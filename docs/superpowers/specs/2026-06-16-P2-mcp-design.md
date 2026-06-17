@@ -12,10 +12,10 @@ Exponer Quaestor como **interfaz en lenguaje natural** para cualquier cliente MC
 
 ## Alcance
 
-- **MCP server con el SDK oficial de Python**, expuesto vía transporte remoto **streamable-HTTP** en la ruta `/mcp`, protegido por el mismo **bearer token (`APP_TOKEN`)** que la API, en el header de auth.
-- **Por qué remoto y no stdio local:** el usuario no quiere correr nada en su laptop. Quaestor vive en el VPS. Con stdio habría que mantener un proceso (o un shim) local apuntando al `quaestor.db`, lo que rompe el modelo "solo el browser y el cliente MCP en la laptop" (§4). Con streamable-HTTP, Claude Code se conecta a una URL remota detrás de Caddy/HTTPS y el servidor corre junto a `services`/DB en el VPS.
+- **MCP server con el SDK oficial de Python**, expuesto vía transporte remoto **streamable-HTTP** en la ruta `/mcp`. **Defensa en capas (ADR-013):** el endpoint **no está en internet público** — lo sirve un sidecar **Tailscale** dentro de la red privada (P7); encima, cada request exige el **bearer token (`APP_TOKEN`)** en el header. El token deja de ser lo único que protege el punto sensible.
+- **Por qué remoto y no stdio local:** el usuario no quiere correr el backend en su laptop. Quaestor vive en el VPS. Con stdio habría que mantener un proceso (o un shim) local apuntando al `quaestor.db`. Con streamable-HTTP, Claude Code se conecta a la URL del servidor —servida por Tailscale en el tailnet, no por Caddy— y el servidor corre junto a `services`/DB en el VPS. (Requisito: el equipo del usuario está en el mismo tailnet; ver trade-off en §4/ADR-013.)
 - **Tools del core (arranque P2):** `registrar_gasto`, `registrar_ingreso`, `transferir`, `fijar_tasa_fx`, y las lecturas (`consultar_*` / `listar_*`: transacciones, cuentas, categorías, tags, tasa vigente).
-- **No incluye** las tools de features: `crear_recurrente`/`listar_recurrentes`, `planear_pago`/`confirmar_pago`/`por_pagar`, `cerrar_mes` (P3); `fijar_presupuesto`/`estado_presupuesto`/`crear_meta`/`aporte_meta`/`progreso_metas` (P4); `reporte_mensual`/`importar_csv` (P5). P2 deja el **patrón de registro listo** para que cada uno enchufe sus tools sin tocar el transporte ni la auth.
+- **No incluye** las tools de features: `crear_recurrente`/`listar_recurrentes`, `planear_pago`/`confirmar_pago`/`por_pagar` (P3 — `cerrar_mes` **no** es tool, lo corre el scheduler, ADR-017); `fijar_presupuesto`/`estado_presupuesto`/`safe_to_spend`/`crear_meta`/`aporte_meta`/`progreso_metas` (P4); `reporte_mensual`/`importar_csv` (P5). P2 deja el **patrón de registro listo** para que cada uno enchufe sus tools sin tocar el transporte ni la auth.
 - **Fuera de alcance:** lógica de dominio (vive en `services`/`domain`, P0), la API REST (P1), el frontend (P6).
 
 ## Aporte al modelo de datos
@@ -78,8 +78,8 @@ Convenciones que heredan las tools: montos como **enteros en centavos** en moned
 
 ## Integración con otros sub-proyectos
 
-- **Cómo conecta Claude Code:** config de MCP remoto apuntando a `https://quaestor.tudominio.com/mcp`, con el `APP_TOKEN` en el header de auth. Caddy enruta `/mcp` → MCP server (§4) sobre HTTPS. **MiniMax:** se enchufa igual cuando soporte MCP remoto; no requiere cambios en el servidor (es LLM-agnóstico).
+- **Cómo conecta Claude Code:** el equipo del usuario está en el tailnet; config de MCP apuntando a la **MagicDNS** del VPS (`https://quaestor-mcp.<tailnet>.ts.net/mcp`), con el `APP_TOKEN` en el header. El sidecar Tailscale sirve `/mcp` → MCP server (§4/ADR-013); **no pasa por Caddy ni por internet público**. **MiniMax:** se enchufa igual cuando soporte MCP remoto y esté en el tailnet; sin cambios en el servidor (es LLM-agnóstico).
 - **P0 (core):** dependencia dura. P2 consume `services` y `domain` tal cual; no los modifica.
 - **P1 (API):** hermano simétrico. Mismos services, distinta puerta (REST vs tools). Cero lógica duplicada; comparten `APP_TOKEN`.
-- **P3/P4/P5:** registran sus tools de features mediante el patrón de `registry.py`. Cada uno aporta sus services y su `register_*_tools`; P2 ya dejó el transporte, la auth y el formateo listos.
-- **P7 (despliegue):** corre el MCP server como servicio `mcp` en `docker-compose.yml`, detrás de Caddy, con `APP_TOKEN` por env y el mismo `quaestor.db` (volumen) que API y rollover.
+- **P3/P4/P5:** registran sus tools de features mediante el patrón de `registry.py`. Cada uno aporta sus services y su `register_*_tools`; P2 ya dejó el transporte, la auth y el formateo listos. P4 expone, entre otras, el **safe-to-spend** ("¿cuánto me queda libre este mes?") — la pregunta agent-native que LM no responde.
+- **P7 (despliegue):** corre el MCP server como servicio `mcp` en `docker-compose.yml`, **servido por el sidecar Tailscale** (no por Caddy, ADR-013), con `APP_TOKEN` por env y el mismo `quaestor.db` (volumen) que API y rollover.

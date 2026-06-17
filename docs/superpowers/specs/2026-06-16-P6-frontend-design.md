@@ -8,7 +8,11 @@
 
 ## Objetivo
 
-Dar al único usuario una UI web para **registrar, consultar y planear** su plata sin abrir Lunch Money ni el chat MCP: CRUD completo sobre todas las entidades, un **dashboard** que responde "¿cómo voy este mes?" de un vistazo, y —el dolor principal— un widget **"Por pagar"** que contesta "¿qué me falta por pagar esta semana?" y permite marcar pagado en un clic.
+**MCP-first (ADR-008):** el driver del producto es agent-native; el registro/CRUD del día a día se hace **hablándole al agente**. El frontend de **v1 es mínimo** y cubre solo lo que el chat hace mal: **revisar de un vistazo**. Dos vistas:
+1. **Dashboard** con el **safe-to-spend** del mes y el widget **"Por pagar"** ("¿qué me falta por pagar esta semana?" + marcar pagado en un clic) — el dolor principal.
+2. **Reporte mensual** (markdown + tablas).
+
+El resto de pantallas (CRUD completo de todas las entidades) queda **documentado como backlog**: la tabla de *Interfaz pública* describe el destino completo, pero v1 entrega solo las dos vistas de arriba. El frontend sigue siendo un **cliente delgado de la API de P1**: cero lógica de negocio.
 
 El frontend es un **cliente delgado de la API de P1**. No tiene lógica de negocio: validar, convertir FX, cuadrar transferencias, calcular metas, rollover — todo vive en `services` (backend) y se consume vía HTTP.
 
@@ -17,10 +21,11 @@ El frontend es un **cliente delgado de la API de P1**. No tiene lógica de negoc
 - **Stack:** Next.js (App Router) · TypeScript · Tailwind · shadcn/ui. SPA autenticada que pega a la HTTP API de P1.
 - **Auth:** página de login (contraseña → cookie de sesión vía `/auth/login` de P1), guard de rutas, logout.
 - **`lib/api.ts`:** cliente tipado de la API (un método por endpoint) + tipos espejo del contrato de P1.
-- **Pantallas:** dashboard, transactions, por-pagar, recurring, budgets, goals, accounts, categories, tags, reports, import, settings (detalle en *Interfaz pública*).
+- **Pantallas v1:** login, **dashboard** (safe-to-spend + Por-pagar), **reports**. (detalle en *Interfaz pública*).
+- **Pantallas backlog:** transactions, por-pagar (vista dedicada), recurring, budgets, goals, accounts, categories, tags, import, settings — se construyen feature por feature después de v1; mientras tanto se operan por agente (MCP).
 - **Formato de dinero:** todo monto que llega es **centavos (int)**; el frontend lo formatea a display por moneda. Nunca opera aritmética de negocio sobre montos.
 
-**Fuera de alcance:** lógica de cálculo (vive en backend), tests automáticos de UI en v1 (prueba manual; tests de componentes después, §11 general), gráficos PDF/HTML (v2), PWA/offline, i18n más allá de es-CO.
+**Fuera de alcance (v1):** todo el CRUD por UI (es backlog, se hace por agente — ADR-008); lógica de cálculo (vive en backend); tests automáticos de UI en v1 (prueba manual; tests de componentes después, §11 general); gráficos PDF/HTML (v2); PWA/offline; i18n más allá de es-CO.
 
 ## Aporte al modelo de datos
 
@@ -59,19 +64,21 @@ components/
 
 ## Interfaz pública (pantallas / rutas)
 
-| Ruta | Qué hace | Endpoints P1 |
-|---|---|---|
-| `/login` | contraseña → sesión; redirige a `/` | `POST /auth/login` |
-| `/` **Dashboard** | ingreso vs gasto del mes + neto · **widget Por pagar** (toggle esta-semana/este-mes + total + marcar pagado) · avance de metas · balances · presupuestos en riesgo | `/reports?month`, `/planned`, `/goals`, `/accounts`, `/budgets` |
-| `/transactions` | CRUD completo; tabla filtrable por fecha/cuenta/categoría/tag/tipo/status | `GET/POST/PATCH/DELETE /transactions` |
-| `/por-pagar` | lista de `planned`; **confirmar pago** (monto real, fecha) y **planear pago suelto** | `GET /planned`, `POST /planned/{id}/confirm`, `POST /planned` |
-| `/recurring` | CRUD recurrentes (type, mode auto/manual, frequency + due_day) | `…/recurring` |
-| `/budgets` | fijar presupuesto categoría×mes; estado vs real (% usado, restante, over) | `GET/PUT /budgets`, `GET /budgets/status?month` |
-| `/goals` | CRUD metas (definida/indefinida), progreso + ETA, **aporte manual** | `…/goals`, `POST /goals/{id}/contribute` |
-| `/accounts` `/categories` `/tags` | CRUD maestros + flags (archived, is_income, exclude_*) + balances | `…/accounts` `…/categories` `…/tags` |
-| `/reports` | reporte mensual: render markdown + tablas; **selector de mes** | `GET /reports?month` |
-| `/import` | subir CSV bulk; muestra **errores por línea** del validador de P5 | `POST /import` (multipart) |
-| `/settings` | moneda base, **tasa FX usd_cop** (fijar por fecha), cambiar contraseña | `…/settings`, `…/fx`, `POST /auth/change-password` |
+> **v1** = `/login`, `/` Dashboard, `/reports`. Todo lo demás es **backlog** (ADR-008): destino completo, no v1.
+
+| Ruta | v1? | Qué hace | Endpoints P1 |
+|---|---|---|---|
+| `/login` | **v1** | contraseña → sesión; redirige a `/` | `POST /auth/login` |
+| `/` **Dashboard** | **v1** | **safe-to-spend del mes** · **widget Por pagar** (toggle esta-semana/este-mes + total + marcar pagado) · ingreso/gasto/neto · avance de metas · balances · sobres en riesgo | `/reports?month`, `/budgets/safe-to-spend`, `/planned`, `/goals`, `/accounts`, `/budgets` |
+| `/reports` | **v1** | reporte mensual: render markdown + tablas (incl. safe-to-spend + sobres); **selector de mes** | `GET /reports?month` |
+| `/transactions` | backlog | CRUD completo; tabla filtrable por fecha/cuenta/categoría/tag/tipo/status | `GET/POST/PATCH/DELETE /transactions` |
+| `/por-pagar` | backlog | lista de `planned`; **confirmar pago** (monto real, fecha) y **planear pago suelto** | `GET /planned`, `POST /planned/{id}/confirm`, `POST /planned` |
+| `/recurring` | backlog | CRUD recurrentes (type, mode auto/manual, frequency + due_day) | `…/recurring` |
+| `/budgets` | backlog | asignar sobres categoría×mes; estado con rollover; safe-to-spend | `GET/PUT /budgets`, `GET /budgets/status?month`, `GET /budgets/safe-to-spend?month` |
+| `/goals` | backlog | CRUD metas (definida/indefinida), progreso + ETA, **aporte manual** (el mensual se confirma en Por-pagar) | `…/goals`, `POST /goals/{id}/contribute` |
+| `/accounts` `/categories` `/tags` | backlog | CRUD maestros + flags (archived, is_income, exclude_*) + balances | `…/accounts` `…/categories` `…/tags` |
+| `/import` | backlog | subir CSV bulk; muestra **errores por línea** del validador de P5 | `POST /import` (multipart) |
+| `/settings` | backlog | moneda base, **tasa FX usd_cop** (auto-fetch + override manual), cambiar contraseña | `…/settings`, `…/fx`, `POST /auth/change-password` |
 
 Toda ruta salvo `/login` exige sesión: sin cookie válida → redirect a `/login`.
 
@@ -83,7 +90,7 @@ Toda ruta salvo `/login` exige sesión: sin cookie válida → redirect a `/logi
 - **Dinero:** `formatCents` formatea por moneda (COP sin decimales y miles con punto; USD con `US$` y 2 decimales). Montos USD muestran también su `to_base` (COP) cuando el contexto es agregado, ya congelado por el backend.
 - **`planned` vs `posted`:** la UI los distingue visualmente (badge); marcar pagado/confirmar dispara la mutación e invalida las queries de Por-pagar, dashboard y balances.
 - **Invalidación:** cada mutación invalida sus query keys relacionadas (ej. confirmar pago → `planned`, `dashboard`, `accounts`) para reflejar balances al instante.
-- **Orden de construcción:** **Dashboard + Por-pagar primero** (dolor principal), luego los CRUDs (transactions, masters, recurring, budgets, goals), por último reports e import.
+- **Orden de construcción:** **v1 = Dashboard (safe-to-spend + Por-pagar) + Reports** (las dos vistas que el chat hace mal). Backlog después: CRUDs (transactions, masters, recurring, budgets, goals) e import — feature por feature, operados por agente mientras tanto.
 
 ## Errores
 
@@ -98,12 +105,12 @@ Toda ruta salvo `/login` exige sesión: sin cookie válida → redirect a `/logi
 
 **Testing v1:** prueba manual end-to-end contra una API de P1 real (alineado con §11 del general: "Frontend v1: prueba manual; tests de componentes después"). Smoke checklist por pantalla: carga, CRUD, filtros, formato de dinero, manejo de error.
 
-**Criterio de "listo" (mínimo aceptable):**
+**Criterio de "listo" v1 (mínimo aceptable, ADR-008):**
 1. **Login funciona:** contraseña → sesión → acceso al shell; rutas protegidas redirigen sin sesión; logout limpia.
-2. **Dashboard muestra "Por pagar"** con toggle esta-semana/este-mes + total, y **permite marcar pagado** reflejando el cambio (Por-pagar y balances se actualizan).
-3. **CRUD de transacciones completo end-to-end** contra la API: crear, listar con filtros (fecha/cuenta/categoría/tag/tipo/status), editar, borrar — todo persiste vía P1.
+2. **Dashboard muestra el safe-to-spend del mes + "Por pagar"** con toggle esta-semana/este-mes + total, y **permite marcar pagado** reflejando el cambio (Por-pagar, safe-to-spend y balances se actualizan).
+3. **`/reports` renderiza el reporte mensual** (markdown + tablas, incl. safe-to-spend y sobres) con selector de mes, degradando con elegancia en arranque en frío (sin drift MoM).
 
-Más allá del mínimo: el resto de pantallas (recurring, budgets, goals, masters, reports, import, settings) operativas contra sus endpoints.
+**Backlog (post-v1):** CRUD de transacciones y el resto de pantallas (por-pagar dedicada, recurring, budgets, goals, masters, import, settings) operativas contra sus endpoints — se construyen feature por feature; mientras tanto se operan por agente.
 
 ## Integración con otros sub-proyectos
 

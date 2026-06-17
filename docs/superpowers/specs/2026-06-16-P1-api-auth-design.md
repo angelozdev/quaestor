@@ -22,7 +22,7 @@ Exponer los services de P0 como una **HTTP API REST** (FastAPI), protegida por a
 - Mapeo de errores de dominio → respuestas 4xx con cuerpo JSON claro.
 
 **No incluye (lo agregan otros sub-proyectos, dejando la estructura lista para crecer):**
-- Routers de features: `/recurring`, `/planned`, `/rollover` (P3); `/budgets`, `/goals` (P4); `/reports`, `/import` (P5). Se registran como nuevos `APIRouter` sin tocar lo de P1.
+- Routers de features: `/recurring`, `/planned`, `/rollover` (P3); `/budgets` (incl. `/budgets/safe-to-spend`), `/goals` (P4); `/reports`, `/import` (P5). Se registran como nuevos `APIRouter` sin tocar lo de P1.
 - MCP (P2), frontend (P6), despliegue/Caddy (P7).
 
 ---
@@ -78,7 +78,7 @@ Base path: `/api`. Todos los endpoints (salvo `/auth/login`) requieren auth. Con
 | **Accounts** | `GET /accounts` (`?archived=`) · `GET /accounts/{id}` · `POST /accounts` · `PATCH /accounts/{id}` · `DELETE /accounts/{id}` (archiva) |
 | **Categories** | `GET /categories` · `GET /categories/{id}` · `POST /categories` · `PATCH /categories/{id}` · `DELETE /categories/{id}` (archiva) |
 | **Tags** | `GET /tags` · `POST /tags` · `PATCH /tags/{id}` · `DELETE /tags/{id}` |
-| **FX** | `GET /fx?date=` → tasa vigente (`tasa_vigente`) · `POST /fx` → `fijar_tasa` (`{date, usd_cop}`) |
+| **FX** | `GET /fx?date=` → tasa vigente (`tasa_vigente`) · `POST /fx` → `fijar_tasa` (`{date, usd_cop}`), **override manual** (la tasa la puebla un job diario, P7/ADR-011) |
 | **Settings** | `GET /settings` · `PATCH /settings` (moneda base, config) |
 
 Respuestas: `200` (read/update), `201` (create), `204` (delete/archive sin cuerpo). Cuerpos = schemas `Out`.

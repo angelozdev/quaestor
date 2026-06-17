@@ -35,7 +35,7 @@ P0 crea **solo** estas entidades (resto en §5 del general, añadidas por otros 
 | **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (centavos, moneda original), `currency`, `fx_rate`, `to_base` (centavos COP), `account_id`, `category_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
 | **Tag** + **TransactionTag** | `name`; relación m2m |
 | **FxRate** | `date`, `usd_cop` (tasa); único por fecha |
-| **Settings** | `base_currency=COP`, config de la app (fila singleton) |
+| **Settings** | `base_currency=COP`, `default_source_account_id?` (FK Account, cuenta origen global de aportes de meta — la usa P4, ADR-015), config de la app (fila singleton) |
 
 > P0 incluye los campos `status` y `transfer_group_id` en Transaction, pero solo ejercita `status=posted` y los pares de transferencia. La semántica avanzada de `planned` (vencimiento, confirmación) la aterriza P3 sin redefinir el modelo.
 
@@ -87,7 +87,7 @@ Toda escritura es **atómica** (commit/rollback). Los services nunca exponen la 
 
 - **Dinero = entero en centavos**, nunca float. `Money` envuelve `(centavos: int, currency)` y conoce la escala por moneda (COP y USD usan 2 decimales → escala 100).
 - **Signo por `type`, no en el monto.** `amount` se almacena **siempre positivo**; el service aplica el signo: `expense` resta, `income` suma. `delta_balance` en `rules.py` centraliza esto.
-- **FX congelado.** Si `currency != base (COP)`: `fx_rate` = el pasado o `tasa_vigente(date)`; `to_base = amount × fx_rate` se calcula y **se guarda fijo** al registrar. Tx en COP → `fx_rate=1`, `to_base=amount`. Cambiar la tasa después no altera tx ya guardadas.
+- **FX congelado.** Si `currency != base (COP)`: `fx_rate` = el pasado o `tasa_vigente(date)`; `to_base = amount × fx_rate` se calcula y **se guarda fijo** al registrar. Tx en COP → `fx_rate=1`, `to_base=amount`. Cambiar la tasa después no altera tx ya guardadas. La tabla `FxRate` la **puebla un job diario** (P7, ADR-011) llamando a `fijar_tasa_fx`; este service queda además como **override manual**. `tasa_vigente` no cambia: lee la última ≤ fecha.
 - **Balance incremental solo en `posted`.** Al registrar una tx `posted`, el service ajusta `Account.balance` con `delta_balance` (en moneda de la cuenta). Las tx `planned` **no tocan balance**. El balance no se recalcula desde cero.
 - **Transferencia = par atómico.** `transferir` genera dos transactions con el mismo `transfer_group_id` y `type=transfer`: una resta en `from_account`, otra suma en `to_account`. Las dos se persisten o ninguna. Quedan **excluidas de ingreso/gasto** (marca consumible por reportes en P5).
 - **Settings singleton.** Una sola fila; `base_currency=COP` fija la moneda de todos los `to_base`.
@@ -120,7 +120,7 @@ Transferencias y cualquier escritura multi-fila: **commit/rollback atómico**; u
 
 - **P1 (API)** y **P2 (MCP)** son adaptadores delgados sobre estos services; no tocan la DB directo ni añaden lógica.
 - **P3 (Motor temporal)** añade RecurringItem/RecurringOccurrence y la semántica plena de `planned` (vencimiento, `confirmar_pago`, `cerrar_mes`) **reutilizando** `registrar_*`/`transferir` y el campo `status` ya definido aquí.
-- **P4 (Presupuestos/Metas)** añade Budget/Goal/GoalContribution apoyándose en `to_base`, el flag de exclusión de categorías y `transferir` (aportes a meta).
+- **P4 (Presupuestos/Metas)** añade Budget (con rollover)/Goal/GoalContribution y la columna `goal_id?` en Transaction (migración propia), apoyándose en `to_base`, el flag de exclusión de categorías y `transferir` (aportes a meta, materializados al confirmar en "Por pagar").
 - **P5 (Reportes/Importer)** lee transacciones, consume la marca de transferencia para excluirlas de ingreso/gasto y usa `to_base` para agregados; el importer llama a `registrar_*`.
 
 **Convenciones transversales respetadas:** centavos `int`, agregados en `to_base` COP, signo por `type`, **solo `posted` cuenta**, transferencias atómicas. P0 no re-litiga estas reglas; las implementa.

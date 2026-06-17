@@ -25,10 +25,14 @@ Sub-specs (en esta misma carpeta):
 Sistema personal de finanzas, **single-user**, que reemplaza a Lunch Money como sistema de registro propio. Cubre gastos, ingresos, recurrentes (auto y manual), transferencias, presupuestos, metas de ahorro y reportes mensuales.
 
 Dos formas de interactuar:
-- **Lenguaje natural** vía un **MCP server** (hoy Claude Code; mañana MiniMax u otro cliente MCP). El backend es LLM-agnóstico.
-- **Frontend web** para CRUD completo + dashboards.
+- **Lenguaje natural** vía un **MCP server** (hoy Claude Code; mañana MiniMax u otro cliente MCP). El backend es LLM-agnóstico. **Vía principal de la v1.**
+- **Frontend web** para revisar y planear. En v1 es **mínimo** (dashboard "Por pagar" + reporte mensual); el CRUD completo queda en backlog (ver [ADR-008](../../adr/2026-06-16-quaestor-adrs.md)).
+
+**Driver del proyecto.** El motor primario es **tener backend propio y agent-native** (DB propia, hablarle a un agente sobre *mi* schema sin depender de la API de un tercero). Los 3 dolores de abajo son la **prueba de valor de la v1**, no la justificación del sistema. El **presupuesto** (§6) es el diferenciador de producto explícito frente a Lunch Money. Ver [ADR-001](../../adr/2026-06-16-quaestor-adrs.md).
 
 **Hoy** el usuario usa Claude Code + API key de Lunch Money ("solo el backend"). Quaestor recrea ese flujo —hablarle a un agente que escribe en un backend— pero sobre **base de datos propia**, desplegable en un VPS.
+
+> **Decisiones de producto registradas como ADRs** en `docs/adr/2026-06-16-quaestor-adrs.md`. Este diseño y los sub-specs P0–P7 ya reflejan esos ADRs.
 
 **Dolores que resuelve explícitamente:**
 1. No saber **qué le falta por pagar** en un punto de la semana → vista "Por pagar".
@@ -52,15 +56,17 @@ Dos formas de interactuar:
 | Capa AI | **MCP server** sobre DB propia. LLM-agnóstico (Claude Code hoy, MiniMax luego). |
 | Stack backend | Python 3.12 · FastAPI · SQLModel (SQLAlchemy+Pydantic) · SDK oficial MCP · uv |
 | Storage | **SQLite** (single-user, un archivo). Migrable a Postgres por connection string si hiciera falta. |
-| Frontend | **Next.js** (App Router) · TypeScript · Tailwind · shadcn/ui |
+| Frontend | **Next.js** (App Router) · TS · Tailwind · shadcn/ui. **v1 mínimo** (dashboard "Por pagar" + reporte); CRUD completo a backlog. **MCP-first** (ADR-008). |
 | Fidelidad de datos | Completa: multi-moneda COP+USD, multi-cuenta+balances, transferencias internas, tags, presupuestos, recurrentes, metas |
 | Arranque de datos | DB **desde cero** + **importer CSV bulk** (formato propio documentado) |
-| Metas | Solo **monto fijo mensual**; meta **definida** (target+deadline) o **indefinida** |
+| Presupuesto | **Híbrido**: sobres por categoría **con rollover** + **safe-to-spend** (plata no asignada = ingreso forecast − comprometido − asignado). Diferenciador vs LM (ADR-002/003). |
+| Metas | **Monto fijo mensual**; definida (target+deadline) o indefinida. Aporte **flexible**: se propone como `planned`, lo confirmas en "Por pagar" (no transfer forzado) (ADR-006). |
+| FX | Multi-moneda COP+USD completa; tasa `usd_cop` **auto-fetch diaria** + override manual; `to_base` congelado (ADR-010/011). |
 | Recurrentes | Gasto **e** ingreso; modo **auto** y **manual** |
 | Pagos futuros | `Transaction.status` ∈ `planned`/`posted`; vista "Por pagar" |
 | Reportes | **Markdown en el chat** (MCP) + render en frontend |
 | Despliegue | **VPS self-hosted**, Docker Compose detrás de **Caddy** (HTTPS auto) |
-| Auth | Single-user: contraseña → sesión (frontend) + bearer token (`APP_TOKEN`) para API y MCP |
+| Auth | Single-user: contraseña → sesión (frontend, **público**) + bearer `APP_TOKEN` para API y MCP. **`/mcp` detrás de Tailscale** (red privada, fuera de internet) (ADR-013). |
 
 ---
 
@@ -143,9 +149,11 @@ Vive en un **VPS** con dominio + HTTPS. Nada corre en la laptop salvo el browser
 
 - **MCP remoto, no stdio local.** El MCP server se expone vía transporte **streamable-HTTP** del SDK oficial, en `/mcp`, protegido por token. Claude Code se conecta a la URL remota con header de auth. (Se descarta el shim stdio local porque obligaría a tener algo corriendo en la laptop.)
 - **Auth:**
-  - Frontend: una **contraseña** → cookie de sesión. Sin registro ni usuarios.
+  - Frontend: una **contraseña** → cookie de sesión. Sin registro ni usuarios. **Público** detrás de HTTPS.
   - API y MCP: **bearer token estático** (`APP_TOKEN` en env). El frontend lo usa vía sesión; Claude Code lo manda en el header.
+  - **`/mcp` no se expone a internet público:** vive detrás de **Tailscale** (red privada). El usuario lo alcanza desde sus propios equipos; el token estático deja de ser lo único que protege el punto sensible (ADR-013). El frontend (`/` y `/api/*`) sí queda público.
   - Todo detrás de HTTPS (Caddy saca y renueva cert solo).
+  - **Trade-off:** clientes MCP en la nube (claude.ai web) no alcanzan `/mcp` por Tailscale; si se necesitaran, se revisa la postura.
 - **Despliegue:** `docker-compose.yml` con servicios `api`, `mcp`, `frontend`, `caddy`. `quaestor.db` en **volumen persistente**. Deploy = `git pull && docker compose up -d --build`.
 - **Backups:** **Litestream** replica el `.db` en continuo a un bucket (S3/R2/Backblaze). Mínimo aceptable: cron `sqlite3 .backup` diario.
 
@@ -163,17 +171,18 @@ Montos = **enteros en centavos**, nunca float. Moneda base = **COP**.
 | **Tag** + **TransactionTag** | `name`; relación m2m |
 | **RecurringItem** | `name`, `payee`, `type` (expense/income), `mode` (auto/manual), `amount` (default), `currency`, `category_id`, `account_id`, `frequency` (monthly/weekly/biweekly/yearly), `due_day`, `start_date`, `end_date?`, `active` |
 | **RecurringOccurrence** | `recurring_id`, `period` (YYYY-MM), `status` (posted/planned/skipped), `transaction_id?`, `created_at` — marca de idempotencia del rollover |
-| **Budget** | `category_id`, `year_month` (YYYY-MM), `amount_base` (centavos COP) |
+| **Budget** (sobre) | `category_id`, `year_month` (YYYY-MM), `amount_assigned` (centavos COP). Rollover derivado del mes anterior (ADR-002/005) |
 | **Goal** | `name`, `target_amount?` (COP), `deadline?`, `monthly_amount` (COP, fijo), `savings_account_id`, `status` (active/reached/paused) |
-| **GoalContribution** | `goal_id`, `date`, `amount`, `source` (auto/manual), `transaction_id?` |
+| **GoalContribution** | `goal_id`, `date`, `amount`, `source` (confirmado/manual), `transaction_id?` |
 | **FxRate** | `date`, `usd_cop` (tasa) |
-| **Settings** | `base_currency=COP`, config de la app |
+| **Settings** | `base_currency=COP`, `default_source_account_id` (cuenta origen global de aportes de meta, ADR-015), config de la app |
 
 ### Reglas de dinero / FX / signo (en `domain`)
 - **Signo explícito por `type`**, no signo en el monto. `amount` siempre positivo; el service sabe que expense resta y income suma. Evita la confusión de signos de LM.
 - **Todo agregado usa `to_base` (COP).** Tx en USD calcula `to_base = amount × fx_rate` al registrar y lo **congela** → reportes históricos estables aunque cambie la tasa.
 - **Balance de cuenta** lo actualiza el service en cada tx `posted` (no se recalcula desde cero).
-- FX sin tasa para la fecha → error claro "fija la tasa usd_cop" (o usa última vigente, configurable).
+- **Tasa `usd_cop` auto-fetch.** Un job diario (P7) pega a una API FX gratis y guarda la tasa en `FxRate`; `fijar_tasa_fx` queda como **override manual / respaldo**. Con USD ~50% del volumen, mantener la tasa a mano era fricción constante (ADR-011).
+- FX sin tasa para la fecha → usa la última vigente; si no hay ninguna → error claro "fija la tasa usd_cop". El `to_base` se congela al registrar (consistencia histórica intacta).
 
 ### Transferencias internas
 Par de transactions con mismo `transfer_group_id`, `type=transfer` → una resta en cuenta origen, otra suma en destino. **Excluidas de ingreso/gasto** en todo reporte. El service las crea **atómicas** (las dos o ninguna).
@@ -188,11 +197,12 @@ Par de transactions con mismo `transfer_group_id`, `type=transfer` → una resta
 ## 6. Lógica temporal
 
 ### `cerrar_mes(YYYY-MM)` — idempotente
+**Disparo automático (ADR-017):** lo corre el `scheduler` (P7) **diario** vía `ensure_mes_cerrado(mes_actual)` — día 1 materializa, demás días no-op, día perdido se auto-cura. No es tool de usuario; el rollover se opera solo.
 1. **Recurrentes:** por cada `RecurringItem` activo que toca el periodo y no tiene `RecurringOccurrence`:
    - `mode=auto` → postea transaction `posted` con el monto definido; occurrence `status=posted`.
    - `mode=manual` → crea transaction **`planned`** (con `due_day`) **sin afectar balance**; occurrence `status=planned`. Aparece en "Por pagar".
-2. **Metas:** por cada `Goal` activa → crea `GoalContribution` por `monthly_amount` + transfer a `savings_account_id`.
-3. Re-ejecutar no duplica (la occurrence ya existe).
+2. **Metas (flexible, ADR-006):** por cada `Goal` activa → crea una obligación **`planned`** (aporte propuesto a `savings_account_id`, vence fin de periodo). **No mueve plata.** Aparece en "Por pagar"; al confirmarla se vuelve `posted` (transfer interna) y se registra la `GoalContribution`. Si el mes vino flojo, confirmas menos u omites.
+3. Re-ejecutar no duplica (la occurrence / el aporte propuesto del periodo ya existe).
 
 ### Recurrentes (gasto/ingreso, auto/manual)
 - `type` distingue gasto (renta, subs, Netflix) de ingreso (sueldo, freelance fijo).
@@ -210,17 +220,38 @@ Par de transactions con mismo `transfer_group_id`, `type=transfer` → una resta
 | **Definida** | sí | sí | sí | aporte fijo + **on-track/atrasado + ETA** vs deadline (compara requerido `(target−ahorrado)/meses` contra el monto fijo) |
 | **Indefinida** | no | no | sí | solo acumula el monto fijo; **sin ETA ni requerido**, solo total ahorrado |
 
-`aporte_meta(goal_id, amount, date)` permite aportes manuales además del automático del rollover.
+`aporte_meta(goal_id, amount, date)` permite aportes manuales sueltos. El aporte mensual **no es automático**: el rollover lo **propone** como `planned` y tú lo confirmas en "Por pagar" (ADR-006). El aporte (manual o confirmado) es una transfer interna a la cuenta de ahorro → no es gasto ni ingreso.
 
-### Presupuesto
-`estado_presupuesto(categoría, mes)` = `Σ to_base(expense de esa cat, ese mes, posted, respetando exclude_flags)` vs `Budget.amount_base` → % usado, restante, over/under.
+### Presupuesto — híbrido (diferenciador, ADR-002/003)
+
+Dos capas que son **un solo modelo** (nada se cuenta dos veces):
+
+**1. Sobres por categoría con rollover.** Cada categoría tiene un sobre mensual (`Budget`). 
+- `disponible(cat, mes) = rollover_in + asignado − gastado_posted`, con `gastado = Σ to_base(expense, cat, mes, posted, respetando exclude_flags)`.
+- **Rollover:** `rollover_in(cat, mes) = max(disponible(cat, mes−1), 0)` → lo no gastado se arrastra; el sobregiro se absorbe en el pozo global y el sobre **resetea a 0** (ADR-005).
+
+**2. Safe-to-spend global** = plata que **no** has asignado a ningún sobre. Sobres **opcionales** (A4/ADR-016): solo algunas categorías llevan sobre; el resto gasta directo del pozo.
+```
+safe_to_spend(mes) = ingreso_forecast(mes)
+                   − comprometido(mes)
+                   − Σ asignado_a_sobres(mes)        # categorías CON sobre
+                   − Σ gasto_no_presupuestado(mes)    # gasto posted en categorías SIN sobre
+                   − Σ sobregiro(mes)                 # max(gastado − (asignado + rollover_in), 0)
+```
+- `ingreso_forecast` = suma de los recurrentes `income` que tocan el mes; **sin override teclado** (ADR-004/A2).
+- `comprometido` = obligaciones del mes (recurrentes auto + `planned` + aportes de meta propuestos), **contadas una sola vez** estén `planned` o ya `posted` (ADR-014). Cuando una obligación postea, el safe-to-spend **no se mueve** (ya estaba descontada).
+- `asignado_a_sobres` = Σ `Budget.amount_assigned` de las categorías con sobre.
+- `gasto_no_presupuestado` = gasto en categorías **sin sobre** (sin esto el pozo sobreestimaría lo libre, A4).
+- `sobregiro` = lo gastado de más en un sobre sobre `asignado + rollover_in` (ADR-005); `rollover_in` (plata previa) no suma al pozo de este mes.
+
+`estado_presupuesto(categoría, mes)` devuelve el estado del sobre (`asignado`, `rollover_in`, `gastado`, `disponible`, `pct_usado`, over/under). `safe_to_spend(mes)` devuelve el número de cabecera + su desglose. Detalle completo en P4.
 
 ---
 
 ## 7. Services, MCP y API
 
 ### Capa `services` (el cerebro)
-`registrar_gasto · registrar_ingreso · transferir · planear_pago · confirmar_pago · por_pagar · crear_recurrente · listar_recurrentes · fijar_presupuesto · estado_presupuesto · crear_meta · aporte_meta · progreso_metas · fijar_tasa_fx · cerrar_mes · reporte_mensual · importar_csv` + reads (listar/consultar).
+`registrar_gasto · registrar_ingreso · transferir · planear_pago · confirmar_pago · por_pagar · crear_recurrente · listar_recurrentes · fijar_presupuesto · estado_presupuesto · safe_to_spend · crear_meta · aporte_meta · progreso_metas · fijar_tasa_fx · cerrar_mes · reporte_mensual · importar_csv` + reads (listar/consultar).
 
 ### Tools MCP
 1 tool = 1 service (adaptador delgado). Mismos verbos. El agente registra, consulta, cierra mes, pregunta "¿qué me falta por pagar?", pide reporte — todo en lenguaje natural → tool → service.
@@ -231,6 +262,8 @@ Routers REST espejo de services: `/transactions /accounts /categories /tags /rec
 ---
 
 ## 8. Frontend (Next.js)
+
+> **Alcance v1 (MCP-first, ADR-008):** solo **`/` Dashboard** (con widget "Por pagar") y **`/reports`**. El resto de la tabla es **backlog** — se opera por agente hasta que cada pantalla aterrice. La tabla describe el destino completo, no el v1.
 
 | Ruta | Qué hace |
 |---|---|
@@ -251,7 +284,9 @@ Routers REST espejo de services: `/transactions /accounts /categories /tags /rec
 
 `reporte_mensual(mes)` devuelve `(datos estructurados, markdown)`. MCP muestra el markdown en el chat; frontend renderiza datos + markdown.
 
-**Contenido:** ingreso / gasto / neto · por categoría · presupuesto vs real · metas (acumulado + ETA en las definidas) · balances de cuentas · drift MoM · USD share · **recurrentes / pagos pendientes** (línea de alerta si hay manuales sin confirmar).
+**Contenido:** ingreso / gasto / neto · **safe-to-spend del mes** · por categoría · **sobres (asignado / gastado / disponible / rollover)** · metas (acumulado + ETA en las definidas) · balances de cuentas · drift MoM · USD share · **recurrentes / pagos pendientes** (línea de alerta si hay manuales sin confirmar).
+
+> **Arranque en frío (ADR-009):** los primeros ~2-3 meses el reporte degrada con elegancia — sin mes previo no hay drift MoM, los sobres aún no acumulan rollover. El importer CSV (§10) sigue disponible para backfillear historial de LM si se decide después.
 
 ---
 
@@ -292,7 +327,7 @@ El sistema se construye como **8 sub-proyectos**, cada uno con su propio design 
 | **P1** | **HTTP API + Auth** | FastAPI REST espejo de services, token `APP_TOKEN`, contrato para el frontend | P0 | `…-P1-api-auth-design.md` |
 | **P2** | **MCP server** | transporte remoto streamable-HTTP, auth, tools sobre services (interfaz en lenguaje natural) | P0 | `…-P2-mcp-design.md` |
 | **P3** | **Motor temporal** | recurrentes (auto/manual), `planned`/Por-pagar, `cerrar_mes` (rollover) | P0 | `…-P3-motor-temporal-design.md` |
-| **P4** | **Presupuestos + Metas** | budgets categoría×mes, metas (definida/indefinida, monto fijo) | P0 | `…-P4-presupuestos-metas-design.md` |
+| **P4** | **Presupuestos + Metas** | sobres categoría×mes **con rollover** + **safe-to-spend**; metas (definida/indefinida, monto fijo) con aporte **flexible** | P0, **P3** | `…-P4-presupuestos-metas-design.md` |
 | **P5** | **Reportes + Importer** | `reporte_mensual` (markdown), importer CSV bulk | P0, P3, P4 | `…-P5-reportes-importer-design.md` |
 | **P6** | **Frontend** | Next.js: dashboard, Por-pagar, CRUDs, reportes | P1 | `…-P6-frontend-design.md` |
 | **P7** | **Despliegue** | Docker Compose, Caddy, Litestream, VPS | todos | `…-P7-despliegue-design.md` |
@@ -300,6 +335,6 @@ El sistema se construye como **8 sub-proyectos**, cada uno con su propio design 
 **Orden de build:** `P0 → (P1 ∥ P2) → P3 → P4 → P5 → P6 → P7`.
 El frontend (P6) puede arrancar apenas exista el contrato de P1 y crecer feature por feature conforme aterrizan P3/P4/P5.
 
-**Cómo se reparte el modelo de datos** (definido completo en §5): P0 crea Account, Category, Transaction (con `status`), Tag, FxRate, Settings. P3 agrega RecurringItem, RecurringOccurrence y la semántica `planned`. P4 agrega Budget, Goal, GoalContribution. Cada sub-proyecto añade sus migraciones; ninguno redefine lo de otro.
+**Cómo se reparte el modelo de datos** (definido completo en §5): P0 crea Account, Category, Transaction (con `status`), Tag, FxRate, Settings. P3 agrega RecurringItem, RecurringOccurrence y la semántica `planned`. P4 agrega Budget (con semántica de rollover), Goal, GoalContribution, y enlaza el aporte propuesto de meta a la cola `planned` de P3 (vía `goal_id` en la tx propuesta). Cada sub-proyecto añade sus migraciones; ninguno redefine lo de otro.
 
 **Convenciones transversales que todos respetan:** dinero en centavos (int), agregados en `to_base` COP, signo por `type`, **solo `posted` cuenta** en balances/reportes, transferencias y rollover atómicos e idempotentes. Cada sub-spec asume estas reglas; no las re-litiga.

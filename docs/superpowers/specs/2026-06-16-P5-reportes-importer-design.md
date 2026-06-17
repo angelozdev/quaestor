@@ -33,9 +33,9 @@ Dar dos capacidades de cierre del ciclo: **leer** el mes con un reporte mensual 
 
 - `services/reports.py` — `reporte_mensual`, helpers de agregación.
 - `services/importer.py` — `importar_csv`, parser y validación de filas.
-- `domain/report_types.py` — dataclasses del contrato (`ReporteMensual`, `SeccionCategoria`, `LineaPresupuesto`, `LineaMeta`, `BalanceCuenta`, `DriftMoM`, `ResultadoImport`, `ErrorFila`).
+- `domain/report_types.py` — dataclasses del contrato (`ReporteMensual`, `SafeToSpend`, `SeccionCategoria`, `LineaSobre`, `LineaMeta`, `BalanceCuenta`, `DriftMoM`, `ResultadoImport`, `ErrorFila`).
 - `domain/report_markdown.py` — renderer puro `datos -> str markdown` (sin I/O, testeable solo).
-- Reúsa de P0: `transactions` (reads, `registrar_*`), `money`/`fx` (`to_base`, `tasa_vigente`), maestros (resolver cuenta/categoría por nombre). De P3: `por_pagar`, occurrences. De P4: `estado_presupuesto`, `progreso_metas`.
+- Reúsa de P0: `transactions` (reads, `registrar_*`), `money`/`fx` (`to_base`, `tasa_vigente`), maestros (resolver cuenta/categoría por nombre). De P3: `por_pagar`, occurrences. De P4: `estado_presupuesto`, `safe_to_spend`, `progreso_metas`.
 
 ## Interfaz pública
 
@@ -49,11 +49,12 @@ def importar_csv(contenido: str, *, dry_run: bool = False) -> ResultadoImport
 class ReporteMensual:
     mes: str
     ingreso: int; gasto: int; neto: int                    # centavos COP, solo posted
+    safe_to_spend: SafeToSpend                             # número de cabecera (de P4): libre + desglose
     por_categoria: list[SeccionCategoria]                  # (categoria, group_name, total, pct)
-    presupuestos: list[LineaPresupuesto]                   # (categoria, presupuesto, real, pct, estado)
+    sobres: list[LineaSobre]                               # (categoria, asignado, rollover_in, gastado, disponible, estado)
     metas: list[LineaMeta]                                 # (nombre, acumulado, target?, eta?, on_track?)
     balances: list[BalanceCuenta]                          # (cuenta, currency, balance)
-    drift_mom: DriftMoM                                    # gasto/ingreso/neto vs mes anterior (abs + %)
+    drift_mom: DriftMoM | None                             # None si no hay mes previo (arranque en frío)
     usd_share: float                                       # % del gasto del mes originado en USD
     pendientes: list[str]                                  # líneas de alerta: manuales sin confirmar
     markdown: str
@@ -94,7 +95,8 @@ date,type,payee,amount,currency,account,category,tags,notes
 - `por_categoria`: agrupa expenses posted del mes por categoría, ordena desc, `pct` sobre gasto total.
 - **Drift MoM**: compara ingreso/gasto/neto del mes vs el mes calendario anterior (abs y %); si no hay datos previos, `pct=None`.
 - **USD share**: `Σ to_base(expenses posted del mes con currency=USD) / gasto total`. Si gasto=0 → `0.0`.
-- **Presupuestos / metas**: se piden a `estado_presupuesto` y `progreso_metas` (P4); P5 sólo los formatea. ETA/on-track sólo en metas **definidas** (las indefinidas muestran sólo acumulado).
+- **Safe-to-spend / sobres / metas**: se piden a `safe_to_spend`, `estado_presupuesto` y `progreso_metas` (P4); P5 sólo los formatea. El **safe-to-spend** es número de cabecera del reporte; los **sobres** muestran asignado/gastado/disponible/rollover. ETA/on-track sólo en metas **definidas** (las indefinidas muestran sólo acumulado).
+- **Arranque en frío (ADR-009):** sin mes previo, `drift_mom=None` y los sobres aún no acumulan rollover; el reporte degrada con elegancia (no rompe). El importer (abajo) sigue disponible para backfillear historial de LM si se decide después.
 - **Pendientes**: si `por_pagar` (P3) reporta recurrentes manuales del mes sin confirmar, emite línea de alerta (cuenta + total estimado).
 - `markdown` se genera con el renderer puro a partir de `datos`; las dos vistas (chat MCP / frontend P6) consumen el mismo objeto.
 
@@ -121,8 +123,8 @@ date,type,payee,amount,currency,account,category,tags,notes
 **Reportes**
 - Agregados correctos: ingreso/gasto/neto sólo con `posted`; `planned` y `transfer` excluidos de ingreso/gasto.
 - Por categoría ordenado y con `pct` correcto; respeta `exclude_*`.
-- **Drift MoM** con y sin mes anterior; **USD share** correcto y `0.0` si gasto 0.
-- Presupuestos/metas formateados desde P4 (definida con ETA, indefinida sin ETA).
+- **Drift MoM** con y sin mes anterior (`None` en arranque en frío); **USD share** correcto y `0.0` si gasto 0.
+- **Safe-to-spend** y sobres (con rollover) formateados desde P4; metas (definida con ETA, indefinida sin ETA).
 - Línea de pendientes aparece sólo si hay manuales sin confirmar.
 - Renderer markdown determinista para un `ReporteMensual` dado.
 
