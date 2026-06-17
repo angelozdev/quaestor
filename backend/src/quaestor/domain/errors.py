@@ -1,21 +1,21 @@
-"""Errores tipados del dominio. P1 los mapea a 4xx; P2 a texto para el agente."""
+"""Typed domain errors. P1 maps these to 4xx; P2 surfaces them as agent text."""
 
 
 class QuaestorError(Exception):
-    """Base de todos los errores de dominio de Quaestor."""
+    """Base class for all Quaestor domain errors."""
 
 
 class ValidationError(QuaestorError):
-    """Entrada inválida: monto ≤ 0, moneda no soportada, id archivado, tipo inválido."""
+    """Invalid input: amount <= 0, unsupported currency, archived id, invalid type."""
 
 
 class MissingRate(QuaestorError):
-    """Falta tasa usd_cop para una tx no-COP sin fx_rate explícito."""
+    """Missing usd_cop rate for a non-COP transaction without an explicit fx_rate."""
 
 
 class TransferImbalance(QuaestorError):
-    """Transferencia inválida: origen == destino o el par no cuadra."""
+    """Invalid transfer: source == destination or the pair does not balance."""
 
 
 class NotFound(QuaestorError):
-    """Id inexistente en una lectura o escritura."""
+    """Nonexistent id in a read or write operation."""
