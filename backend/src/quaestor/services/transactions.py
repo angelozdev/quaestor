@@ -335,8 +335,8 @@ def list_transactions(
         stmt = stmt.where(Transaction.date <= date_to)
     if tag is not None:
         stmt = (
-            stmt.join(TransactionTag, TransactionTag.transaction_id == Transaction.id)
-            .join(Tag, Tag.id == TransactionTag.tag_id)
+            stmt.join(TransactionTag, TransactionTag.transaction_id == Transaction.id)  # type: ignore[arg-type]
+            .join(Tag, Tag.id == TransactionTag.tag_id)  # type: ignore[arg-type]
             .where(Tag.name == tag)
         )
     return list(session.exec(stmt.order_by(Transaction.date)).all())

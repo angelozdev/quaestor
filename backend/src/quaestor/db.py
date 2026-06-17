@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy.engine import Engine
@@ -36,13 +36,13 @@ def init_db(target_engine: Engine = engine) -> None:
 
 
 @contextmanager
-def get_session(target_engine: Engine = engine) -> Iterator[Session]:
+def get_session(target_engine: Engine = engine) -> Generator[Session, None, None]:
     with Session(target_engine) as s:
         yield s
 
 
 @contextmanager
-def atomic(session: Session) -> Iterator[Session]:
+def atomic(session: Session) -> Generator[Session, None, None]:
     try:
         yield session
         session.commit()
