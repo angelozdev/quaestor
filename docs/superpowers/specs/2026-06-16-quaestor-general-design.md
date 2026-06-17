@@ -1,10 +1,22 @@
-# Quaestor — Diseño
+# Quaestor — Diseño General (paraguas)
 
 > *Quaestor*: el magistrado romano a cargo del tesoro. Le hablas a tu Quaestor para registrar, consultar y planear tu plata.
 
 **Fecha:** 2026-06-16
 **Estado:** diseño aprobado, pendiente plan de implementación
 **Autor:** angelozam17 (+ asistente)
+
+Este es el **diseño general**. Fija lo transversal (objetivo, arquitectura, modelo de datos, convenciones de dinero, auth, despliegue) y descompone el sistema en **8 sub-proyectos**, cada uno con su propio design. Ver [§12 Sub-proyectos](#12-sub-proyectos).
+
+Sub-specs (en esta misma carpeta):
+- `2026-06-16-P0-core-design.md`
+- `2026-06-16-P1-api-auth-design.md`
+- `2026-06-16-P2-mcp-design.md`
+- `2026-06-16-P3-motor-temporal-design.md`
+- `2026-06-16-P4-presupuestos-metas-design.md`
+- `2026-06-16-P5-reportes-importer-design.md`
+- `2026-06-16-P6-frontend-design.md`
+- `2026-06-16-P7-despliegue-design.md`
 
 ---
 
@@ -270,15 +282,24 @@ date,type,payee,amount,currency,account,category,tags,notes
 
 ---
 
-## 12. Orden sugerido de implementación (para el plan)
+## 12. Sub-proyectos
 
-1. **Core:** `domain` (models, money/FX, rules) + `db` + tests de cálculo.
-2. **Services base:** transactions, accounts, categories, fx + tests.
-3. **MCP server** mínimo (registrar/consultar) → probar el flujo NL end-to-end temprano.
-4. **HTTP API** espejo + auth (token).
-5. **Recurrentes + planned + por_pagar + rollover** (la lógica temporal).
-6. **Budgets + goals**.
-7. **Reportes**.
-8. **Importer CSV**.
-9. **Frontend** (dashboard + por-pagar primero, luego CRUDs y reportes).
-10. **Despliegue:** Docker Compose + Caddy + Litestream.
+El sistema se construye como **8 sub-proyectos**, cada uno con su propio design en esta carpeta. Cada uno tiene un propósito claro, una interfaz bien definida, y se entiende/testea de forma aislada.
+
+| # | Proyecto | Qué incluye | Depende de | Spec |
+|---|---|---|---|---|
+| **P0** | **Core** | domain (models, money/FX, rules), db/SQLite, services base: accounts, categories, transactions, transfers | — | `…-P0-core-design.md` |
+| **P1** | **HTTP API + Auth** | FastAPI REST espejo de services, token `APP_TOKEN`, contrato para el frontend | P0 | `…-P1-api-auth-design.md` |
+| **P2** | **MCP server** | transporte remoto streamable-HTTP, auth, tools sobre services (interfaz en lenguaje natural) | P0 | `…-P2-mcp-design.md` |
+| **P3** | **Motor temporal** | recurrentes (auto/manual), `planned`/Por-pagar, `cerrar_mes` (rollover) | P0 | `…-P3-motor-temporal-design.md` |
+| **P4** | **Presupuestos + Metas** | budgets categoría×mes, metas (definida/indefinida, monto fijo) | P0 | `…-P4-presupuestos-metas-design.md` |
+| **P5** | **Reportes + Importer** | `reporte_mensual` (markdown), importer CSV bulk | P0, P3, P4 | `…-P5-reportes-importer-design.md` |
+| **P6** | **Frontend** | Next.js: dashboard, Por-pagar, CRUDs, reportes | P1 | `…-P6-frontend-design.md` |
+| **P7** | **Despliegue** | Docker Compose, Caddy, Litestream, VPS | todos | `…-P7-despliegue-design.md` |
+
+**Orden de build:** `P0 → (P1 ∥ P2) → P3 → P4 → P5 → P6 → P7`.
+El frontend (P6) puede arrancar apenas exista el contrato de P1 y crecer feature por feature conforme aterrizan P3/P4/P5.
+
+**Cómo se reparte el modelo de datos** (definido completo en §5): P0 crea Account, Category, Transaction (con `status`), Tag, FxRate, Settings. P3 agrega RecurringItem, RecurringOccurrence y la semántica `planned`. P4 agrega Budget, Goal, GoalContribution. Cada sub-proyecto añade sus migraciones; ninguno redefine lo de otro.
+
+**Convenciones transversales que todos respetan:** dinero en centavos (int), agregados en `to_base` COP, signo por `type`, **solo `posted` cuenta** en balances/reportes, transferencias y rollover atómicos e idempotentes. Cada sub-spec asume estas reglas; no las re-litiga.
