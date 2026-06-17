@@ -15,7 +15,7 @@ Exponer los services de P0 como una **HTTP API REST** (FastAPI), protegida por a
 ## Alcance
 
 **Incluye:**
-- App FastAPI + routers REST espejo de los services de P0: `/transactions`, `/accounts`, `/categories`, `/tags`, `/fx`, `/settings`.
+- App FastAPI + routers REST espejo de los services de P0: `/transactions`, `/accounts`, `/category-groups`, `/categories`, `/tags`, `/fx`, `/settings`.
 - Auth single-user de doble camino: bearer token estático (`APP_TOKEN`) **y** sesión por cookie (login/logout con contraseña).
 - CORS para el origin del frontend.
 - Schemas Pydantic de request/response (reutilizando los modelos SQLModel de P0).
@@ -76,7 +76,8 @@ Base path: `/api`. Todos los endpoints (salvo `/auth/login`) requieren auth. Con
 |---|---|
 | **Transactions** | `GET /transactions` (filtros: `date_from`, `date_to`, `account_id`, `category_id`, `tag`, `type`, `status`) · `GET /transactions/{id}` · `POST /transactions` (gasto/ingreso, despacha a `registrar_gasto`/`registrar_ingreso` según `type`) · `POST /transactions/transfer` → `transferir` (crea el par atómico) · `PATCH /transactions/{id}` · `DELETE /transactions/{id}` |
 | **Accounts** | `GET /accounts` (`?archived=`) · `GET /accounts/{id}` · `POST /accounts` · `PATCH /accounts/{id}` · `DELETE /accounts/{id}` (archiva) |
-| **Categories** | `GET /categories` · `GET /categories/{id}` · `POST /categories` · `PATCH /categories/{id}` · `DELETE /categories/{id}` (archiva) |
+| **CategoryGroups** | `GET /category-groups` · `POST /category-groups` · `PATCH /category-groups/{id}` · `DELETE /category-groups/{id}` (archiva) — entidad de grupo (ADR-023) |
+| **Categories** | `GET /categories` · `GET /categories/{id}` · `POST /categories` (acepta `group_id?`) · `PATCH /categories/{id}` · `DELETE /categories/{id}` (archiva) |
 | **Tags** | `GET /tags` · `POST /tags` · `PATCH /tags/{id}` · `DELETE /tags/{id}` |
 | **FX** | `GET /fx?date=` → tasa vigente (`tasa_vigente`) · `POST /fx` → `fijar_tasa` (`{date, usd_cop}`), **override manual** (la tasa la puebla un job diario, P7/ADR-011) |
 | **Settings** | `GET /settings` · `PATCH /settings` (moneda base, config) |

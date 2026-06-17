@@ -280,3 +280,97 @@ safe_to_spend = ingreso_forecast
 **Alternativas descartadas.** B1: aportes derivados de transfers con `goal_id` (menos maquinaria, pero el usuario eligió registro explícito). B2: P4 dueño de su confirmación (P3 intacto, pero dos caminos).
 
 **Consecuencias.** Sin cambios respecto a lo ya escrito en P3/P4 (el mecanismo descrito allí queda confirmado). `confirmar_pago` que materializa transfers planeados queda como capacidad reutilizable más allá de metas.
+
+---
+
+## ADR-019 — Reporte mensual retrospectivo (titular = neto + desempeño de sobres; safe-to-spend al pie)
+
+**Estado:** aceptado (caso C1) · **Cambia** el rol del safe-to-spend en el reporte (§9, P5: era "número de cabecera")
+
+**Contexto.** Dos superficies muestran números del mes: el **dashboard** (vivo, mes actual, headline = safe-to-spend "cuánto me queda") y el **reporte** (`/reports`, selector de mes). El spec original ponía **safe-to-spend como número de cabecera del reporte**. Pero safe-to-spend es *forward-looking* ("lo que me queda por gastar"): en un mes ya cerrado es solo el sobrante, un titular raro. Riesgo: reporte ≈ dashboard con date-picker → redundante.
+
+**Decisión.** El reporte mensual es **retrospectivo puro** y responde *"¿cómo me fue?"*. Su **titular es el neto del mes + el desempeño de los sobres** (cuántos en verde/rojo, cuánto rollover generaste para el mes siguiente) — justo lo que LM no cuenta. El **safe-to-spend baja a dato de cierre al pie** ("cerraste con $X libres"), no es el titular. El dashboard sigue dueño del safe-to-spend en vivo. Roles separados, cero redundancia.
+
+**Alternativas descartadas.** (B) safe-to-spend congelado como titular del reporte → reporte ≈ dashboard histórico, poco valor extra y titular sin sentido en meses cerrados. (C) sin titular, todas las secciones planas (estilo LM) → pierde el "de un vistazo".
+
+**Consecuencias.** P5: el `safe_to_spend` del `ReporteMensual` pasa de "número de cabecera" a **cierre al pie**; el titular se arma con `neto` + un **resumen de desempeño de sobres** (verde/rojo + rollover total generado). El renderer markdown ordena: neto → sobres → metas → … → safe-to-spend al cierre. El dashboard (P6) no cambia (sigue mostrando safe-to-spend arriba, en vivo).
+
+---
+
+## ADR-020 — Motor de recurrencia genérico (intervalo cada-N) + materialización diaria due-driven
+
+**Estado:** aceptado (caso C2) · **Reemplaza** el `frequency` enum + `due_day` y la llave `(recurring_id, period)` del spec original (§5, P3)
+
+**Contexto.** El spec modelaba `frequency ∈ {monthly, weekly, biweekly, yearly}` con un `due_day` (día-del-mes) y una occurrence con llave única `(recurring_id, period=YYYY-MM)` → **una sola occurrence por recurrente por mes**. Eso choca con cualquier frecuencia sub-mensual: un recurrente semanal cae ~4 veces/mes, uno quincenal 2. Tal como estaba, semanal/quincenal disparaban una sola vez. Además el usuario pidió **variedad real**: mensual, cada 3 y 4 meses, semestral, anual, semanal, cada 2 semanas, etc.
+
+**Decisión.** **Motor genérico cada-N**, anclado a fecha:
+- `RecurringItem` reemplaza `frequency` + `due_day` por **`interval_unit ∈ {day, week, month, year}` + `interval_count` (≥1)**, anclado en `start_date`. Cada vencimiento = `start_date + k × intervalo`; clamp fin de mes para unit `month`/`year` (día 31 → 30/28). Cubre todo: mensual=`1 month`, trimestral=`3 month`, cada-4-meses=`4 month`, semestral=`6 month`, anual=`12 month`, semanal=`1 week`, quincenal/cada-2-semanas=`2 week`.
+- La occurrence se llavea por **`(recurring_id, due_date)`** (no por `period`). Más preciso y sigue idempotente.
+- **Materialización due-driven (no eager):** el `scheduler` diario (ADR-011/017) materializa cada día las occurrences con `due_date ≤ hoy` aún no creadas. Un **auto** postea en su fecha real (no el mes entero por adelantado → el balance no adelanta gastos); un **manual** se genera `planned` para el mes en curso, visible en "Por pagar". Días perdidos se auto-curan.
+
+**Alternativas descartadas.** (A) Solo mensual/anual (quincenal = 2 recurrentes separados) → simple pero parte ítems y no da la variedad pedida. Materialización **eager** (todo el mes de golpe al cerrar) → el balance de hoy adelanta gastos futuros, justo lo que un sistema "¿cuánto me queda?" debe evitar.
+
+**Consecuencias.** P3 se rediseña: `RecurringItem` con intervalo cada-N; occurrence por `due_date`; se **separa** la **materialización diaria de recurrentes** (due-driven, cualquier intervalo) del **cierre mensual** (rollover de sobres + propuesta de aportes de meta, que siguen siendo por `period` calendario, ADR-022). `domain/rules.py` cambia `toca_periodo`/`fecha_vencimiento` por un generador de fechas por intervalo. P7: el scheduler diario corre FX + materializar-vencidos(hoy) + ensure cierre mensual. Idempotencia ahora por `(recurring_id, due_date)`.
+
+---
+
+## ADR-021 — Tarjeta de crédito por causación (gasto al comprar; pago de extracto = transferencia)
+
+**Estado:** aceptado (caso C3)
+
+**Contexto.** `Account.type` ya incluye `credit`. Con débito/efectivo la plata sale al instante; con **tarjeta de crédito** compras hoy y el dinero sale del banco semanas después (al pagar el extracto). Faltaba decidir cuándo ese gasto golpea presupuesto y safe-to-spend.
+
+**Decisión.** **Por causación (estilo YNAB).** El gasto con tarjeta cuenta **el día de la compra** contra el sobre de su categoría y baja el safe-to-spend en ese momento. Dos reglas firmes lo sostienen:
+1. El **pago del extracto es una transferencia** (cuenta débito → cuenta tarjeta), **nunca un gasto** — si no, se contaría dos veces.
+2. El safe-to-spend y los sobres cuentan los gastos de **todas las cuentas, incluida la tarjeta**, en la fecha de compra.
+
+La cuenta de tarjeta queda como una cuenta normal con **saldo negativo = deuda**; el pago la sube hacia cero sin volver a tocar el presupuesto.
+
+**Alternativas descartadas.** Criterio de caja (el gasto con tarjeta no toca presupuesto hasta pagar el extracto) → el safe-to-spend se infla durante el mes y revienta de golpe al pagar; deshonesto para un sistema cuyo norte es "¿cuánto me queda?".
+
+**Consecuencias.** El **modelo actual ya soporta esto sin cambios estructurales**. Se documentan las dos reglas firmes en P0 (semántica de cuenta `credit`), §5/§6 del general y P4 (el `gastado`/`gasto_no_presupuestado` del safe-to-spend agregan **todas las cuentas**; el pago de extracto, al ser `transfer`, ya está excluido de gasto).
+
+---
+
+## ADR-022 — Período de presupuesto = mes calendario
+
+**Estado:** aceptado (caso C4) · confirma el supuesto del motor
+
+**Contexto.** Todo el sistema está cableado a `YYYY-MM`: cierre mensual, sobres, rollover, safe-to-spend. La alternativa era presupuestar por **ciclo de pago** (ej. del 15 al 14, anclado a cuándo entra el sueldo), útil para quien vive "de quincena a quincena".
+
+**Decisión.** **Mes calendario** (1 → fin de mes). El presupuesto, los sobres y el safe-to-spend se reinician el día 1. Es como razona la mayoría y como ya está construido el motor entero.
+
+**Alternativas descartadas.** Ciclo de pago configurable (15 → 14) → rompe el supuesto `YYYY-MM` que atraviesa P3/P4/P5; habría que re-llavear cierre, rollover y reportes a rangos arbitrarios. Caro, y el **rollover de sobres ya cubre** el caso (lo que sobra de la primera quincena queda disponible para la segunda dentro del mismo mes calendario).
+
+**Consecuencias.** Ninguna al modelo (confirma lo existente). Nota: la **materialización de recurrentes** es por fecha (due-driven, ADR-020), pero el **cierre/rollover de presupuesto y la propuesta de aportes** siguen siendo por mes calendario.
+
+---
+
+## ADR-023 — Grupo de categoría como entidad propia
+
+**Estado:** aceptado (caso C5) · **Cambia** `Category.group_name` (string) del spec original (§5, P0)
+
+**Contexto.** La categoría siempre fue entidad (tabla `Category`) y el reporte por categoría ya existe. El "grupo" (contenedor que junta categorías: "Esenciales" → Mercado, Arriendo) estaba como **texto libre** (`group_name`). El usuario quiere estructura y reportes por categoría **y por grupo**.
+
+**Decisión.** El grupo pasa a ser **entidad propia `CategoryGroup`**; cada `Category` apunta a un grupo por **FK (`group_id?`)**. Se gana: renombrar el grupo en un solo lugar, orden fijo (y color a futuro), cero typos/duplicados fantasma, y rollups de reporte por grupo limpios.
+
+**Alternativas descartadas.** Grupo como texto libre → permite agrupar en reportes, pero renombrar obliga a tocar cada categoría, los typos crean grupos duplicados y no hay orden/color. Para un usuario que quiere reportes por grupo, la entidad vale su CRUD mínimo.
+
+**Consecuencias.** P0: nueva entidad `CategoryGroup` (`name`, `sort_order`, `archived`) + servicios `crear_grupo`/`listar_grupos`; `Category.group_name` → `group_id?` (FK); `crear_categoria` recibe `group_id`. §5 del general agrega la fila `CategoryGroup` y cambia `Category`. P5: `SeccionCategoria` resuelve el nombre del grupo por FK y habilita rollup por grupo. P6: `/categories` y `/category-groups` (backlog) gestionan ambos.
+
+---
+
+## ADR-024 — Maestros y alcance v1: categoría opcional, settings mínimo, importer sin UI (confirmaciones)
+
+**Estado:** aceptado (caso C5, cierres menores) · confirma supuestos del spec
+
+**Contexto.** Barrido final de maestros/alcance: tres puntos que el spec ya asumía pero no estaban registrados como decisión.
+
+**Decisión.**
+- **Categoría opcional al registrar.** `Transaction.category_id` sigue nullable: puedes registrar "gasté 30 mil" sin categoría. El gasto sin sobre cae en `gasto_no_presupuestado` del safe-to-spend (ADR-016). Baja fricción con el agente; el reporte muestra cuánto quedó sin categorizar.
+- **Settings mínimo.** Solo `base_currency=COP` (fija) y `default_source_account_id` (ADR-015). No se agregan perillas para un solo usuario; una preferencia real futura = una fila más, no un panel.
+- **Importer como service, sin UI en v1.** `importar_csv` (formato propio) queda en P5 como contrato testeado, pero se arranca limpio (ADR-009) y el frontend v1 **no** trae pantalla `/import` (ADR-008). Usable por MCP/endpoint si hace falta puntualmente.
+
+**Alternativas descartadas.** Forzar categoría siempre (fricción); panel de settings configurable (config que nadie tocará); pantalla `/import` en v1 (UI para algo que no se usa al arrancar limpio).
+
+**Consecuencias.** Ninguna estructural — confirma lo existente. P5 mantiene el importer disponible (backfill diferido); P6 deja `/import` y el grueso de `/settings` en backlog.

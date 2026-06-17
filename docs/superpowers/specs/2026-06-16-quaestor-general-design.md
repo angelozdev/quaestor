@@ -165,12 +165,13 @@ Montos = **enteros en centavos**, nunca float. Moneda base = **COP**.
 
 | Entidad | Campos clave |
 |---|---|
-| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (centavos), `archived` |
-| **Category** | `name`, `group_name`, `is_income`, `exclude_from_budget`, `exclude_from_totals`, `archived` |
-| **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (centavos, moneda original), `currency`, `fx_rate`, `to_base` (centavos COP), `account_id`, `category_id`, `recurring_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
+| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (centavos), `archived`. **Tarjeta de crédito** = cuenta normal con saldo negativo = deuda; el gasto cuenta al comprar y el pago del extracto es una `transfer`, no un gasto (ADR-021) |
+| **CategoryGroup** | `name`, `sort_order`, `archived` — contenedor de categorías ("Esenciales", "Ocio"); entidad propia para renombrar/ordenar y reportar por grupo (ADR-023) |
+| **Category** | `name`, `group_id?` (FK CategoryGroup), `is_income`, `exclude_from_budget`, `exclude_from_totals`, `archived` |
+| **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (centavos, moneda original), `currency`, `fx_rate`, `to_base` (centavos COP), `account_id`, `category_id?`, `recurring_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
 | **Tag** + **TransactionTag** | `name`; relación m2m |
-| **RecurringItem** | `name`, `payee`, `type` (expense/income), `mode` (auto/manual), `amount` (default), `currency`, `category_id`, `account_id`, `frequency` (monthly/weekly/biweekly/yearly), `due_day`, `start_date`, `end_date?`, `active` |
-| **RecurringOccurrence** | `recurring_id`, `period` (YYYY-MM), `status` (posted/planned/skipped), `transaction_id?`, `created_at` — marca de idempotencia del rollover |
+| **RecurringItem** | `name`, `payee`, `type` (expense/income), `mode` (auto/manual), `amount` (default), `currency`, `category_id`, `account_id`, `interval_unit` (day/week/month/year), `interval_count` (≥1), `start_date` (ancla), `end_date?`, `active`. Intervalo genérico cada-N (ADR-020): mensual=`1 month`, trimestral=`3 month`, semestral=`6 month`, anual=`12 month`, semanal=`1 week`, quincenal=`2 week` |
+| **RecurringOccurrence** | `recurring_id`, `due_date` (fecha de vencimiento concreta), `status` (posted/planned/skipped), `transaction_id?`, `created_at` — marca de idempotencia, única por `(recurring_id, due_date)` (ADR-020) |
 | **Budget** (sobre) | `category_id`, `year_month` (YYYY-MM), `amount_assigned` (centavos COP). Rollover derivado del mes anterior (ADR-002/005) |
 | **Goal** | `name`, `target_amount?` (COP), `deadline?`, `monthly_amount` (COP, fijo), `savings_account_id`, `status` (active/reached/paused) |
 | **GoalContribution** | `goal_id`, `date`, `amount`, `source` (confirmado/manual), `transaction_id?` |
@@ -196,17 +197,24 @@ Par de transactions con mismo `transfer_group_id`, `type=transfer` → una resta
 
 ## 6. Lógica temporal
 
-### `cerrar_mes(YYYY-MM)` — idempotente
-**Disparo automático (ADR-017):** lo corre el `scheduler` (P7) **diario** vía `ensure_mes_cerrado(mes_actual)` — día 1 materializa, demás días no-op, día perdido se auto-cura. No es tool de usuario; el rollover se opera solo.
-1. **Recurrentes:** por cada `RecurringItem` activo que toca el periodo y no tiene `RecurringOccurrence`:
-   - `mode=auto` → postea transaction `posted` con el monto definido; occurrence `status=posted`.
-   - `mode=manual` → crea transaction **`planned`** (con `due_day`) **sin afectar balance**; occurrence `status=planned`. Aparece en "Por pagar".
+El motor temporal corre **solo**, vía el `scheduler` diario (P7). Tiene **dos relojes distintos** (ADR-020/022): la **materialización de recurrentes va por fecha** (due-driven, soporta cualquier intervalo); el **cierre de presupuesto/metas va por mes calendario**.
+
+### Materialización de recurrentes — diaria, due-driven (ADR-020)
+Cada día el scheduler materializa las `RecurringOccurrence` con `due_date ≤ hoy` que aún no existen (no el mes entero por adelantado → el balance no adelanta gastos). Por cada `RecurringItem` activo, generando fechas con `start_date + k × (interval_count × interval_unit)`:
+- `mode=auto` → postea transaction `posted` en su `due_date` con el monto definido; occurrence `status=posted`. (Un semanal postea cada semana en su fecha, no 4 de golpe.)
+- `mode=manual` → para el mes en curso se genera transaction **`planned`** (vence en `due_date`) **sin afectar balance**, visible en "Por pagar"; occurrence `status=planned`. Lo confirmas con el monto real.
+- **Idempotente** por `(recurring_id, due_date)`: un día perdido se auto-cura, re-correr no duplica.
+
+### Cierre mensual — `cerrar_mes(YYYY-MM)`, idempotente (ADR-017/022)
+**Disparo automático:** el `scheduler` corre diario `ensure_mes_cerrado(mes_actual)` — el día 1 materializa el cierre del **mes calendario**, demás días no-op, día perdido se auto-cura. No es tool de usuario.
+1. **Rollover de sobres:** arrastra el saldo positivo de cada sobre al mes siguiente (`rollover_in`, P4/ADR-005).
 2. **Metas (flexible, ADR-006):** por cada `Goal` activa → crea una obligación **`planned`** (aporte propuesto a `savings_account_id`, vence fin de periodo). **No mueve plata.** Aparece en "Por pagar"; al confirmarla se vuelve `posted` (transfer interna) y se registra la `GoalContribution`. Si el mes vino flojo, confirmas menos u omites.
-3. Re-ejecutar no duplica (la occurrence / el aporte propuesto del periodo ya existe).
+3. Re-ejecutar no duplica (el rollover / aporte propuesto del periodo ya existe).
 
 ### Recurrentes (gasto/ingreso, auto/manual)
 - `type` distingue gasto (renta, subs, Netflix) de ingreso (sueldo, freelance fijo).
-- `mode=auto` → se postea solo en el rollover.
+- `interval_unit` + `interval_count` dan la frecuencia genérica (ADR-020): semanal, quincenal, mensual, trimestral, cada-4-meses, semestral, anual…
+- `mode=auto` → se postea solo en su `due_date`.
 - `mode=manual` → cae como `planned`; lo confirmas con el monto real (útil para variables: luz, agua, tarjeta).
 
 ### Pagos futuros / "Por pagar"
@@ -228,6 +236,7 @@ Dos capas que son **un solo modelo** (nada se cuenta dos veces):
 
 **1. Sobres por categoría con rollover.** Cada categoría tiene un sobre mensual (`Budget`). 
 - `disponible(cat, mes) = rollover_in + asignado − gastado_posted`, con `gastado = Σ to_base(expense, cat, mes, posted, respetando exclude_flags)`.
+- **Por causación, todas las cuentas (ADR-021).** `gastado` suma los gastos de **todas las cuentas incluida la tarjeta de crédito**, en la **fecha de compra** (no al pagar el extracto). El pago del extracto es una `transfer` (débito → tarjeta), ya excluida de gasto → nunca se cuenta dos veces.
 - **Rollover:** `rollover_in(cat, mes) = max(disponible(cat, mes−1), 0)` → lo no gastado se arrastra; el sobregiro se absorbe en el pozo global y el sobre **resetea a 0** (ADR-005).
 
 **2. Safe-to-spend global** = plata que **no** has asignado a ningún sobre. Sobres **opcionales** (A4/ADR-016): solo algunas categorías llevan sobre; el resto gasta directo del pozo.
@@ -244,14 +253,14 @@ safe_to_spend(mes) = ingreso_forecast(mes)
 - `gasto_no_presupuestado` = gasto en categorías **sin sobre** (sin esto el pozo sobreestimaría lo libre, A4).
 - `sobregiro` = lo gastado de más en un sobre sobre `asignado + rollover_in` (ADR-005); `rollover_in` (plata previa) no suma al pozo de este mes.
 
-`estado_presupuesto(categoría, mes)` devuelve el estado del sobre (`asignado`, `rollover_in`, `gastado`, `disponible`, `pct_usado`, over/under). `safe_to_spend(mes)` devuelve el número de cabecera + su desglose. Detalle completo en P4.
+`estado_presupuesto(categoría, mes)` devuelve el estado del sobre (`asignado`, `rollover_in`, `gastado`, `disponible`, `pct_usado`, over/under). `safe_to_spend(mes)` devuelve el número de cabecera **del dashboard en vivo** + su desglose (en el reporte mensual va al pie, ADR-019). Detalle completo en P4.
 
 ---
 
 ## 7. Services, MCP y API
 
 ### Capa `services` (el cerebro)
-`registrar_gasto · registrar_ingreso · transferir · planear_pago · confirmar_pago · por_pagar · crear_recurrente · listar_recurrentes · fijar_presupuesto · estado_presupuesto · safe_to_spend · crear_meta · aporte_meta · progreso_metas · fijar_tasa_fx · cerrar_mes · reporte_mensual · importar_csv` + reads (listar/consultar).
+`registrar_gasto · registrar_ingreso · transferir · crear_grupo · crear_categoria · planear_pago · confirmar_pago · por_pagar · crear_recurrente · listar_recurrentes · materializar_vencidos · fijar_presupuesto · estado_presupuesto · safe_to_spend · crear_meta · aporte_meta · progreso_metas · fijar_tasa_fx · cerrar_mes · reporte_mensual · importar_csv` + reads (listar/consultar). `materializar_vencidos` y `cerrar_mes` los corre el scheduler (P7), no el usuario.
 
 ### Tools MCP
 1 tool = 1 service (adaptador delgado). Mismos verbos. El agente registra, consulta, cierra mes, pregunta "¿qué me falta por pagar?", pide reporte — todo en lenguaje natural → tool → service.
@@ -270,10 +279,10 @@ Routers REST espejo de services: `/transactions /accounts /categories /tags /rec
 | `/` **Dashboard** | ingreso vs gasto del mes + neto · **widget "Por pagar"** (esta semana / este mes + total + marcar pagado) · avance de metas · balances · presupuestos en riesgo |
 | `/transactions` | CRUD completo, tabla filtrable (fecha/cuenta/categoría/tag/tipo/status) |
 | `/por-pagar` | lista de `planned`, confirmar pago (monto real), planear pago suelto |
-| `/recurring` | CRUD recurrentes (type, mode auto/manual, frequency+due_day) |
+| `/recurring` | CRUD recurrentes (type, mode auto/manual, intervalo cada-N: unit + count) |
 | `/budgets` | fijar presupuesto categoría×mes, estado vs real |
 | `/goals` | CRUD metas (definida/indefinida), progreso/ETA, aporte manual |
-| `/accounts` · `/categories` · `/tags` | CRUD maestros + flags + balances |
+| `/accounts` · `/categories` · `/category-groups` · `/tags` | CRUD maestros (grupos de categoría como entidad, ADR-023) + flags + balances |
 | `/reports` | reporte mensual (render markdown + tablas), selector de mes |
 | `/import` | subir CSV bulk |
 | `/settings` | moneda base, tasa FX (usd_cop), contraseña |
@@ -284,7 +293,9 @@ Routers REST espejo de services: `/transactions /accounts /categories /tags /rec
 
 `reporte_mensual(mes)` devuelve `(datos estructurados, markdown)`. MCP muestra el markdown en el chat; frontend renderiza datos + markdown.
 
-**Contenido:** ingreso / gasto / neto · **safe-to-spend del mes** · por categoría · **sobres (asignado / gastado / disponible / rollover)** · metas (acumulado + ETA en las definidas) · balances de cuentas · drift MoM · USD share · **recurrentes / pagos pendientes** (línea de alerta si hay manuales sin confirmar).
+**Reporte retrospectivo (ADR-019):** responde *"¿cómo me fue?"* (no "cuánto me queda" — eso es el dashboard en vivo). El **titular es el neto del mes + el desempeño de sobres** (cuántos en verde/rojo, cuánto rollover generaste); el **safe-to-spend va al pie como cierre** ("cerraste con $X libres"), no como cabecera.
+
+**Contenido (en orden):** **neto** (ingreso / gasto) · **desempeño de sobres** (asignado / gastado / disponible / rollover; resumen verde-rojo + rollover total generado) · por categoría y **por grupo** (ADR-023) · metas (acumulado + ETA en las definidas) · balances de cuentas · drift MoM · USD share · **recurrentes / pagos pendientes** (línea de alerta si hay manuales sin confirmar) · **safe-to-spend de cierre** (al pie).
 
 > **Arranque en frío (ADR-009):** los primeros ~2-3 meses el reporte degrada con elegancia — sin mes previo no hay drift MoM, los sobres aún no acumulan rollover. El importer CSV (§10) sigue disponible para backfillear historial de LM si se decide después.
 
@@ -335,6 +346,6 @@ El sistema se construye como **8 sub-proyectos**, cada uno con su propio design 
 **Orden de build:** `P0 → (P1 ∥ P2) → P3 → P4 → P5 → P6 → P7`.
 El frontend (P6) puede arrancar apenas exista el contrato de P1 y crecer feature por feature conforme aterrizan P3/P4/P5.
 
-**Cómo se reparte el modelo de datos** (definido completo en §5): P0 crea Account, Category, Transaction (con `status`), Tag, FxRate, Settings. P3 agrega RecurringItem, RecurringOccurrence y la semántica `planned`. P4 agrega Budget (con semántica de rollover), Goal, GoalContribution, y enlaza el aporte propuesto de meta a la cola `planned` de P3 (vía `goal_id` en la tx propuesta). Cada sub-proyecto añade sus migraciones; ninguno redefine lo de otro.
+**Cómo se reparte el modelo de datos** (definido completo en §5): P0 crea Account, CategoryGroup, Category, Transaction (con `status`), Tag, FxRate, Settings. P3 agrega RecurringItem, RecurringOccurrence y la semántica `planned`. P4 agrega Budget (con semántica de rollover), Goal, GoalContribution, y enlaza el aporte propuesto de meta a la cola `planned` de P3 (vía `goal_id` en la tx propuesta). Cada sub-proyecto añade sus migraciones; ninguno redefine lo de otro.
 
 **Convenciones transversales que todos respetan:** dinero en centavos (int), agregados en `to_base` COP, signo por `type`, **solo `posted` cuenta** en balances/reportes, transferencias y rollover atómicos e idempotentes. Cada sub-spec asume estas reglas; no las re-litiga.

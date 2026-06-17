@@ -14,7 +14,7 @@ Poner Quaestor en línea: un **VPS self-hosted**, **single-user**, con dominio +
 
 - `docker-compose.yml`: servicios `api`, `mcp`, `frontend`, `caddy`, **`tailscale`** (sidecar que sirve `/mcp` en la red privada) y **`scheduler`** (job diario de FX). La DB (`quaestor.db`) vive en un **volumen persistente compartido por `api` y `mcp`**.
 - `Caddyfile`: un dominio, enrutado por path. HTTPS automático (Let's Encrypt). **Solo publica frontend + `/api/*`; `/mcp` no sale a internet** (lo sirve Tailscale).
-- **Scheduler diario (ADR-011/017):** el `scheduler` corre, **cada día**, dos jobs: (a) **FX** — pega a una API gratis y actualiza `usd_cop` en `FxRate` (`python -m quaestor.jobs.fx_fetch` → `fijar_tasa_fx`); (b) **`ensure_mes_cerrado`** — asegura que el mes actual esté cerrado (`cerrar_mes(mes_actual)`, idempotente): el día 1 lo materializa, los demás días son no-op, un día perdido se auto-cura. El rollover se opera **solo**, no a mano.
+- **Scheduler diario (ADR-011/017/020):** el `scheduler` corre, **cada día**, tres jobs idempotentes: (a) **FX** — pega a una API gratis y actualiza `usd_cop` en `FxRate` (`python -m quaestor.jobs.fx_fetch` → `fijar_tasa_fx`); (b) **`materializar_vencidos(hoy)`** — materializa las occurrences de recurrentes con `due_date ≤ hoy` (due-driven, soporta cualquier intervalo: semanal, quincenal, mensual…; auto postea en su fecha, manual cae en "Por pagar"); (c) **`ensure_mes_cerrado`** — asegura el cierre del **mes calendario** actual (`cerrar_mes(mes_actual)`: rollover de sobres + propuesta de aportes de meta): el día 1 lo materializa, los demás días son no-op, un día perdido se auto-cura. El motor temporal se opera **solo**, no a mano.
 - Variables de entorno (`.env`, no commiteado): `APP_TOKEN`, hash de contraseña del frontend, dominio, ruta de la DB, config de Litestream, **`TS_AUTHKEY`** (Tailscale), **`FX_API_URL`/`FX_API_KEY`** (proveedor de tasa).
 - Backups con **Litestream** (replicación continua a un bucket) + restauración; mínimo alterno: cron `sqlite3 .backup` diario.
 - Pasos de deploy (`git pull && docker compose up -d --build`) y cómo conectar Claude Code al `/mcp` **por Tailscale**.
@@ -35,7 +35,7 @@ Poner Quaestor en línea: un **VPS self-hosted**, **single-user**, con dominio +
 | `frontend` | Next.js App Router (P6), `:3000` interno | node, build standalone |
 | `caddy` | Reverse proxy + HTTPS auto, único que publica `80/443` al host (frontend + `/api/*`) | `caddy:2` |
 | `tailscale` | Sidecar que une el VPS al tailnet y **sirve `/mcp`** en la red privada (`tailscale serve` → `mcp:9000`). No publica puertos al host | `tailscale/tailscale` |
-| `scheduler` | Jobs diarios: fetch de tasa FX → `FxRate` + `ensure_mes_cerrado` (cerrar_mes idempotente del mes actual, ADR-017) | Python 3.12 + uv (reusa imagen `api`) |
+| `scheduler` | Jobs diarios idempotentes: fetch de tasa FX → `FxRate` + `materializar_vencidos(hoy)` (recurrentes due-driven, ADR-020) + `ensure_mes_cerrado` (cierre del mes calendario, ADR-017) | Python 3.12 + uv (reusa imagen `api`) |
 | `litestream` | Sidecar (o proceso dentro de `api`) replicando la DB | `litestream/litestream` |
 | volumen `quaestor-data` | Persiste `quaestor.db` (+ `-wal`, `-shm`) | named volume Docker |
 
@@ -89,7 +89,7 @@ services:
     restart: unless-stopped
   scheduler:                       # job diario de FX (ADR-011)
     build: ./backend
-    command: ["./scripts/cron.sh"]  # crond diario: fx_fetch + ensure_mes_cerrado (idempotente)
+    command: ["./scripts/cron.sh"]  # crond diario: fx_fetch + materializar_vencidos + ensure_mes_cerrado (idempotente)
     environment: [DB_PATH, FX_API_URL, FX_API_KEY]
     volumes: ["quaestor-data:/data"]
     restart: unless-stopped
@@ -188,7 +188,7 @@ Verificación manual (single-user, sin CI):
 2. `https://$DOMAIN/` sirve el **frontend por HTTPS** con cert válido (no warning de browser).
 3. `curl -H "Authorization: Bearer $APP_TOKEN" https://$DOMAIN/api/accounts` responde 200; **sin** el header responde 401. **`https://$DOMAIN/mcp` NO responde** (no está enrutado en Caddy → confirma que `/mcp` no es público).
 4. **Por Tailscale:** `curl https://quaestor-mcp.<tailnet>.ts.net/mcp ...` y, end-to-end, **Claude Code (en el tailnet) conecta** al `/mcp`, lista las tools y ejecuta una (p. ej. registrar un gasto). Un equipo **fuera del tailnet** no alcanza el endpoint.
-5. **Scheduler:** tras una corrida hay tasa `usd_cop` para hoy en `FxRate`; y `ensure_mes_cerrado` deja el mes actual cerrado (recurrentes posteados/propuestos), siendo no-op en la segunda corrida (idempotente). `fijar_tasa_fx` manual sigue como override.
+5. **Scheduler:** tras una corrida hay tasa `usd_cop` para hoy en `FxRate`; `materializar_vencidos(hoy)` deja las occurrences vencidas materializadas (auto posteado, manual en "Por pagar"); y `ensure_mes_cerrado` deja el mes calendario cerrado (rollover + aportes propuestos). Todo **no-op en la segunda corrida** (idempotente). `fijar_tasa_fx` manual sigue como override.
 6. El volumen **persiste**: `docker compose restart` mantiene los datos.
 7. **Backup restaurable:** `litestream restore` (o la copia diaria) reconstruye `quaestor.db` en un directorio limpio y el `api` arranca sobre esa DB con los datos intactos. (No es backup hasta que la restauración se prueba.)
 

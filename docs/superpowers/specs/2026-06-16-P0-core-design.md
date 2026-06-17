@@ -30,8 +30,9 @@ P0 crea **solo** estas entidades (resto en §5 del general, añadidas por otros 
 
 | Entidad | Campos clave |
 |---|---|
-| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (centavos), `archived` |
-| **Category** | `name`, `group_name`, `is_income`, `exclude_from_budget`, `exclude_from_totals`, `archived` |
+| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (centavos), `archived`. **Tarjeta de crédito** (`type=credit`): cuenta normal con saldo negativo = deuda; el pago del extracto es una `transfer` (débito → tarjeta), no un gasto (ADR-021) |
+| **CategoryGroup** | `name`, `sort_order`, `archived` — contenedor de categorías; entidad propia (ADR-023) |
+| **Category** | `name`, `group_id?` (FK CategoryGroup), `is_income`, `exclude_from_budget`, `exclude_from_totals`, `archived` |
 | **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (centavos, moneda original), `currency`, `fx_rate`, `to_base` (centavos COP), `account_id`, `category_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
 | **Tag** + **TransactionTag** | `name`; relación m2m |
 | **FxRate** | `date`, `usd_cop` (tasa); único por fecha |
@@ -58,7 +59,9 @@ consultar_cuenta(account_id) -> Account
 archivar_cuenta(account_id) -> Account
 
 # categories.py
-crear_categoria(name, group_name=None, is_income=False, **flags) -> Category
+crear_grupo(name, sort_order=0) -> CategoryGroup              # entidad de grupo (ADR-023)
+listar_grupos(incluir_archivados=False) -> list[CategoryGroup]
+crear_categoria(name, group_id=None, is_income=False, **flags) -> Category
 listar_categorias(incluir_archivadas=False) -> list[Category]
 
 # tags.py

@@ -70,13 +70,13 @@ components/
 |---|---|---|---|
 | `/login` | **v1** | contraseña → sesión; redirige a `/` | `POST /auth/login` |
 | `/` **Dashboard** | **v1** | **safe-to-spend del mes** · **widget Por pagar** (toggle esta-semana/este-mes + total + marcar pagado) · ingreso/gasto/neto · avance de metas · balances · sobres en riesgo | `/reports?month`, `/budgets/safe-to-spend`, `/planned`, `/goals`, `/accounts`, `/budgets` |
-| `/reports` | **v1** | reporte mensual: render markdown + tablas (incl. safe-to-spend + sobres); **selector de mes** | `GET /reports?month` |
+| `/reports` | **v1** | reporte **retrospectivo** (ADR-019): titular neto + desempeño de sobres; por categoría/grupo; safe-to-spend al pie; **selector de mes** | `GET /reports?month` |
 | `/transactions` | backlog | CRUD completo; tabla filtrable por fecha/cuenta/categoría/tag/tipo/status | `GET/POST/PATCH/DELETE /transactions` |
 | `/por-pagar` | backlog | lista de `planned`; **confirmar pago** (monto real, fecha) y **planear pago suelto** | `GET /planned`, `POST /planned/{id}/confirm`, `POST /planned` |
-| `/recurring` | backlog | CRUD recurrentes (type, mode auto/manual, frequency + due_day) | `…/recurring` |
+| `/recurring` | backlog | CRUD recurrentes (type, mode auto/manual, intervalo cada-N: unit + count) | `…/recurring` |
 | `/budgets` | backlog | asignar sobres categoría×mes; estado con rollover; safe-to-spend | `GET/PUT /budgets`, `GET /budgets/status?month`, `GET /budgets/safe-to-spend?month` |
 | `/goals` | backlog | CRUD metas (definida/indefinida), progreso + ETA, **aporte manual** (el mensual se confirma en Por-pagar) | `…/goals`, `POST /goals/{id}/contribute` |
-| `/accounts` `/categories` `/tags` | backlog | CRUD maestros + flags (archived, is_income, exclude_*) + balances | `…/accounts` `…/categories` `…/tags` |
+| `/accounts` `/categories` `/category-groups` `/tags` | backlog | CRUD maestros (grupos de categoría como entidad, ADR-023) + flags (archived, is_income, exclude_*) + balances | `…/accounts` `…/categories` `…/category-groups` `…/tags` |
 | `/import` | backlog | subir CSV bulk; muestra **errores por línea** del validador de P5 | `POST /import` (multipart) |
 | `/settings` | backlog | moneda base, **tasa FX usd_cop** (auto-fetch + override manual), cambiar contraseña | `…/settings`, `…/fx`, `POST /auth/change-password` |
 
@@ -108,7 +108,7 @@ Toda ruta salvo `/login` exige sesión: sin cookie válida → redirect a `/logi
 **Criterio de "listo" v1 (mínimo aceptable, ADR-008):**
 1. **Login funciona:** contraseña → sesión → acceso al shell; rutas protegidas redirigen sin sesión; logout limpia.
 2. **Dashboard muestra el safe-to-spend del mes + "Por pagar"** con toggle esta-semana/este-mes + total, y **permite marcar pagado** reflejando el cambio (Por-pagar, safe-to-spend y balances se actualizan).
-3. **`/reports` renderiza el reporte mensual** (markdown + tablas, incl. safe-to-spend y sobres) con selector de mes, degradando con elegancia en arranque en frío (sin drift MoM).
+3. **`/reports` renderiza el reporte mensual retrospectivo** (ADR-019: titular neto + desempeño de sobres, por categoría/grupo, safe-to-spend al pie) con selector de mes, degradando con elegancia en arranque en frío (sin drift MoM).
 
 **Backlog (post-v1):** CRUD de transacciones y el resto de pantallas (por-pagar dedicada, recurring, budgets, goals, masters, import, settings) operativas contra sus endpoints — se construyen feature por feature; mientras tanto se operan por agente.
 

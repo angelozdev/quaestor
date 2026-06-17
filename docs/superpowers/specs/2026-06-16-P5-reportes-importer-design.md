@@ -33,7 +33,7 @@ Dar dos capacidades de cierre del ciclo: **leer** el mes con un reporte mensual 
 
 - `services/reports.py` — `reporte_mensual`, helpers de agregación.
 - `services/importer.py` — `importar_csv`, parser y validación de filas.
-- `domain/report_types.py` — dataclasses del contrato (`ReporteMensual`, `SafeToSpend`, `SeccionCategoria`, `LineaSobre`, `LineaMeta`, `BalanceCuenta`, `DriftMoM`, `ResultadoImport`, `ErrorFila`).
+- `domain/report_types.py` — dataclasses del contrato (`ReporteMensual`, `SafeToSpend`, `SobresResumen`, `SeccionCategoria`, `SeccionGrupo`, `LineaSobre`, `LineaMeta`, `BalanceCuenta`, `DriftMoM`, `ResultadoImport`, `ErrorFila`).
 - `domain/report_markdown.py` — renderer puro `datos -> str markdown` (sin I/O, testeable solo).
 - Reúsa de P0: `transactions` (reads, `registrar_*`), `money`/`fx` (`to_base`, `tasa_vigente`), maestros (resolver cuenta/categoría por nombre). De P3: `por_pagar`, occurrences. De P4: `estado_presupuesto`, `safe_to_spend`, `progreso_metas`.
 
@@ -46,17 +46,19 @@ def importar_csv(contenido: str, *, dry_run: bool = False) -> ResultadoImport
 
 ```python
 @dataclass
-class ReporteMensual:
+class ReporteMensual:                                      # RETROSPECTIVO (ADR-019): "¿cómo me fue?"
     mes: str
-    ingreso: int; gasto: int; neto: int                    # centavos COP, solo posted
-    safe_to_spend: SafeToSpend                             # número de cabecera (de P4): libre + desglose
-    por_categoria: list[SeccionCategoria]                  # (categoria, group_name, total, pct)
+    ingreso: int; gasto: int; neto: int                    # centavos COP, solo posted — TITULAR
+    sobres_resumen: SobresResumen                          # (n_verde, n_rojo, rollover_generado) — TITULAR
     sobres: list[LineaSobre]                               # (categoria, asignado, rollover_in, gastado, disponible, estado)
+    por_categoria: list[SeccionCategoria]                  # (categoria, group, total, pct)
+    por_grupo: list[SeccionGrupo]                          # rollup por CategoryGroup (group, total, pct) — ADR-023
     metas: list[LineaMeta]                                 # (nombre, acumulado, target?, eta?, on_track?)
     balances: list[BalanceCuenta]                          # (cuenta, currency, balance)
     drift_mom: DriftMoM | None                             # None si no hay mes previo (arranque en frío)
     usd_share: float                                       # % del gasto del mes originado en USD
     pendientes: list[str]                                  # líneas de alerta: manuales sin confirmar
+    safe_to_spend: SafeToSpend                             # CIERRE al pie (no titular, ADR-019): "cerraste con $X libres"
     markdown: str
 
 @dataclass
@@ -92,10 +94,12 @@ date,type,payee,amount,currency,account,category,tags,notes
 - Todo número en **`to_base` (COP)** ya congelado en cada tx; el reporte **no reconvierte** FX.
 - **Transferencias excluidas** de ingreso/gasto/por-categoría (igual que en §5). Sí afectan balances de cuenta.
 - Respeta `exclude_from_totals` / `exclude_from_budget` al agregar (lo aplica el helper de categoría/presupuesto, alineado con P4).
-- `por_categoria`: agrupa expenses posted del mes por categoría, ordena desc, `pct` sobre gasto total.
+- `por_categoria`: agrupa expenses posted del mes por categoría, ordena desc, `pct` sobre gasto total. Incluye gasto de **todas las cuentas, incl. tarjeta de crédito** (por causación, ADR-021).
+- `por_grupo`: rollup del anterior por **`CategoryGroup`** (ADR-023) — suma las categorías de cada grupo, ordena desc, `pct` sobre gasto total. Resuelve el nombre del grupo por FK.
 - **Drift MoM**: compara ingreso/gasto/neto del mes vs el mes calendario anterior (abs y %); si no hay datos previos, `pct=None`.
 - **USD share**: `Σ to_base(expenses posted del mes con currency=USD) / gasto total`. Si gasto=0 → `0.0`.
-- **Safe-to-spend / sobres / metas**: se piden a `safe_to_spend`, `estado_presupuesto` y `progreso_metas` (P4); P5 sólo los formatea. El **safe-to-spend** es número de cabecera del reporte; los **sobres** muestran asignado/gastado/disponible/rollover. ETA/on-track sólo en metas **definidas** (las indefinidas muestran sólo acumulado).
+- **Reporte retrospectivo (ADR-019):** el **titular** es el **neto del mes** + el **desempeño de sobres** (`sobres_resumen`: cuántos en verde/rojo, `rollover_generado` = Σ disponibles positivos que ruedan al mes siguiente). El **safe-to-spend va al pie** como cierre ("cerraste con $X libres"), **no** como cabecera. El renderer ordena: neto → sobres → por categoría/grupo → metas → balances → drift/USD → pendientes → safe-to-spend.
+- **Safe-to-spend / sobres / metas**: se piden a `safe_to_spend`, `estado_presupuesto` y `progreso_metas` (P4); P5 sólo los formatea. Los **sobres** muestran asignado/gastado/disponible/rollover. ETA/on-track sólo en metas **definidas** (las indefinidas muestran sólo acumulado).
 - **Arranque en frío (ADR-009):** sin mes previo, `drift_mom=None` y los sobres aún no acumulan rollover; el reporte degrada con elegancia (no rompe). El importer (abajo) sigue disponible para backfillear historial de LM si se decide después.
 - **Pendientes**: si `por_pagar` (P3) reporta recurrentes manuales del mes sin confirmar, emite línea de alerta (cuenta + total estimado).
 - `markdown` se genera con el renderer puro a partir de `datos`; las dos vistas (chat MCP / frontend P6) consumen el mismo objeto.
