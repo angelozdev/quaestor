@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.python-version
+
+# DB
+*.db
+*.db-shm
+*.db-wal
+
+# Node / Next
+node_modules/
+.next/
+out/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store
