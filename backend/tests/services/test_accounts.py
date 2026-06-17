@@ -5,38 +5,38 @@ from quaestor.domain.models import AccountType
 from quaestor.services import accounts
 
 
-def test_crear_y_consultar_cuenta(session):
-    acc = accounts.crear_cuenta(session, "Bancolombia", AccountType.debit, "COP")
+def test_create_and_get_account(session):
+    acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP")
     assert acc.id is not None
-    assert accounts.consultar_cuenta(session, acc.id).name == "Bancolombia"
+    assert accounts.get_account(session, acc.id).name == "Bancolombia"
 
 
-def test_crear_cuenta_acepta_tipo_string(session):
-    acc = accounts.crear_cuenta(session, "Tarjeta", "credit", "COP", balance=-50000)
+def test_create_account_accepts_string_type(session):
+    acc = accounts.create_account(session, "Tarjeta", "credit", "COP", balance=-50000)
     assert acc.type == AccountType.credit
     assert acc.balance == -50000
 
 
-def test_crear_cuenta_rechaza_moneda(session):
+def test_create_account_rejects_currency(session):
     with pytest.raises(ValidationError):
-        accounts.crear_cuenta(session, "X", AccountType.cash, "EUR")
+        accounts.create_account(session, "X", AccountType.cash, "EUR")
 
 
-def test_crear_cuenta_rechaza_nombre_vacio(session):
+def test_create_account_rejects_empty_name(session):
     with pytest.raises(ValidationError):
-        accounts.crear_cuenta(session, "  ", AccountType.cash, "COP")
+        accounts.create_account(session, "  ", AccountType.cash, "COP")
 
 
-def test_listar_excluye_archivadas_por_defecto(session):
-    a = accounts.crear_cuenta(session, "A", AccountType.debit, "COP")
-    accounts.crear_cuenta(session, "B", AccountType.debit, "COP")
-    accounts.archivar_cuenta(session, a.id)
-    activas = accounts.listar_cuentas(session)
+def test_list_excludes_archived_by_default(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP")
+    accounts.create_account(session, "B", AccountType.debit, "COP")
+    accounts.archive_account(session, a.id)
+    activas = accounts.list_accounts(session)
     assert {c.name for c in activas} == {"B"}
-    todas = accounts.listar_cuentas(session, incluir_archivadas=True)
+    todas = accounts.list_accounts(session, include_archived=True)
     assert {c.name for c in todas} == {"A", "B"}
 
 
-def test_consultar_inexistente(session):
+def test_get_nonexistent(session):
     with pytest.raises(NotFound):
-        accounts.consultar_cuenta(session, 999)
+        accounts.get_account(session, 999)

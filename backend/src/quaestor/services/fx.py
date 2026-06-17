@@ -10,7 +10,7 @@ from ..domain.errors import MissingRate, ValidationError
 from ..domain.models import FxRate
 
 
-def fijar_tasa_fx(session: Session, date: Date, usd_cop) -> FxRate:
+def set_fx_rate(session: Session, date: Date, usd_cop) -> FxRate:
     rate = Decimal(str(usd_cop))
     if rate <= 0:
         raise ValidationError("usd_cop must be > 0")
@@ -28,7 +28,7 @@ def fijar_tasa_fx(session: Session, date: Date, usd_cop) -> FxRate:
     return fr
 
 
-def tasa_vigente(session: Session, date: Date) -> Decimal:
+def get_current_rate(session: Session, date: Date) -> Decimal:
     stmt = (
         select(FxRate)
         .where(FxRate.date <= date)

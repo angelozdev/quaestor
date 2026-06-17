@@ -33,7 +33,7 @@ def _get_or_create_tag(session: Session, name: str) -> Tag:
     return tag
 
 
-def crear_tag(session: Session, name: str) -> Tag:
+def create_tag(session: Session, name: str) -> Tag:
     """Create or retrieve an idempotent tag by name.
 
     If a tag with the same name already exists, returns the existing tag.
@@ -52,7 +52,7 @@ def crear_tag(session: Session, name: str) -> Tag:
     return _get_or_create_tag(session, name)
 
 
-def listar_tags(session: Session) -> list[Tag]:
+def list_tags(session: Session) -> list[Tag]:
     """List all tags ordered by name.
 
     Args:
@@ -64,7 +64,7 @@ def listar_tags(session: Session) -> list[Tag]:
     return list(session.exec(select(Tag).order_by(Tag.name)).all())
 
 
-def etiquetar(session: Session, tx_id: int, tags: list[str]) -> Transaction:
+def tag_transaction(session: Session, tx_id: int, tags: list[str]) -> Transaction:
     """Tag a transaction with the given tag names.
 
     Creates any missing tags and links them to the transaction.

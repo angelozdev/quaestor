@@ -44,10 +44,10 @@ def _resolve_fx(session: Session, currency: str, date: Date, fx_rate) -> Decimal
         return Decimal("1")
     if fx_rate is not None:
         return Decimal(str(fx_rate))
-    return fx.tasa_vigente(session, date)  # raises MissingRate if absent
+    return fx.get_current_rate(session, date)  # raises MissingRate if absent
 
 
-def _registrar(
+def _record(
     session: Session,
     tx_type: TxType,
     account_id: int,
@@ -60,7 +60,7 @@ def _registrar(
     source: str,
     fx_rate,
 ) -> Transaction:
-    """Core registration logic shared by registrar_gasto and registrar_ingreso."""
+    """Core registration logic shared by record_expense and record_income."""
     if amount <= 0:
         raise ValidationError("amount must be > 0")
     if not is_supported(currency):
@@ -99,7 +99,7 @@ def _registrar(
     return tx
 
 
-def registrar_gasto(
+def record_expense(
     session: Session,
     account_id: int,
     amount: int,
@@ -134,13 +134,13 @@ def registrar_gasto(
         NotFound: Account does not exist.
         MissingRate: Non-COP account with no rate available and no explicit fx_rate.
     """
-    return _registrar(
+    return _record(
         session, TxType.expense, account_id, amount, currency, date, payee,
         category_id, notes, source, fx_rate,
     )
 
 
-def registrar_ingreso(
+def record_income(
     session: Session,
     account_id: int,
     amount: int,
@@ -175,13 +175,13 @@ def registrar_ingreso(
         NotFound: Account does not exist.
         MissingRate: Non-COP account with no rate available and no explicit fx_rate.
     """
-    return _registrar(
+    return _record(
         session, TxType.income, account_id, amount, currency, date, payee,
         category_id, notes, source, fx_rate,
     )
 
 
-def consultar_transaccion(session: Session, tx_id: int) -> Transaction:
+def get_transaction(session: Session, tx_id: int) -> Transaction:
     """Fetch a transaction by ID.
 
     Args:
@@ -200,7 +200,7 @@ def consultar_transaccion(session: Session, tx_id: int) -> Transaction:
     return tx
 
 
-def transferir(
+def transfer(
     session: Session,
     from_account_id: int,
     to_account_id: int,
@@ -295,7 +295,7 @@ def transferir(
     return (leg_from, leg_to)
 
 
-def listar_transacciones(
+def list_transactions(
     session: Session,
     account_id: int | None = None,
     category_id: int | None = None,

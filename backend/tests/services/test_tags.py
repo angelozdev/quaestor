@@ -8,7 +8,7 @@ from quaestor.domain.models import Account, AccountType, Transaction, TxType
 from quaestor.services import tags
 
 
-def _tx_directa(session):
+def _make_transaction(session):
     acc = Account(name="A", type=AccountType.debit, currency="COP")
     session.add(acc)
     session.commit()
@@ -24,21 +24,21 @@ def _tx_directa(session):
     return tx
 
 
-def test_crear_tag_es_idempotente(session):
-    t1 = tags.crear_tag(session, "viaje")
-    t2 = tags.crear_tag(session, "viaje")
+def test_create_tag_is_idempotent(session):
+    t1 = tags.create_tag(session, "viaje")
+    t2 = tags.create_tag(session, "viaje")
     assert t1.id == t2.id
-    assert len(tags.listar_tags(session)) == 1
+    assert len(tags.list_tags(session)) == 1
 
 
-def test_etiquetar_crea_faltantes_y_no_duplica(session):
-    tx = _tx_directa(session)
-    tags.etiquetar(session, tx.id, ["viaje", "japón"])
-    tags.etiquetar(session, tx.id, ["viaje"])  # ya existe -> no duplica link
-    nombres = {t.name for t in tags.listar_tags(session)}
+def test_tag_creates_missing_and_no_duplicates(session):
+    tx = _make_transaction(session)
+    tags.tag_transaction(session, tx.id, ["viaje", "japón"])
+    tags.tag_transaction(session, tx.id, ["viaje"])  # ya existe -> no duplica link
+    nombres = {t.name for t in tags.list_tags(session)}
     assert nombres == {"viaje", "japón"}
 
 
-def test_etiquetar_tx_inexistente(session):
+def test_tag_nonexistent_transaction(session):
     with pytest.raises(NotFound):
-        tags.etiquetar(session, 999, ["x"])
+        tags.tag_transaction(session, 999, ["x"])

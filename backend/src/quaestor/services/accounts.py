@@ -8,7 +8,7 @@ from ..domain.models import Account, AccountType
 from ..domain.money import is_supported
 
 
-def crear_cuenta(
+def create_account(
     session: Session, name: str, type, currency: str, balance: int = 0
 ) -> Account:
     """Create a new account with the given parameters.
@@ -44,25 +44,25 @@ def crear_cuenta(
     return acc
 
 
-def listar_cuentas(session: Session, incluir_archivadas: bool = False) -> list[Account]:
+def list_accounts(session: Session, include_archived: bool = False) -> list[Account]:
     """List all accounts.
 
-    By default, archived accounts are excluded. Set incluir_archivadas=True to include them.
+    By default, archived accounts are excluded. Set include_archived=True to include them.
 
     Args:
         session: Database session
-        incluir_archivadas: Whether to include archived accounts
+        include_archived: Whether to include archived accounts
 
     Returns:
         List of Account objects
     """
     stmt = select(Account)
-    if not incluir_archivadas:
+    if not include_archived:
         stmt = stmt.where(Account.archived == False)  # noqa: E712
     return list(session.exec(stmt).all())
 
 
-def consultar_cuenta(session: Session, account_id: int) -> Account:
+def get_account(session: Session, account_id: int) -> Account:
     """Get an account by ID.
 
     Args:
@@ -81,7 +81,7 @@ def consultar_cuenta(session: Session, account_id: int) -> Account:
     return acc
 
 
-def archivar_cuenta(session: Session, account_id: int) -> Account:
+def archive_account(session: Session, account_id: int) -> Account:
     """Archive an account.
 
     Args:
@@ -94,7 +94,7 @@ def archivar_cuenta(session: Session, account_id: int) -> Account:
     Raises:
         NotFound: If account does not exist
     """
-    acc = consultar_cuenta(session, account_id)
+    acc = get_account(session, account_id)
     acc.archived = True
     session.add(acc)
     session.commit()

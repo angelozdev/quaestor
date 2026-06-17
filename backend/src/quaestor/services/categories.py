@@ -7,7 +7,7 @@ from ..domain.errors import ValidationError
 from ..domain.models import Category, CategoryGroup
 
 
-def crear_grupo(session: Session, name: str, sort_order: int = 0) -> CategoryGroup:
+def create_group(session: Session, name: str, sort_order: int = 0) -> CategoryGroup:
     """Create a new category group.
 
     Args:
@@ -23,32 +23,32 @@ def crear_grupo(session: Session, name: str, sort_order: int = 0) -> CategoryGro
     """
     if not name or not name.strip():
         raise ValidationError("group name is required")
-    grupo = CategoryGroup(name=name.strip(), sort_order=sort_order)
-    session.add(grupo)
+    group = CategoryGroup(name=name.strip(), sort_order=sort_order)
+    session.add(group)
     session.commit()
-    session.refresh(grupo)
-    return grupo
+    session.refresh(group)
+    return group
 
 
-def listar_grupos(
-    session: Session, incluir_archivados: bool = False
+def list_groups(
+    session: Session, include_archived: bool = False
 ) -> list[CategoryGroup]:
     """List all category groups ordered by sort_order.
 
     Args:
         session: Database session.
-        incluir_archivados: Whether to include archived groups (default: False).
+        include_archived: Whether to include archived groups (default: False).
 
     Returns:
         List of CategoryGroup objects ordered by sort_order.
     """
     stmt = select(CategoryGroup)
-    if not incluir_archivados:
+    if not include_archived:
         stmt = stmt.where(CategoryGroup.archived == False)  # noqa: E712
     return list(session.exec(stmt.order_by(CategoryGroup.sort_order)).all())
 
 
-def crear_categoria(
+def create_category(
     session: Session,
     name: str,
     group_id: int | None = None,
@@ -89,19 +89,19 @@ def crear_categoria(
     return cat
 
 
-def listar_categorias(
-    session: Session, incluir_archivadas: bool = False
+def list_categories(
+    session: Session, include_archived: bool = False
 ) -> list[Category]:
     """List all categories.
 
     Args:
         session: Database session.
-        incluir_archivadas: Whether to include archived categories (default: False).
+        include_archived: Whether to include archived categories (default: False).
 
     Returns:
         List of Category objects.
     """
     stmt = select(Category)
-    if not incluir_archivadas:
+    if not include_archived:
         stmt = stmt.where(Category.archived == False)  # noqa: E712
     return list(session.exec(stmt).all())
