@@ -1,7 +1,7 @@
 """SQLModel tables and enums from the domain (P0)."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Optional
@@ -76,7 +76,7 @@ class Transaction(SQLModel, table=True):
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
     transfer_group_id: Annotated[Optional[str], Field(default=None, index=True)] = None
     source: Source = Source.manual
-    created_at: Annotated[datetime, Field(default_factory=datetime.utcnow)]
+    created_at: Annotated[datetime, Field(default_factory=lambda: datetime.now(timezone.utc))]
 
 
 class Tag(SQLModel, table=True):
