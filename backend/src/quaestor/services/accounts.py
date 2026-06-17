@@ -1,4 +1,4 @@
-"""Casos de uso de cuentas."""
+"""Account use cases."""
 from __future__ import annotations
 
 from sqlmodel import Session, select
@@ -29,9 +29,9 @@ def crear_cuenta(
         ValidationError: If name is empty or currency is not supported
     """
     if not name or not name.strip():
-        raise ValidationError("el nombre de la cuenta es obligatorio")
+        raise ValidationError("account name is required")
     if not is_supported(currency):
-        raise ValidationError(f"moneda no soportada: {currency}")
+        raise ValidationError(f"unsupported currency: {currency}")
     acc = Account(
         name=name.strip(),
         type=AccountType(type),
@@ -77,7 +77,7 @@ def consultar_cuenta(session: Session, account_id: int) -> Account:
     """
     acc = session.get(Account, account_id)
     if acc is None:
-        raise NotFound(f"cuenta {account_id} no existe")
+        raise NotFound(f"account {account_id} not found")
     return acc
 
 
