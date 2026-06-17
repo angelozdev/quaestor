@@ -80,3 +80,64 @@ def test_categoria_inexistente_falla(session):
         transactions.registrar_gasto(
             session, acc.id, 1000, "COP", date(2026, 6, 1), "X", category_id=999
         )
+
+
+def test_transferir_mueve_ambos_balances_y_comparte_grupo(session):
+    origen = accounts.crear_cuenta(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
+    destino = accounts.crear_cuenta(session, "Ahorros", AccountType.savings, "COP", balance=0)
+    leg_from, leg_to = transactions.transferir(
+        session, origen.id, destino.id, 500_000, "COP", date(2026, 6, 1)
+    )
+    assert leg_from.type == TxType.transfer and leg_to.type == TxType.transfer
+    assert leg_from.transfer_group_id == leg_to.transfer_group_id
+    assert accounts.consultar_cuenta(session, origen.id).balance == 500_000
+    assert accounts.consultar_cuenta(session, destino.id).balance == 500_000
+
+
+def test_transferir_misma_cuenta_falla(session):
+    acc = accounts.crear_cuenta(session, "A", AccountType.debit, "COP", balance=100)
+    with pytest.raises(Exception):  # TransferImbalance
+        transactions.transferir(session, acc.id, acc.id, 50, "COP", date(2026, 6, 1))
+
+
+def test_transferir_destino_inexistente_es_atomica(session):
+    origen = accounts.crear_cuenta(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
+    with pytest.raises(NotFound):
+        transactions.transferir(session, origen.id, 999, 500_000, "COP", date(2026, 6, 1))
+    # no rows created, balance intact
+    assert accounts.consultar_cuenta(session, origen.id).balance == 1_000_000
+    assert transactions.listar_transacciones(session) == []
+
+
+def test_pago_extracto_tarjeta_es_transfer_no_gasto(session):
+    debito = accounts.crear_cuenta(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
+    tarjeta = accounts.crear_cuenta(session, "Visa", AccountType.credit, "COP", balance=-300_000)
+    transactions.transferir(session, debito.id, tarjeta.id, 300_000, "COP", date(2026, 6, 5))
+    assert accounts.consultar_cuenta(session, tarjeta.id).balance == 0  # debt settled
+    gastos = transactions.listar_transacciones(session, type=TxType.expense)
+    assert gastos == []  # the payment is NOT an expense
+
+
+def test_listar_filtra_por_cuenta_tipo_y_rango(session):
+    a = accounts.crear_cuenta(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    b = accounts.crear_cuenta(session, "B", AccountType.debit, "COP", balance=0)
+    transactions.registrar_gasto(session, a.id, 1000, "COP", date(2026, 6, 1), "x")
+    transactions.registrar_ingreso(session, a.id, 2000, "COP", date(2026, 6, 15), "y")
+    transactions.registrar_gasto(session, b.id, 3000, "COP", date(2026, 7, 1), "z")
+    de_a = transactions.listar_transacciones(session, account_id=a.id)
+    assert len(de_a) == 2
+    gastos_junio = transactions.listar_transacciones(
+        session, type=TxType.expense, date_from=date(2026, 6, 1), date_to=date(2026, 6, 30)
+    )
+    assert len(gastos_junio) == 1
+    assert gastos_junio[0].account_id == a.id
+
+
+def test_listar_filtra_por_tag(session):
+    from quaestor.services import tags
+    a = accounts.crear_cuenta(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    tx = transactions.registrar_gasto(session, a.id, 1000, "COP", date(2026, 6, 1), "x")
+    transactions.registrar_gasto(session, a.id, 2000, "COP", date(2026, 6, 2), "y")
+    tags.etiquetar(session, tx.id, ["viaje"])
+    con_tag = transactions.listar_transacciones(session, tag="viaje")
+    assert len(con_tag) == 1 and con_tag[0].id == tx.id
