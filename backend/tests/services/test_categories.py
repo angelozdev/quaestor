@@ -35,3 +35,25 @@ def test_list_groups_ordered(session):
     categories.create_group(session, "Essentials", sort_order=1)
     nombres = [g.name for g in categories.list_groups(session)]
     assert nombres == ["Essentials", "Entertainment"]
+
+
+def test_update_group_renames_and_reorders(session):
+    g = categories.create_group(session, "Ocio", sort_order=1)
+    updated = categories.update_group(session, g.id, name="Entretenimiento", sort_order=5)
+    assert updated.name == "Entretenimiento" and updated.sort_order == 5
+
+
+def test_update_group_missing_raises(session):
+    import pytest
+
+    from quaestor.domain.errors import NotFound
+
+    with pytest.raises(NotFound):
+        categories.update_group(session, 999, name="X")
+
+
+def test_archive_group_hides_from_default_list(session):
+    g = categories.create_group(session, "Temp")
+    categories.archive_group(session, g.id)
+    assert all(x.id != g.id for x in categories.list_groups(session))
+    assert any(x.id == g.id for x in categories.list_groups(session, include_archived=True))

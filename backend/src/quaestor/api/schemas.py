@@ -27,3 +27,22 @@ class AccountOut(BaseModel):
     currency: str
     balance: int
     archived: bool
+
+
+class CategoryGroupCreate(BaseModel):
+    name: str
+    sort_order: int = 0
+
+
+class CategoryGroupUpdate(BaseModel):
+    name: str | None = None
+    sort_order: int | None = None
+
+
+class CategoryGroupOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    sort_order: int
+    archived: bool

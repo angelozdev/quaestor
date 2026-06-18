@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
-from ..domain.errors import ValidationError
+from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, CategoryGroup
 
 
@@ -105,3 +105,43 @@ def list_categories(
     if not include_archived:
         stmt = stmt.where(Category.archived == False)  # noqa: E712
     return list(session.exec(stmt).all())
+
+
+def update_group(
+    session: Session, group_id: int, name=None, sort_order=None
+) -> CategoryGroup:
+    """Update a category group's name and/or sort_order.
+
+    Raises:
+        NotFound: If the group does not exist.
+        ValidationError: If name is provided but empty.
+    """
+    group = session.get(CategoryGroup, group_id)
+    if group is None:
+        raise NotFound(f"group {group_id} not found")
+    if name is not None:
+        if not name.strip():
+            raise ValidationError("group name is required")
+        group.name = name.strip()
+    if sort_order is not None:
+        group.sort_order = sort_order
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
+
+
+def archive_group(session: Session, group_id: int) -> CategoryGroup:
+    """Archive a category group.
+
+    Raises:
+        NotFound: If the group does not exist.
+    """
+    group = session.get(CategoryGroup, group_id)
+    if group is None:
+        raise NotFound(f"group {group_id} not found")
+    group.archived = True
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group
