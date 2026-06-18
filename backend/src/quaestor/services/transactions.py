@@ -340,3 +340,74 @@ def list_transactions(
             .where(Tag.name == tag)
         )
     return list(session.exec(stmt.order_by(Transaction.date)).all())
+
+
+_UNSET = object()
+
+
+def update_transaction(
+    session: Session,
+    tx_id: int,
+    payee=None,
+    notes=_UNSET,
+    category_id=_UNSET,
+    date=None,
+) -> Transaction:
+    """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
+
+    Amount/account/currency/type are immutable here, so no balance ever moves.
+    `notes`/`category_id` use the _UNSET sentinel to allow setting them to None.
+
+    Raises:
+        NotFound: If the transaction does not exist.
+        ValidationError: A non-None category_id that is missing or archived.
+    """
+    tx = get_transaction(session, tx_id)
+    if payee is not None:
+        tx.payee = payee
+    if notes is not _UNSET:
+        tx.notes = notes
+    if date is not None:
+        tx.date = date
+    if category_id is not _UNSET:
+        if category_id is not None:
+            cat = session.get(Category, category_id)
+            if cat is None:
+                raise ValidationError(f"category {category_id} not found")
+            if cat.archived:
+                raise ValidationError(f"category {category_id} is archived")
+        tx.category_id = category_id
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return tx
+
+
+def delete_transaction(session: Session, tx_id: int) -> None:
+    """Delete a transaction, reversing its posted balance effect.
+
+    Transfers are not deletable in P1 (no stored leg direction to reverse safely).
+
+    Raises:
+        NotFound: If the transaction does not exist.
+        ValidationError: If the transaction is a transfer leg.
+    """
+    tx = get_transaction(session, tx_id)
+    if tx.type == TxType.transfer:
+        raise ValidationError("deleting transfers is not supported in P1")
+    try:
+        if tx.status == TxStatus.posted:
+            acc = session.get(Account, tx.account_id)
+            if acc is not None:
+                acc.balance -= delta_balance(tx.type, tx.amount)
+                session.add(acc)
+        links = session.exec(
+            select(TransactionTag).where(TransactionTag.transaction_id == tx_id)
+        ).all()
+        for link in links:
+            session.delete(link)
+        session.delete(tx)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise

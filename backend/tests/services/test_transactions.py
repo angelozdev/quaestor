@@ -141,3 +141,54 @@ def test_list_filters_by_tag(session):
     tags.tag_transaction(session, tx.id, ["viaje"])
     con_tag = transactions.list_transactions(session, tag="viaje")
     assert len(con_tag) == 1 and con_tag[0].id == tx.id
+
+
+def test_update_transaction_edits_safe_fields(session):
+    from datetime import date
+
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, categories, transactions
+
+    acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+    cat = categories.create_category(session, "Comida")
+    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Tienda")
+    updated = transactions.update_transaction(
+        session, tx.id, payee="Supermercado", notes="ofertas", category_id=cat.id
+    )
+    assert updated.payee == "Supermercado"
+    assert updated.notes == "ofertas"
+    assert updated.category_id == cat.id
+    # balance untouched by an edit
+    assert accounts.get_account(session, acc.id).balance == -1000
+
+
+def test_delete_expense_reverses_balance(session):
+    from datetime import date
+
+    from quaestor.domain.errors import NotFound
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, transactions
+    import pytest
+
+    acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Tienda")
+    assert accounts.get_account(session, acc.id).balance == -1000
+    transactions.delete_transaction(session, tx.id)
+    assert accounts.get_account(session, acc.id).balance == 0
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, tx.id)
+
+
+def test_delete_transfer_leg_is_rejected(session):
+    from datetime import date
+
+    from quaestor.domain.errors import ValidationError
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, transactions
+    import pytest
+
+    a = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+    b = accounts.create_account(session, "Bank", AccountType.debit, "COP")
+    leg_from, _ = transactions.transfer(session, a.id, b.id, 500, "COP", date(2026, 6, 17))
+    with pytest.raises(ValidationError):
+        transactions.delete_transaction(session, leg_from.id)

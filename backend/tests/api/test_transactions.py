@@ -143,3 +143,43 @@ def test_list_transactions_filters(client, auth, two_accounts):
 def test_get_missing_transaction_is_404(client, auth):
     resp = client.get("/api/transactions/999", headers=auth)
     assert resp.status_code == 404 and resp.json()["error"] == "NotFound"
+
+
+def test_patch_transaction_edits_fields(client, auth, two_accounts):
+    cash, _ = two_accounts
+    tx = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Tienda"},
+    ).json()
+    patched = client.patch(
+        f"/api/transactions/{tx['id']}", headers=auth, json={"payee": "Super", "notes": "x"}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["payee"] == "Super" and patched.json()["notes"] == "x"
+
+
+def test_delete_expense_reverses_balance_via_api(client, auth, two_accounts):
+    cash, _ = two_accounts
+    tx = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Tienda"},
+    ).json()
+    assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == -1000
+    assert client.delete(f"/api/transactions/{tx['id']}", headers=auth).status_code == 204
+    assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0
+
+
+def test_delete_transfer_leg_via_api_is_422(client, auth, two_accounts):
+    cash, bank = two_accounts
+    transfer = client.post(
+        "/api/transactions/transfer",
+        headers=auth,
+        json={"from_account_id": cash["id"], "to_account_id": bank["id"],
+              "amount": 500, "currency": "COP", "date": "2026-06-17"},
+    ).json()
+    resp = client.delete(f"/api/transactions/{transfer['from_leg']['id']}", headers=auth)
+    assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"

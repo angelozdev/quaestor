@@ -165,3 +165,10 @@ class TransactionOut(BaseModel):
 class TransferOut(BaseModel):
     from_leg: TransactionOut
     to_leg: TransactionOut
+
+
+class TransactionUpdate(BaseModel):
+    payee: str | None = None
+    notes: str | None = None
+    category_id: int | None = None
+    date: Date | None = None

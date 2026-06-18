@@ -13,6 +13,7 @@ from ..deps import get_session
 from ..schemas import (
     TransactionCreate,
     TransactionOut,
+    TransactionUpdate,
     TransferIn,
     TransferOut,
 )
@@ -81,3 +82,17 @@ def create_transfer(body: TransferIn, session: Session = Depends(get_session)):
         fx_rate=body.fx_rate,
     )
     return TransferOut(from_leg=leg_from, to_leg=leg_to)
+
+
+@router.patch("/{tx_id}", response_model=TransactionOut)
+def update_transaction(
+    tx_id: int, body: TransactionUpdate, session: Session = Depends(get_session)
+):
+    fields = body.model_dump(exclude_unset=True)
+    return transactions.update_transaction(session, tx_id, **fields)
+
+
+@router.delete("/{tx_id}", status_code=204)
+def delete_transaction(tx_id: int, session: Session = Depends(get_session)):
+    transactions.delete_transaction(session, tx_id)
+    return None
