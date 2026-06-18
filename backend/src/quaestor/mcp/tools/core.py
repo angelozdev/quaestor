@@ -186,3 +186,49 @@ def transferir(session: Session, inp: TransferirInput) -> str:
 def fijar_tasa_fx(session: Session, inp: FijarTasaInput) -> str:
     fr = fx.set_fx_rate(session, inp.date, inp.usd_cop)
     return format.fx_set(fr)
+
+
+# ----- read tools -----
+
+
+@_as_text
+def consultar_transacciones(session: Session, inp: ConsultarTxInput) -> str:
+    account_id = _resolve_account(session, inp.account).id if inp.account else None
+    category_id = (
+        _resolve_category(session, inp.category).id if inp.category else None
+    )
+    txs = transactions.list_transactions(
+        session,
+        account_id=account_id,
+        category_id=category_id,
+        tag=inp.tag,
+        type=inp.type,
+        status=inp.status,
+        date_from=inp.desde,
+        date_to=inp.hasta,
+    )
+    return format.transactions_table(txs)
+
+
+@_as_text
+def consultar_tasa_fx(session: Session, inp: ConsultarTasaInput) -> str:
+    on = inp.date or Date.today()
+    rate = fx.get_current_rate(session, on)  # raises MissingRate if absent
+    return format.fx_current(rate, on)
+
+
+@_as_text
+def listar_cuentas(session: Session) -> str:
+    return format.accounts_table(accounts.list_accounts(session))
+
+
+@_as_text
+def listar_categorias(session: Session) -> str:
+    return format.categories_table(
+        categories.list_categories(session), categories.list_groups(session)
+    )
+
+
+@_as_text
+def listar_tags(session: Session) -> str:
+    return format.tags_list(tags.list_tags(session))
