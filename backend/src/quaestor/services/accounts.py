@@ -100,3 +100,23 @@ def archive_account(session: Session, account_id: int) -> Account:
     session.commit()
     session.refresh(acc)
     return acc
+
+
+def update_account(session: Session, account_id: int, name=None, type=None) -> Account:
+    """Update an account's name and/or type. None leaves a field unchanged.
+
+    Raises:
+        NotFound: If the account does not exist.
+        ValidationError: If name is provided but empty.
+    """
+    acc = get_account(session, account_id)
+    if name is not None:
+        if not name.strip():
+            raise ValidationError("account name is required")
+        acc.name = name.strip()
+    if type is not None:
+        acc.type = AccountType(type)
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+    return acc

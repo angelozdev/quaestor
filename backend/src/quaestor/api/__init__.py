@@ -28,10 +28,17 @@ def _configure_middleware(app: FastAPI) -> None:
 
 
 def _include_routers(app: FastAPI) -> None:
-    """Register routers. Resource routers (Tasks 4-11) are added below."""
+    """Register routers. Resource routers are protected by require_auth."""
+    from fastapi import Depends
+
     from . import auth
+    from .deps import require_auth
+    from .routers import accounts
 
     app.include_router(auth.router, prefix="/api")
+
+    protected = [Depends(require_auth)]
+    app.include_router(accounts.router, prefix="/api", dependencies=protected)
 
 
 def create_app() -> FastAPI:

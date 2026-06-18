@@ -40,3 +40,21 @@ def test_list_excludes_archived_by_default(session):
 def test_get_nonexistent(session):
     with pytest.raises(NotFound):
         accounts.get_account(session, 999)
+
+
+def test_update_account_renames_and_retypes(session):
+    acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+    updated = accounts.update_account(session, acc.id, name="Wallet", type=AccountType.debit)
+    assert updated.name == "Wallet"
+    assert updated.type == AccountType.debit
+
+
+def test_update_account_empty_name_rejected(session):
+    acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+    with pytest.raises(ValidationError):
+        accounts.update_account(session, acc.id, name="  ")
+
+
+def test_update_account_missing_id_raises(session):
+    with pytest.raises(NotFound):
+        accounts.update_account(session, 999, name="X")
