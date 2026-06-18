@@ -28,8 +28,10 @@ def _configure_middleware(app: FastAPI) -> None:
 
 
 def _include_routers(app: FastAPI) -> None:
-    """Register routers. Filled in by later tasks (auth + resource routers)."""
-    return None
+    """Register routers. Resource routers (Tasks 4-11) are added below."""
+    from . import auth
+
+    app.include_router(auth.router, prefix="/api")
 
 
 def create_app() -> FastAPI:
