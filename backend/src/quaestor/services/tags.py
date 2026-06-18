@@ -92,3 +92,44 @@ def tag_transaction(session: Session, tx_id: int, tags: list[str]) -> Transactio
     session.commit()
     session.refresh(tx)
     return tx
+
+
+def update_tag(session: Session, tag_id: int, name: str) -> Tag:
+    """Rename a tag.
+
+    Raises:
+        NotFound: If the tag does not exist.
+        ValidationError: Empty name, or a name already used by another tag.
+    """
+    tag = session.get(Tag, tag_id)
+    if tag is None:
+        raise NotFound(f"tag {tag_id} not found")
+    name = name.strip()
+    if not name:
+        raise ValidationError("tag name is required")
+    clash = session.exec(select(Tag).where(Tag.name == name)).first()
+    if clash is not None and clash.id != tag_id:
+        raise ValidationError(f"tag '{name}' already exists")
+    tag.name = name
+    session.add(tag)
+    session.commit()
+    session.refresh(tag)
+    return tag
+
+
+def delete_tag(session: Session, tag_id: int) -> None:
+    """Hard-delete a tag and its transaction links.
+
+    Raises:
+        NotFound: If the tag does not exist.
+    """
+    tag = session.get(Tag, tag_id)
+    if tag is None:
+        raise NotFound(f"tag {tag_id} not found")
+    links = session.exec(
+        select(TransactionTag).where(TransactionTag.tag_id == tag_id)
+    ).all()
+    for link in links:
+        session.delete(link)
+    session.delete(tag)
+    session.commit()

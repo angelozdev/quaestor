@@ -74,3 +74,18 @@ class CategoryOut(BaseModel):
     exclude_from_budget: bool
     exclude_from_totals: bool
     archived: bool
+
+
+class TagCreate(BaseModel):
+    name: str
+
+
+class TagUpdate(BaseModel):
+    name: str
+
+
+class TagOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
