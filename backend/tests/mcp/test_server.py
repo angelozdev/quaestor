@@ -48,3 +48,39 @@ def test_build_mcp_registers_core_tools():
     mcp = server.build_mcp()
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert set(CORE_TOOL_NAMES) <= names
+
+
+def test_nl_loop_register_then_query(monkeypatch, engine):
+    """Spec 'listo': register a gasto via tool, then consultar shows it."""
+    import asyncio
+
+    from sqlmodel import Session
+
+    from quaestor.services import accounts
+
+    monkeypatch.setattr(db, "engine", engine)
+    with Session(engine) as s:
+        accounts.create_account(s, "Bancolombia", "debit", "COP", balance=10_000_000)
+
+    mcp = server.build_mcp()
+
+    register = asyncio.run(
+        mcp.call_tool(
+            "registrar_gasto",
+            {
+                "gasto": {
+                    "payee": "Almuerzo",
+                    "amount": 5_000_000,
+                    "account": "Bancolombia",
+                    "date": "2026-06-18",
+                }
+            },
+        )
+    )
+    assert "Gasto registrado" in str(register)
+
+    query = asyncio.run(
+        mcp.call_tool("consultar_transacciones", {"filtros": {"type": "expense"}})
+    )
+    assert "Almuerzo" in str(query)
+    assert "Total (COP): 50000.00" in str(query)
