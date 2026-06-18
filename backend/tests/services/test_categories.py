@@ -57,3 +57,46 @@ def test_archive_group_hides_from_default_list(session):
     categories.archive_group(session, g.id)
     assert all(x.id != g.id for x in categories.list_groups(session))
     assert any(x.id == g.id for x in categories.list_groups(session, include_archived=True))
+
+
+def test_get_category_missing_raises(session):
+    import pytest
+
+    from quaestor.domain.errors import NotFound
+
+    with pytest.raises(NotFound):
+        categories.get_category(session, 999)
+
+
+def test_update_category_reassigns_group_and_flags(session):
+    g = categories.create_group(session, "Esenciales")
+    cat = categories.create_category(session, "Mercado")
+    updated = categories.update_category(
+        session, cat.id, name="Comida", group_id=g.id, exclude_from_budget=True
+    )
+    assert updated.name == "Comida"
+    assert updated.group_id == g.id
+    assert updated.exclude_from_budget is True
+
+
+def test_update_category_can_unassign_group(session):
+    g = categories.create_group(session, "Esenciales")
+    cat = categories.create_category(session, "Mercado", group_id=g.id)
+    updated = categories.update_category(session, cat.id, group_id=None)
+    assert updated.group_id is None
+
+
+def test_update_category_bad_group_rejected(session):
+    cat = categories.create_category(session, "Mercado")
+    import pytest
+
+    from quaestor.domain.errors import ValidationError
+
+    with pytest.raises(ValidationError):
+        categories.update_category(session, cat.id, group_id=12345)
+
+
+def test_archive_category_hides_from_default_list(session):
+    cat = categories.create_category(session, "Temp")
+    categories.archive_category(session, cat.id)
+    assert all(c.id != cat.id for c in categories.list_categories(session))

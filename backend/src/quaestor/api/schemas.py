@@ -46,3 +46,31 @@ class CategoryGroupOut(BaseModel):
     name: str
     sort_order: int
     archived: bool
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    group_id: int | None = None
+    is_income: bool = False
+    exclude_from_budget: bool = False
+    exclude_from_totals: bool = False
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = None
+    group_id: int | None = None
+    is_income: bool | None = None
+    exclude_from_budget: bool | None = None
+    exclude_from_totals: bool | None = None
+
+
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    group_id: int | None
+    is_income: bool
+    exclude_from_budget: bool
+    exclude_from_totals: bool
+    archived: bool

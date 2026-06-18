@@ -145,3 +145,65 @@ def archive_group(session: Session, group_id: int) -> CategoryGroup:
     session.commit()
     session.refresh(group)
     return group
+
+
+_UNSET = object()
+
+
+def get_category(session: Session, category_id: int) -> Category:
+    """Fetch a category by id, or raise NotFound."""
+    cat = session.get(Category, category_id)
+    if cat is None:
+        raise NotFound(f"category {category_id} not found")
+    return cat
+
+
+def update_category(
+    session: Session,
+    category_id: int,
+    name=None,
+    group_id=_UNSET,
+    is_income=None,
+    exclude_from_budget=None,
+    exclude_from_totals=None,
+) -> Category:
+    """Update a category. `group_id=_UNSET` leaves it unchanged; `group_id=None`
+    unassigns the group; a non-None group_id must exist.
+
+    Raises:
+        NotFound: If the category does not exist.
+        ValidationError: Empty name, or group_id that does not exist.
+    """
+    cat = get_category(session, category_id)
+    if name is not None:
+        if not name.strip():
+            raise ValidationError("category name is required")
+        cat.name = name.strip()
+    if group_id is not _UNSET:
+        if group_id is not None and session.get(CategoryGroup, group_id) is None:
+            raise ValidationError(f"group {group_id} does not exist")
+        cat.group_id = group_id
+    if is_income is not None:
+        cat.is_income = is_income
+    if exclude_from_budget is not None:
+        cat.exclude_from_budget = exclude_from_budget
+    if exclude_from_totals is not None:
+        cat.exclude_from_totals = exclude_from_totals
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    return cat
+
+
+def archive_category(session: Session, category_id: int) -> Category:
+    """Archive a category.
+
+    Raises:
+        NotFound: If the category does not exist.
+    """
+    cat = get_category(session, category_id)
+    cat.archived = True
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    return cat
