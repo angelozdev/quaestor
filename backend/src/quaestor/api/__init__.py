@@ -2,12 +2,21 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from .. import db
 from .errors import register_exception_handlers
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Ensure the schema exists before serving (P0's idempotent init_db)."""
+    db.init_db(db.engine)
+    yield
 
 
 def _configure_middleware(app: FastAPI) -> None:
@@ -56,7 +65,7 @@ def _include_routers(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Quaestor API")
+    app = FastAPI(title="Quaestor API", lifespan=_lifespan)
     _configure_middleware(app)
     register_exception_handlers(app)
     _include_routers(app)

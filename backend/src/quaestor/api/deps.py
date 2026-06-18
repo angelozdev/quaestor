@@ -8,16 +8,18 @@ from collections.abc import Generator
 from fastapi import Header, Request
 from sqlmodel import Session
 
-from ..db import engine
+from .. import db
 from .errors import Unauthorized
 
 
 def get_session() -> Generator[Session, None, None]:
     """Yield a Session bound to the process engine, closed when the request ends.
 
-    Tests override this via app.dependency_overrides to bind an in-memory engine.
+    Resolves ``db.engine`` dynamically (not at import time) so the app and its
+    startup hook share one engine even when it is swapped (e.g. tests).
+    Tests may also override this via app.dependency_overrides.
     """
-    with Session(engine) as s:
+    with Session(db.engine) as s:
         yield s
 
 
