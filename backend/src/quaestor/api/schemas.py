@@ -102,3 +102,16 @@ class FxIn(BaseModel):
 class FxOut(BaseModel):
     date: Date
     usd_cop: Decimal
+
+
+class SettingsUpdate(BaseModel):
+    base_currency: str | None = None
+    default_source_account_id: int | None = None
+
+
+class SettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    base_currency: str
+    default_source_account_id: int | None
