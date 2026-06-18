@@ -40,7 +40,7 @@ class BearerAuthMiddleware:
             response = JSONResponse(
                 {
                     "error": "Unauthorized",
-                    "detail": "Authorization: Bearer <APP_TOKEN> requerido",
+                    "detail": "Missing or invalid Authorization: Bearer <APP_TOKEN> header",
                 },
                 status_code=401,
             )
