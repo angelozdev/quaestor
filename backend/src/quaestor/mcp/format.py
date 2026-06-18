@@ -6,6 +6,7 @@ This module is named `format` (per the P2 spec) and shadows the builtin
 from __future__ import annotations
 
 from datetime import date as Date
+from decimal import Decimal
 
 from ..domain.errors import (
     MissingRate,
@@ -80,11 +81,18 @@ def transfer_confirmation(
 
 
 def fx_set(fr: FxRate) -> str:
-    return f"✅ Tasa USD→COP para {fr.date.isoformat()}: {fr.usd_cop}"
+    # Strip trailing zeros while preserving significant digits
+    rate_str = str(fr.usd_cop) if fr.usd_cop % 1 else str(fr.usd_cop.to_integral_value())
+    return f"✅ Tasa USD→COP para {fr.date.isoformat()}: {rate_str}"
 
 
 def fx_current(rate, on: Date) -> str:
-    return f"Tasa vigente USD→COP al {on.isoformat()}: {rate}"
+    if isinstance(rate, str):
+        rate_str = rate
+    else:
+        d = Decimal(str(rate)) if not isinstance(rate, Decimal) else rate
+        rate_str = str(d) if d % 1 else str(d.to_integral_value())
+    return f"Tasa vigente USD→COP al {on.isoformat()}: {rate_str}"
 
 
 def accounts_table(accounts: list[Account]) -> str:

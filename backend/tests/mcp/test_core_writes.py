@@ -100,6 +100,14 @@ def test_fijar_tasa_fx_confirms(session):
     assert "4150" in out
 
 
+def test_registrar_gasto_unknown_category_returns_guidance(session, seeded):
+    out = core.registrar_gasto(
+        session,
+        RegistrarGastoInput(payee="X", amount=1000, account="Bancolombia", category="NoExiste"),
+    )
+    assert "No encontré la categoría" in out
+
+
 def test_usd_expense_without_rate_returns_missing_rate_text(session):
     accounts.create_account(session, "Amex", "credit", "USD", balance=0)
     out = core.registrar_gasto(
