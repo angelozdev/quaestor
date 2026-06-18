@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from datetime import date as Date
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from ..domain.models import AccountType
+from ..domain.models import AccountType, Source, TxStatus, TxType
 
 
 class AccountCreate(BaseModel):
@@ -115,3 +116,52 @@ class SettingsOut(BaseModel):
     id: int
     base_currency: str
     default_source_account_id: int | None
+
+
+class TransactionCreate(BaseModel):
+    type: TxType
+    account_id: int
+    amount: int
+    currency: str
+    date: Date
+    payee: str = ""
+    category_id: int | None = None
+    notes: str | None = None
+    source: str = "manual"
+    fx_rate: Decimal | None = None
+
+
+class TransferIn(BaseModel):
+    from_account_id: int
+    to_account_id: int
+    amount: int
+    currency: str
+    date: Date
+    notes: str | None = None
+    source: str = "manual"
+    fx_rate: Decimal | None = None
+
+
+class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    date: Date
+    payee: str
+    notes: str | None
+    type: TxType
+    status: TxStatus
+    amount: int
+    currency: str
+    fx_rate: Decimal
+    to_base: int
+    account_id: int
+    category_id: int | None
+    transfer_group_id: str | None
+    source: Source
+    created_at: datetime
+
+
+class TransferOut(BaseModel):
+    from_leg: TransactionOut
+    to_leg: TransactionOut
