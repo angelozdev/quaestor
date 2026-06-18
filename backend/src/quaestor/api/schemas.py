@@ -1,6 +1,9 @@
 """Pydantic request/response models. `*Out` mirror the SQLModel rows (cents as int)."""
 from __future__ import annotations
 
+from datetime import date as Date
+from decimal import Decimal
+
 from pydantic import BaseModel, ConfigDict
 
 from ..domain.models import AccountType
@@ -89,3 +92,13 @@ class TagOut(BaseModel):
 
     id: int
     name: str
+
+
+class FxIn(BaseModel):
+    date: Date
+    usd_cop: Decimal
+
+
+class FxOut(BaseModel):
+    date: Date
+    usd_cop: Decimal
