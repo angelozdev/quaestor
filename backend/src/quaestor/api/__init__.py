@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
+from .errors import register_exception_handlers
+
 
 def _configure_middleware(app: FastAPI) -> None:
     app.add_middleware(
@@ -33,6 +35,7 @@ def _include_routers(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     app = FastAPI(title="Quaestor API")
     _configure_middleware(app)
+    register_exception_handlers(app)
     _include_routers(app)
     return app
 
