@@ -4,6 +4,16 @@ __pycache__/
 .venv/
 .python-version
 
+# python / quaestor
+__pycache__/
+*.pyc
+.venv/
+backend/.venv/
+backend/quaestor.db
+backend/quaestor.db-*
+.pytest_cache/
+uv.lock
+
 # DB
 *.db
 *.db-shm
