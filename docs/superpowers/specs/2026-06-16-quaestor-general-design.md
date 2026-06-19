@@ -26,13 +26,13 @@ Sistema personal de finanzas, **single-user**, que reemplaza a Lunch Money como 
 
 Dos formas de interactuar:
 - **Lenguaje natural** vía un **MCP server** (hoy Claude Code; mañana MiniMax u otro cliente MCP). El backend es LLM-agnóstico. **Vía principal de la v1.**
-- **Frontend web** para revisar y planear. En v1 es **mínimo** (dashboard "Por pagar" + reporte mensual); el CRUD completo queda en backlog (ver [ADR-008](../../adr/2026-06-16-quaestor-adrs.md)).
+- **Frontend web** para revisar y planear. En v1 es **mínimo** (dashboard "Por pagar" + reporte mensual); el CRUD completo queda en backlog (ver [ADR-008](../../decisions/product-decisions.md)).
 
-**Driver del proyecto.** El motor primario es **tener backend propio y agent-native** (DB propia, hablarle a un agente sobre *mi* schema sin depender de la API de un tercero). Los 3 dolores de abajo son la **prueba de valor de la v1**, no la justificación del sistema. El **presupuesto** (§6) es el diferenciador de producto explícito frente a Lunch Money. Ver [ADR-001](../../adr/2026-06-16-quaestor-adrs.md).
+**Driver del proyecto.** El motor primario es **tener backend propio y agent-native** (DB propia, hablarle a un agente sobre *mi* schema sin depender de la API de un tercero). Los 3 dolores de abajo son la **prueba de valor de la v1**, no la justificación del sistema. El **presupuesto** (§6) es el diferenciador de producto explícito frente a Lunch Money. Ver [ADR-001](../../decisions/product-decisions.md).
 
 **Hoy** el usuario usa Claude Code + API key de Lunch Money ("solo el backend"). Quaestor recrea ese flujo —hablarle a un agente que escribe en un backend— pero sobre **base de datos propia**, desplegable en un VPS.
 
-> **Decisiones de producto registradas como ADRs** en `docs/adr/2026-06-16-quaestor-adrs.md`. Este diseño y los sub-specs P0–P7 ya reflejan esos ADRs.
+> **Decisiones de producto registradas como ADRs** en `docs/decisions/product-decisions.md`. Este diseño y los sub-specs P0–P7 ya reflejan esos ADRs.
 
 **Dolores que resuelve explícitamente:**
 1. No saber **qué le falta por pagar** en un punto de la semana → vista "Por pagar".
