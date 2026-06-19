@@ -77,7 +77,7 @@ def test_nl_loop_register_then_query(monkeypatch, engine):
             },
         )
     )
-    assert "Gasto registrado" in str(register)
+    assert "Expense recorded" in str(register)
 
     query = asyncio.run(
         mcp.call_tool("consultar_transacciones", {"filtros": {"type": "expense"}})

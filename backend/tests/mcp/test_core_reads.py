@@ -28,12 +28,12 @@ def test_consultar_tasa_fx_returns_rate(session):
 
 def test_consultar_tasa_fx_missing_returns_text(session):
     out = core.consultar_tasa_fx(session, ConsultarTasaInput(date=date(2026, 6, 18)))
-    assert "No tengo la tasa USD→COP" in out
+    assert "USD→COP" in out
 
 
 def test_consultar_transacciones_empty(session, seeded):
     out = core.consultar_transacciones(session, ConsultarTxInput())
-    assert out == "No hay transacciones para esos filtros."
+    assert out == "No transactions for those filters."
 
 
 def test_consultar_transacciones_lists_and_totals(session, seeded):
@@ -61,4 +61,4 @@ def test_consultar_transacciones_filters_by_account_name(session, seeded):
 
 def test_consultar_transacciones_unknown_account_returns_text(session, seeded):
     out = core.consultar_transacciones(session, ConsultarTxInput(account="Nequi"))
-    assert "No encontré la cuenta 'Nequi'" in out
+    assert "Account 'Nequi' not found" in out

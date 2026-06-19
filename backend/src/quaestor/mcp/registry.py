@@ -37,50 +37,50 @@ CORE_TOOL_NAMES = (
 def register_core_tools(mcp) -> None:
     """Register the 9 P2 core tools on the given FastMCP instance."""
 
-    @mcp.tool(name="registrar_gasto", description="Registra un gasto en una cuenta.")
+    @mcp.tool(name="registrar_gasto", description="Record an expense in an account.")
     def registrar_gasto(gasto: RegistrarGastoInput) -> str:
         with Session(db.engine) as session:
             return core.registrar_gasto(session, gasto)
 
-    @mcp.tool(name="registrar_ingreso", description="Registra un ingreso en una cuenta.")
+    @mcp.tool(name="registrar_ingreso", description="Record income in an account.")
     def registrar_ingreso(ingreso: RegistrarIngresoInput) -> str:
         with Session(db.engine) as session:
             return core.registrar_ingreso(session, ingreso)
 
-    @mcp.tool(name="transferir", description="Transfiere dinero entre dos cuentas.")
+    @mcp.tool(name="transferir", description="Transfer money between two accounts.")
     def transferir(transferencia: TransferirInput) -> str:
         with Session(db.engine) as session:
             return core.transferir(session, transferencia)
 
-    @mcp.tool(name="fijar_tasa_fx", description="Fija la tasa USD→COP de una fecha.")
+    @mcp.tool(name="fijar_tasa_fx", description="Set the USD→COP exchange rate for a date.")
     def fijar_tasa_fx(tasa: FijarTasaInput) -> str:
         with Session(db.engine) as session:
             return core.fijar_tasa_fx(session, tasa)
 
     @mcp.tool(
         name="consultar_transacciones",
-        description="Lista transacciones con filtros opcionales (fechas, cuenta, categoría, tag, tipo, estado).",
+        description="List transactions with optional filters (dates, account, category, tag, type, status).",
     )
     def consultar_transacciones(filtros: ConsultarTxInput) -> str:
         with Session(db.engine) as session:
             return core.consultar_transacciones(session, filtros)
 
-    @mcp.tool(name="consultar_tasa_fx", description="Consulta la tasa USD→COP vigente para una fecha.")
+    @mcp.tool(name="consultar_tasa_fx", description="Get the current USD→COP exchange rate for a date.")
     def consultar_tasa_fx(consulta: ConsultarTasaInput) -> str:
         with Session(db.engine) as session:
             return core.consultar_tasa_fx(session, consulta)
 
-    @mcp.tool(name="listar_cuentas", description="Lista las cuentas con su balance y moneda.")
+    @mcp.tool(name="listar_cuentas", description="List accounts with their balance and currency.")
     def listar_cuentas() -> str:
         with Session(db.engine) as session:
             return core.listar_cuentas(session)
 
-    @mcp.tool(name="listar_categorias", description="Lista las categorías y su grupo.")
+    @mcp.tool(name="listar_categorias", description="List categories and their group.")
     def listar_categorias() -> str:
         with Session(db.engine) as session:
             return core.listar_categorias(session)
 
-    @mcp.tool(name="listar_tags", description="Lista las etiquetas existentes.")
+    @mcp.tool(name="listar_tags", description="List existing tags.")
     def listar_tags() -> str:
         with Session(db.engine) as session:
             return core.listar_tags(session)

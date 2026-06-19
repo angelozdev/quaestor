@@ -24,58 +24,58 @@ from .. import format
 
 
 class RegistrarGastoInput(BaseModel):
-    payee: str = Field(description="Comercio o beneficiario, ej. 'Mercado'")
+    payee: str = Field(description="Merchant or payee, e.g. 'Supermarket'")
     amount: int = Field(
-        gt=0, description="Monto en centavos, moneda original (40 mil COP = 4000000)"
+        gt=0, description="Amount in cents, original currency (40000 COP = 4000000)"
     )
-    account: str = Field(description="Nombre de la cuenta, ej. 'Bancolombia'")
-    currency: str = Field(default="COP", description="Moneda ISO; por defecto COP")
-    category: str | None = Field(default=None, description="Nombre de la categoría (opcional)")
-    date: Date | None = Field(default=None, description="Fecha YYYY-MM-DD; por defecto hoy")
-    tags: list[str] = Field(default_factory=list, description="Etiquetas por nombre")
-    notes: str | None = Field(default=None, description="Notas libres (opcional)")
+    account: str = Field(description="Account name, e.g. 'Bancolombia'")
+    currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
+    category: str | None = Field(default=None, description="Category name (optional)")
+    date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
+    tags: list[str] = Field(default_factory=list, description="Tag names")
+    notes: str | None = Field(default=None, description="Free-form notes (optional)")
 
 
 class RegistrarIngresoInput(BaseModel):
-    payee: str = Field(description="Fuente del ingreso, ej. 'Sueldo'")
-    amount: int = Field(gt=0, description="Monto en centavos, moneda original")
-    account: str = Field(description="Nombre de la cuenta destino")
-    currency: str = Field(default="COP", description="Moneda ISO; por defecto COP")
-    category: str | None = Field(default=None, description="Nombre de la categoría (opcional)")
-    date: Date | None = Field(default=None, description="Fecha YYYY-MM-DD; por defecto hoy")
-    tags: list[str] = Field(default_factory=list, description="Etiquetas por nombre")
-    notes: str | None = Field(default=None, description="Notas libres (opcional)")
+    payee: str = Field(description="Income source, e.g. 'Salary'")
+    amount: int = Field(gt=0, description="Amount in cents, original currency")
+    account: str = Field(description="Destination account name")
+    currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
+    category: str | None = Field(default=None, description="Category name (optional)")
+    date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
+    tags: list[str] = Field(default_factory=list, description="Tag names")
+    notes: str | None = Field(default=None, description="Free-form notes (optional)")
 
 
 class TransferirInput(BaseModel):
-    from_account: str = Field(description="Cuenta origen (por nombre)")
-    to_account: str = Field(description="Cuenta destino (por nombre)")
-    amount: int = Field(gt=0, description="Monto en centavos")
-    currency: str = Field(default="COP", description="Moneda; debe coincidir con ambas cuentas")
-    date: Date | None = Field(default=None, description="Fecha YYYY-MM-DD; por defecto hoy")
-    notes: str | None = Field(default=None, description="Notas libres (opcional)")
+    from_account: str = Field(description="Source account name")
+    to_account: str = Field(description="Destination account name")
+    amount: int = Field(gt=0, description="Amount in cents")
+    currency: str = Field(default="COP", description="Currency; must match both accounts")
+    date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
+    notes: str | None = Field(default=None, description="Free-form notes (optional)")
 
 
 class FijarTasaInput(BaseModel):
-    date: Date = Field(description="Fecha de la tasa, YYYY-MM-DD")
-    usd_cop: float = Field(gt=0, description="Pesos por dólar, ej. 4150")
+    date: Date = Field(description="Rate date, YYYY-MM-DD")
+    usd_cop: float = Field(gt=0, description="Pesos per dollar, e.g. 4150")
 
 
 class ConsultarTasaInput(BaseModel):
-    date: Date | None = Field(default=None, description="Fecha YYYY-MM-DD; por defecto hoy")
+    date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
 
 
 class ConsultarTxInput(BaseModel):
-    desde: Date | None = Field(default=None, description="Incluir desde esta fecha")
-    hasta: Date | None = Field(default=None, description="Incluir hasta esta fecha")
-    account: str | None = Field(default=None, description="Filtrar por cuenta (nombre)")
-    category: str | None = Field(default=None, description="Filtrar por categoría (nombre)")
-    tag: str | None = Field(default=None, description="Filtrar por etiqueta (nombre)")
+    desde: Date | None = Field(default=None, description="Include from this date")
+    hasta: Date | None = Field(default=None, description="Include up to this date")
+    account: str | None = Field(default=None, description="Filter by account name")
+    category: str | None = Field(default=None, description="Filter by category name")
+    tag: str | None = Field(default=None, description="Filter by tag name")
     type: Literal["expense", "income", "transfer"] | None = Field(
-        default=None, description="Tipo de transacción"
+        default=None, description="Transaction type"
     )
     status: Literal["posted", "planned"] | None = Field(
-        default=None, description="Estado de la transacción"
+        default=None, description="Transaction status"
     )
 
 
@@ -104,8 +104,8 @@ def _resolve_account(session: Session, name: str) -> Account:
     for account in all_accounts:
         if account.name.lower() == target:
             return account
-    available = ", ".join(a.name for a in all_accounts) or "(ninguna)"
-    raise NotFound(f"No encontré la cuenta '{name}'. Cuentas: {available}.")
+    available = ", ".join(a.name for a in all_accounts) or "(none)"
+    raise NotFound(f"Account '{name}' not found. Available: {available}.")
 
 
 def _resolve_category(session: Session, name: str) -> Category:
@@ -114,7 +114,7 @@ def _resolve_category(session: Session, name: str) -> Category:
         if category.name.lower() == target:
             return category
     raise NotFound(
-        f"No encontré la categoría '{name}'. Puedes crearla o registrar sin categoría."
+        f"Category '{name}' not found. You can create it or record without a category."
     )
 
 
