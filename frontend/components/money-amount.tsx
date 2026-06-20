@@ -12,12 +12,15 @@ export function MoneyAmount({
   type?: TxType;
   className?: string;
 }) {
-  const sign = type === "expense" ? "−" : type === "income" ? "+" : "";
   const color =
-    type === "expense" ? "text-red-600" : type === "income" ? "text-green-600" : "";
+    type === "expense"
+      ? "var(--expense)"
+      : type === "income"
+      ? "var(--income)"
+      : "var(--foreground)";
+
   return (
-    <span className={`tabular-nums ${color} ${className}`}>
-      {sign}
+    <span className={`tabular-nums ${className}`} style={{ color }}>
       {formatCents(cents, currency)}
     </span>
   );

@@ -1,3 +1,7 @@
 export function EmptyState({ message }: { message: string }) {
-  return <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>;
+  return (
+    <p className="py-6 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
+      {message}
+    </p>
+  );
 }

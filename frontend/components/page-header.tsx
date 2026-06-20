@@ -8,12 +8,16 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-start justify-between gap-4">
       <div>
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        {subtitle && <p className="text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {subtitle && (
+          <p className="mt-0.5 text-sm" style={{ color: "var(--muted-foreground)" }}>
+            {subtitle}
+          </p>
+        )}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }

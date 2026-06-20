@@ -3,10 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -29,30 +25,66 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Quaestor</CardTitle>
-        </CardHeader>
-        <CardContent>
+    <main
+      className="grid min-h-screen place-items-center p-6"
+      style={{ background: "var(--muted)" }}
+    >
+      <div className="w-full max-w-sm animate-fade-up">
+        <div
+          className="rounded-xl p-8 space-y-6"
+          style={{
+            background: "var(--card)",
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.06)",
+          }}
+        >
+          <div className="space-y-1">
+            <h1 className="text-lg font-semibold tracking-tight">Quaestor</h1>
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+              Ingresa tu contraseña para continuar
+            </p>
+          </div>
+
           <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
+            <div className="space-y-1.5">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium"
+              >
+                Contraseña
+              </label>
+              <input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
                 required
+                placeholder="••••••••"
+                className="w-full rounded-md px-3 py-2 text-sm outline-none transition-colors"
+                style={{
+                  background: "var(--input)",
+                  border: "1px solid var(--border)",
+                  color: "var(--foreground)",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = "var(--foreground)")}
+                onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full rounded-md py-2 text-sm font-medium transition-opacity disabled:opacity-50"
+              style={{
+                background: "var(--foreground)",
+                color: "var(--background)",
+              }}
+            >
               {loading ? "Entrando…" : "Entrar"}
-            </Button>
+            </button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </main>
   );
 }

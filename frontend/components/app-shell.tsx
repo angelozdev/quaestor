@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Button } from "@/components/ui/button";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -28,28 +27,45 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b">
-        <nav className="mx-auto flex h-14 max-w-5xl items-center gap-1 px-4">
-          <span className="mr-4 font-semibold">Quaestor</span>
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className={`rounded-md px-3 py-1.5 text-sm ${
-                pathname === n.href
-                  ? "bg-muted font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {n.label}
-            </Link>
-          ))}
-          <Button variant="ghost" size="sm" className="ml-auto" onClick={logout}>
+      <header className="sticky top-0 z-40 border-b bg-white">
+        <nav className="mx-auto flex h-12 max-w-5xl items-center gap-7 px-5">
+          <Link href="/" className="text-sm font-semibold tracking-tight text-foreground">
+            Quaestor
+          </Link>
+
+          <div className="flex items-center gap-1">
+            {NAV.map((n) => {
+              const active = pathname === n.href;
+              return (
+                <Link
+                  key={n.href}
+                  href={n.href}
+                  className="px-2.5 py-1 text-sm rounded transition-colors"
+                  style={{
+                    color: active ? "var(--foreground)" : "var(--muted-foreground)",
+                    fontWeight: active ? 500 : 400,
+                    background: active ? "var(--muted)" : "transparent",
+                  }}
+                >
+                  {n.label}
+                </Link>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={logout}
+            className="ml-auto text-sm transition-colors"
+            style={{ color: "var(--muted-foreground)" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--foreground)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-foreground)")}
+          >
             Salir
-          </Button>
+          </button>
         </nav>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 p-4">{children}</main>
+
+      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">{children}</main>
     </div>
   );
 }

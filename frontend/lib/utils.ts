@@ -1,6 +1,3 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
+// `cn` lives in the design system (the single source of truth). Re-exported here
+// so app code and shadcn's `@/lib/utils` alias keep working. See docs/adr/0002.
+export { cn } from "@/ui/lib/cn"
