@@ -70,3 +70,41 @@ def test_usd_share(session):
 
 def test_usd_share_zero_when_no_expense(session):
     assert reports._usd_share([], 0) == 0.0
+
+
+def test_category_sections_sorted_with_pct_and_uncategorized(session):
+    acc = _acc(session)
+    grp = categories.create_group(session, name="Essentials")
+    food = _cat(session, name="Food", group_id=grp.id)
+    fun = _cat(session, name="Fun", group_id=grp.id)
+    transactions.record_expense(session, acc.id, 200_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
+    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)
+    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 7), "none")  # uncategorized
+    start, end = month_bounds("2026-06")
+    expenses = reports._posted_for_totals(session, TxType.expense, start, end)
+    total = sum(t.to_base for t in expenses)
+    sections = reports._category_sections(session, expenses, total)
+    assert [s.category for s in sections] == ["Food", "Fun", "Uncategorized"]
+    assert sections[0].group == "Essentials"
+    assert sections[-1].group is None
+    assert sections[0].total == 200_000
+    assert sections[0].pct == pytest.approx(50.0)
+
+
+def test_group_sections_rollup(session):
+    acc = _acc(session)
+    essentials = categories.create_group(session, name="Essentials")
+    food = _cat(session, name="Food", group_id=essentials.id)
+    rent = _cat(session, name="Rent", group_id=essentials.id)
+    loose = _cat(session, name="Loose")  # no group
+    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 5), "a", category_id=food.id)
+    transactions.record_expense(session, acc.id, 200_000, "COP", date(2026, 6, 6), "b", category_id=rent.id)
+    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 7), "c", category_id=loose.id)
+    start, end = month_bounds("2026-06")
+    expenses = reports._posted_for_totals(session, TxType.expense, start, end)
+    total = sum(t.to_base for t in expenses)
+    groups = reports._group_sections(session, expenses, total)
+    assert [g.group for g in groups] == ["Essentials", "Ungrouped"]
+    assert groups[0].total == 300_000
+    assert groups[0].pct == pytest.approx(75.0)
+    assert groups[1].group == "Ungrouped" and groups[1].total == 100_000
