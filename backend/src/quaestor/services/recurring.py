@@ -182,3 +182,42 @@ def materialize_due(session: Session, until_date: Date) -> list[RecurringOccurre
     for occ in created:
         session.refresh(occ)
     return created
+
+
+def skip_recurring(
+    session: Session, recurring_id: int, due_date: Date
+) -> RecurringOccurrence:
+    """Mark (or create) the occurrence for (recurring_id, due_date) as skipped.
+
+    A planned tx already materialized for that occurrence is skipped too, so it
+    leaves to_pay. materialize_due will not recreate the date afterwards.
+
+    Raises:
+        NotFound: the recurring item does not exist.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    occ = session.exec(
+        select(RecurringOccurrence).where(
+            RecurringOccurrence.recurring_id == recurring_id,
+            RecurringOccurrence.due_date == due_date,
+        )
+    ).first()
+    if occ is None:
+        occ = RecurringOccurrence(
+            recurring_id=recurring_id,
+            due_date=due_date,
+            status=OccurrenceStatus.skipped,
+        )
+    else:
+        occ.status = OccurrenceStatus.skipped
+        if occ.transaction_id is not None:
+            tx = session.get(Transaction, occ.transaction_id)
+            if tx is not None and tx.status == TxStatus.planned:
+                tx.status = TxStatus.skipped
+                session.add(tx)
+    session.add(occ)
+    session.commit()
+    session.refresh(occ)
+    return occ

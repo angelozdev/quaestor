@@ -180,3 +180,37 @@ def test_materialize_skips_inactive_items(session):
     session.add(item)
     session.commit()
     assert recurring.materialize_due(session, date(2026, 6, 1)) == []
+
+
+def test_skip_recurring_before_materialization_blocks_it(session):
+    acc = _acc(session)
+    item = recurring.create_recurring(
+        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
+        amount=1_000_000, currency="COP", category_id=None, account_id=acc.id,
+        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+    )
+    occ = recurring.skip_recurring(session, item.id, date(2026, 2, 1))
+    assert occ.status == OccurrenceStatus.skipped and occ.transaction_id is None
+    occs = recurring.materialize_due(session, date(2026, 3, 15))
+    # Jan and Mar materialize; Feb stays skipped and is not recreated
+    assert [o.due_date for o in occs] == [date(2026, 1, 1), date(2026, 3, 1)]
+
+
+def test_skip_recurring_after_manual_materialization_skips_the_planned_tx(session):
+    acc = _acc(session)
+    item = recurring.create_recurring(
+        session, name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
+        amount=50_000, currency="COP", category_id=None, account_id=acc.id,
+        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 5),
+    )
+    recurring.materialize_due(session, date(2026, 1, 31))
+    assert len(transactions.list_transactions(session, status="planned")) == 1
+    occ = recurring.skip_recurring(session, item.id, date(2026, 1, 5))
+    assert occ.status == OccurrenceStatus.skipped
+    assert transactions.list_transactions(session, status="planned") == []
+    assert len(transactions.list_transactions(session, status="skipped")) == 1
+
+
+def test_skip_recurring_unknown_item(session):
+    with pytest.raises(NotFound):
+        recurring.skip_recurring(session, 999, date(2026, 1, 1))
