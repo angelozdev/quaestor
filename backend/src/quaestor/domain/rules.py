@@ -4,7 +4,7 @@ from __future__ import annotations
 import calendar
 from datetime import date, timedelta
 
-from .dtos import BudgetStatus
+from .dtos import BudgetStatus, GoalProgress
 from .models import IntervalUnit, TxType
 
 
@@ -130,4 +130,40 @@ def safe_to_spend_calc(
         - assigned_envelopes
         - unbudgeted_spending
         - overspend
+    )
+
+
+def goal_progress_calc(
+    goal_id: int,
+    name: str,
+    monthly_amount: int,
+    saved: int,
+    target_amount: int | None,
+    deadline: date | None,
+    today: date,
+) -> GoalProgress:
+    """Goal status math (fixed monthly amount). Pure.
+
+    Defined iff both target_amount and deadline are set; open-ended iff neither
+    (the only-one case is rejected upstream in create_goal).
+    """
+    if target_amount is None or deadline is None:
+        return GoalProgress(
+            goal_id=goal_id, name=name, type="open-ended",
+            monthly_amount=monthly_amount, saved=saved,
+        )
+    remaining = max(target_amount - saved, 0)
+    months_left = (deadline.year * 12 + deadline.month) - (today.year * 12 + today.month)
+    if months_left < 1:
+        months_left = 1
+    monthly_required = -(-remaining // months_left)  # ceil division
+    on_track = monthly_amount >= monthly_required
+    if remaining == 0:
+        eta = today
+    else:
+        eta = _add_months(today, -(-remaining // monthly_amount))
+    return GoalProgress(
+        goal_id=goal_id, name=name, type="defined", monthly_amount=monthly_amount,
+        saved=saved, target_amount=target_amount, deadline=deadline,
+        monthly_required=monthly_required, on_track=on_track, eta=eta, remaining=remaining,
     )
