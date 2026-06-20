@@ -123,7 +123,7 @@ quaestor/
 ### How it runs (local dev)
 - `uv run uvicorn quaestor.api:app` → API on `:8000`
 - `uv run python -m quaestor.mcp` → MCP server
-- `npm run dev` in `frontend/` → UI on `:3000`, hits `:8000`
+- `pnpm dev` in `frontend/` → UI on `:3000`, hits `:8000`
 - All three share the same `quaestor.db`.
 
 ---

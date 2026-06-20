@@ -2,16 +2,16 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+This package uses **pnpm** as its only package manager (see
+[ADR-0003](../docs/adr/0003-pnpm-as-the-sole-package-manager-for-the-frontend.md)).
+With [Corepack](https://nodejs.org/api/corepack.html) enabled (`corepack enable`),
+the pinned pnpm version is used automatically.
+
+Install dependencies, then run the development server:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
