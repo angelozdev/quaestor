@@ -12,8 +12,8 @@ from sqlmodel import Session, select
 
 from ..domain.errors import ValidationError
 from ..domain.models import Category, CategoryGroup, Transaction, TxStatus, TxType
-from ..domain.report_types import CategorySection, GroupSection
-from ..domain.rules import month_bounds
+from ..domain.report_types import CategorySection, DriftMoM, GroupSection
+from ..domain.rules import month_bounds, prev_year_month
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -112,3 +112,24 @@ def _group_sections(
     ]
     sections.sort(key=lambda s: (-s.total, s.group))
     return sections
+
+
+def _drift(
+    session: Session, month: str, income: int, expense: int, net: int
+) -> DriftMoM | None:
+    """MoM drift vs the previous calendar month. None on cold start (no prior activity)."""
+    prev = prev_year_month(month)
+    p_start, p_end = month_bounds(prev)
+    p_income, p_expense, p_net = _totals(session, p_start, p_end)
+    if p_income == 0 and p_expense == 0:
+        return None
+
+    def pct(curr: int, base: int) -> float | None:
+        return ((curr - base) / base * 100) if base != 0 else None
+
+    return DriftMoM(
+        prev_month=prev,
+        income_abs=income - p_income, income_pct=pct(income, p_income),
+        expense_abs=expense - p_expense, expense_pct=pct(expense, p_expense),
+        net_abs=net - p_net, net_pct=pct(net, p_net),
+    )

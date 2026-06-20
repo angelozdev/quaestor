@@ -108,3 +108,43 @@ def test_group_sections_rollup(session):
     assert groups[0].total == 300_000
     assert groups[0].pct == pytest.approx(75.0)
     assert groups[1].group == "Ungrouped" and groups[1].total == 100_000
+
+
+def test_drift_none_on_cold_start(session):
+    acc = _acc(session)
+    cat = _cat(session)
+    transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 6, 5), "x", category_id=cat.id)
+    # no May activity -> cold start
+    income, expense, net = reports._totals(session, *month_bounds("2026-06"))
+    assert reports._drift(session, "2026-06", income, expense, net) is None
+
+
+def test_drift_abs_and_pct(session):
+    acc = _acc(session)
+    cat = _cat(session)
+    # May: income 100_000, expense 40_000, net 60_000
+    transactions.record_income(session, acc.id, 100_000, "COP", date(2026, 5, 10), "s", category_id=cat.id)
+    transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 5, 11), "x", category_id=cat.id)
+    # June: income 150_000, expense 60_000, net 90_000
+    transactions.record_income(session, acc.id, 150_000, "COP", date(2026, 6, 10), "s", category_id=cat.id)
+    transactions.record_expense(session, acc.id, 60_000, "COP", date(2026, 6, 11), "x", category_id=cat.id)
+    income, expense, net = reports._totals(session, *month_bounds("2026-06"))
+    d = reports._drift(session, "2026-06", income, expense, net)
+    assert d is not None and d.prev_month == "2026-05"
+    assert d.income_abs == 50_000 and d.income_pct == pytest.approx(50.0)
+    assert d.expense_abs == 20_000 and d.expense_pct == pytest.approx(50.0)
+    assert d.net_abs == 30_000 and d.net_pct == pytest.approx(50.0)
+
+
+def test_drift_pct_none_when_previous_zero(session):
+    acc = _acc(session)
+    cat = _cat(session)
+    # May has expense only (income 0); June has income
+    transactions.record_expense(session, acc.id, 10_000, "COP", date(2026, 5, 5), "x", category_id=cat.id)
+    transactions.record_income(session, acc.id, 50_000, "COP", date(2026, 6, 5), "s", category_id=cat.id)
+    transactions.record_expense(session, acc.id, 10_000, "COP", date(2026, 6, 6), "x", category_id=cat.id)
+    income, expense, net = reports._totals(session, *month_bounds("2026-06"))
+    d = reports._drift(session, "2026-06", income, expense, net)
+    assert d is not None
+    assert d.income_abs == 50_000 and d.income_pct is None  # previous income was 0
+    assert d.expense_pct == pytest.approx(0.0)  # 10_000 -> 10_000
