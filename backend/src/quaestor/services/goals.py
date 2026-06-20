@@ -174,3 +174,45 @@ def goals_progress(
         )
         for goal in goals_
     ]
+
+
+def propose_goal_contributions(period: str, session: Session) -> list[Transaction]:
+    """Rollover hook: create one `planned` transfer per active goal (no money moved).
+
+    Idempotent per (goal_id, period): skips a goal that already has any transaction
+    carrying its goal_id dated within the period (planned, posted, or skipped), so
+    daily re-runs of close_month never duplicate a proposal.
+
+    Does NOT commit — close_month owns the transaction. Writes directly to session.
+
+    Raises:
+        ValidationError: a goal's savings account is missing or archived.
+    """
+    start, end = month_bounds(period)
+    created: list[Transaction] = []
+    goals_ = session.exec(select(Goal).where(Goal.status == GoalStatus.active)).all()
+    for goal in goals_:
+        existing = session.exec(
+            select(Transaction).where(
+                Transaction.goal_id == goal.id,
+                Transaction.date >= start,
+                Transaction.date <= end,
+            )
+        ).first()
+        if existing is not None:
+            continue
+        dst = session.get(Account, goal.savings_account_id)
+        if dst is None:
+            raise ValidationError(f"goal {goal.id} savings account is missing")
+        if dst.archived:
+            raise ValidationError(f"goal {goal.id} savings account is archived")
+        rate = _tx._resolve_fx(session, dst.currency, end, None)
+        tx = Transaction(
+            date=end, payee=f"Goal: {goal.name}", type=TxType.transfer,
+            status=TxStatus.planned, amount=goal.monthly_amount, currency=dst.currency,
+            fx_rate=rate, to_base=to_base_cents(goal.monthly_amount, rate),
+            account_id=goal.savings_account_id, goal_id=goal.id, source=Source.manual,
+        )
+        session.add(tx)
+        created.append(tx)
+    return created

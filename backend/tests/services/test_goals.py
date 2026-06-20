@@ -164,3 +164,59 @@ def test_goals_progress_explicit_ids_include_inactive(session):
     session.commit()
     ids = [p.goal_id for p in goals.goals_progress(session, goal_ids=[g.id], today=date(2026, 6, 19))]
     assert ids == [g.id]
+
+
+from quaestor.domain.models import Goal, GoalStatus, Transaction, TxStatus
+
+
+def _planned_transfers(session):
+    return [
+        t for t in transactions.list_transactions(session, type=TxType.transfer, status="planned")
+    ]
+
+
+def test_propose_creates_planned_transfer_per_active_goal(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    txs = _planned_transfers(session)
+    assert len(txs) == 1
+    tx = txs[0]
+    assert tx.goal_id == g.id and tx.amount == 200_000
+    assert tx.account_id == sav.id and tx.date == date(2026, 6, 30)
+    # no balance moved by a proposal
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, sav.id).balance == 0
+
+
+def test_propose_skips_paused_and_reached(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Active", monthly_amount=100_000, savings_account_id=sav.id)
+    paused = goals.create_goal(session, name="Paused", monthly_amount=100_000, savings_account_id=sav.id)
+    reached = goals.create_goal(session, name="Reached", monthly_amount=100_000, savings_account_id=sav.id)
+    session.get(Goal, paused.id).status = GoalStatus.paused
+    session.get(Goal, reached.id).status = GoalStatus.reached
+    session.commit()
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    txs = _planned_transfers(session)
+    assert len(txs) == 1 and txs[0].payee == "Goal: Active"
+
+
+def test_propose_is_idempotent_per_goal_period(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    goals.propose_goal_contributions("2026-06", session)  # re-run
+    session.commit()
+    assert len(_planned_transfers(session)) == 1
+
+
+def test_propose_archived_savings_raises(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    accounts.archive_account(session, sav.id)
+    with pytest.raises(ValidationError):
+        goals.propose_goal_contributions("2026-06", session)
