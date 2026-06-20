@@ -244,3 +244,23 @@ class ToPayOut(BaseModel):
 
 class CloseMonthIn(BaseModel):
     period: str  # "YYYY-MM"
+
+
+class CommittedItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    kind: str
+    name: str
+    date: Date
+    amount: int
+
+
+class SafeToSpendOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    income_forecast: int
+    committed: int
+    assigned_envelopes: int
+    free: int
+    committed_breakdown: list[CommittedItemOut]

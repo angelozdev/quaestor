@@ -44,6 +44,7 @@ def _include_routers(app: FastAPI) -> None:
     from .deps import require_auth
     from .routers import (
         accounts,
+        budgets,
         categories,
         category_groups,
         fx,
@@ -68,6 +69,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(recurring.router, prefix="/api", dependencies=protected)
     app.include_router(planned.router, prefix="/api", dependencies=protected)
     app.include_router(rollover.router, prefix="/api", dependencies=protected)
+    app.include_router(budgets.router, prefix="/api", dependencies=protected)
 
 
 def create_app() -> FastAPI:
