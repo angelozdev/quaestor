@@ -33,6 +33,8 @@ def init_db(target_engine: Engine = engine) -> None:
         if s.get(Settings, 1) is None:
             s.add(Settings(id=1, base_currency="COP"))
             s.commit()
+    from .services.bootstrap import register_goal_hooks
+    register_goal_hooks()
 
 
 @contextmanager
