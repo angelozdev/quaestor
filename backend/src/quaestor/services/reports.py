@@ -11,9 +11,16 @@ from datetime import date as Date
 from sqlmodel import Session, select
 
 from ..domain.errors import ValidationError
-from ..domain.models import Category, CategoryGroup, Transaction, TxStatus, TxType
-from ..domain.report_types import CategorySection, DriftMoM, GroupSection
+from ..domain.models import Budget, Category, CategoryGroup, Transaction, TxStatus, TxType
+from ..domain.report_types import (
+    CategorySection,
+    DriftMoM,
+    EnvelopeLine,
+    EnvelopesSummary,
+    GroupSection,
+)
 from ..domain.rules import month_bounds, prev_year_month
+from . import budgets as _budgets
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -132,4 +139,29 @@ def _drift(
         income_abs=income - p_income, income_pct=pct(income, p_income),
         expense_abs=expense - p_expense, expense_pct=pct(expense, p_expense),
         net_abs=net - p_net, net_pct=pct(net, p_net),
+    )
+
+
+def _envelope_lines(
+    session: Session, month: str
+) -> tuple[list[EnvelopeLine], EnvelopesSummary]:
+    """One EnvelopeLine per budget in the month + the green/red/rollover summary."""
+    budgets_ = session.exec(select(Budget).where(Budget.year_month == month)).all()
+    lines: list[EnvelopeLine] = []
+    for b in budgets_:
+        st = _budgets.budget_status(session, b.category_id, month)
+        cat = session.get(Category, b.category_id)
+        name = cat.name if cat is not None else f"category {b.category_id}"
+        lines.append(
+            EnvelopeLine(
+                category=name, allocated=st.assigned, rollover_in=st.rollover_in,
+                spent=st.spent, available=st.available, status=st.status,
+            )
+        )
+    lines.sort(key=lambda e: e.category)
+    n_green = sum(1 for e in lines if e.status == "under")
+    n_red = sum(1 for e in lines if e.status == "over")
+    rollover_generated = sum(max(e.available, 0) for e in lines)
+    return lines, EnvelopesSummary(
+        n_green=n_green, n_red=n_red, rollover_generated=rollover_generated
     )

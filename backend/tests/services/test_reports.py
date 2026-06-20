@@ -148,3 +148,29 @@ def test_drift_pct_none_when_previous_zero(session):
     assert d is not None
     assert d.income_abs == 50_000 and d.income_pct is None  # previous income was 0
     assert d.expense_pct == pytest.approx(0.0)  # 10_000 -> 10_000
+
+
+def test_envelope_lines_and_summary(session):
+    from quaestor.services import budgets
+    acc = _acc(session)
+    food = _cat(session, name="Food")
+    fun = _cat(session, name="Fun")
+    budgets.set_budget(session, food.id, "2026-06", 100_000)
+    budgets.set_budget(session, fun.id, "2026-06", 50_000)
+    transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
+    transactions.record_expense(session, acc.id, 70_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)  # over
+    lines, summary = reports._envelope_lines(session, "2026-06")
+    assert [l.category for l in lines] == ["Food", "Fun"]
+    food_line = lines[0]
+    assert food_line.allocated == 100_000 and food_line.spent == 40_000
+    assert food_line.available == 60_000 and food_line.status == "under"
+    fun_line = lines[1]
+    assert fun_line.available == -20_000 and fun_line.status == "over"
+    assert summary.n_green == 1 and summary.n_red == 1
+    assert summary.rollover_generated == 60_000  # only Food's positive available
+
+
+def test_envelope_lines_empty_when_no_budgets(session):
+    lines, summary = reports._envelope_lines(session, "2026-06")
+    assert lines == []
+    assert summary.n_green == 0 and summary.n_red == 0 and summary.rollover_generated == 0
