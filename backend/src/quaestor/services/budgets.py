@@ -101,6 +101,10 @@ def _available(session: Session, category_id: int, year_month: str) -> int:
 
     Base case: a month with no assignment and no spending contributes 0 and
     stops the recursion (no infinite climb into the past).
+
+    Recurses one month at a time — fine for the expected lifetime of a personal
+    finance database (< 50 years ≈ 600 frames). Not suitable for >83 years of
+    continuous category activity.
     """
     assigned = _assigned(session, category_id, year_month)
     spent = _spent(session, category_id, year_month)
@@ -159,6 +163,7 @@ def _committed(session: Session, year_month: str, start, end) -> tuple[int, list
             breakdown.append(CommittedItem(kind="recurring", name=item.name, date=d, amount=amount))
     planned_txs = session.exec(
         select(Transaction).where(
+            Transaction.type == TxType.expense,
             Transaction.status == TxStatus.planned,
             Transaction.recurring_id == None,  # noqa: E711
             Transaction.date >= start,

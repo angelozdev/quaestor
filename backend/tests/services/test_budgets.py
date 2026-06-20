@@ -214,3 +214,18 @@ def test_safe_to_spend_rollover_protects_against_false_overspend(session):
     sts = budgets.safe_to_spend(session, "2026-06")
     # spent 100k <= assigned 50k + rollover 70k = 120k -> overspend 0
     assert sts.free == 950_000  # 1,000,000 - 0 - 50,000 - 0 - 0
+
+
+def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
+    from quaestor.services import accounts as accs, goals as goals_svc
+    from quaestor.domain.models import AccountType, GoalStatus
+    acc = _acc(session)
+    sav = accs.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    _income(session, acc)  # 1,000,000 forecast
+    g = goals_svc.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals_svc.propose_goal_contributions("2026-06", session)
+    session.commit()
+    sts = budgets.safe_to_spend(session, "2026-06")
+    # Goal proposals are transfers, not expenses — must NOT be in committed
+    assert sts.committed == 0
+    assert sts.free == 1_000_000
