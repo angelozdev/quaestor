@@ -58,3 +58,33 @@ def test_update_index_inserts_row_inside_table(tmp_path):
     lines = readme.read_text().splitlines()
     sep_idx = next(i for i, l in enumerate(lines) if l.startswith("|---"))
     assert lines[sep_idx + 1] == "| 0001 | Pick Postgres | proposed | 2026-06-19 |"
+
+
+def test_render_template_substitutes_all_tokens(tmp_path):
+    template = tmp_path / "TEMPLATE.md"
+    template.write_text(
+        "# NNNN. <short title of the decision>\n\n- **Date:** YYYY-MM-DD\n"
+    )
+    result = new_adr.render_template(template, "0042", "Switch to Postgres", "2026-06-19")
+    assert "0042" in result
+    assert "Switch to Postgres" in result
+    assert "2026-06-19" in result
+    assert "NNNN" not in result
+    assert "<short title of the decision>" not in result
+    assert "YYYY-MM-DD" not in result
+
+
+def test_update_index_appends_after_existing_data_row(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(
+        "# ADR\n\n## Index\n\n"
+        "| #    | Title | Status | Date |\n"
+        "|------|-------|--------|------|\n"
+        "| 0001 | First ADR | proposed | 2026-01-01 |\n"
+    )
+    new_adr.update_index(readme, "0002", "Second ADR", "accepted", "2026-06-19")
+    lines = readme.read_text().splitlines()
+    first_row_idx = next(
+        i for i, l in enumerate(lines) if "First ADR" in l
+    )
+    assert lines[first_row_idx + 1] == "| 0002 | Second ADR | accepted | 2026-06-19 |"

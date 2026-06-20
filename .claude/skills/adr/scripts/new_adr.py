@@ -62,7 +62,7 @@ def update_index(
     row = f"| {number} | {title} | {status} | {date} |"
     last_table_idx = None
     for i, line in enumerate(lines):
-        if line.lstrip().startswith("|"):
+        if line.startswith("|"):
             last_table_idx = i
     if last_table_idx is None:
         lines.append(row)
