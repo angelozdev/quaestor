@@ -6,20 +6,32 @@ post-confirm hooks (the seam P4 uses to record goal contributions).
 from __future__ import annotations
 
 from datetime import date as Date
+from typing import Callable
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from ..domain.errors import NotFound, ValidationError
+from ..domain.errors import IllegalTransition, NotFound, ValidationError
 from ..domain.models import (
     Account,
     Category,
+    OccurrenceStatus,
+    RecurringOccurrence,
     Source,
     Transaction,
     TxStatus,
     TxType,
 )
 from ..domain.money import is_supported, to_base_cents
+from ..domain.rules import delta_balance
 from . import transactions as _tx
+
+
+POST_CONFIRM_HOOKS: list[Callable[[Transaction, Session], None]] = []
+
+
+def register_post_confirm_hook(fn: Callable[[Transaction, Session], None]) -> None:
+    """Register a hook fired inside confirm_payment's transaction, after posting."""
+    POST_CONFIRM_HOOKS.append(fn)
 
 
 def _require_account(session: Session, account_id: int) -> Account:
@@ -96,3 +108,73 @@ def to_pay(session: Session, since: Date, until: Date) -> dict:
     )
     total_base = sum(t.to_base for t in items)
     return {"items": items, "total_base": total_base}
+
+
+def _sync_occurrence_posted(session: Session, tx: Transaction) -> None:
+    """If tx came from a manual occurrence, mark that occurrence posted."""
+    occ = session.exec(
+        select(RecurringOccurrence).where(
+            RecurringOccurrence.transaction_id == tx.id
+        )
+    ).first()
+    if occ is not None and occ.status != OccurrenceStatus.posted:
+        occ.status = OccurrenceStatus.posted
+        session.add(occ)
+
+
+def confirm_payment(
+    session: Session,
+    tx_id: int,
+    amount: int | None = None,
+    date: Date | None = None,
+) -> Transaction:
+    """planned -> posted; the only such transition. Fires post-confirm hooks.
+
+    Applies the real amount/date if provided, recomputes to_base, moves the
+    balance, and syncs a manual occurrence to posted. A `transfer` tx is
+    materialized into a real posted pair (Task 9). Everything (post + hooks)
+    runs in one transaction; any failure rolls back.
+
+    Raises:
+        NotFound: the tx does not exist.
+        IllegalTransition: the tx is not `planned`.
+        ValidationError: a non-positive adjusted amount.
+        MissingRate: a non-COP tx with no rate for its date.
+    """
+    tx = _tx.get_transaction(session, tx_id)
+    if tx.status != TxStatus.planned:
+        raise IllegalTransition(
+            f"transaction {tx_id} is {tx.status.value}, not planned"
+        )
+    try:
+        if tx.type == TxType.transfer:
+            result = _materialize_planned_transfer(session, tx, amount, date)
+        else:
+            if amount is not None:
+                tx.amount = amount
+            if date is not None:
+                tx.date = date
+            if tx.amount <= 0:
+                raise ValidationError("amount must be > 0")
+            rate = _tx._resolve_fx(session, tx.currency, tx.date, None)
+            tx.fx_rate = rate
+            tx.to_base = to_base_cents(tx.amount, rate)
+            acc = _require_account(session, tx.account_id)
+            acc.balance += delta_balance(tx.type, tx.amount)
+            tx.status = TxStatus.posted
+            _sync_occurrence_posted(session, tx)
+            session.add(tx)
+            session.add(acc)
+            result = tx
+        for hook in POST_CONFIRM_HOOKS:
+            hook(result, session)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    session.refresh(result)
+    return result
+
+
+def _materialize_planned_transfer(session, tx, amount, date):  # replaced in Task 9
+    raise NotImplementedError("planned transfer materialization arrives in Task 9")
