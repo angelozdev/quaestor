@@ -11,7 +11,7 @@ already translates domain errors to text.
 from sqlmodel import Session
 
 from .. import db
-from .tools import core
+from .tools import core, temporal
 from .tools.core import (
     GetFxRateInput,
     ListTransactionsInput,
@@ -19,6 +19,25 @@ from .tools.core import (
     RecordIncomeInput,
     SetFxRateInput,
     TransferInput,
+)
+from .tools.temporal import (
+    ConfirmPaymentInput,
+    CreateRecurringInput,
+    ListRecurringInput,
+    PlanPaymentInput,
+    SkipPaymentInput,
+    SkipRecurringInput,
+    ToPayInput,
+)
+
+TEMPORAL_TOOL_NAMES = (
+    "create_recurring",
+    "list_recurring",
+    "plan_payment",
+    "confirm_payment",
+    "skip_payment",
+    "skip_recurring",
+    "to_pay",
 )
 
 CORE_TOOL_NAMES = (
@@ -84,3 +103,42 @@ def register_core_tools(mcp) -> None:
     def list_tags() -> str:
         with Session(db.engine) as session:
             return core.list_tags(session)
+
+
+def register_temporal_tools(mcp) -> None:
+    """Register the 7 P3 temporal tools on the given FastMCP instance."""
+
+    @mcp.tool(name="create_recurring", description="Create a recurring expense/income (every-N interval).")
+    def create_recurring(item: CreateRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.create_recurring(session, item)
+
+    @mcp.tool(name="list_recurring", description="List recurring items (optionally filter by active).")
+    def list_recurring(filters: ListRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.list_recurring(session, filters)
+
+    @mcp.tool(name="plan_payment", description="Plan a one-off future payment (lands in to-pay).")
+    def plan_payment(payment: PlanPaymentInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.plan_payment(session, payment)
+
+    @mcp.tool(name="confirm_payment", description="Confirm a planned payment (planned -> posted).")
+    def confirm_payment(confirmation: ConfirmPaymentInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.confirm_payment(session, confirmation)
+
+    @mcp.tool(name="skip_payment", description="Skip/cancel a planned payment.")
+    def skip_payment(skip: SkipPaymentInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.skip_payment(session, skip)
+
+    @mcp.tool(name="skip_recurring", description="Skip a single occurrence of a recurring item.")
+    def skip_recurring(skip: SkipRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.skip_recurring(session, skip)
+
+    @mcp.tool(name="to_pay", description="What's still to pay in a date window (the confirmation queue).")
+    def to_pay(window: ToPayInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.to_pay(session, window)

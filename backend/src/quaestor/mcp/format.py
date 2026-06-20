@@ -9,6 +9,7 @@ from datetime import date as Date
 from decimal import Decimal
 
 from ..domain.errors import (
+    IllegalTransition,
     MissingRate,
     NotFound,
     QuaestorError,
@@ -20,6 +21,8 @@ from ..domain.models import (
     Category,
     CategoryGroup,
     FxRate,
+    RecurringItem,
+    RecurringOccurrence,
     Tag,
     Transaction,
 )
@@ -40,6 +43,8 @@ def domain_error_text(exc: QuaestorError) -> str:
         )
     if isinstance(exc, TransferImbalance):
         return f"Could not record the transfer: {exc}."
+    if isinstance(exc, IllegalTransition):
+        return f"Can't do that: {exc}."
     if isinstance(exc, NotFound):
         return str(exc)
     if isinstance(exc, ValidationError):
@@ -138,4 +143,78 @@ def transactions_table(txs: list[Transaction]) -> str:
         )
     rows.append("")
     rows.append(f"**Total (COP): {cents_to_major(total)}** · {len(txs)} transaction(s)")
+    return "\n".join(rows)
+
+
+def recurring_created(item: RecurringItem) -> str:
+    every = (
+        f"{item.interval_count} {item.interval_unit.value}"
+        if item.interval_count != 1
+        else item.interval_unit.value
+    )
+    end = f", until {item.end_date.isoformat()}" if item.end_date else ""
+    return (
+        f"✅ Recurring **{item.name}** ({item.type.value}, {item.mode.value}) — "
+        f"{money(item.amount, item.currency)} every {every}, "
+        f"from {item.start_date.isoformat()}{end}. id={item.id}"
+    )
+
+
+def recurring_list(items: list[RecurringItem]) -> str:
+    if not items:
+        return "No recurring items."
+    rows = ["| id | Name | Type | Mode | Amount | Every | Active |", "|---|---|---|---|---|---|---|"]
+    for i in items:
+        every = (
+            f"{i.interval_count} {i.interval_unit.value}"
+            if i.interval_count != 1
+            else i.interval_unit.value
+        )
+        rows.append(
+            f"| {i.id} | {i.name} | {i.type.value} | {i.mode.value} | "
+            f"{cents_to_major(i.amount)} {i.currency} | {every} | "
+            f"{'yes' if i.active else 'no'} |"
+        )
+    return "\n".join(rows)
+
+
+def payment_planned(tx: Transaction) -> str:
+    return (
+        f"✅ Planned payment **{tx.payee}** — {money(tx.amount, tx.currency)} "
+        f"due {tx.date.isoformat()}. id={tx.id} (not yet posted)"
+    )
+
+
+def payment_confirmed(tx: Transaction) -> str:
+    return (
+        f"✅ Confirmed **{tx.payee}** — {money(tx.amount, tx.currency)} "
+        f"posted on {tx.date.isoformat()}. id={tx.id}"
+    )
+
+
+def payment_skipped(tx: Transaction) -> str:
+    return f"✅ Skipped **{tx.payee}** — {money(tx.amount, tx.currency)}. id={tx.id}"
+
+
+def recurring_skipped(occ: RecurringOccurrence) -> str:
+    return (
+        f"✅ Skipped the occurrence for recurring item {occ.recurring_id} "
+        f"due {occ.due_date.isoformat()}."
+    )
+
+
+def to_pay_table(result: dict) -> str:
+    items = result["items"]
+    if not items:
+        return "Nothing to pay in that window. 🎉"
+    rows = ["| id | Due | Payee | Amount | Currency | COP |", "|---|---|---|---|---|---|"]
+    for t in items:
+        rows.append(
+            f"| {t.id} | {t.date.isoformat()} | {t.payee} | "
+            f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
+        )
+    rows.append("")
+    rows.append(
+        f"**To pay (COP): {cents_to_major(result['total_base'])}** · {len(items)} item(s)"
+    )
     return "\n".join(rows)
