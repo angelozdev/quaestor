@@ -232,3 +232,30 @@ def _materialize_planned_transfer(
     _sync_occurrence_posted(session, tx)
     session.add_all([from_leg, tx, src, dst])
     return tx
+
+
+def skip_payment(session: Session, tx_id: int) -> Transaction:
+    """Cancel a `planned` tx (planned -> skipped). Syncs its occurrence if any.
+
+    Raises:
+        NotFound: the tx does not exist.
+        IllegalTransition: the tx is not `planned`.
+    """
+    tx = _tx.get_transaction(session, tx_id)
+    if tx.status != TxStatus.planned:
+        raise IllegalTransition(
+            f"transaction {tx_id} is {tx.status.value}, not planned"
+        )
+    tx.status = TxStatus.skipped
+    occ = session.exec(
+        select(RecurringOccurrence).where(
+            RecurringOccurrence.transaction_id == tx.id
+        )
+    ).first()
+    if occ is not None:
+        occ.status = OccurrenceStatus.skipped
+        session.add(occ)
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return tx

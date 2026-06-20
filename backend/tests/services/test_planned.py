@@ -191,3 +191,39 @@ def test_confirm_planned_transfer_without_default_source_raises(session):
     tx = _planned_transfer(session, dst.id)
     with pytest.raises(ValidationError):
         planned.confirm_payment(session, tx.id)
+
+
+def test_skip_payment_cancels_standalone_planned(session):
+    acc = _acc(session, balance=500_000)
+    tx = planned.plan_payment(session, payee="Friend", amount=80_000, currency="COP",
+                              due_date=date(2026, 6, 20), account_id=acc.id)
+    skipped = planned.skip_payment(session, tx.id)
+    assert skipped.status == TxStatus.skipped
+    result = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30))
+    assert result["items"] == []  # left the queue
+    assert accounts.get_account(session, acc.id).balance == 500_000
+
+
+def test_skip_payment_marks_occurrence_skipped(session):
+    acc = _acc(session, balance=1_000_000)
+    item = recurring.create_recurring(
+        session, name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
+        amount=50_000, currency="COP", category_id=None, account_id=acc.id,
+        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 5),
+    )
+    recurring.materialize_due(session, date(2026, 6, 30))
+    planned_tx = transactions.list_transactions(session, status="planned")[0]
+    planned.skip_payment(session, planned_tx.id)
+    from sqlmodel import select
+    from quaestor.domain.models import RecurringOccurrence
+    occ = session.exec(
+        select(RecurringOccurrence).where(RecurringOccurrence.recurring_id == item.id)
+    ).first()
+    assert occ.status == OccurrenceStatus.skipped
+
+
+def test_skip_payment_non_planned_raises(session):
+    acc = _acc(session, balance=500_000)
+    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
+    with pytest.raises(IllegalTransition):
+        planned.skip_payment(session, tx.id)
