@@ -23,6 +23,13 @@ class TxType(str, Enum):
     transfer = "transfer"
 
 
+class IntervalUnit(str, Enum):
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
+
+
 class TxStatus(str, Enum):
     planned = "planned"
     posted = "posted"
