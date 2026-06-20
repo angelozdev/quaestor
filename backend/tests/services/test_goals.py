@@ -123,3 +123,44 @@ def test_goal_contribution_rejects_bad_amount_and_unknown_goal(session):
         goals.goal_contribution(session, g.id, 0, date(2026, 6, 15))
     with pytest.raises(NotFound):
         goals.goal_contribution(session, 999, 100_000, date(2026, 6, 15))
+
+
+def test_goals_progress_open_ended_reports_saved(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Buffer", monthly_amount=100_000, savings_account_id=sav.id)
+    goals.goal_contribution(session, g.id, 250_000, date(2026, 6, 1))
+    [p] = goals.goals_progress(session, today=date(2026, 6, 19))
+    assert p.type == "open-ended" and p.saved == 250_000
+    assert p.monthly_required is None
+
+
+def test_goals_progress_defined_reports_on_track_and_eta(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
+                          target_amount=1_200_000, deadline=date(2026, 12, 1))
+    goals.goal_contribution(session, g.id, 200_000, date(2026, 6, 1))
+    [p] = goals.goals_progress(session, today=date(2026, 6, 19))
+    assert p.type == "defined" and p.remaining == 1_000_000
+    assert p.monthly_required == 166_667 and p.on_track is True
+    assert p.eta == date(2026, 11, 19)
+
+
+def test_goals_progress_default_lists_only_active(session):
+    src, sav = _funded(session)
+    active = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    paused = goals.create_goal(session, name="B", monthly_amount=100_000, savings_account_id=sav.id)
+    from quaestor.domain.models import Goal, GoalStatus
+    session.get(Goal, paused.id).status = GoalStatus.paused
+    session.commit()
+    ids = [p.goal_id for p in goals.goals_progress(session, today=date(2026, 6, 19))]
+    assert ids == [active.id]
+
+
+def test_goals_progress_explicit_ids_include_inactive(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    from quaestor.domain.models import Goal, GoalStatus
+    session.get(Goal, g.id).status = GoalStatus.paused
+    session.commit()
+    ids = [p.goal_id for p in goals.goals_progress(session, goal_ids=[g.id], today=date(2026, 6, 19))]
+    assert ids == [g.id]

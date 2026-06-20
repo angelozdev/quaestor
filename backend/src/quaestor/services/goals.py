@@ -148,3 +148,29 @@ def goal_contribution(
         raise
     session.refresh(contribution)
     return contribution
+
+
+def goals_progress(
+    session: Session,
+    goal_ids: list[int] | None = None,
+    today: Date | None = None,
+) -> list[GoalProgress]:
+    """Progress of each goal (all active ones if goal_ids=None).
+
+    today defaults to date.today(); pass it explicitly for deterministic tests.
+    """
+    if today is None:
+        today = Date.today()
+    stmt = select(Goal)
+    if goal_ids is not None:
+        stmt = stmt.where(Goal.id.in_(goal_ids))
+    else:
+        stmt = stmt.where(Goal.status == GoalStatus.active)
+    goals_ = session.exec(stmt.order_by(Goal.id)).all()
+    return [
+        goal_progress_calc(
+            goal.id, goal.name, goal.monthly_amount, _saved(session, goal.id),
+            goal.target_amount, goal.deadline, today,
+        )
+        for goal in goals_
+    ]
