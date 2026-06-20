@@ -66,3 +66,85 @@ def create_goal(
     session.commit()
     session.refresh(goal)
     return goal
+
+
+def _saved(session: Session, goal_id: int) -> int:
+    rows = session.exec(
+        select(GoalContribution.amount).where(GoalContribution.goal_id == goal_id)
+    ).all()
+    return sum(rows)
+
+
+def _maybe_mark_reached(session: Session, goal: Goal) -> None:
+    """Flip a defined goal to reached once its contributions meet target. No-op otherwise.
+
+    Relies on autoflush: any contribution added earlier in this transaction is
+    visible to the _saved query.
+    """
+    if goal.target_amount is None:
+        return
+    if _saved(session, goal.id) >= goal.target_amount:
+        goal.status = GoalStatus.reached
+        session.add(goal)
+
+
+def goal_contribution(
+    session: Session, goal_id: int, amount: int, date: Date
+) -> GoalContribution:
+    """Standalone manual contribution: internal transfer + GoalContribution, atomic.
+
+    Raises:
+        ValidationError: amount <= 0; no default source account; same source/dest;
+            missing/archived source or savings account; currency mismatch.
+        NotFound: the goal does not exist.
+    """
+    if amount <= 0:
+        raise ValidationError("amount must be > 0")
+    goal = session.get(Goal, goal_id)
+    if goal is None:
+        raise NotFound(f"goal {goal_id} not found")
+    dst = session.get(Account, goal.savings_account_id)
+    if dst is None or dst.archived:
+        raise ValidationError("goal savings account is missing or archived")
+    settings = session.get(Settings, 1)
+    src_id = settings.default_source_account_id if settings else None
+    if src_id is None:
+        raise ValidationError("no default source account configured for transfers")
+    if src_id == dst.id:
+        raise ValidationError("source and destination cannot be the same account")
+    src = session.get(Account, src_id)
+    if src is None or src.archived:
+        raise ValidationError(f"source account {src_id} is missing or archived")
+    if src.currency != dst.currency:
+        raise ValidationError("transfer currency must match both accounts")
+    rate = _tx._resolve_fx(session, dst.currency, date, None)
+    base = to_base_cents(amount, rate)
+    group = uuid.uuid4().hex
+    d_from, d_to = transfer_deltas(amount)
+    try:
+        leg_from = Transaction(
+            date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
+            status=TxStatus.posted, amount=amount, currency=dst.currency, fx_rate=rate,
+            to_base=base, account_id=src.id, transfer_group_id=group, source=Source.manual,
+        )
+        leg_to = Transaction(
+            date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
+            status=TxStatus.posted, amount=amount, currency=dst.currency, fx_rate=rate,
+            to_base=base, account_id=dst.id, transfer_group_id=group, source=Source.manual,
+        )
+        src.balance += d_from
+        dst.balance += d_to
+        session.add_all([leg_from, leg_to, src, dst])
+        session.flush()  # assign leg_to.id for the contribution link
+        contribution = GoalContribution(
+            goal_id=goal.id, date=date, amount=base,
+            source=ContributionSource.manual, transaction_id=leg_to.id,
+        )
+        session.add(contribution)
+        _maybe_mark_reached(session, goal)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    session.refresh(contribution)
+    return contribution
