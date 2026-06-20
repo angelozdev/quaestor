@@ -153,3 +153,41 @@ def test_post_confirm_hook_sees_posted_tx(session):
     finally:
         planned.POST_CONFIRM_HOOKS.remove(record)
     assert seen["status"] == TxStatus.posted
+
+
+def _planned_transfer(session, dst_account_id, amount=100_000, due=date(2026, 6, 20)):
+    """Construct a planned transfer row directly (P4 normally creates these)."""
+    from quaestor.domain.models import Transaction
+    from decimal import Decimal
+    tx = Transaction(
+        date=due, payee="Savings goal", type=TxType.transfer, status=TxStatus.planned,
+        amount=amount, currency="COP", fx_rate=Decimal("1"), to_base=amount,
+        account_id=dst_account_id, source="manual",
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return tx
+
+
+def test_confirm_planned_transfer_materializes_posted_pair(session):
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+    confirmed = planned.confirm_payment(session, tx.id)
+    assert confirmed.status == TxStatus.posted and confirmed.transfer_group_id is not None
+    assert accounts.get_account(session, src.id).balance == 900_000
+    assert accounts.get_account(session, dst.id).balance == 100_000
+    # exactly one posted pair sharing the group
+    posted = transactions.list_transactions(session, status="posted", type=TxType.transfer)
+    assert len(posted) == 2
+    assert posted[0].transfer_group_id == posted[1].transfer_group_id
+
+
+def test_confirm_planned_transfer_without_default_source_raises(session):
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    tx = _planned_transfer(session, dst.id)
+    with pytest.raises(ValidationError):
+        planned.confirm_payment(session, tx.id)

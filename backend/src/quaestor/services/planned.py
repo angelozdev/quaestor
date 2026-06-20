@@ -22,7 +22,10 @@ from ..domain.models import (
     TxType,
 )
 from ..domain.money import is_supported, to_base_cents
-from ..domain.rules import delta_balance
+import uuid
+
+from ..domain.models import Settings  # noqa: F401 (used by _materialize_planned_transfer)
+from ..domain.rules import delta_balance, transfer_deltas
 from . import transactions as _tx
 
 
@@ -176,5 +179,56 @@ def confirm_payment(
     return result
 
 
-def _materialize_planned_transfer(session, tx, amount, date):  # replaced in Task 9
-    raise NotImplementedError("planned transfer materialization arrives in Task 9")
+def _materialize_planned_transfer(
+    session: Session, tx: Transaction, amount: int | None, date: Date | None
+) -> Transaction:
+    """Turn a planned transfer into a real posted pair.
+
+    tx.account_id is the destination (ADR-015); the source is the global
+    Settings.default_source_account_id. The original row becomes the
+    destination leg; a new source leg is created sharing a transfer_group_id.
+    Does NOT commit (the caller's transaction owns the commit).
+    """
+    if amount is not None:
+        tx.amount = amount
+    if date is not None:
+        tx.date = date
+    if tx.amount <= 0:
+        raise ValidationError("amount must be > 0")
+    settings = session.get(Settings, 1)
+    src_id = settings.default_source_account_id if settings else None
+    if src_id is None:
+        raise ValidationError("no default source account configured for transfers")
+    if src_id == tx.account_id:
+        raise ValidationError("source and destination cannot be the same account")
+    src = _require_account(session, src_id)
+    dst = _require_account(session, tx.account_id)
+    if tx.currency != src.currency or tx.currency != dst.currency:
+        raise ValidationError("transfer currency must match both accounts")
+    rate = _tx._resolve_fx(session, tx.currency, tx.date, None)
+    to_base = to_base_cents(tx.amount, rate)
+    group = uuid.uuid4().hex
+    d_from, d_to = transfer_deltas(tx.amount)
+    from_leg = Transaction(
+        date=tx.date,
+        payee=tx.payee,
+        notes=tx.notes,
+        type=TxType.transfer,
+        status=TxStatus.posted,
+        amount=tx.amount,
+        currency=tx.currency,
+        fx_rate=rate,
+        to_base=to_base,
+        account_id=src_id,
+        transfer_group_id=group,
+        source=Source.manual,
+    )
+    tx.fx_rate = rate
+    tx.to_base = to_base
+    tx.transfer_group_id = group
+    tx.status = TxStatus.posted
+    src.balance += d_from
+    dst.balance += d_to
+    _sync_occurrence_posted(session, tx)
+    session.add_all([from_leg, tx, src, dst])
+    return tx
