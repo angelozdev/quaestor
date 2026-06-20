@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 
 from ..domain.errors import ValidationError
 from ..domain.models import Account, Budget, Category, CategoryGroup, Transaction, TxStatus, TxType
-from ..domain.report_markdown import money
+from ..domain.report_markdown import money, render_markdown
 from ..domain.report_types import (
     AccountBalance,
     CategorySection,
@@ -21,6 +21,7 @@ from ..domain.report_types import (
     EnvelopesSummary,
     GoalLine,
     GroupSection,
+    MonthlyReport,
 )
 from ..domain.rules import month_bounds, prev_year_month
 from . import accounts as _accounts
@@ -208,3 +209,46 @@ def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
         rows.append((name, total))
     rows.sort(key=lambda r: r[0])
     return [f"{name}: {money(total)} pending" for name, total in rows]
+
+
+def monthly_report(
+    session: Session, month: str, *, today: Date | None = None
+) -> MonthlyReport:
+    """Build the retrospective monthly report (data + markdown) for "YYYY-MM".
+
+    Posted-only aggregates in COP cents; reuses P3/P4 for pending/envelopes/goals/
+    safe-to-spend. `today` (defaults to date.today()) drives deterministic goal ETAs.
+
+    Raises:
+        ValidationError: malformed month.
+        MissingRate: surfaced from P4 safe-to-spend if a forecast needs an absent USD rate.
+    """
+    _validate_month(month)
+    if today is None:
+        today = Date.today()
+    start, end = month_bounds(month)
+
+    expenses = _posted_for_totals(session, TxType.expense, start, end)
+    incomes = _posted_for_totals(session, TxType.income, start, end)
+    expense = sum(t.to_base for t in expenses)
+    income = sum(t.to_base for t in incomes)
+    net = income - expense
+
+    envelopes, envelopes_summary = _envelope_lines(session, month)
+    report = MonthlyReport(
+        month=month,
+        income=income, expense=expense, net=net,
+        envelopes_summary=envelopes_summary,
+        envelopes=envelopes,
+        by_category=_category_sections(session, expenses, expense),
+        by_group=_group_sections(session, expenses, expense),
+        goals=_goal_lines(session, today),
+        balances=_balance_lines(session),
+        drift_mom=_drift(session, month, income, expense, net),
+        usd_share=_usd_share(expenses, expense),
+        pending=_pending_lines(session, start, end),
+        safe_to_spend=_budgets.safe_to_spend(session, month),
+        markdown="",
+    )
+    report.markdown = render_markdown(report)
+    return report

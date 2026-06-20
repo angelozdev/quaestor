@@ -213,3 +213,32 @@ def test_pending_lines_group_by_account(session):
 
 def test_pending_lines_empty_when_nothing_planned(session):
     assert reports._pending_lines(session, *month_bounds("2026-06")) == []
+
+
+def test_monthly_report_end_to_end(session):
+    from quaestor.services import budgets, goals
+    acc = _acc(session)
+    sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    food = _cat(session, name="Food")
+    budgets.set_budget(session, food.id, "2026-06", 100_000)
+    goals.create_goal(session, name="Buffer", monthly_amount=50_000, savings_account_id=sav.id)
+    transactions.record_income(session, acc.id, 500_000, "COP", date(2026, 6, 1), "salary", category_id=food.id)
+    transactions.record_expense(session, acc.id, 80_000, "COP", date(2026, 6, 5), "groceries", category_id=food.id)
+
+    report = reports.monthly_report(session, "2026-06", today=date(2026, 6, 15))
+
+    assert report.month == "2026-06"
+    assert report.income == 500_000 and report.expense == 80_000 and report.net == 420_000
+    assert report.envelopes_summary.n_green == 1
+    assert [c.category for c in report.by_category] == ["Food"]
+    assert report.drift_mom is None  # cold start
+    assert report.usd_share == 0.0
+    assert report.safe_to_spend.year_month == "2026-06"
+    # markdown is rendered from the same data
+    assert report.markdown.startswith("# Monthly report — 2026-06")
+    assert "**Net:** $4,200.00 COP" in report.markdown
+
+
+def test_monthly_report_rejects_malformed_month(session):
+    with pytest.raises(ValidationError):
+        reports.monthly_report(session, "2026-13")
