@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Optional
 
-from sqlalchemy import Column, Numeric
+from sqlalchemy import Column, Numeric, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -30,9 +30,21 @@ class IntervalUnit(str, Enum):
     year = "year"
 
 
+class RecurringMode(str, Enum):
+    auto = "auto"
+    manual = "manual"
+
+
+class OccurrenceStatus(str, Enum):
+    posted = "posted"
+    planned = "planned"
+    skipped = "skipped"
+
+
 class TxStatus(str, Enum):
     planned = "planned"
     posted = "posted"
+    skipped = "skipped"  # terminal cancel; affects neither balance nor to_pay
 
 
 class Source(str, Enum):
@@ -81,6 +93,7 @@ class Transaction(SQLModel, table=True):
     to_base: int  # centavos COP, frozen
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
+    recurring_id: Annotated[Optional[int], Field(default=None, foreign_key="recurring_item.id")] = None
     transfer_group_id: Annotated[Optional[str], Field(default=None, index=True)] = None
     source: Source = Source.manual
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -108,3 +121,34 @@ class Settings(SQLModel, table=True):
     id: Annotated[Optional[int], Field(default=1, primary_key=True)] = 1
     base_currency: str = "COP"
     default_source_account_id: Annotated[Optional[int], Field(default=None, foreign_key="account.id")] = None
+
+
+class RecurringItem(SQLModel, table=True):
+    __tablename__ = "recurring_item"
+    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
+    name: str
+    payee: str = ""
+    type: TxType  # expense or income (validated in the service; never transfer)
+    mode: RecurringMode
+    amount: int  # centavos, original currency, positive (the default amount)
+    currency: str
+    category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
+    account_id: Annotated[int, Field(foreign_key="account.id")]
+    interval_unit: IntervalUnit
+    interval_count: int = 1
+    start_date: date
+    end_date: Optional[date] = None
+    active: bool = True
+
+
+class RecurringOccurrence(SQLModel, table=True):
+    __tablename__ = "recurring_occurrence"
+    __table_args__ = (
+        UniqueConstraint("recurring_id", "due_date", name="uq_occurrence_recurring_due"),
+    )
+    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
+    recurring_id: Annotated[int, Field(foreign_key="recurring_item.id", index=True)]
+    due_date: date
+    status: OccurrenceStatus
+    transaction_id: Annotated[Optional[int], Field(default=None, foreign_key="transaction.id")] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
