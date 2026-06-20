@@ -1,9 +1,9 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000";
 
 export async function isAuthenticated(): Promise<boolean> {
-  const cookieHeader = (await cookies()).toString();
+  const cookieHeader = (await headers()).get("cookie") ?? "";
   try {
     const res = await fetch(`${API_URL}/api/auth/me`, {
       headers: { cookie: cookieHeader },
