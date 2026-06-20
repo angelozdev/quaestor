@@ -110,3 +110,24 @@ def envelope_status_calc(
         rollover_in=rollover_in, spent=spent, available=available,
         pct_used=pct_used, status=status,
     )
+
+
+def safe_to_spend_calc(
+    income_forecast: int,
+    committed: int,
+    assigned_envelopes: int,
+    unbudgeted_spending: int,
+    overspend: int,
+) -> int:
+    """Safe-to-spend headline cascade (ADR-003/005/014/016). Pure.
+
+    free = income_forecast - committed - assigned_envelopes
+           - unbudgeted_spending - overspend
+    """
+    return (
+        income_forecast
+        - committed
+        - assigned_envelopes
+        - unbudgeted_spending
+        - overspend
+    )
