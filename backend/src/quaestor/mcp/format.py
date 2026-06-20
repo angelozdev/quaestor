@@ -36,7 +36,7 @@ def domain_error_text(exc: QuaestorError) -> str:
     if isinstance(exc, MissingRate):
         return (
             "I don't have the USD→COP rate for that date. "
-            "Set it with `fijar_tasa_fx` (date, usd_cop) and retry."
+            "Set it with `set_fx_rate` (date, usd_cop) and retry."
         )
     if isinstance(exc, TransferImbalance):
         return f"Could not record the transfer: {exc}."

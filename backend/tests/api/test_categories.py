@@ -3,26 +3,26 @@ def test_categories_requires_auth(client):
 
 
 def test_categories_crud(client, auth):
-    g = client.post("/api/category-groups", headers=auth, json={"name": "Esenciales"})
+    g = client.post("/api/category-groups", headers=auth, json={"name": "Essentials"})
     gid = g.json()["id"]
 
     created = client.post(
         "/api/categories",
         headers=auth,
-        json={"name": "Mercado", "group_id": gid, "is_income": False},
+        json={"name": "Groceries", "group_id": gid, "is_income": False},
     )
     assert created.status_code == 201
     cid = created.json()["id"]
     assert created.json()["group_id"] == gid
 
     got = client.get(f"/api/categories/{cid}", headers=auth)
-    assert got.status_code == 200 and got.json()["name"] == "Mercado"
+    assert got.status_code == 200 and got.json()["name"] == "Groceries"
 
     patched = client.patch(
-        f"/api/categories/{cid}", headers=auth, json={"name": "Comida", "exclude_from_budget": True}
+        f"/api/categories/{cid}", headers=auth, json={"name": "Food", "exclude_from_budget": True}
     )
     assert patched.status_code == 200
-    assert patched.json()["name"] == "Comida" and patched.json()["exclude_from_budget"] is True
+    assert patched.json()["name"] == "Food" and patched.json()["exclude_from_budget"] is True
 
     assert len(client.get("/api/categories", headers=auth).json()) == 1
     assert client.delete(f"/api/categories/{cid}", headers=auth).status_code == 204

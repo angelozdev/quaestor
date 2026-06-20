@@ -31,13 +31,13 @@ def test_bearer_full_core_crud(client, auth):
     ).json()
 
     # category group + category
-    group = client.post("/api/category-groups", headers=auth, json={"name": "Esenciales"}).json()
+    group = client.post("/api/category-groups", headers=auth, json={"name": "Essentials"}).json()
     cat = client.post(
-        "/api/categories", headers=auth, json={"name": "Comida", "group_id": group["id"]}
+        "/api/categories", headers=auth, json={"name": "Food", "group_id": group["id"]}
     ).json()
 
     # tag
-    tag = client.post("/api/tags", headers=auth, json={"name": "mercado"}).json()
+    tag = client.post("/api/tags", headers=auth, json={"name": "groceries"}).json()
 
     # fx override then expense in COP
     assert client.post(
@@ -48,7 +48,7 @@ def test_bearer_full_core_crud(client, auth):
         "/api/transactions",
         headers=auth,
         json={"type": "expense", "account_id": cash["id"], "amount": 1500,
-              "currency": "COP", "date": "2026-06-17", "payee": "Tienda",
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
               "category_id": cat["id"]},
     ).json()
     assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == -1500

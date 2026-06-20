@@ -51,7 +51,7 @@ def test_build_mcp_registers_core_tools():
 
 
 def test_nl_loop_register_then_query(monkeypatch, engine):
-    """Spec 'listo': register a gasto via tool, then consultar shows it."""
+    """Spec 'done': record an expense via tool, then a query shows it."""
     import asyncio
 
     from sqlmodel import Session
@@ -66,10 +66,10 @@ def test_nl_loop_register_then_query(monkeypatch, engine):
 
     register = asyncio.run(
         mcp.call_tool(
-            "registrar_gasto",
+            "record_expense",
             {
-                "gasto": {
-                    "payee": "Almuerzo",
+                "expense": {
+                    "payee": "Lunch",
                     "amount": 5_000_000,
                     "account": "Bancolombia",
                     "date": "2026-06-18",
@@ -80,7 +80,7 @@ def test_nl_loop_register_then_query(monkeypatch, engine):
     assert "Expense recorded" in str(register)
 
     query = asyncio.run(
-        mcp.call_tool("consultar_transacciones", {"filtros": {"type": "expense"}})
+        mcp.call_tool("list_transactions", {"filters": {"type": "expense"}})
     )
-    assert "Almuerzo" in str(query)
+    assert "Lunch" in str(query)
     assert "Total (COP): 50000.00" in str(query)

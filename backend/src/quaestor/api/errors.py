@@ -17,7 +17,7 @@ from ..domain.errors import (
 class Unauthorized(Exception):
     """Auth missing or invalid (API layer; not a domain error)."""
 
-    def __init__(self, detail: str = "credenciales requeridas o inválidas") -> None:
+    def __init__(self, detail: str = "credentials required or invalid") -> None:
         self.detail = detail
         super().__init__(detail)
 

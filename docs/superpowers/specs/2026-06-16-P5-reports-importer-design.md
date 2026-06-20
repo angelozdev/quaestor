@@ -1,152 +1,152 @@
-# Quaestor — P5 Reportes + Importer (sub-proyecto)
+# Quaestor — P5 Reports + Importer (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** P0 (core), P3 (motor temporal), P4 (presupuestos + metas).
-**Se expone vía:** P1 (endpoints `/reports`, `/import`), P2 (tools MCP `reporte_mensual`, `importar_csv`), P6 (pantallas `/reports`, `/import`).
-**Parte de:** `2026-06-16-quaestor-general-design.md` (reportes §9, importer §10, convenciones §5/§12).
+**Date:** 2026-06-16
+**Depends on:** P0 (core), P3 (temporal engine), P4 (budgets + goals).
+**Exposed via:** P1 (endpoints `/reports`, `/import`), P2 (MCP tools `monthly_report`, `import_csv`), P6 (screens `/reports`, `/import`).
+**Part of:** `2026-06-16-quaestor-general-design.md` (reports §9, importer §10, conventions §5/§12).
 
 ---
 
-## Objetivo
+## Objective
 
-Dar dos capacidades de cierre del ciclo: **leer** el mes con un reporte mensual (markdown para el chat + datos estructurados para el frontend) y **cargar** historia/lotes con un importer CSV bulk atómico de formato propio. P5 es **agregación + formateo + ingesta**; no recalcula reglas ajenas: reutiliza los services de P0/P3/P4 para los números.
+Provide two capabilities for closing the cycle: **read** the month with a monthly report (markdown for the chat + structured data for the frontend) and **load** history/batches with an atomic bulk CSV importer in a custom format. P5 is **aggregation + formatting + ingestion**; it does not recompute rules that belong elsewhere: it reuses the P0/P3/P4 services for the numbers.
 
-## Alcance
+## Scope
 
-**Incluye**
-- Service `reporte_mensual(mes) -> (datos, markdown)` con todas las secciones de §9.
-- Service `importar_csv(contenido, dry_run=False) -> ResultadoImport` con validación fila por fila, atomicidad y reporte de errores con número de línea.
-- Helpers de agregación reutilizables (gasto por categoría, neto, USD share, drift MoM).
-- Contrato de datos (`ReporteMensual`, `ResultadoImport`) para wire en P1/P2 y pantallas P6.
+**Includes**
+- Service `monthly_report(month) -> (data, markdown)` with all the sections in §9.
+- Service `import_csv(content, dry_run=False) -> ImportResult` with row-by-row validation, atomicity, and error reporting with line numbers.
+- Reusable aggregation helpers (expense by category, net, USD share, MoM drift).
+- Data contract (`MonthlyReport`, `ImportResult`) for wiring in P1/P2 and P6 screens.
 
-**No incluye**
-- Recalcular reglas de presupuesto/meta/rollover (vienen de P4/P3 ya calculadas).
-- Gráficos HTML/PDF (v2; v1 es markdown + tablas).
-- Migrador específico de Lunch Money (solo el CSV propio genérico).
-- Wire físico de tools/endpoints/UI (lo hacen P1/P2/P6; P5 entrega el contrato).
+**Does not include**
+- Recomputing budget/goal/rollover rules (these come from P4/P3 already calculated).
+- HTML/PDF charts (v2; v1 is markdown + tables).
+- A Lunch Money-specific migrator (only the generic custom CSV).
+- Physical wiring of tools/endpoints/UI (P1/P2/P6 do this; P5 delivers the contract).
 
-## Aporte al modelo de datos
+## Contribution to the data model
 
-**Ninguna entidad nueva.** P5 sólo **lee** (Transaction, Account, Category, Budget, Goal, GoalContribution, RecurringOccurrence, FxRate) y **escribe Transaction/Tag/TransactionTag** vía los services de creación de P0 al importar. Las filas importadas se insertan con `source=import` y, si aplica, `status` por defecto `posted`. No define migraciones propias.
+**No new entities.** P5 only **reads** (Transaction, Account, Category, Budget, Goal, GoalContribution, RecurringOccurrence, FxRate) and **writes Transaction/Tag/TransactionTag** via P0's creation services when importing. Imported rows are inserted with `source=import` and, if applicable, a default `status` of `posted`. It defines no migrations of its own.
 
-## Componentes
+## Components
 
-- `services/reports.py` — `reporte_mensual`, helpers de agregación.
-- `services/importer.py` — `importar_csv`, parser y validación de filas.
-- `domain/report_types.py` — dataclasses del contrato (`ReporteMensual`, `SafeToSpend`, `SobresResumen`, `SeccionCategoria`, `SeccionGrupo`, `LineaSobre`, `LineaMeta`, `BalanceCuenta`, `DriftMoM`, `ResultadoImport`, `ErrorFila`).
-- `domain/report_markdown.py` — renderer puro `datos -> str markdown` (sin I/O, testeable solo).
-- Reúsa de P0: `transactions` (reads, `registrar_*`), `money`/`fx` (`to_base`, `tasa_vigente`), maestros (resolver cuenta/categoría por nombre). De P3: `por_pagar`, occurrences. De P4: `estado_presupuesto`, `safe_to_spend`, `progreso_metas`.
+- `services/reports.py` — `monthly_report`, aggregation helpers.
+- `services/importer.py` — `import_csv`, parser and row validation.
+- `domain/report_types.py` — contract dataclasses (`MonthlyReport`, `SafeToSpend`, `EnvelopesSummary`, `CategorySection`, `GroupSection`, `EnvelopeLine`, `GoalLine`, `AccountBalance`, `DriftMoM`, `ImportResult`, `RowError`).
+- `domain/report_markdown.py` — pure renderer `data -> str markdown` (no I/O, testable on its own).
+- Reuses from P0: `transactions` (reads, `record_*`), `money`/`fx` (`to_base`, `current_rate`), masters (resolve account/category by name). From P3: `to_pay`, occurrences. From P4: `budget_status`, `safe_to_spend`, `goals_progress`.
 
-## Interfaz pública
+## Public interface
 
 ```python
-def reporte_mensual(mes: str) -> ReporteMensual            # mes = "YYYY-MM"; .markdown es atributo del resultado
-def importar_csv(contenido: str, *, dry_run: bool = False) -> ResultadoImport
+def monthly_report(month: str) -> MonthlyReport            # month = "YYYY-MM"; .markdown is an attribute of the result
+def import_csv(content: str, *, dry_run: bool = False) -> ImportResult
 ```
 
 ```python
 @dataclass
-class ReporteMensual:                                      # RETROSPECTIVO (ADR-019): "¿cómo me fue?"
-    mes: str
-    ingreso: int; gasto: int; neto: int                    # centavos COP, solo posted — TITULAR
-    sobres_resumen: SobresResumen                          # (n_verde, n_rojo, rollover_generado) — TITULAR
-    sobres: list[LineaSobre]                               # (categoria, asignado, rollover_in, gastado, disponible, estado)
-    por_categoria: list[SeccionCategoria]                  # (categoria, group, total, pct)
-    por_grupo: list[SeccionGrupo]                          # rollup por CategoryGroup (group, total, pct) — ADR-023
-    metas: list[LineaMeta]                                 # (nombre, acumulado, target?, eta?, on_track?)
-    balances: list[BalanceCuenta]                          # (cuenta, currency, balance)
-    drift_mom: DriftMoM | None                             # None si no hay mes previo (arranque en frío)
-    usd_share: float                                       # % del gasto del mes originado en USD
-    pendientes: list[str]                                  # líneas de alerta: manuales sin confirmar
-    safe_to_spend: SafeToSpend                             # CIERRE al pie (no titular, ADR-019): "cerraste con $X libres"
+class MonthlyReport:                                       # RETROSPECTIVE (ADR-019): "how did I do?"
+    month: str
+    income: int; expense: int; net: int                    # COP cents, posted only — HEADLINE
+    envelopes_summary: EnvelopesSummary                    # (n_green, n_red, rollover_generated) — HEADLINE
+    envelopes: list[EnvelopeLine]                          # (category, allocated, rollover_in, spent, available, status)
+    by_category: list[CategorySection]                     # (category, group, total, pct)
+    by_group: list[GroupSection]                           # rollup by CategoryGroup (group, total, pct) — ADR-023
+    goals: list[GoalLine]                                  # (name, accumulated, target?, eta?, on_track?)
+    balances: list[AccountBalance]                         # (account, currency, balance)
+    drift_mom: DriftMoM | None                             # None if there is no previous month (cold start)
+    usd_share: float                                       # % of the month's expense originated in USD
+    pending: list[str]                                     # alert lines: unconfirmed manual entries
+    safe_to_spend: SafeToSpend                             # CLOSING at the bottom (not headline, ADR-019): "you closed with $X free"
     markdown: str
 
 @dataclass
-class ResultadoImport:
+class ImportResult:
     ok: bool
-    insertadas: int                                        # 0 si !ok o dry_run
-    tags_creados: list[str]
-    errores: list[ErrorFila]                               # ErrorFila(linea: int, motivo: str)
+    inserted: int                                          # 0 if !ok or dry_run
+    tags_created: list[str]
+    errors: list[RowError]                                 # RowError(line: int, reason: str)
     dry_run: bool
 ```
 
-**Formato CSV propio** (cabecera obligatoria, exacta):
+**Custom CSV format** (mandatory header, exact):
 ```
 date,type,payee,amount,currency,account,category,tags,notes
 ```
 
-| Columna | Significado / contrato |
+| Column | Meaning / contract |
 |---|---|
-| `date` | `YYYY-MM-DD`. Inválida → error con línea. |
-| `type` | ∈ `expense` / `income` / `transfer`. Otro → error. |
-| `payee` | texto libre; opcional. |
-| `amount` | número en la **moneda original**, positivo (signo lo da `type`). ≤0 o no-numérico → error. |
-| `currency` | `COP` / `USD`. Debe existir tasa vigente si `USD` → si no, error (`MissingRate`). |
-| `account` | **nombre** de Account existente (no archivada). No existe → error con línea. |
-| `category` | **nombre** de Category existente. No existe → error con línea (vacía permitida sólo si `type=transfer`). |
-| `tags` | lista separada por `;`; **se auto-crean** si no existen. |
-| `notes` | texto libre; opcional. |
+| `date` | `YYYY-MM-DD`. Invalid → error with line. |
+| `type` | ∈ `expense` / `income` / `transfer`. Anything else → error. |
+| `payee` | free text; optional. |
+| `amount` | number in the **original currency**, positive (sign is given by `type`). ≤0 or non-numeric → error. |
+| `currency` | `COP` / `USD`. A current rate must exist if `USD` → otherwise, error (`MissingRate`). |
+| `account` | **name** of an existing Account (not archived). Does not exist → error with line. |
+| `category` | **name** of an existing Category. Does not exist → error with line (empty allowed only if `type=transfer`). |
+| `tags` | list separated by `;`; **auto-created** if they don't exist. |
+| `notes` | free text; optional. |
 
-## Lógica y reglas clave
+## Logic and key rules
 
-**Reportes**
-- **Solo `posted`** en todo agregado/balance (convención §5). `planned` nunca suma a ingreso/gasto/neto.
-- Todo número en **`to_base` (COP)** ya congelado en cada tx; el reporte **no reconvierte** FX.
-- **Transferencias excluidas** de ingreso/gasto/por-categoría (igual que en §5). Sí afectan balances de cuenta.
-- Respeta `exclude_from_totals` / `exclude_from_budget` al agregar (lo aplica el helper de categoría/presupuesto, alineado con P4).
-- `por_categoria`: agrupa expenses posted del mes por categoría, ordena desc, `pct` sobre gasto total. Incluye gasto de **todas las cuentas, incl. tarjeta de crédito** (por causación, ADR-021).
-- `por_grupo`: rollup del anterior por **`CategoryGroup`** (ADR-023) — suma las categorías de cada grupo, ordena desc, `pct` sobre gasto total. Resuelve el nombre del grupo por FK.
-- **Drift MoM**: compara ingreso/gasto/neto del mes vs el mes calendario anterior (abs y %); si no hay datos previos, `pct=None`.
-- **USD share**: `Σ to_base(expenses posted del mes con currency=USD) / gasto total`. Si gasto=0 → `0.0`.
-- **Reporte retrospectivo (ADR-019):** el **titular** es el **neto del mes** + el **desempeño de sobres** (`sobres_resumen`: cuántos en verde/rojo, `rollover_generado` = Σ disponibles positivos que ruedan al mes siguiente). El **safe-to-spend va al pie** como cierre ("cerraste con $X libres"), **no** como cabecera. El renderer ordena: neto → sobres → por categoría/grupo → metas → balances → drift/USD → pendientes → safe-to-spend.
-- **Safe-to-spend / sobres / metas**: se piden a `safe_to_spend`, `estado_presupuesto` y `progreso_metas` (P4); P5 sólo los formatea. Los **sobres** muestran asignado/gastado/disponible/rollover. ETA/on-track sólo en metas **definidas** (las indefinidas muestran sólo acumulado).
-- **Arranque en frío (ADR-009):** sin mes previo, `drift_mom=None` y los sobres aún no acumulan rollover; el reporte degrada con elegancia (no rompe). El importer (abajo) sigue disponible para backfillear historial de LM si se decide después.
-- **Pendientes**: si `por_pagar` (P3) reporta recurrentes manuales del mes sin confirmar, emite línea de alerta (cuenta + total estimado).
-- `markdown` se genera con el renderer puro a partir de `datos`; las dos vistas (chat MCP / frontend P6) consumen el mismo objeto.
-
-**Importer**
-- **Atómico (todo o nada):** parsea y valida las N filas en memoria; **si una sola falla, no inserta ninguna** y devuelve `ok=False` con todos los `errores`. Sólo si 0 errores abre una transacción DB y la confirma (commit) o revierte (rollback) en bloque.
-- **Validación fila por fila** acumulando errores (no aborta al primero) → el usuario ve todos los problemas de una.
-- Resuelve `account`/`category` por **nombre** vía maestros de P0; **tags se auto-crean** (registrados en `tags_creados`).
-- Calcula `to_base` con **`tasa_vigente`** de la fecha de la fila (FX de P0); USD sin tasa → error de esa línea.
-- Inserta vía services de P0 (`registrar_gasto/ingreso/transferir`) → reusa signo-por-`type`, balance y atomicidad ya probados. `source=import`.
-- **`dry_run=True`**: ejecuta todo el pipeline de validación (incl. resolución de nombres y tasas) y **no inserta**; alimenta la validación previa de la pantalla `/import` y la tool.
-- Cabecera ausente/distinta o CSV vacío → error global (línea 0/1), no se importa nada.
-
-## Errores
-
-- Errores de fila se acumulan en `ResultadoImport.errores` como `ErrorFila(linea, motivo)` — **no** se lanzan; permiten el reporte completo.
-- Errores tipados de `domain` que sí se propagan en reportes: `MissingRate` (FX faltante al agregar USD si hiciera falta), `ValidationError` (mes mal formado). API (P1) los mapea a 4xx; MCP (P2) los devuelve como texto estructurado.
-- Importer: `MissingRate` por fila → motivo "sin tasa usd_cop para `<fecha>`". Nombre inexistente → "cuenta/categoría `<n>` no existe". `type`/`amount`/`date` inválidos → motivo específico con la línea.
-- Cualquier fallo en el commit (improbable, ya validado) → rollback total y `ok=False`.
-
-## Testing y criterio de "listo"
-
-`pytest` sobre `services` + renderer con SQLite in-memory.
-
-**Reportes**
-- Agregados correctos: ingreso/gasto/neto sólo con `posted`; `planned` y `transfer` excluidos de ingreso/gasto.
-- Por categoría ordenado y con `pct` correcto; respeta `exclude_*`.
-- **Drift MoM** con y sin mes anterior (`None` en arranque en frío); **USD share** correcto y `0.0` si gasto 0.
-- **Safe-to-spend** y sobres (con rollover) formateados desde P4; metas (definida con ETA, indefinida sin ETA).
-- Línea de pendientes aparece sólo si hay manuales sin confirmar.
-- Renderer markdown determinista para un `ReporteMensual` dado.
+**Reports**
+- **Only `posted`** in every aggregate/balance (convention §5). `planned` never adds to income/expense/net.
+- Every number in **`to_base` (COP)** is already frozen on each tx; the report **does not reconvert** FX.
+- **Transfers excluded** from income/expense/by-category (same as in §5). They do affect account balances.
+- Respects `exclude_from_totals` / `exclude_from_budget` when aggregating (applied by the category/budget helper, aligned with P4).
+- `by_category`: groups the month's posted expenses by category, sorts descending, `pct` over total expense. Includes expense from **all accounts, incl. credit card** (on an accrual basis, ADR-021).
+- `by_group`: rollup of the above by **`CategoryGroup`** (ADR-023) — sums the categories of each group, sorts descending, `pct` over total expense. Resolves the group name by FK.
+- **MoM Drift**: compares the month's income/expense/net vs the previous calendar month (abs and %); if there is no prior data, `pct=None`.
+- **USD share**: `Σ to_base(month's posted expenses with currency=USD) / total expense`. If expense=0 → `0.0`.
+- **Retrospective report (ADR-019):** the **headline** is the **month's net** + the **envelope performance** (`envelopes_summary`: how many green/red, `rollover_generated` = Σ positive availables that roll into the next month). The **safe-to-spend goes at the bottom** as a closing line ("you closed with $X free"), **not** as a header. The renderer orders: net → envelopes → by category/group → goals → balances → drift/USD → pending → safe-to-spend.
+- **Safe-to-spend / envelopes / goals**: requested from `safe_to_spend`, `budget_status`, and `goals_progress` (P4); P5 only formats them. **Envelopes** show allocated/spent/available/rollover. ETA/on-track only on **defined** goals (undefined ones show only the accumulated amount).
+- **Cold start (ADR-009):** with no previous month, `drift_mom=None` and envelopes have not yet accumulated rollover; the report degrades gracefully (it does not break). The importer (below) remains available to backfill LM history if decided later.
+- **Pending**: if `to_pay` (P3) reports the month's unconfirmed manual recurring entries, it emits an alert line (account + estimated total).
+- `markdown` is generated by the pure renderer from `data`; the two views (MCP chat / P6 frontend) consume the same object.
 
 **Importer**
-- Validación: filas malas (date/type/amount/currency) reportan línea + motivo correctos.
-- **Atomicidad**: una fila inválida ⇒ **0 insertadas**, DB intacta.
-- Mapeo de nombres: cuenta/categoría por nombre resueltos; inexistente ⇒ error con línea.
-- Tags: auto-creación y reporte en `tags_creados`.
-- `to_base` con tasa vigente; `source=import` en todas.
-- `dry_run` valida sin insertar (insertadas=0, errores poblados igual).
+- **Atomic (all or nothing):** it parses and validates the N rows in memory; **if a single one fails, it inserts none** and returns `ok=False` with all the `errors`. Only if there are 0 errors does it open a DB transaction and commit it or roll it back as a block.
+- **Row-by-row validation** accumulating errors (it does not abort at the first one) → the user sees all the problems at once.
+- Resolves `account`/`category` by **name** via P0's masters; **tags are auto-created** (recorded in `tags_created`).
+- Computes `to_base` with the **`current_rate`** of the row's date (FX from P0); USD without a rate → error on that line.
+- Inserts via P0's services (`record_expense/record_income/transfer`) → reuses sign-by-`type`, balance, and atomicity already proven. `source=import`.
+- **`dry_run=True`**: runs the entire validation pipeline (incl. name and rate resolution) and **inserts nothing**; feeds the pre-validation of the `/import` screen and the tool.
+- Missing/different header or empty CSV → global error (line 0/1), nothing is imported.
 
-**Listo cuando:** todos los tests verdes; `reporte_mensual` e `importar_csv` con sus contratos estables; renderer puro sin I/O; documentado el formato CSV. Wire de tools (P2), endpoints (P1) y contrato de pantallas `/reports` y `/import` (P6) referenciados y disponibles.
+## Errors
 
-## Integración con otros sub-proyectos
+- Row errors accumulate in `ImportResult.errors` as `RowError(line, reason)` — they are **not** raised; they allow the full report.
+- Typed `domain` errors that do propagate in reports: `MissingRate` (missing FX when aggregating USD if needed), `ValidationError` (malformed month). The API (P1) maps them to 4xx; MCP (P2) returns them as structured text.
+- Importer: `MissingRate` per row → reason "no usd_cop rate for `<date>`". Nonexistent name → "account/category `<n>` does not exist". Invalid `type`/`amount`/`date` → specific reason with the line.
+- Any failure in the commit (unlikely, already validated) → full rollback and `ok=False`.
 
-- **P0**: consume reads de transactions, `money`/`fx` (`to_base`, `tasa_vigente`), maestros (resolver por nombre) y `registrar_*` para insertar el import. No toca DB directo (regla de oro §3).
-- **P3**: `reporte_mensual` lee `por_pagar`/occurrences para la línea de pendientes; no dispara rollover.
-- **P4**: toma `estado_presupuesto` y `progreso_metas` ya calculados; P5 sólo formatea.
-- **P1**: expone `GET /reports?mes=YYYY-MM` (devuelve datos + markdown) y `POST /import` (body CSV, `?dry_run`); espejo directo de los services.
-- **P2**: tools MCP `reporte_mensual` (muestra `.markdown` en el chat) e `importar_csv` (acepta dry-run); adaptadores delgados 1:1.
-- **P6**: pantalla `/reports` renderiza datos + markdown con selector de mes; `/import` sube CSV, muestra validación previa (dry-run) y errores con línea antes de confirmar.
+## Testing and "done" criteria
+
+`pytest` over `services` + renderer with in-memory SQLite.
+
+**Reports**
+- Correct aggregates: income/expense/net only with `posted`; `planned` and `transfer` excluded from income/expense.
+- By category sorted and with correct `pct`; respects `exclude_*`.
+- **MoM Drift** with and without a previous month (`None` on cold start); **USD share** correct and `0.0` if expense 0.
+- **Safe-to-spend** and envelopes (with rollover) formatted from P4; goals (defined with ETA, undefined without ETA).
+- The pending line appears only if there are unconfirmed manual entries.
+- Deterministic markdown renderer for a given `MonthlyReport`.
+
+**Importer**
+- Validation: bad rows (date/type/amount/currency) report the correct line + reason.
+- **Atomicity**: one invalid row ⇒ **0 inserted**, DB intact.
+- Name mapping: account/category resolved by name; nonexistent ⇒ error with line.
+- Tags: auto-creation and reporting in `tags_created`.
+- `to_base` with current rate; `source=import` on all of them.
+- `dry_run` validates without inserting (inserted=0, errors populated all the same).
+
+**Done when:** all tests green; `monthly_report` and `import_csv` with their stable contracts; pure renderer with no I/O; CSV format documented. Wiring of tools (P2), endpoints (P1), and the `/reports` and `/import` screen contracts (P6) referenced and available.
+
+## Integration with other sub-projects
+
+- **P0**: consumes reads from transactions, `money`/`fx` (`to_base`, `current_rate`), masters (resolve by name), and `record_*` to insert the import. Does not touch the DB directly (golden rule §3).
+- **P3**: `monthly_report` reads `to_pay`/occurrences for the pending line; it does not trigger rollover.
+- **P4**: takes `budget_status` and `goals_progress` already calculated; P5 only formats.
+- **P1**: exposes `GET /reports?month=YYYY-MM` (returns data + markdown) and `POST /import` (CSV body, `?dry_run`); a direct mirror of the services.
+- **P2**: MCP tools `monthly_report` (shows `.markdown` in the chat) and `import_csv` (accepts dry-run); thin 1:1 adapters.
+- **P6**: the `/reports` screen renders data + markdown with a month selector; `/import` uploads a CSV, shows the pre-validation (dry-run) and errors with line before confirming.

@@ -21,7 +21,7 @@ class LoginIn(BaseModel):
 def login(body: LoginIn, request: Request) -> dict[str, bool]:
     expected = os.environ.get("APP_PASSWORD")
     if not expected or not hmac.compare_digest(body.password, expected):
-        raise Unauthorized("contraseña inválida")
+        raise Unauthorized("invalid password")
     request.session["authenticated"] = True
     return {"ok": True}
 

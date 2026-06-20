@@ -12,7 +12,7 @@ def test_get_settings_returns_singleton(session):
 
 
 def test_update_settings_sets_default_source_account(session):
-    acc = accounts.create_account(session, "Ahorros", AccountType.savings, "COP")
+    acc = accounts.create_account(session, "Savings", AccountType.savings, "COP")
     s = settings.update_settings(session, default_source_account_id=acc.id)
     assert s.default_source_account_id == acc.id
 

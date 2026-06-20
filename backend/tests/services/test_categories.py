@@ -5,9 +5,9 @@ from quaestor.services import categories
 
 
 def test_create_group_and_linked_category(session):
-    grupo = categories.create_group(session, "Essentials", sort_order=1)
-    cat = categories.create_category(session, "Groceries", group_id=grupo.id)
-    assert cat.group_id == grupo.id
+    group = categories.create_group(session, "Essentials", sort_order=1)
+    cat = categories.create_category(session, "Groceries", group_id=group.id)
+    assert cat.group_id == group.id
     assert cat.is_income is False
 
 
@@ -33,14 +33,14 @@ def test_category_flags(session):
 def test_list_groups_ordered(session):
     categories.create_group(session, "Entertainment", sort_order=2)
     categories.create_group(session, "Essentials", sort_order=1)
-    nombres = [g.name for g in categories.list_groups(session)]
-    assert nombres == ["Essentials", "Entertainment"]
+    names = [g.name for g in categories.list_groups(session)]
+    assert names == ["Essentials", "Entertainment"]
 
 
 def test_update_group_renames_and_reorders(session):
-    g = categories.create_group(session, "Ocio", sort_order=1)
-    updated = categories.update_group(session, g.id, name="Entretenimiento", sort_order=5)
-    assert updated.name == "Entretenimiento" and updated.sort_order == 5
+    g = categories.create_group(session, "Leisure", sort_order=1)
+    updated = categories.update_group(session, g.id, name="Entertainment", sort_order=5)
+    assert updated.name == "Entertainment" and updated.sort_order == 5
 
 
 def test_update_group_missing_raises(session):
@@ -69,25 +69,25 @@ def test_get_category_missing_raises(session):
 
 
 def test_update_category_reassigns_group_and_flags(session):
-    g = categories.create_group(session, "Esenciales")
-    cat = categories.create_category(session, "Mercado")
+    g = categories.create_group(session, "Essentials")
+    cat = categories.create_category(session, "Groceries")
     updated = categories.update_category(
-        session, cat.id, name="Comida", group_id=g.id, exclude_from_budget=True
+        session, cat.id, name="Food", group_id=g.id, exclude_from_budget=True
     )
-    assert updated.name == "Comida"
+    assert updated.name == "Food"
     assert updated.group_id == g.id
     assert updated.exclude_from_budget is True
 
 
 def test_update_category_can_unassign_group(session):
-    g = categories.create_group(session, "Esenciales")
-    cat = categories.create_category(session, "Mercado", group_id=g.id)
+    g = categories.create_group(session, "Essentials")
+    cat = categories.create_category(session, "Groceries", group_id=g.id)
     updated = categories.update_category(session, cat.id, group_id=None)
     assert updated.group_id is None
 
 
 def test_update_category_bad_group_rejected(session):
-    cat = categories.create_category(session, "Mercado")
+    cat = categories.create_category(session, "Groceries")
     import pytest
 
     from quaestor.domain.errors import ValidationError

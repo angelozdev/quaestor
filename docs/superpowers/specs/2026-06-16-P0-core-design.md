@@ -1,129 +1,129 @@
-# Quaestor — P0 Core (sub-proyecto)
+# Quaestor — P0 Core (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** —
-**Parte de:** `2026-06-16-quaestor-general-design.md`
+**Date:** 2026-06-16
+**Depends on:** —
+**Part of:** `2026-06-16-quaestor-general-design.md`
 
 ---
 
-## Objetivo
+## Objective
 
-Entregar la **fundación** del backend: el modelo de datos persistido, la aritmética de dinero/FX, las reglas de balance y los **services base** para operar cuentas, categorías, tags, tasas y transacciones (gasto/ingreso/transferencia). Frontera: **sin HTTP, sin MCP, sin UI** y sin lógica temporal (recurrentes, rollover, presupuestos, metas). Todo es invocable y testeable desde código puro.
+Deliver the backend **foundation**: the persisted data model, money/FX arithmetic, balance rules, and the **base services** to operate accounts, categories, tags, rates, and transactions (expense/income/transfer). Boundary: **no HTTP, no MCP, no UI** and no temporal logic (recurring items, rollover, budgets, goals). Everything is callable and testable from pure code.
 
-## Alcance
+## Scope
 
-**En:**
+**In:**
 - `domain/models.py`: Account, Category, Transaction, Tag, TransactionTag, FxRate, Settings.
-- `domain/money.py`: tipo `Money`, escala por moneda, conversión FX, formateo display.
-- `domain/rules.py`: actualización incremental de balance en tx `posted`.
-- `db.py`: engine SQLite, sesión, estrategia de migraciones.
+- `domain/money.py`: the `Money` type, per-currency scale, FX conversion, display formatting.
+- `domain/rules.py`: incremental balance update on `posted` transactions.
+- `db.py`: SQLite engine, session, migration strategy.
 - Services: `transactions.py`, `accounts.py`, `categories.py`, `tags.py`, `fx.py` + reads.
 
-**Fuera:**
-- RecurringItem, RecurringOccurrence, Budget, Goal, GoalContribution (los crean **P3/P4**).
-- Semántica completa de `planned` / "Por pagar" y `cerrar_mes` (**P3**).
-- API REST (**P1**), tools MCP (**P2**), reportes/importer (**P5**), frontend (**P6**).
+**Out:**
+- RecurringItem, RecurringOccurrence, Budget, Goal, GoalContribution (created by **P3/P4**).
+- Full semantics of `planned` / "to-pay" and `close_month` (**P3**).
+- REST API (**P1**), MCP tools (**P2**), reports/importer (**P5**), frontend (**P6**).
 
-## Aporte al modelo de datos
+## Contribution to the data model
 
-P0 crea **solo** estas entidades (resto en §5 del general, añadidas por otros sub-proyectos):
+P0 creates **only** these entities (the rest live in §5 of the general design, added by other sub-projects):
 
-| Entidad | Campos clave |
+| Entity | Key fields |
 |---|---|
-| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (centavos), `archived`. **Tarjeta de crédito** (`type=credit`): cuenta normal con saldo negativo = deuda; el pago del extracto es una `transfer` (débito → tarjeta), no un gasto (ADR-021) |
-| **CategoryGroup** | `name`, `sort_order`, `archived` — contenedor de categorías; entidad propia (ADR-023) |
+| **Account** | `name`, `type` (debit/credit/cash/savings), `currency`, `balance` (cents), `archived`. **Credit card** (`type=credit`): a normal account with a negative balance = debt; the statement payment is a `transfer` (debit → card), not an expense (ADR-021) |
+| **CategoryGroup** | `name`, `sort_order`, `archived` — container of categories; its own entity (ADR-023) |
 | **Category** | `name`, `group_id?` (FK CategoryGroup), `is_income`, `exclude_from_budget`, `exclude_from_totals`, `archived` |
-| **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (centavos, moneda original), `currency`, `fx_rate`, `to_base` (centavos COP), `account_id`, `category_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
-| **Tag** + **TransactionTag** | `name`; relación m2m |
-| **FxRate** | `date`, `usd_cop` (tasa); único por fecha |
-| **Settings** | `base_currency=COP`, `default_source_account_id?` (FK Account, cuenta origen global de aportes de meta — la usa P4, ADR-015), config de la app (fila singleton) |
+| **Transaction** | `date`, `payee`, `notes`, `type` (expense/income/transfer), `status` (planned/posted), `amount` (cents, original currency), `currency`, `fx_rate`, `to_base` (cents COP), `account_id`, `category_id?`, `transfer_group_id?`, `source` (manual/agent/import), `created_at` |
+| **Tag** + **TransactionTag** | `name`; m2m relationship |
+| **FxRate** | `date`, `usd_cop` (rate); unique per date |
+| **Settings** | `base_currency=COP`, `default_source_account_id?` (FK Account, the global source account for goal contributions — used by P4, ADR-015), app config (singleton row) |
 
-> P0 incluye los campos `status` y `transfer_group_id` en Transaction, pero solo ejercita `status=posted` y los pares de transferencia. La semántica avanzada de `planned` (vencimiento, confirmación) la aterriza P3 sin redefinir el modelo.
+> P0 includes the `status` and `transfer_group_id` fields on Transaction, but only exercises `status=posted` and the transfer pairs. The advanced semantics of `planned` (due dates, confirmation) are landed by P3 without redefining the model.
 
-## Componentes
+## Components
 
-- `src/quaestor/domain/models.py` — tablas SQLModel + enums (`AccountType`, `CategoryKind`, `TxType`, `TxStatus`, `Source`).
-- `src/quaestor/domain/money.py` — `Money`, escalas, `to_base`, formateo.
-- `src/quaestor/domain/rules.py` — `aplicar_a_balance`, `delta_balance`, signo por tipo.
-- `src/quaestor/db.py` — `engine`, `get_session`, `init_db`, transacción atómica.
-- `src/quaestor/services/{accounts,categories,tags,fx,transactions}.py` — casos de uso + reads.
-- `tests/` — pytest sobre domain + services con SQLite in-memory.
+- `src/quaestor/domain/models.py` — SQLModel tables + enums (`AccountType`, `CategoryKind`, `TxType`, `TxStatus`, `Source`).
+- `src/quaestor/domain/money.py` — `Money`, scales, `to_base`, formatting.
+- `src/quaestor/domain/rules.py` — `apply_to_balance`, `delta_balance`, sign by type.
+- `src/quaestor/db.py` — `engine`, `get_session`, `init_db`, atomic transaction.
+- `src/quaestor/services/{accounts,categories,tags,fx,transactions}.py` — use cases + reads.
+- `tests/` — pytest over domain + services with in-memory SQLite.
 
-## Interfaz pública (services)
+## Public interface (services)
 
 ```python
 # accounts.py
-crear_cuenta(name, type, currency, balance=0) -> Account
-listar_cuentas(incluir_archivadas=False) -> list[Account]
-consultar_cuenta(account_id) -> Account
-archivar_cuenta(account_id) -> Account
+create_account(name, type, currency, balance=0) -> Account
+list_accounts(include_archived=False) -> list[Account]
+get_account(account_id) -> Account
+archive_account(account_id) -> Account
 
 # categories.py
-crear_grupo(name, sort_order=0) -> CategoryGroup              # entidad de grupo (ADR-023)
-listar_grupos(incluir_archivados=False) -> list[CategoryGroup]
-crear_categoria(name, group_id=None, is_income=False, **flags) -> Category
-listar_categorias(incluir_archivadas=False) -> list[Category]
+create_group(name, sort_order=0) -> CategoryGroup            # group entity (ADR-023)
+list_groups(include_archived=False) -> list[CategoryGroup]
+create_category(name, group_id=None, is_income=False, **flags) -> Category
+list_categories(include_archived=False) -> list[Category]
 
 # tags.py
-crear_tag(name) -> Tag
-listar_tags() -> list[Tag]
-etiquetar(tx_id, tags: list[str]) -> Transaction   # crea tags faltantes (upsert)
+create_tag(name) -> Tag
+list_tags() -> list[Tag]
+tag(tx_id, tags: list[str]) -> Transaction   # creates missing tags (upsert)
 
 # fx.py
-fijar_tasa_fx(date, usd_cop) -> FxRate              # upsert por fecha
-tasa_vigente(date) -> Decimal                       # última <= date; MissingRate si no hay
+set_fx_rate(date, usd_cop) -> FxRate               # upsert by date
+current_rate(date) -> Decimal                       # latest <= date; MissingRate if none
 
 # transactions.py
-registrar_gasto(account_id, amount, currency, date, payee, category_id=None,
-                notes=None, source="manual", fx_rate=None) -> Transaction
-registrar_ingreso(account_id, amount, currency, date, payee, category_id=None,
-                  notes=None, source="manual", fx_rate=None) -> Transaction
-transferir(from_account_id, to_account_id, amount, currency, date,
-           notes=None, source="manual", fx_rate=None) -> tuple[Transaction, Transaction]
-listar_transacciones(filtros...) -> list[Transaction]   # cuenta/categoría/tag/tipo/status/rango
-consultar_transaccion(tx_id) -> Transaction
+record_expense(account_id, amount, currency, date, payee, category_id=None,
+               notes=None, source="manual", fx_rate=None) -> Transaction
+record_income(account_id, amount, currency, date, payee, category_id=None,
+              notes=None, source="manual", fx_rate=None) -> Transaction
+transfer(from_account_id, to_account_id, amount, currency, date,
+         notes=None, source="manual", fx_rate=None) -> tuple[Transaction, Transaction]
+list_transactions(filters...) -> list[Transaction]   # account/category/tag/type/status/range
+get_transaction(tx_id) -> Transaction
 ```
 
-Toda escritura es **atómica** (commit/rollback). Los services nunca exponen la sesión; reciben/abren su propia unidad de trabajo.
+Every write is **atomic** (commit/rollback). Services never expose the session; they receive/open their own unit of work.
 
-## Lógica y reglas clave
+## Key logic and rules
 
-- **Dinero = entero en centavos**, nunca float. `Money` envuelve `(centavos: int, currency)` y conoce la escala por moneda (COP y USD usan 2 decimales → escala 100).
-- **Signo por `type`, no en el monto.** `amount` se almacena **siempre positivo**; el service aplica el signo: `expense` resta, `income` suma. `delta_balance` en `rules.py` centraliza esto.
-- **FX congelado.** Si `currency != base (COP)`: `fx_rate` = el pasado o `tasa_vigente(date)`; `to_base = amount × fx_rate` se calcula y **se guarda fijo** al registrar. Tx en COP → `fx_rate=1`, `to_base=amount`. Cambiar la tasa después no altera tx ya guardadas. La tabla `FxRate` la **puebla un job diario** (P7, ADR-011) llamando a `fijar_tasa_fx`; este service queda además como **override manual**. `tasa_vigente` no cambia: lee la última ≤ fecha.
-- **Balance incremental solo en `posted`.** Al registrar una tx `posted`, el service ajusta `Account.balance` con `delta_balance` (en moneda de la cuenta). Las tx `planned` **no tocan balance**. El balance no se recalcula desde cero.
-- **Transferencia = par atómico.** `transferir` genera dos transactions con el mismo `transfer_group_id` y `type=transfer`: una resta en `from_account`, otra suma en `to_account`. Las dos se persisten o ninguna. Quedan **excluidas de ingreso/gasto** (marca consumible por reportes en P5).
-- **Settings singleton.** Una sola fila; `base_currency=COP` fija la moneda de todos los `to_base`.
+- **Money = integer in cents**, never float. `Money` wraps `(cents: int, currency)` and knows the per-currency scale (COP and USD use 2 decimals → scale 100).
+- **Sign by `type`, not in the amount.** `amount` is **always stored positive**; the service applies the sign: `expense` subtracts, `income` adds. `delta_balance` in `rules.py` centralizes this.
+- **Frozen FX.** If `currency != base (COP)`: `fx_rate` = the one passed in or `current_rate(date)`; `to_base = amount × fx_rate` is computed and **stored fixed** at record time. Transactions in COP → `fx_rate=1`, `to_base=amount`. Changing the rate later does not alter transactions already stored. The `FxRate` table is **populated by a daily job** (P7, ADR-011) calling `set_fx_rate`; this service also remains available as a **manual override**. `current_rate` does not change: it reads the latest ≤ date.
+- **Incremental balance only on `posted`.** When recording a `posted` transaction, the service adjusts `Account.balance` with `delta_balance` (in the account's currency). `planned` transactions **do not touch the balance**. The balance is not recomputed from scratch.
+- **Transfer = atomic pair.** `transfer` produces two transactions with the same `transfer_group_id` and `type=transfer`: one subtracts from `from_account`, the other adds to `to_account`. Both are persisted or neither is. They are **excluded from income/expense** (a flag consumable by reports in P5).
+- **Settings singleton.** A single row; `base_currency=COP` fixes the currency of every `to_base`.
 
-## Errores
+## Errors
 
-`domain` lanza errores tipados (mapeables luego a 4xx en P1 / texto en P2):
+`domain` raises typed errors (later mappable to 4xx in P1 / text in P2):
 
-- `ValidationError` — monto ≤ 0, moneda no soportada, cuenta/categoría inexistente o archivada, `type` inválido.
-- `MissingRate` — tx no-COP sin `fx_rate` explícito y sin tasa vigente para la fecha. Mensaje accionable: "fija la tasa usd_cop para {date}".
-- `TransferImbalance` — origen == destino, o el par no cuadra (no debe ocurrir; guarda de invariante).
-- `NotFound` — id inexistente en reads/escrituras.
+- `ValidationError` — amount ≤ 0, unsupported currency, nonexistent or archived account/category, invalid `type`.
+- `MissingRate` — non-COP transaction without an explicit `fx_rate` and without a current rate for the date. Actionable message: "set the usd_cop rate for {date}".
+- `TransferImbalance` — source == destination, or the pair does not balance (must not happen; invariant guard).
+- `NotFound` — nonexistent id in reads/writes.
 
-Transferencias y cualquier escritura multi-fila: **commit/rollback atómico**; un fallo deja la DB intacta.
+Transfers and any multi-row write: **atomic commit/rollback**; a failure leaves the DB intact.
 
-## Testing y criterio de "listo"
+## Testing and "done" criteria
 
-`pytest` sobre `domain` + `services` con **SQLite in-memory** (fixture de sesión por test):
+`pytest` over `domain` + `services` with **in-memory SQLite** (per-test session fixture):
 
-- Money/FX: escalas COP/USD, redondeo a centavos, `to_base` congelado tras cambiar la tasa.
-- Balance: gasto resta, ingreso suma, monto siempre positivo; `posted` mueve balance.
-- Transferencia: par con mismo `transfer_group_id`, origen−/destino+, **atómica** (fallo → ninguna fila).
-- FX: `tasa_vigente` toma la última ≤ fecha; `MissingRate` cuando falta.
-- Reads: filtros por cuenta/categoría/tag/tipo/status/rango.
-- Validación: montos inválidos, moneda no soportada, ids inexistentes → error tipado.
+- Money/FX: COP/USD scales, rounding to cents, `to_base` frozen after the rate changes.
+- Balance: expense subtracts, income adds, amount always positive; `posted` moves the balance.
+- Transfer: pair with the same `transfer_group_id`, source−/destination+, **atomic** (failure → no rows).
+- FX: `current_rate` takes the latest ≤ date; `MissingRate` when missing.
+- Reads: filters by account/category/tag/type/status/range.
+- Validation: invalid amounts, unsupported currency, nonexistent ids → typed error.
 
-**Listo cuando:** en código/tests se puede registrar gasto, ingreso y transferencia; los balances quedan correctos; el `to_base` USD está congelado; las transferencias son atómicas; y `init_db` levanta el esquema en in-memory.
+**Done when:** in code/tests you can record an expense, income, and transfer; balances come out correct; the USD `to_base` is frozen; transfers are atomic; and `init_db` brings up the schema in-memory.
 
-## Integración con otros sub-proyectos
+## Integration with other sub-projects
 
-- **P1 (API)** y **P2 (MCP)** son adaptadores delgados sobre estos services; no tocan la DB directo ni añaden lógica.
-- **P3 (Motor temporal)** añade RecurringItem/RecurringOccurrence y la semántica plena de `planned` (vencimiento, `confirmar_pago`, `cerrar_mes`) **reutilizando** `registrar_*`/`transferir` y el campo `status` ya definido aquí.
-- **P4 (Presupuestos/Metas)** añade Budget (con rollover)/Goal/GoalContribution y la columna `goal_id?` en Transaction (migración propia), apoyándose en `to_base`, el flag de exclusión de categorías y `transferir` (aportes a meta, materializados al confirmar en "Por pagar").
-- **P5 (Reportes/Importer)** lee transacciones, consume la marca de transferencia para excluirlas de ingreso/gasto y usa `to_base` para agregados; el importer llama a `registrar_*`.
+- **P1 (API)** and **P2 (MCP)** are thin adapters over these services; they do not touch the DB directly nor add logic.
+- **P3 (Temporal engine)** adds RecurringItem/RecurringOccurrence and the full semantics of `planned` (due dates, `confirm_payment`, `close_month`), **reusing** `record_*`/`transfer` and the `status` field already defined here.
+- **P4 (Budgets/Goals)** adds Budget (with rollover)/Goal/GoalContribution and the `goal_id?` column on Transaction (its own migration), building on `to_base`, the category-exclusion flag, and `transfer` (goal contributions, materialized when confirming in "to-pay").
+- **P5 (Reports/Importer)** reads transactions, consumes the transfer flag to exclude them from income/expense, and uses `to_base` for aggregates; the importer calls `record_*`.
 
-**Convenciones transversales respetadas:** centavos `int`, agregados en `to_base` COP, signo por `type`, **solo `posted` cuenta**, transferencias atómicas. P0 no re-litiga estas reglas; las implementa.
+**Cross-cutting conventions respected:** `int` cents, aggregates in `to_base` COP, sign by `type`, **only `posted` counts**, atomic transfers. P0 does not re-litigate these rules; it implements them.

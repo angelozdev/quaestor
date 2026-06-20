@@ -9,7 +9,7 @@ def test_get_and_patch_settings(client, auth):
     acc = client.post(
         "/api/accounts",
         headers=auth,
-        json={"name": "Ahorros", "type": "savings", "currency": "COP"},
+        json={"name": "Savings", "type": "savings", "currency": "COP"},
     ).json()
 
     patched = client.patch(

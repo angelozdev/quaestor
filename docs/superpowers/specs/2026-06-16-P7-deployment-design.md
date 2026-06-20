@@ -1,51 +1,51 @@
-# Quaestor — P7 Despliegue (sub-proyecto)
+# Quaestor — P7 Deployment (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** todos (P0, P1, P2, P3, P4, P5, P6) — empaqueta lo que ellos producen
-**Parte de:** `2026-06-16-quaestor-general-design.md` (ver §4 Despliegue y auth, §3 Arquitectura)
+**Date:** 2026-06-16
+**Depends on:** all (P0, P1, P2, P3, P4, P5, P6) — packages what they produce
+**Part of:** `2026-06-16-quaestor-general-design.md` (see §4 Deployment and auth, §3 Architecture)
 
 ---
 
-## Objetivo
+## Objective
 
-Poner Quaestor en línea: un **VPS self-hosted**, **single-user**, con dominio + HTTPS. El **frontend y `/api/*` son públicos** detrás de Caddy; el **`/mcp` no se expone a internet** — vive detrás de **Tailscale** (red privada, ADR-013) y solo lo alcanzan los equipos del usuario. Que el browser sirva el frontend por HTTPS, que `curl` a la API con token responda, que Claude Code se conecte al `/mcp` **por Tailscale**, que un **job diario** mantenga la tasa FX fresca (ADR-011), y que la DB esté respaldada en continuo y sea restaurable.
+Bring Quaestor online: a **self-hosted VPS**, **single-user**, with a domain + HTTPS. The **frontend and `/api/*` are public** behind Caddy; **`/mcp` is not exposed to the internet** — it lives behind **Tailscale** (private network, ADR-013) and is reachable only from the user's own machines. The browser should serve the frontend over HTTPS, a token-authenticated `curl` to the API should respond, Claude Code should connect to `/mcp` **over Tailscale**, a **daily job** should keep the FX rate fresh (ADR-011), and the DB should be continuously backed up and restorable.
 
-## Alcance
+## Scope
 
-- `docker-compose.yml`: servicios `api`, `mcp`, `frontend`, `caddy`, **`tailscale`** (sidecar que sirve `/mcp` en la red privada) y **`scheduler`** (job diario de FX). La DB (`quaestor.db`) vive en un **volumen persistente compartido por `api` y `mcp`**.
-- `Caddyfile`: un dominio, enrutado por path. HTTPS automático (Let's Encrypt). **Solo publica frontend + `/api/*`; `/mcp` no sale a internet** (lo sirve Tailscale).
-- **Scheduler diario (ADR-011/017/020):** el `scheduler` corre, **cada día**, tres jobs idempotentes: (a) **FX** — pega a una API gratis y actualiza `usd_cop` en `FxRate` (`python -m quaestor.jobs.fx_fetch` → `fijar_tasa_fx`); (b) **`materializar_vencidos(hoy)`** — materializa las occurrences de recurrentes con `due_date ≤ hoy` (due-driven, soporta cualquier intervalo: semanal, quincenal, mensual…; auto postea en su fecha, manual cae en "Por pagar"); (c) **`ensure_mes_cerrado`** — asegura el cierre del **mes calendario** actual (`cerrar_mes(mes_actual)`: rollover de sobres + propuesta de aportes de meta): el día 1 lo materializa, los demás días son no-op, un día perdido se auto-cura. El motor temporal se opera **solo**, no a mano.
-- Variables de entorno (`.env`, no commiteado): `APP_TOKEN`, hash de contraseña del frontend, dominio, ruta de la DB, config de Litestream, **`TS_AUTHKEY`** (Tailscale), **`FX_API_URL`/`FX_API_KEY`** (proveedor de tasa).
-- Backups con **Litestream** (replicación continua a un bucket) + restauración; mínimo alterno: cron `sqlite3 .backup` diario.
-- Pasos de deploy (`git pull && docker compose up -d --build`) y cómo conectar Claude Code al `/mcp` **por Tailscale**.
-- Postura de seguridad: API pública solo con token; **`/mcp` fuera de internet (Tailscale)**; solo Caddy publica 80/443.
+- `docker-compose.yml`: services `api`, `mcp`, `frontend`, `caddy`, **`tailscale`** (sidecar that serves `/mcp` on the private network) and **`scheduler`** (daily FX job). The DB (`quaestor.db`) lives on a **persistent volume shared by `api` and `mcp`**.
+- `Caddyfile`: one domain, routed by path. Automatic HTTPS (Let's Encrypt). **Only publishes the frontend + `/api/*`; `/mcp` does not leave the internet** (Tailscale serves it).
+- **Daily scheduler (ADR-011/017/020):** the `scheduler` runs, **every day**, three idempotent jobs: (a) **FX** — hits a free API and updates `usd_cop` in `FxRate` (`python -m quaestor.jobs.fx_fetch` → `set_fx_rate`); (b) **`materialize_due(today)`** — materializes the occurrences of recurring items with `due_date ≤ today` (due-driven, supports any interval: weekly, biweekly, monthly…; auto items post on their date, manual ones fall into "to-pay"); (c) **`ensure_month_closed`** — ensures the current **calendar month** is closed (`close_month(current_month)`: envelope rollover + goal contribution proposals): on day 1 it materializes the close, on other days it is a no-op, and a missed day self-heals. The temporal engine runs **on its own**, not by hand.
+- Environment variables (`.env`, not committed): `APP_TOKEN`, the frontend password hash, domain, DB path, Litestream config, **`TS_AUTHKEY`** (Tailscale), **`FX_API_URL`/`FX_API_KEY`** (rate provider).
+- Backups with **Litestream** (continuous replication to a bucket) + restore; minimal fallback: a daily `sqlite3 .backup` cron.
+- Deploy steps (`git pull && docker compose up -d --build`) and how to connect Claude Code to `/mcp` **over Tailscale**.
+- Security posture: the public API only with a token; **`/mcp` off the internet (Tailscale)**; only Caddy publishes 80/443.
 
-**Fuera de alcance:** CI/CD, orquestación multi-nodo, alta disponibilidad, Postgres (el general lo deja como migración futura por connection string). Single-writer SQLite es suficiente para single-user.
+**Out of scope:** CI/CD, multi-node orchestration, high availability, Postgres (the general design leaves it as a future migration via connection string). Single-writer SQLite is enough for single-user.
 
-## Aporte al modelo de datos
+## Contribution to the data model
 
-**Ninguno.** P7 no define entidades, campos ni migraciones. Solo empaqueta y despliega artefactos de P0–P6. Su única relación con los datos es operativa: **dónde vive** `quaestor.db` (volumen), **quién lo escribe** (api + mcp, un solo proceso a la vez en la práctica) y **cómo se respalda/restaura**. Las migraciones las corre el backend al arrancar (responsabilidad de P0); P7 solo garantiza que el archivo persista entre reinicios.
+**None.** P7 defines no entities, fields, or migrations. It only packages and deploys the artifacts of P0–P6. Its only relationship with the data is operational: **where** `quaestor.db` lives (the volume), **who writes to it** (api + mcp, in practice one process at a time), and **how it is backed up/restored**. The migrations are run by the backend at startup (P0's responsibility); P7 only guarantees that the file persists across restarts.
 
-## Componentes
+## Components
 
-| Componente | Qué es | Imagen / base |
+| Component | What it is | Image / base |
 |---|---|---|
-| `api` | FastAPI servido por uvicorn (P1), escucha `:8000` interno | Python 3.12 + uv |
-| `mcp` | MCP streamable-HTTP (P2), escucha `:9000` interno | Python 3.12 + uv |
-| `frontend` | Next.js App Router (P6), `:3000` interno | node, build standalone |
-| `caddy` | Reverse proxy + HTTPS auto, único que publica `80/443` al host (frontend + `/api/*`) | `caddy:2` |
-| `tailscale` | Sidecar que une el VPS al tailnet y **sirve `/mcp`** en la red privada (`tailscale serve` → `mcp:9000`). No publica puertos al host | `tailscale/tailscale` |
-| `scheduler` | Jobs diarios idempotentes: fetch de tasa FX → `FxRate` + `materializar_vencidos(hoy)` (recurrentes due-driven, ADR-020) + `ensure_mes_cerrado` (cierre del mes calendario, ADR-017) | Python 3.12 + uv (reusa imagen `api`) |
-| `litestream` | Sidecar (o proceso dentro de `api`) replicando la DB | `litestream/litestream` |
-| volumen `quaestor-data` | Persiste `quaestor.db` (+ `-wal`, `-shm`) | named volume Docker |
+| `api` | FastAPI served by uvicorn (P1), listens on internal `:8000` | Python 3.12 + uv |
+| `mcp` | MCP streamable-HTTP (P2), listens on internal `:9000` | Python 3.12 + uv |
+| `frontend` | Next.js App Router (P6), internal `:3000` | node, standalone build |
+| `caddy` | Reverse proxy + auto HTTPS, the only one that publishes `80/443` to the host (frontend + `/api/*`) | `caddy:2` |
+| `tailscale` | Sidecar that joins the VPS to the tailnet and **serves `/mcp`** on the private network (`tailscale serve` → `mcp:9000`). Publishes no ports to the host | `tailscale/tailscale` |
+| `scheduler` | Idempotent daily jobs: FX rate fetch → `FxRate` + `materialize_due(today)` (due-driven recurring items, ADR-020) + `ensure_month_closed` (calendar-month close, ADR-017) | Python 3.12 + uv (reuses the `api` image) |
+| `litestream` | Sidecar (or process inside `api`) replicating the DB | `litestream/litestream` |
+| volume `quaestor-data` | Persists `quaestor.db` (+ `-wal`, `-shm`) | Docker named volume |
 
-`api` y `mcp` montan **el mismo volumen** en la misma ruta (`/data/quaestor.db`) → comparten el archivo SQLite. `frontend` y `caddy` no tocan la DB.
+`api` and `mcp` mount **the same volume** at the same path (`/data/quaestor.db`) → they share the SQLite file. `frontend` and `caddy` do not touch the DB.
 
-## Interfaz pública
+## Public interface
 
-Los artefactos versionados del sub-proyecto (en la raíz del repo):
+The sub-project's versioned artifacts (at the repo root):
 
-### `docker-compose.yml` (forma)
+### `docker-compose.yml` (shape)
 ```yaml
 services:
   api:
@@ -53,11 +53,11 @@ services:
     command: uv run uvicorn quaestor.api:app --host 0.0.0.0 --port 8000
     environment: [APP_TOKEN, DB_PATH, FRONTEND_PASSWORD_HASH]
     volumes: ["quaestor-data:/data"]
-    expose: ["8000"]            # solo red interna, sin "ports:"
+    expose: ["8000"]            # internal network only, no "ports:"
     restart: unless-stopped
   mcp:
     build: ./backend
-    command: uv run python -m quaestor.mcp   # streamable-HTTP en :9000
+    command: uv run python -m quaestor.mcp   # streamable-HTTP on :9000
     environment: [APP_TOKEN, DB_PATH]
     volumes: ["quaestor-data:/data"]
     expose: ["9000"]
@@ -69,14 +69,14 @@ services:
     restart: unless-stopped
   caddy:
     image: caddy:2
-    ports: ["80:80", "443:443"]   # único que publica al host (frontend + /api/*)
+    ports: ["80:80", "443:443"]   # the only one published to the host (frontend + /api/*)
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on: [api, frontend]
     restart: unless-stopped
-  tailscale:                       # /mcp NO sale a internet: se sirve por el tailnet
+  tailscale:                       # /mcp does NOT leave the internet: it is served over the tailnet
     image: tailscale/tailscale
     hostname: quaestor-mcp
     environment:
@@ -87,9 +87,9 @@ services:
     cap_add: ["NET_ADMIN"]
     depends_on: [mcp]
     restart: unless-stopped
-  scheduler:                       # job diario de FX (ADR-011)
+  scheduler:                       # daily FX job (ADR-011)
     build: ./backend
-    command: ["./scripts/cron.sh"]  # crond diario: fx_fetch + materializar_vencidos + ensure_mes_cerrado (idempotente)
+    command: ["./scripts/cron.sh"]  # daily crond: fx_fetch + materialize_due + ensure_month_closed (idempotent)
     environment: [DB_PATH, FX_API_URL, FX_API_KEY]
     volumes: ["quaestor-data:/data"]
     restart: unless-stopped
@@ -100,107 +100,107 @@ volumes:
   tailscale-state:
 ```
 
-### `Caddyfile` (forma)
+### `Caddyfile` (shape)
 ```caddy
 {$DOMAIN} {
     encode gzip
     handle /api/* {
         reverse_proxy api:8000
     }
-    # /mcp NO se enruta aquí: lo sirve el sidecar Tailscale en la red privada (ADR-013).
+    # /mcp is NOT routed here: the Tailscale sidecar serves it on the private network (ADR-013).
     handle {
         reverse_proxy frontend:3000
     }
 }
 ```
-HTTPS automático: Caddy obtiene y renueva el cert de Let's Encrypt para `$DOMAIN` solo. El puerto 80 redirige a 443.
+Automatic HTTPS: Caddy obtains and renews the Let's Encrypt cert for `$DOMAIN` only. Port 80 redirects to 443.
 
-### `.env.example` (documentado; el `.env` real **no se commitea**)
+### `.env.example` (documented; the real `.env` **is not committed**)
 ```dotenv
-DOMAIN=quaestor.tudominio.com
-APP_TOKEN=                 # bearer estático para API + MCP (genera 32+ bytes aleatorios)
-FRONTEND_PASSWORD_HASH=    # hash (bcrypt/argon2) de la contraseña de login del frontend
+DOMAIN=quaestor.yourdomain.com
+APP_TOKEN=                 # static bearer for API + MCP (generate 32+ random bytes)
+FRONTEND_PASSWORD_HASH=    # hash (bcrypt/argon2) of the frontend login password
 DB_PATH=/data/quaestor.db
-# Tailscale (sirve /mcp en red privada, ADR-013)
-TS_AUTHKEY=                # auth key del tailnet (reusable, etiquetada)
-# Tasa FX (job diario, ADR-011)
-FX_API_URL=                # endpoint del proveedor de tasa usd_cop
-FX_API_KEY=                # si el proveedor lo exige
+# Tailscale (serves /mcp on the private network, ADR-013)
+TS_AUTHKEY=                # tailnet auth key (reusable, tagged)
+# FX rate (daily job, ADR-011)
+FX_API_URL=                # endpoint of the usd_cop rate provider
+FX_API_KEY=                # if the provider requires it
 # Litestream
 LITESTREAM_BUCKET=s3://quaestor-backups/quaestor.db
 LITESTREAM_ACCESS_KEY_ID=
 LITESTREAM_SECRET_ACCESS_KEY=
-LITESTREAM_ENDPOINT=       # para R2/Backblaze; vacío para AWS S3
+LITESTREAM_ENDPOINT=       # for R2/Backblaze; empty for AWS S3
 ```
-`.env` y `quaestor.db*` van en `.gitignore`. `.env.example` sí se commitea, con valores vacíos.
+`.env` and `quaestor.db*` go in `.gitignore`. `.env.example` is committed, with empty values.
 
-## Lógica y reglas clave
+## Key logic and rules
 
-**Un solo escritor SQLite.** SQLite admite un escritor a la vez. `api` y `mcp` comparten el archivo; en single-user los escritos son esporádicos y cortos, así que el bloqueo de SQLite (con **WAL** activo) los serializa sin problema. Reglas:
-- **Modo WAL obligatorio** en la conexión (lo fija P0 en `db.py`): permite lecturas concurrentes mientras hay un escritor y reduce contención entre `api` y `mcp`.
-- WAL implica **tres archivos**: `quaestor.db`, `quaestor.db-wal`, `quaestor.db-shm`. Deben vivir todos en el **mismo volumen** y la misma ruta para ambos servicios; nunca montar la DB por separado ni copiarla en caliente sin checkpoint.
-- `busy_timeout` razonable (p. ej. 5s) para que el segundo escritor espere en vez de fallar con "database is locked".
-- No correr más de una réplica de `api` ni de `mcp`. Single-writer es una invariante, no una limitación a esquivar.
+**Single SQLite writer.** SQLite allows one writer at a time. `api` and `mcp` share the file; in single-user usage writes are sporadic and short, so SQLite's locking (with **WAL** enabled) serializes them without trouble. Rules:
+- **WAL mode mandatory** on the connection (set by P0 in `db.py`): it allows concurrent reads while a writer is active and reduces contention between `api` and `mcp`.
+- WAL implies **three files**: `quaestor.db`, `quaestor.db-wal`, `quaestor.db-shm`. They must all live on the **same volume** at the same path for both services; never mount the DB separately nor copy it hot without a checkpoint.
+- A reasonable `busy_timeout` (e.g. 5s) so the second writer waits instead of failing with "database is locked".
+- Do not run more than one replica of `api` or `mcp`. Single-writer is an invariant, not a limitation to work around.
 
-**HTTPS y red.** Solo `caddy` publica puertos al host (`80`, `443`) → frontend + `/api/*`. `api`/`mcp`/`frontend` usan `expose` (visibles solo en la red interna de Docker, no en el host). **`/mcp` no entra por Caddy:** el sidecar `tailscale` lo sirve (`tailscale serve` → `mcp:9000`) **solo dentro del tailnet** (ADR-013); ningún puerto de `mcp` toca internet. El usuario alcanza `/mcp` por la MagicDNS del tailnet desde sus equipos.
+**HTTPS and network.** Only `caddy` publishes ports to the host (`80`, `443`) → frontend + `/api/*`. `api`/`mcp`/`frontend` use `expose` (visible only on Docker's internal network, not on the host). **`/mcp` does not come in through Caddy:** the `tailscale` sidecar serves it (`tailscale serve` → `mcp:9000`) **only inside the tailnet** (ADR-013); no `mcp` port touches the internet. The user reaches `/mcp` via the tailnet's MagicDNS from their machines.
 
-**Auth (resumen de §4 del general, P1/P2 lo implementan).** API y MCP exigen `Authorization: Bearer $APP_TOKEN`; sin token → 401. Caddy **no** termina la auth, solo enruta; el token lo valida el servicio destino. El frontend valida la contraseña (contra `FRONTEND_PASSWORD_HASH`) y guarda sesión; del lado servidor adjunta `APP_TOKEN` a sus llamadas a la API. **Defensa en capas para `/mcp` (ADR-013):** primero Tailscale (el endpoint ni existe fuera del tailnet), luego el bearer token. El token estático deja de ser lo único que protege el punto sensible.
+**Auth (summary of §4 of the general design, implemented by P1/P2).** API and MCP require `Authorization: Bearer $APP_TOKEN`; no token → 401. Caddy does **not** terminate auth, it only routes; the destination service validates the token. The frontend validates the password (against `FRONTEND_PASSWORD_HASH`) and keeps a session; server-side it attaches `APP_TOKEN` to its API calls. **Defense in depth for `/mcp` (ADR-013):** first Tailscale (the endpoint doesn't even exist outside the tailnet), then the bearer token. The static token is no longer the only thing protecting the sensitive endpoint.
 
-**Backups — Litestream (recomendado).** Replica `quaestor.db` en continuo (lee el WAL) a un bucket S3/R2/Backblaze. Config en `litestream.yml`:
+**Backups — Litestream (recommended).** Continuously replicates `quaestor.db` (reading the WAL) to an S3/R2/Backblaze bucket. Config in `litestream.yml`:
 ```yaml
 dbs:
   - path: /data/quaestor.db
     replicas:
       - url: ${LITESTREAM_BUCKET}
 ```
-Restauración en limpio: `litestream restore -o /data/quaestor.db ${LITESTREAM_BUCKET}` antes de arrancar `api`/`mcp` (idealmente como paso de un entrypoint: si no existe la DB, restaurar; luego arrancar). **Mínimo alterno** si no hay bucket: cron diario `sqlite3 /data/quaestor.db ".backup /data/backups/quaestor-$(date +%F).db"` (usa la API de backup, segura en caliente) con retención de N días.
+Clean restore: `litestream restore -o /data/quaestor.db ${LITESTREAM_BUCKET}` before starting `api`/`mcp` (ideally as an entrypoint step: if the DB doesn't exist, restore; then start). **Minimal fallback** if there is no bucket: a daily cron `sqlite3 /data/quaestor.db ".backup /data/backups/quaestor-$(date +%F).db"` (uses the backup API, safe while hot) with N-day retention.
 
-**Deploy.** Desde el VPS, en el repo: `git pull && docker compose up -d --build`. Compose reconstruye las imágenes cambiadas y reinicia con cero pérdida del volumen. Las migraciones de P0 corren al arrancar `api`. Primer arranque: crear `.env`, apuntar el DNS del dominio al VPS, `docker compose up -d` y esperar a que Caddy emita el cert.
+**Deploy.** From the VPS, in the repo: `git pull && docker compose up -d --build`. Compose rebuilds the changed images and restarts with zero loss of the volume. P0's migrations run when `api` starts. First boot: create `.env`, point the domain's DNS at the VPS, `docker compose up -d`, and wait for Caddy to issue the cert.
 
-**Conectar Claude Code al MCP por Tailscale (ADR-013).** El equipo del usuario debe estar en el **mismo tailnet** (Tailscale instalado y logueado). El MCP server es streamable-HTTP servido por el sidecar Tailscale en la **MagicDNS** del VPS (`https://quaestor-mcp.<tailnet>.ts.net/mcp`), no en el dominio público. En la config de MCP de Claude Code:
+**Connect Claude Code to the MCP over Tailscale (ADR-013).** The user's machine must be on the **same tailnet** (Tailscale installed and logged in). The MCP server is streamable-HTTP served by the Tailscale sidecar on the VPS's **MagicDNS** name (`https://quaestor-mcp.<tailnet>.ts.net/mcp`), not on the public domain. In Claude Code's MCP config:
 ```jsonc
 { "mcpServers": {
   "quaestor": {
     "type": "http",
-    "url": "https://quaestor-mcp.<tu-tailnet>.ts.net/mcp",
+    "url": "https://quaestor-mcp.<your-tailnet>.ts.net/mcp",
     "headers": { "Authorization": "Bearer <APP_TOKEN>" }
   }
 }}
 ```
-No hay shim stdio local: el cliente habla HTTPS al VPS **por la red privada del tailnet**, con el header de auth como segunda capa. **Trade-off:** clientes MCP en la nube (claude.ai web) no están en el tailnet → no alcanzan `/mcp`; si se necesitaran, se revisa la postura (ADR-013).
+There is no local stdio shim: the client speaks HTTPS to the VPS **over the tailnet's private network**, with the auth header as a second layer. **Trade-off:** cloud MCP clients (claude.ai web) are not on the tailnet → they cannot reach `/mcp`; if they were needed, the posture would be revisited (ADR-013).
 
-## Errores/Riesgos
+## Errors/Risks
 
-- **"database is locked"** por dos escritores simultáneos (api + mcp) → mitigado con WAL + `busy_timeout`; si persiste, indica un escrito largo (revisar transacciones de P3 rollover, que deben ser cortas y atómicas).
-- **WAL no incluido en un backup manual** → un `cp` crudo del `.db` sin checkpoint pierde datos del WAL. Por eso Litestream (sigue el WAL) o `sqlite3 .backup` (hace checkpoint), nunca `cp` en caliente.
-- **`APP_TOKEN` o `.env` filtrados** → con `/mcp` ya fuera de internet (Tailscale), el token filtrado solo da acceso a la API pública; aun así rotar (cambiar env + reiniciar + actualizar config de Claude Code). `.env` fuera de git.
-- **Sidecar Tailscale caído** → `/mcp` inalcanzable (el agente no opera), pero **nada se expone a internet**: falla cerrada, no abierta. Reiniciar `tailscale`; verificar `TS_AUTHKEY` válida.
-- **API FX caída o sin respuesta** → el job diario no actualiza la tasa; el backend usa la **última vigente** y el `to_base` se congela igual. Override manual con `fijar_tasa_fx` si hace falta. No bloquea registros (ADR-011).
-- **Cert no emite** (DNS mal apuntado, puerto 80 cerrado en el firewall del VPS) → Caddy reintenta; verificar `A`/`AAAA` del dominio y que `80/443` estén abiertos en el VPS.
-- **Volumen borrado** (`docker compose down -v`) → pérdida de la DB. Documentar que `-v` destruye datos; la red de seguridad es Litestream.
-- **Servicio expuesto por error** (`ports:` en api/mcp) → bypass de Caddy y del TLS. Solo `caddy` lleva `ports:`.
-- **Restauración no probada** = backup inexistente. El criterio de listo exige restaurar de verdad.
+- **"database is locked"** from two simultaneous writers (api + mcp) → mitigated with WAL + `busy_timeout`; if it persists, it indicates a long write (review P3 rollover transactions, which must be short and atomic).
+- **WAL not included in a manual backup** → a raw `cp` of the `.db` without a checkpoint loses WAL data. That's why Litestream (follows the WAL) or `sqlite3 .backup` (does a checkpoint), never a hot `cp`.
+- **`APP_TOKEN` or `.env` leaked** → with `/mcp` already off the internet (Tailscale), a leaked token only grants access to the public API; rotate anyway (change env + restart + update Claude Code's config). `.env` stays out of git.
+- **Tailscale sidecar down** → `/mcp` unreachable (the agent can't operate), but **nothing is exposed to the internet**: it fails closed, not open. Restart `tailscale`; verify `TS_AUTHKEY` is valid.
+- **FX API down or unresponsive** → the daily job doesn't update the rate; the backend uses the **last effective one** and `to_base` freezes likewise. Manual override with `set_fx_rate` if needed. It doesn't block records (ADR-011).
+- **Cert won't issue** (DNS pointed wrong, port 80 closed in the VPS firewall) → Caddy retries; verify the domain's `A`/`AAAA` records and that `80/443` are open on the VPS.
+- **Volume deleted** (`docker compose down -v`) → loss of the DB. Document that `-v` destroys data; the safety net is Litestream.
+- **Service exposed by mistake** (`ports:` on api/mcp) → bypass of Caddy and TLS. Only `caddy` carries `ports:`.
+- **Untested restore** = nonexistent backup. The "done" criterion requires an actual restore.
 
-## Testing y criterio de "listo"
+## Testing and "done" criterion
 
-Verificación manual (single-user, sin CI):
-1. `docker compose up -d --build` levanta los **servicios** (api, mcp, frontend, caddy, tailscale, scheduler) y quedan `healthy`/`running` (`docker compose ps`).
-2. `https://$DOMAIN/` sirve el **frontend por HTTPS** con cert válido (no warning de browser).
-3. `curl -H "Authorization: Bearer $APP_TOKEN" https://$DOMAIN/api/accounts` responde 200; **sin** el header responde 401. **`https://$DOMAIN/mcp` NO responde** (no está enrutado en Caddy → confirma que `/mcp` no es público).
-4. **Por Tailscale:** `curl https://quaestor-mcp.<tailnet>.ts.net/mcp ...` y, end-to-end, **Claude Code (en el tailnet) conecta** al `/mcp`, lista las tools y ejecuta una (p. ej. registrar un gasto). Un equipo **fuera del tailnet** no alcanza el endpoint.
-5. **Scheduler:** tras una corrida hay tasa `usd_cop` para hoy en `FxRate`; `materializar_vencidos(hoy)` deja las occurrences vencidas materializadas (auto posteado, manual en "Por pagar"); y `ensure_mes_cerrado` deja el mes calendario cerrado (rollover + aportes propuestos). Todo **no-op en la segunda corrida** (idempotente). `fijar_tasa_fx` manual sigue como override.
-6. El volumen **persiste**: `docker compose restart` mantiene los datos.
-7. **Backup restaurable:** `litestream restore` (o la copia diaria) reconstruye `quaestor.db` en un directorio limpio y el `api` arranca sobre esa DB con los datos intactos. (No es backup hasta que la restauración se prueba.)
+Manual verification (single-user, no CI):
+1. `docker compose up -d --build` brings up the **services** (api, mcp, frontend, caddy, tailscale, scheduler) and they end up `healthy`/`running` (`docker compose ps`).
+2. `https://$DOMAIN/` serves the **frontend over HTTPS** with a valid cert (no browser warning).
+3. `curl -H "Authorization: Bearer $APP_TOKEN" https://$DOMAIN/api/accounts` responds 200; **without** the header it responds 401. **`https://$DOMAIN/mcp` does NOT respond** (not routed in Caddy → confirms `/mcp` is not public).
+4. **Over Tailscale:** `curl https://quaestor-mcp.<tailnet>.ts.net/mcp ...` and, end-to-end, **Claude Code (on the tailnet) connects** to `/mcp`, lists the tools, and runs one (e.g. recording an expense). A machine **outside the tailnet** cannot reach the endpoint.
+5. **Scheduler:** after a run there is a `usd_cop` rate for today in `FxRate`; `materialize_due(today)` leaves the due occurrences materialized (auto items posted, manual ones in "to-pay"); and `ensure_month_closed` leaves the calendar month closed (rollover + proposed contributions). All **no-op on the second run** (idempotent). Manual `set_fx_rate` still works as an override.
+6. The volume **persists**: `docker compose restart` keeps the data.
+7. **Restorable backup:** `litestream restore` (or the daily copy) rebuilds `quaestor.db` in a clean directory and `api` starts on that DB with the data intact. (It isn't a backup until the restore is tested.)
 
-"Listo" = los 7 puntos pasan.
+"Done" = all 7 points pass.
 
-## Integración con otros sub-proyectos
+## Integration with other sub-projects
 
-- **P0 Core:** provee `db.py` con **WAL** y `busy_timeout`, y corre migraciones al arrancar. P7 solo persiste el archivo y comparte el volumen.
-- **P1 API + Auth:** define el servicio `api` y valida `APP_TOKEN`. P7 lo construye, lo expone solo en la red interna y lo enruta `/api/*` vía Caddy.
-- **P2 MCP:** define el servicio `mcp` (streamable-HTTP) y su auth por bearer. P7 **no** lo enruta por Caddy: lo sirve el sidecar `tailscale` en el tailnet (ADR-013) y documenta cómo conecta Claude Code por la MagicDNS.
-- **P3 Motor temporal:** sus escritos (rollover, confirmar pago) deben ser cortos/atómicos para no chocar con el single-writer; no requiere artefacto de deploy propio.
-- **P4 / P5:** sin artefactos de deploy propios; viajan dentro de `api`/`mcp`. P5 (importer) puede generar escritos grandes (CSV bulk) → otra razón para WAL + `busy_timeout`.
-- **P6 Frontend:** define el servicio `frontend`; P7 lo construye, lo enruta como catch-all en Caddy y le pasa `API_INTERNAL_URL=http://api:8000` (red interna) + el hash de contraseña.
+- **P0 Core:** provides `db.py` with **WAL** and `busy_timeout`, and runs migrations at startup. P7 only persists the file and shares the volume.
+- **P1 API + Auth:** defines the `api` service and validates `APP_TOKEN`. P7 builds it, exposes it on the internal network only, and routes `/api/*` to it via Caddy.
+- **P2 MCP:** defines the `mcp` service (streamable-HTTP) and its bearer auth. P7 does **not** route it through Caddy: the `tailscale` sidecar serves it on the tailnet (ADR-013) and P7 documents how Claude Code connects via MagicDNS.
+- **P3 Temporal engine:** its writes (rollover, confirm payment) must be short/atomic so they don't collide with the single-writer; it requires no deploy artifact of its own.
+- **P4 / P5:** no deploy artifacts of their own; they ride inside `api`/`mcp`. P5 (importer) can produce large writes (CSV bulk) → another reason for WAL + `busy_timeout`.
+- **P6 Frontend:** defines the `frontend` service; P7 builds it, routes it as the catch-all in Caddy, and passes it `API_INTERNAL_URL=http://api:8000` (internal network) + the password hash.
 
-**Convenciones transversales respetadas:** P7 no toca dinero, signo ni `posted`/`planned` (no manipula datos); su responsabilidad es que el **único `quaestor.db`** —fuente de verdad de todo el sistema— persista, esté protegido por token detrás de HTTPS, y sea respaldado y restaurable.
+**Cross-cutting conventions respected:** P7 does not touch money, sign, or `posted`/`planned` (it does not manipulate data); its responsibility is that the **single `quaestor.db`** — the source of truth for the whole system — persists, is protected by a token behind HTTPS, and is backed up and restorable.

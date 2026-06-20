@@ -1,49 +1,49 @@
-# Quaestor — P1 HTTP API + Auth (sub-proyecto)
+# Quaestor — P1 HTTP API + Auth (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** P0 (Core: domain + services + db)
-**Parte de:** `2026-06-16-quaestor-general-design.md` (ver §3 arquitectura, §4 auth, §5 modelo de datos, §11 errores)
-
----
-
-## Objetivo
-
-Exponer los services de P0 como una **HTTP API REST** (FastAPI), protegida por auth single-user, lista para que la consuma el frontend (P6) y cualquier cliente programático (curl, Claude Code). La API es un **adaptador delgado**: traduce HTTP ↔ services, no contiene lógica de negocio.
+**Date:** 2026-06-16
+**Depends on:** P0 (Core: domain + services + db)
+**Part of:** `2026-06-16-quaestor-general-design.md` (see §3 architecture, §4 auth, §5 data model, §11 errors)
 
 ---
 
-## Alcance
+## Objective
 
-**Incluye:**
-- App FastAPI + routers REST espejo de los services de P0: `/transactions`, `/accounts`, `/category-groups`, `/categories`, `/tags`, `/fx`, `/settings`.
-- Auth single-user de doble camino: bearer token estático (`APP_TOKEN`) **y** sesión por cookie (login/logout con contraseña).
-- CORS para el origin del frontend.
-- Schemas Pydantic de request/response (reutilizando los modelos SQLModel de P0).
-- Mapeo de errores de dominio → respuestas 4xx con cuerpo JSON claro.
-
-**No incluye (lo agregan otros sub-proyectos, dejando la estructura lista para crecer):**
-- Routers de features: `/recurring`, `/planned`, `/rollover` (P3); `/budgets` (incl. `/budgets/safe-to-spend`), `/goals` (P4); `/reports`, `/import` (P5). Se registran como nuevos `APIRouter` sin tocar lo de P1.
-- MCP (P2), frontend (P6), despliegue/Caddy (P7).
+Expose the P0 services as an **HTTP REST API** (FastAPI), protected by single-user auth, ready for the frontend (P6) and any programmatic client (curl, Claude Code) to consume. The API is a **thin adapter**: it translates HTTP ↔ services and contains no business logic.
 
 ---
 
-## Aporte al modelo de datos
+## Scope
 
-**Ninguno.** P1 no crea ni migra entidades; consume las de P0 (Account, Category, Transaction, Tag, FxRate, Settings). La única configuración nueva vive en **env vars**, no en DB: `APP_TOKEN` (bearer), `APP_PASSWORD` (login del frontend), `SESSION_SECRET` (firma de cookie), `FRONTEND_ORIGIN` (CORS).
+**Includes:**
+- FastAPI app + REST routers mirroring the P0 services: `/transactions`, `/accounts`, `/category-groups`, `/categories`, `/tags`, `/fx`, `/settings`.
+- Dual-path single-user auth: static bearer token (`APP_TOKEN`) **and** cookie session (login/logout with a password).
+- CORS for the frontend origin.
+- Pydantic request/response schemas (reusing the P0 SQLModel models).
+- Mapping of domain errors → 4xx responses with a clear JSON body.
+
+**Does not include (other sub-projects add these, leaving the structure ready to grow):**
+- Feature routers: `/recurring`, `/planned`, `/rollover` (P3); `/budgets` (incl. `/budgets/safe-to-spend`), `/goals` (P4); `/reports`, `/import` (P5). They are registered as new `APIRouter`s without touching anything in P1.
+- MCP (P2), frontend (P6), deployment/Caddy (P7).
 
 ---
 
-## Componentes
+## Contribution to the data model
 
-Dentro de `backend/src/quaestor/api/`:
+**None.** P1 neither creates nor migrates entities; it consumes those of P0 (Account, Category, Transaction, Tag, FxRate, Settings). The only new configuration lives in **env vars**, not in the DB: `APP_TOKEN` (bearer), `APP_PASSWORD` (frontend login), `SESSION_SECRET` (cookie signing), `FRONTEND_ORIGIN` (CORS).
+
+---
+
+## Components
+
+Inside `backend/src/quaestor/api/`:
 
 ```
 api/
-├── __init__.py        # crea y configura la app FastAPI (factory create_app())
+├── __init__.py        # creates and configures the FastAPI app (create_app() factory)
 ├── deps.py            # dependencies: get_session, require_auth
-├── auth.py            # router /auth (login/logout) + lógica de sesión/cookie
-├── errors.py          # exception handlers: dominio -> 4xx JSON
-├── schemas.py         # modelos Pydantic request/response (in/out)
+├── auth.py            # /auth router (login/logout) + session/cookie logic
+├── errors.py          # exception handlers: domain -> 4xx JSON
+├── schemas.py         # Pydantic request/response models (in/out)
 └── routers/
     ├── transactions.py
     ├── accounts.py
@@ -53,90 +53,90 @@ api/
     └── settings.py
 ```
 
-- **`create_app()`**: instancia FastAPI, monta CORS, registra exception handlers, incluye routers. Punto único donde P3/P4/P5 añaden sus routers.
-- **`deps.get_session`**: yield de una `Session` de SQLModel (de `quaestor.db`), cerrada al final del request.
-- **`deps.require_auth`**: dependency global aplicada a **todos** los routers de negocio; acepta bearer token o sesión válida (ver §7).
-- **`schemas.py`**: `XxxCreate`, `XxxUpdate`, `XxxOut`. `Out` deriva de los SQLModel; los montos viajan en **centavos (int)** tal cual el dominio (§5).
+- **`create_app()`**: instantiates FastAPI, mounts CORS, registers exception handlers, includes routers. Single place where P3/P4/P5 add their routers.
+- **`deps.get_session`**: yields a SQLModel `Session` (from `quaestor.db`), closed at the end of the request.
+- **`deps.require_auth`**: global dependency applied to **all** business routers; accepts a bearer token or a valid session (see §7).
+- **`schemas.py`**: `XxxCreate`, `XxxUpdate`, `XxxOut`. `Out` derives from the SQLModel models; amounts travel in **cents (int)** exactly as in the domain (§5).
 
 ---
 
-## Interfaz pública
+## Public interface
 
-Base path: `/api`. Todos los endpoints (salvo `/auth/login`) requieren auth. Convención REST uniforme por recurso.
+Base path: `/api`. Every endpoint (except `/auth/login`) requires auth. Uniform REST convention per resource.
 
 ### Auth (`/auth`)
-| Método | Ruta | Descripción |
+| Method | Path | Description |
 |---|---|---|
-| `POST` | `/auth/login` | Body `{password}`. Si coincide con `APP_PASSWORD` → setea cookie de sesión firmada (`HttpOnly`, `Secure`, `SameSite=Lax`); responde `200 {ok:true}`. Si no → `401`. |
-| `POST` | `/auth/logout` | Invalida/borra la cookie de sesión; `200 {ok:true}`. |
-| `GET` | `/auth/me` | `200 {authenticated:true}` si hay sesión/token válido; usado por el frontend para saber si pedir login. |
+| `POST` | `/auth/login` | Body `{password}`. If it matches `APP_PASSWORD` → sets a signed session cookie (`HttpOnly`, `Secure`, `SameSite=Lax`); responds `200 {ok:true}`. Otherwise → `401`. |
+| `POST` | `/auth/logout` | Invalidates/clears the session cookie; `200 {ok:true}`. |
+| `GET` | `/auth/me` | `200 {authenticated:true}` if there is a valid session/token; used by the frontend to decide whether to prompt for login. |
 
-### Recursos core (todos bajo auth)
-| Recurso | Endpoints |
+### Core resources (all under auth)
+| Resource | Endpoints |
 |---|---|
-| **Transactions** | `GET /transactions` (filtros: `date_from`, `date_to`, `account_id`, `category_id`, `tag`, `type`, `status`) · `GET /transactions/{id}` · `POST /transactions` (gasto/ingreso, despacha a `registrar_gasto`/`registrar_ingreso` según `type`) · `POST /transactions/transfer` → `transferir` (crea el par atómico) · `PATCH /transactions/{id}` · `DELETE /transactions/{id}` |
-| **Accounts** | `GET /accounts` (`?archived=`) · `GET /accounts/{id}` · `POST /accounts` · `PATCH /accounts/{id}` · `DELETE /accounts/{id}` (archiva) |
-| **CategoryGroups** | `GET /category-groups` · `POST /category-groups` · `PATCH /category-groups/{id}` · `DELETE /category-groups/{id}` (archiva) — entidad de grupo (ADR-023) |
-| **Categories** | `GET /categories` · `GET /categories/{id}` · `POST /categories` (acepta `group_id?`) · `PATCH /categories/{id}` · `DELETE /categories/{id}` (archiva) |
+| **Transactions** | `GET /transactions` (filters: `date_from`, `date_to`, `account_id`, `category_id`, `tag`, `type`, `status`) · `GET /transactions/{id}` · `POST /transactions` (expense/income, dispatches to `record_expense`/`record_income` based on `type`) · `POST /transactions/transfer` → `transfer` (creates the atomic pair) · `PATCH /transactions/{id}` · `DELETE /transactions/{id}` |
+| **Accounts** | `GET /accounts` (`?archived=`) · `GET /accounts/{id}` · `POST /accounts` · `PATCH /accounts/{id}` · `DELETE /accounts/{id}` (archives) |
+| **CategoryGroups** | `GET /category-groups` · `POST /category-groups` · `PATCH /category-groups/{id}` · `DELETE /category-groups/{id}` (archives) — group entity (ADR-023) |
+| **Categories** | `GET /categories` · `GET /categories/{id}` · `POST /categories` (accepts `group_id?`) · `PATCH /categories/{id}` · `DELETE /categories/{id}` (archives) |
 | **Tags** | `GET /tags` · `POST /tags` · `PATCH /tags/{id}` · `DELETE /tags/{id}` |
-| **FX** | `GET /fx?date=` → tasa vigente (`tasa_vigente`) · `POST /fx` → `fijar_tasa` (`{date, usd_cop}`), **override manual** (la tasa la puebla un job diario, P7/ADR-011) |
-| **Settings** | `GET /settings` · `PATCH /settings` (moneda base, config) |
+| **FX** | `GET /fx?date=` → current rate (`current_rate`) · `POST /fx` → `set_rate` (`{date, usd_cop}`), **manual override** (the rate is populated by a daily job, P7/ADR-011) |
+| **Settings** | `GET /settings` · `PATCH /settings` (base currency, config) |
 
-Respuestas: `200` (read/update), `201` (create), `204` (delete/archive sin cuerpo). Cuerpos = schemas `Out`.
-
----
-
-## Lógica y reglas clave
-
-- **Cada endpoint llama a un service de P0; NUNCA toca la DB directo.** El router recibe la `Session` por dependency y la pasa al service. Cero queries ni mutaciones SQL en la capa `api/`. Esto preserva la "regla de oro" del general (§3).
-- **Sin lógica de negocio en la API.** Signo por `type`, cálculo de `to_base`, congelado de FX, cuadre de transferencias y actualización de balance viven en services/domain. El router solo (de)serializa y mapea errores.
-- **Doble auth, una sola autorización.** `require_auth` autoriza si **cualquiera** de los dos caminos es válido:
-  - **Bearer token** (`Authorization: Bearer <APP_TOKEN>`) → camino programático: Claude Code, curl, scripts. Comparación en tiempo constante.
-  - **Cookie de sesión** (firmada con `SESSION_SECRET`) → camino browser: el frontend hace `POST /auth/login` una vez y luego manda la cookie automáticamente; nunca ve el `APP_TOKEN`.
-  - Ambos caminos llegan al mismo conjunto de endpoints con los mismos permisos (single-user, sin roles).
-- **CORS** restringido a `FRONTEND_ORIGIN`, con `allow_credentials=True` para que viaje la cookie. Métodos `GET/POST/PATCH/DELETE`.
-- **Filtros y paginación** se traducen a argumentos de los services de lectura; la API no arma queries propias.
+Responses: `200` (read/update), `201` (create), `204` (delete/archive with no body). Bodies = `Out` schemas.
 
 ---
 
-## Errores
+## Key logic and rules
 
-`api/errors.py` registra exception handlers que convierten errores tipados del dominio (§11 del general) en respuestas JSON consistentes:
+- **Every endpoint calls a P0 service; it NEVER touches the DB directly.** The router receives the `Session` via dependency and passes it to the service. Zero SQL queries or mutations in the `api/` layer. This preserves the general design's "golden rule" (§3).
+- **No business logic in the API.** Sign by `type`, `to_base` computation, FX freezing, transfer balancing, and balance updates all live in services/domain. The router only (de)serializes and maps errors.
+- **Dual auth, single authorization.** `require_auth` authorizes if **either** of the two paths is valid:
+  - **Bearer token** (`Authorization: Bearer <APP_TOKEN>`) → programmatic path: Claude Code, curl, scripts. Constant-time comparison.
+  - **Session cookie** (signed with `SESSION_SECRET`) → browser path: the frontend does `POST /auth/login` once and then sends the cookie automatically; it never sees the `APP_TOKEN`.
+  - Both paths reach the same set of endpoints with the same permissions (single-user, no roles).
+- **CORS** restricted to `FRONTEND_ORIGIN`, with `allow_credentials=True` so the cookie travels. Methods `GET/POST/PATCH/DELETE`.
+- **Filters and pagination** are translated into arguments of the read services; the API does not build its own queries.
 
-| Excepción de dominio | HTTP | Cuerpo `{error, detail}` |
+---
+
+## Errors
+
+`api/errors.py` registers exception handlers that convert typed domain errors (§11 of the general design) into consistent JSON responses:
+
+| Domain exception | HTTP | Body `{error, detail}` |
 |---|---|---|
-| `ValidationError` | `422` | qué campo/regla falló |
-| `MissingRate` | `409` | "no hay tasa usd_cop para la fecha; fija la tasa" |
-| `TransferImbalance` | `409` | "la transferencia no cuadra" |
-| `NotFound` (recurso inexistente) | `404` | id no encontrado |
-| Auth ausente/ inválida | `401` | "credenciales requeridas o inválidas" |
-| Pydantic request inválido | `422` | (handler por defecto de FastAPI) |
+| `ValidationError` | `422` | which field/rule failed |
+| `MissingRate` | `409` | "no usd_cop rate for the date; set the rate" |
+| `TransferImbalance` | `409` | "the transfer does not balance" |
+| `NotFound` (nonexistent resource) | `404` | id not found |
+| Missing/invalid auth | `401` | "credentials required or invalid" |
+| Invalid Pydantic request | `422` | (FastAPI's default handler) |
 
-Formato uniforme: `{"error": "<tipo>", "detail": "<mensaje legible>"}`. El frontend y curl reciben siempre el mismo shape.
+Uniform format: `{"error": "<type>", "detail": "<readable message>"}`. The frontend and curl always receive the same shape.
 
 ---
 
-## Testing y criterio de "listo"
+## Testing and "done" criteria
 
 **Tests (`pytest` + `TestClient`, SQLite in-memory):**
-- **Happy-path CRUD** de cada recurso core con bearer token (crear → leer → actualizar → archivar).
-- **Auth rechazada:** request sin credenciales → `401`; token incorrecto → `401`.
-- **Login:** `POST /auth/login` con contraseña correcta → `200` + cookie; con cookie posterior se accede a un endpoint protegido; contraseña incorrecta → `401`; `logout` invalida la sesión.
-- **Validación:** body inválido → `422`; FX sin tasa → `409 MissingRate`; transferencia descuadrada → `409 TransferImbalance`.
-- **Mapeo de errores:** cada excepción de dominio produce el HTTP y el cuerpo esperados.
+- **Happy-path CRUD** for each core resource with a bearer token (create → read → update → archive).
+- **Auth rejected:** request with no credentials → `401`; wrong token → `401`.
+- **Login:** `POST /auth/login` with the correct password → `200` + cookie; with the resulting cookie a protected endpoint is reached; wrong password → `401`; `logout` invalidates the session.
+- **Validation:** invalid body → `422`; FX with no rate → `409 MissingRate`; unbalanced transfer → `409 TransferImbalance`.
+- **Error mapping:** each domain exception produces the expected HTTP status and body.
 
-**Criterio de listo:**
-1. Con `curl` + `Authorization: Bearer $APP_TOKEN` se hace **CRUD completo** sobre el core (transactions, accounts, categories, tags, fx, settings).
-2. `POST /auth/login` con la contraseña entrega una **cookie de sesión válida** que autoriza los mismos endpoints sin token.
-3. La suite de `TestClient` pasa (happy-path + auth rechazada + validación) en verde.
-4. Ningún endpoint accede a la DB sin pasar por un service de P0.
+**Done criteria:**
+1. With `curl` + `Authorization: Bearer $APP_TOKEN` you can do **full CRUD** over the core (transactions, accounts, categories, tags, fx, settings).
+2. `POST /auth/login` with the password yields a **valid session cookie** that authorizes the same endpoints without a token.
+3. The `TestClient` suite passes (happy-path + auth rejected + validation) green.
+4. No endpoint accesses the DB without going through a P0 service.
 
 ---
 
-## Integración con otros sub-proyectos
+## Integration with other sub-projects
 
-- **P0 (Core):** consumidor directo. La API importa y llama services; si P0 cambia una firma, P1 ajusta el adaptador. Comparte la `Session`/engine de `quaestor.db`.
-- **P2 (MCP):** adaptador hermano sobre los mismos services; reutiliza la **misma estrategia de bearer token** (`APP_TOKEN`). No comparte código de routers, sí el contrato de auth.
-- **P3/P4/P5:** agregan sus routers (`/recurring`, `/planned`, `/rollover`, `/budgets`, `/goals`, `/reports`, `/import`) registrándolos en `create_app()` y reusando `require_auth` y `errors.py`. La estructura de P1 ya los acomoda sin reescritura.
-- **P6 (Frontend):** consumidor del contrato. Usa el camino de **sesión por cookie** (login con contraseña); `lib/api.ts` tipa estos endpoints. CORS habilita su origin.
-- **P7 (Despliegue):** Caddy enruta `/api/*` → este servicio; provee `APP_TOKEN`, `APP_PASSWORD`, `SESSION_SECRET`, `FRONTEND_ORIGIN` por env; HTTPS hace seguras las cookies `Secure`.
+- **P0 (Core):** direct consumer. The API imports and calls services; if P0 changes a signature, P1 adjusts the adapter. Shares the `Session`/engine from `quaestor.db`.
+- **P2 (MCP):** sibling adapter over the same services; reuses the **same bearer-token strategy** (`APP_TOKEN`). It does not share router code, but it does share the auth contract.
+- **P3/P4/P5:** add their routers (`/recurring`, `/planned`, `/rollover`, `/budgets`, `/goals`, `/reports`, `/import`) by registering them in `create_app()` and reusing `require_auth` and `errors.py`. The P1 structure already accommodates them without a rewrite.
+- **P6 (Frontend):** consumer of the contract. Uses the **cookie session** path (login with password); `lib/api.ts` types these endpoints. CORS enables its origin.
+- **P7 (Deployment):** Caddy routes `/api/*` → this service; provides `APP_TOKEN`, `APP_PASSWORD`, `SESSION_SECRET`, `FRONTEND_ORIGIN` via env; HTTPS makes the `Secure` cookies secure.

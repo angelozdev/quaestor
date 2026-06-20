@@ -27,7 +27,7 @@ def test_create_expense_decrements_balance(client, auth, two_accounts):
             "amount": 1500,
             "currency": "COP",
             "date": "2026-06-17",
-            "payee": "Tienda",
+            "payee": "Store",
         },
     )
     assert resp.status_code == 201
@@ -49,7 +49,7 @@ def test_create_income(client, auth, two_accounts):
             "amount": 5000,
             "currency": "COP",
             "date": "2026-06-17",
-            "payee": "Sueldo",
+            "payee": "Salary",
         },
     )
     assert resp.status_code == 201
@@ -151,7 +151,7 @@ def test_patch_transaction_edits_fields(client, auth, two_accounts):
         "/api/transactions",
         headers=auth,
         json={"type": "expense", "account_id": cash["id"], "amount": 1000,
-              "currency": "COP", "date": "2026-06-17", "payee": "Tienda"},
+              "currency": "COP", "date": "2026-06-17", "payee": "Store"},
     ).json()
     patched = client.patch(
         f"/api/transactions/{tx['id']}", headers=auth, json={"payee": "Super", "notes": "x"}
@@ -166,7 +166,7 @@ def test_delete_expense_reverses_balance_via_api(client, auth, two_accounts):
         "/api/transactions",
         headers=auth,
         json={"type": "expense", "account_id": cash["id"], "amount": 1000,
-              "currency": "COP", "date": "2026-06-17", "payee": "Tienda"},
+              "currency": "COP", "date": "2026-06-17", "payee": "Store"},
     ).json()
     assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == -1000
     assert client.delete(f"/api/transactions/{tx['id']}", headers=auth).status_code == 204

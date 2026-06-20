@@ -14,7 +14,7 @@ def test_set_and_read_rate(session):
 
 def test_upsert_by_date(session):
     fx.set_fx_rate(session, date(2026, 6, 1), "4150")
-    fx.set_fx_rate(session, date(2026, 6, 1), "4200")  # mismo día -> actualiza
+    fx.set_fx_rate(session, date(2026, 6, 1), "4200")  # same day -> updates
     assert fx.get_current_rate(session, date(2026, 6, 1)) == Decimal("4200")
 
 

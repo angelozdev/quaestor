@@ -23,7 +23,7 @@ from quaestor.mcp import format
 def _expense(currency="COP", amount=4_000_000, to_base=4_000_000):
     return Transaction(
         date=date(2026, 6, 18),
-        payee="Mercado",
+        payee="Groceries",
         type=TxType.expense,
         amount=amount,
         currency=currency,
@@ -40,7 +40,7 @@ def test_money_renders_major_units_and_currency():
 def test_missing_rate_uses_canonical_sentence():
     text = format.domain_error_text(MissingRate("set usd_cop rate for 2026-06-18"))
     assert "USD→COP" in text
-    assert "fijar_tasa_fx" in text
+    assert "set_fx_rate" in text
 
 
 def test_not_found_passes_message_through():
@@ -65,7 +65,7 @@ def test_expense_confirmation_cop_omits_equivalent():
     acc = Account(name="Bancolombia", type=AccountType.debit, currency="COP", balance=6_000_000)
     text = format.expense_confirmation(_expense(), acc)
     assert "Expense recorded" in text
-    assert "Mercado" in text
+    assert "Groceries" in text
     assert "Bancolombia" in text
     assert "60000.00 COP" in text  # new balance
     assert "Equivalent" not in text  # COP needs no to_base line
@@ -80,9 +80,9 @@ def test_expense_confirmation_usd_shows_to_base():
 
 def test_transfer_confirmation_lists_both_balances():
     src = Account(name="Bancolombia", type=AccountType.debit, currency="COP", balance=2_000_000)
-    dst = Account(name="Ahorros", type=AccountType.savings, currency="COP", balance=8_000_000)
+    dst = Account(name="Savings", type=AccountType.savings, currency="COP", balance=8_000_000)
     text = format.transfer_confirmation(src, dst, 5_000_000, "COP")
-    assert "Bancolombia" in text and "Ahorros" in text
+    assert "Bancolombia" in text and "Savings" in text
     assert "20000.00 COP" in text and "80000.00 COP" in text
 
 
@@ -102,16 +102,16 @@ def test_accounts_table_and_empty():
 
 
 def test_categories_table_resolves_group_name():
-    groups = [CategoryGroup(id=1, name="Esenciales")]
-    cats = [Category(name="Mercado", group_id=1), Category(name="Sueldo", is_income=True)]
+    groups = [CategoryGroup(id=1, name="Essentials")]
+    cats = [Category(name="Groceries", group_id=1), Category(name="Salary", is_income=True)]
     table = format.categories_table(cats, groups)
-    assert "Mercado" in table and "Esenciales" in table
-    assert "Sueldo" in table and "yes" in table  # is_income
+    assert "Groceries" in table and "Essentials" in table
+    assert "Salary" in table and "yes" in table  # is_income
 
 
 def test_tags_list():
-    assert format.tags_list([Tag(name="viaje"), Tag(name="trabajo")]) == (
-        "Tags: viaje, trabajo"
+    assert format.tags_list([Tag(name="trip"), Tag(name="work")]) == (
+        "Tags: trip, work"
     )
     assert format.tags_list([]) == "No tags."
 

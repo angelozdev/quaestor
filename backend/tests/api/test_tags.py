@@ -3,12 +3,12 @@ def test_tags_requires_auth(client):
 
 
 def test_tags_crud(client, auth):
-    created = client.post("/api/tags", headers=auth, json={"name": "viaje"})
+    created = client.post("/api/tags", headers=auth, json={"name": "trip"})
     assert created.status_code == 201
     tid = created.json()["id"]
 
-    patched = client.patch(f"/api/tags/{tid}", headers=auth, json={"name": "vacaciones"})
-    assert patched.status_code == 200 and patched.json()["name"] == "vacaciones"
+    patched = client.patch(f"/api/tags/{tid}", headers=auth, json={"name": "vacation"})
+    assert patched.status_code == 200 and patched.json()["name"] == "vacation"
 
     assert len(client.get("/api/tags", headers=auth).json()) == 1
     assert client.delete(f"/api/tags/{tid}", headers=auth).status_code == 204

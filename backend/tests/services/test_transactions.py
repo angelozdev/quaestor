@@ -9,13 +9,13 @@ from quaestor.services import accounts, categories, fx, transactions
 
 
 def _make_account(session, currency="COP", balance=0, type=AccountType.debit):
-    return accounts.create_account(session, "Cuenta", type, currency, balance=balance)
+    return accounts.create_account(session, "Account", type, currency, balance=balance)
 
 
 def test_record_expense_decrements_balance(session):
     acc = _make_account(session, balance=100_000)
     tx = transactions.record_expense(
-        session, acc.id, 45_000, "COP", date(2026, 6, 1), "Éxito"
+        session, acc.id, 45_000, "COP", date(2026, 6, 1), "Store"
     )
     assert tx.type == TxType.expense
     assert tx.status == TxStatus.posted
@@ -28,7 +28,7 @@ def test_record_expense_decrements_balance(session):
 def test_record_income_increments_balance(session):
     acc = _make_account(session, balance=0)
     transactions.record_income(
-        session, acc.id, 3_200_000, "COP", date(2026, 6, 1), "Sueldo"
+        session, acc.id, 3_200_000, "COP", date(2026, 6, 1), "Salary"
     )
     assert accounts.get_account(session, acc.id).balance == 3_200_000
 
@@ -40,8 +40,8 @@ def test_expense_usd_freezes_to_base(session):
         session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
     )
     assert tx.fx_rate == Decimal("4150")
-    assert tx.to_base == 4_980_000  # congelado
-    # cambiar la tasa después no mueve el to_base ya guardado
+    assert tx.to_base == 4_980_000  # frozen
+    # changing the rate afterwards does not move the already-stored to_base
     fx.set_fx_rate(session, date(2026, 6, 2), "5000")
     assert transactions.get_transaction(session, tx.id).to_base == 4_980_000
     assert accounts.get_account(session, acc.id).balance == -1200  # USD cents
@@ -83,15 +83,15 @@ def test_nonexistent_category_fails(session):
 
 
 def test_transfer_moves_both_balances_and_shares_group(session):
-    origen = accounts.create_account(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
-    destino = accounts.create_account(session, "Ahorros", AccountType.savings, "COP", balance=0)
+    source = accounts.create_account(session, "Debit", AccountType.debit, "COP", balance=1_000_000)
+    destination = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     leg_from, leg_to = transactions.transfer(
-        session, origen.id, destino.id, 500_000, "COP", date(2026, 6, 1)
+        session, source.id, destination.id, 500_000, "COP", date(2026, 6, 1)
     )
     assert leg_from.type == TxType.transfer and leg_to.type == TxType.transfer
     assert leg_from.transfer_group_id == leg_to.transfer_group_id
-    assert accounts.get_account(session, origen.id).balance == 500_000
-    assert accounts.get_account(session, destino.id).balance == 500_000
+    assert accounts.get_account(session, source.id).balance == 500_000
+    assert accounts.get_account(session, destination.id).balance == 500_000
 
 
 def test_transfer_same_account_fails(session):
@@ -101,21 +101,21 @@ def test_transfer_same_account_fails(session):
 
 
 def test_transfer_nonexistent_destination_is_atomic(session):
-    origen = accounts.create_account(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
+    source = accounts.create_account(session, "Debit", AccountType.debit, "COP", balance=1_000_000)
     with pytest.raises(NotFound):
-        transactions.transfer(session, origen.id, 999, 500_000, "COP", date(2026, 6, 1))
+        transactions.transfer(session, source.id, 999, 500_000, "COP", date(2026, 6, 1))
     # no rows created, balance intact
-    assert accounts.get_account(session, origen.id).balance == 1_000_000
+    assert accounts.get_account(session, source.id).balance == 1_000_000
     assert transactions.list_transactions(session) == []
 
 
 def test_credit_card_payment_is_transfer_not_expense(session):
-    debito = accounts.create_account(session, "Débito", AccountType.debit, "COP", balance=1_000_000)
-    tarjeta = accounts.create_account(session, "Visa", AccountType.credit, "COP", balance=-300_000)
-    transactions.transfer(session, debito.id, tarjeta.id, 300_000, "COP", date(2026, 6, 5))
-    assert accounts.get_account(session, tarjeta.id).balance == 0  # debt settled
-    gastos = transactions.list_transactions(session, type=TxType.expense)
-    assert gastos == []  # the payment is NOT an expense
+    debit = accounts.create_account(session, "Debit", AccountType.debit, "COP", balance=1_000_000)
+    card = accounts.create_account(session, "Visa", AccountType.credit, "COP", balance=-300_000)
+    transactions.transfer(session, debit.id, card.id, 300_000, "COP", date(2026, 6, 5))
+    assert accounts.get_account(session, card.id).balance == 0  # debt settled
+    expenses = transactions.list_transactions(session, type=TxType.expense)
+    assert expenses == []  # the payment is NOT an expense
 
 
 def test_list_filters_by_account_type_and_range(session):
@@ -124,13 +124,13 @@ def test_list_filters_by_account_type_and_range(session):
     transactions.record_expense(session, a.id, 1000, "COP", date(2026, 6, 1), "x")
     transactions.record_income(session, a.id, 2000, "COP", date(2026, 6, 15), "y")
     transactions.record_expense(session, b.id, 3000, "COP", date(2026, 7, 1), "z")
-    de_a = transactions.list_transactions(session, account_id=a.id)
-    assert len(de_a) == 2
-    gastos_junio = transactions.list_transactions(
+    from_a = transactions.list_transactions(session, account_id=a.id)
+    assert len(from_a) == 2
+    june_expenses = transactions.list_transactions(
         session, type=TxType.expense, date_from=date(2026, 6, 1), date_to=date(2026, 6, 30)
     )
-    assert len(gastos_junio) == 1
-    assert gastos_junio[0].account_id == a.id
+    assert len(june_expenses) == 1
+    assert june_expenses[0].account_id == a.id
 
 
 def test_list_filters_by_tag(session):
@@ -138,9 +138,9 @@ def test_list_filters_by_tag(session):
     a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
     tx = transactions.record_expense(session, a.id, 1000, "COP", date(2026, 6, 1), "x")
     transactions.record_expense(session, a.id, 2000, "COP", date(2026, 6, 2), "y")
-    tags.tag_transaction(session, tx.id, ["viaje"])
-    con_tag = transactions.list_transactions(session, tag="viaje")
-    assert len(con_tag) == 1 and con_tag[0].id == tx.id
+    tags.tag_transaction(session, tx.id, ["trip"])
+    tagged = transactions.list_transactions(session, tag="trip")
+    assert len(tagged) == 1 and tagged[0].id == tx.id
 
 
 def test_update_transaction_edits_safe_fields(session):
@@ -150,13 +150,13 @@ def test_update_transaction_edits_safe_fields(session):
     from quaestor.services import accounts, categories, transactions
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
-    cat = categories.create_category(session, "Comida")
-    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Tienda")
+    cat = categories.create_category(session, "Food")
+    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Store")
     updated = transactions.update_transaction(
-        session, tx.id, payee="Supermercado", notes="ofertas", category_id=cat.id
+        session, tx.id, payee="Supermarket", notes="deals", category_id=cat.id
     )
-    assert updated.payee == "Supermercado"
-    assert updated.notes == "ofertas"
+    assert updated.payee == "Supermarket"
+    assert updated.notes == "deals"
     assert updated.category_id == cat.id
     # balance untouched by an edit
     assert accounts.get_account(session, acc.id).balance == -1000
@@ -171,7 +171,7 @@ def test_delete_expense_reverses_balance(session):
     import pytest
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
-    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Tienda")
+    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Store")
     assert accounts.get_account(session, acc.id).balance == -1000
     transactions.delete_transaction(session, tx.id)
     assert accounts.get_account(session, acc.id).balance == 0

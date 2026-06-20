@@ -1,85 +1,85 @@
-# Quaestor — P2 MCP server (sub-proyecto)
+# Quaestor — P2 MCP server (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** P0 (core: domain + services base)
-**Parte de:** `2026-06-16-quaestor-general-design.md` (ver arquitectura §3, despliegue/auth §4, services §7)
+**Date:** 2026-06-16
+**Depends on:** P0 (core: domain + base services)
+**Part of:** `2026-06-16-quaestor-general-design.md` (see architecture §3, deployment/auth §4, services §7)
 
 ---
 
-## Objetivo
+## Objective
 
-Exponer Quaestor como **interfaz en lenguaje natural** para cualquier cliente MCP (hoy Claude Code; mañana MiniMax u otro). El usuario le habla a un agente —"gasté 40 mil en mercado", "¿qué tengo que pagar esta semana?"— y el agente registra, consulta y opera el backend a través de **tools MCP**. El servidor es un **adaptador delgado** sobre `services`: traduce intención del agente a llamadas de caso de uso y devuelve texto/markdown que el agente le explica al usuario. Es **LLM-agnóstico**: ningún cliente está cableado, solo el protocolo MCP.
+Expose Quaestor as a **natural-language interface** for any MCP client (Claude Code today; MiniMax or another tomorrow). The user talks to an agent —"I spent 40k on groceries", "what do I have to pay this week?"— and the agent records, queries, and operates the backend through **MCP tools**. The server is a **thin adapter** over `services`: it translates the agent's intent into use-case calls and returns text/markdown that the agent explains back to the user. It is **LLM-agnostic**: no client is hard-wired, only the MCP protocol.
 
-## Alcance
+## Scope
 
-- **MCP server con el SDK oficial de Python**, expuesto vía transporte remoto **streamable-HTTP** en la ruta `/mcp`. **Defensa en capas (ADR-013):** el endpoint **no está en internet público** — lo sirve un sidecar **Tailscale** dentro de la red privada (P7); encima, cada request exige el **bearer token (`APP_TOKEN`)** en el header. El token deja de ser lo único que protege el punto sensible.
-- **Por qué remoto y no stdio local:** el usuario no quiere correr el backend en su laptop. Quaestor vive en el VPS. Con stdio habría que mantener un proceso (o un shim) local apuntando al `quaestor.db`. Con streamable-HTTP, Claude Code se conecta a la URL del servidor —servida por Tailscale en el tailnet, no por Caddy— y el servidor corre junto a `services`/DB en el VPS. (Requisito: el equipo del usuario está en el mismo tailnet; ver trade-off en §4/ADR-013.)
-- **Tools del core (arranque P2):** `registrar_gasto`, `registrar_ingreso`, `transferir`, `fijar_tasa_fx`, y las lecturas (`consultar_*` / `listar_*`: transacciones, cuentas, categorías, tags, tasa vigente).
-- **No incluye** las tools de features: `crear_recurrente`/`listar_recurrentes`, `planear_pago`/`confirmar_pago`/`por_pagar` (P3 — `cerrar_mes` **no** es tool, lo corre el scheduler, ADR-017); `fijar_presupuesto`/`estado_presupuesto`/`safe_to_spend`/`crear_meta`/`aporte_meta`/`progreso_metas` (P4); `reporte_mensual`/`importar_csv` (P5). P2 deja el **patrón de registro listo** para que cada uno enchufe sus tools sin tocar el transporte ni la auth.
-- **Fuera de alcance:** lógica de dominio (vive en `services`/`domain`, P0), la API REST (P1), el frontend (P6).
+- **MCP server with the official Python SDK**, exposed over the **streamable-HTTP** remote transport at the `/mcp` path. **Defense in depth (ADR-013):** the endpoint is **not on the public internet** — a **Tailscale** sidecar serves it inside the private network (P7); on top of that, every request requires the **bearer token (`APP_TOKEN`)** in the header. The token is no longer the only thing protecting the sensitive endpoint.
+- **Why remote and not local stdio:** the user doesn't want to run the backend on their laptop. Quaestor lives on the VPS. With stdio you'd have to keep a local process (or a shim) pointing at `quaestor.db`. With streamable-HTTP, Claude Code connects to the server's URL —served by Tailscale on the tailnet, not by Caddy— and the server runs alongside `services`/DB on the VPS. (Requirement: the user's machine is on the same tailnet; see the trade-off in §4/ADR-013.)
+- **Core tools (P2 kickoff):** `record_expense`, `record_income`, `transfer`, `set_fx_rate`, and the reads (`get_*` / `list_*`: transactions, accounts, categories, tags, current rate).
+- **Does not include** the feature tools: `create_recurring`/`list_recurring`, `plan_payment`/`confirm_payment`/`to_pay` (P3 — `close_month` is **not** a tool, the scheduler runs it, ADR-017); `set_budget`/`budget_status`/`safe_to_spend`/`create_goal`/`goal_contribution`/`goals_progress` (P4); `monthly_report`/`import_csv` (P5). P2 leaves the **registration pattern ready** so each one plugs in its tools without touching the transport or the auth.
+- **Out of scope:** domain logic (lives in `services`/`domain`, P0), the REST API (P1), the frontend (P6).
 
-## Aporte al modelo de datos
+## Contribution to the data model
 
-**Ninguno.** P2 no crea entidades, columnas ni migraciones. Es un puro adaptador de entrada: cada tool desemboca en un service que ya opera sobre el modelo definido en §5 del general. Igual que la API (P1), el MCP server **es el mismo cerebro visto por otra puerta**; añadir tablas aquí violaría la regla de oro (§3: los adaptadores nunca tocan la DB ni redefinen el modelo).
+**None.** P2 creates no entities, columns, or migrations. It is a pure inbound adapter: each tool ends up in a service that already operates on the model defined in §5 of the general design. Just like the API (P1), the MCP server **is the same brain seen through another door**; adding tables here would break the golden rule (§3: adapters never touch the DB or redefine the model).
 
-## Componentes
+## Components
 
-Bajo `backend/src/quaestor/mcp/`:
+Under `backend/src/quaestor/mcp/`:
 
-- `server.py` — construye la instancia MCP del SDK oficial, monta el transporte streamable-HTTP en `/mcp`, aplica el middleware de auth, registra las tools. Punto de entrada `python -m quaestor.mcp`.
-- `auth.py` — verifica el bearer `APP_TOKEN` del header en cada request al transporte; rechaza si falta o no coincide.
-- `registry.py` — el **patrón de registro**: una función `register_core_tools(mcp, ...)` que P2 implementa, y la convención para que P3/P4/P5 expongan su propio `register_*_tools(mcp, ...)` y el `server.py` los invoque todos. Crecer = añadir una línea, no tocar transporte.
-- `tools/core.py` — las tools del core (gastos, ingresos, transferencias, FX, lecturas). Cada una: parsea entrada (schema Pydantic), llama al service, formatea la salida en texto/markdown.
-- `format.py` — helpers para renderizar resultados de service (transacción registrada, lista, balance, tasa) a markdown legible, y para convertir errores de dominio en texto claro.
+- `server.py` — builds the official SDK's MCP instance, mounts the streamable-HTTP transport at `/mcp`, applies the auth middleware, registers the tools. Entry point `python -m quaestor.mcp`.
+- `auth.py` — verifies the `APP_TOKEN` bearer from the header on every request to the transport; rejects if it's missing or doesn't match.
+- `registry.py` — the **registration pattern**: a `register_core_tools(mcp, ...)` function that P2 implements, plus the convention for P3/P4/P5 to expose their own `register_*_tools(mcp, ...)` and for `server.py` to invoke all of them. Growing = adding a line, not touching the transport.
+- `tools/core.py` — the core tools (expenses, income, transfers, FX, reads). Each one: parses input (Pydantic schema), calls the service, formats the output as text/markdown.
+- `format.py` — helpers to render service results (recorded transaction, list, balance, rate) into readable markdown, and to turn domain errors into clear text.
 
-Una sesión de DB por request (igual disciplina que la API), pasada al service. Las tools no abren engines ni sesiones propias fuera de ese scope.
+One DB session per request (same discipline as the API), passed to the service. Tools don't open their own engines or sessions outside that scope.
 
-## Interfaz pública (tools MCP)
+## Public interface (MCP tools)
 
-1 tool = 1 service, mismos verbos. Los **schemas se derivan de Pydantic** (un modelo de entrada por tool → JSON Schema que el SDK publica al cliente). La salida es **texto/markdown estructurado**, no objetos crudos.
+1 tool = 1 service, same verbs. The **schemas are derived from Pydantic** (one input model per tool → JSON Schema that the SDK publishes to the client). The output is **structured text/markdown**, not raw objects.
 
-Tools del core en P2:
+Core tools in P2:
 
-| Tool | Service | Entrada (campos clave) | Salida (texto/markdown) |
+| Tool | Service | Input (key fields) | Output (text/markdown) |
 |---|---|---|---|
-| `registrar_gasto` | `transactions.registrar_gasto` | `payee`, `amount`, `currency`, `account`, `category?`, `date?`, `tags?`, `notes?` | confirmación: monto, cuenta, `to_base` COP, nuevo balance |
-| `registrar_ingreso` | `transactions.registrar_ingreso` | igual que gasto | confirmación equivalente |
-| `transferir` | `transactions.transferir` | `from_account`, `to_account`, `amount`, `currency`, `date?`, `notes?` | par creado (origen/destino), balances resultantes |
-| `fijar_tasa_fx` | `fx.fijar_tasa` | `date`, `usd_cop` | tasa registrada para la fecha |
-| `consultar_transacciones` | reads | filtros: `desde?`, `hasta?`, `account?`, `category?`, `tag?`, `type?`, `status?` | tabla markdown + totales |
-| `listar_cuentas` | reads | — | cuentas con balance y moneda |
-| `listar_categorias` | reads | — | categorías + grupo + flags |
-| `consultar_tasa_fx` | `fx.tasa_vigente` | `date?` | tasa vigente para la fecha |
+| `record_expense` | `transactions.record_expense` | `payee`, `amount`, `currency`, `account`, `category?`, `date?`, `tags?`, `notes?` | confirmation: amount, account, `to_base` COP, new balance |
+| `record_income` | `transactions.record_income` | same as expense | equivalent confirmation |
+| `transfer` | `transactions.transfer` | `from_account`, `to_account`, `amount`, `currency`, `date?`, `notes?` | pair created (source/destination), resulting balances |
+| `set_fx_rate` | `fx.set_rate` | `date`, `usd_cop` | rate recorded for the date |
+| `list_transactions` | reads | filters: `from?`, `to?`, `account?`, `category?`, `tag?`, `type?`, `status?` | markdown table + totals |
+| `list_accounts` | reads | — | accounts with balance and currency |
+| `list_categories` | reads | — | categories + group + flags |
+| `get_fx_rate` | `fx.current_rate` | `date?` | current rate for the date |
 
-Convenciones que heredan las tools: montos como **enteros en centavos** en moneda original; **signo por `type`** (no en el monto); agregados/balances en `to_base` COP; al registrar, `status=posted` por defecto y `source=agent`. Aceptan nombres legibles (cuenta/categoría/tag por nombre, no por id) y el adaptador los resuelve antes de llamar al service.
+Conventions the tools inherit: amounts as **integers in cents** in the original currency; **sign by `type`** (not in the amount); aggregates/balances in `to_base` COP; on recording, `status=posted` by default and `source=agent`. They accept readable names (account/category/tag by name, not by id) and the adapter resolves them before calling the service.
 
-## Lógica y reglas clave
+## Logic and key rules
 
-- **Cero lógica de dominio en P2.** Validar, convertir FX, cuadrar transferencias, actualizar balance → todo en `services`/`domain`. La tool solo adapta forma de entrada/salida.
-- **Cada tool llama a un service; nunca toca la DB.** Idéntico cerebro que la API.
-- **Resolución de nombres:** el agente habla con nombres ("Bancolombia", "Mercado"); la tool los resuelve a entidades vía service de lectura. Si no existe, devuelve texto que sugiere la opción correcta o crear la entidad.
-- **Defaults amables:** `date` ausente → hoy; `currency` ausente → moneda base (COP). Esto reduce fricción en lenguaje natural, pero el monto siempre se pasa explícito.
-- **Salida pensada para el agente:** markdown corto y estructurado que el LLM pueda parafrasear (no JSON crudo). Incluye el dato que cierra el loop: balance nuevo tras un gasto, `to_base` en una tx USD, total en una consulta.
-- **Patrón de crecimiento:** cuando P3/P4/P5 aterricen, registran sus tools vía `register_*_tools` sin tocar `server.py` salvo una línea de wiring. El transporte y la auth no se re-litigan.
+- **Zero domain logic in P2.** Validating, converting FX, balancing transfers, updating balance → all in `services`/`domain`. The tool only adapts the input/output shape.
+- **Each tool calls one service; never touches the DB.** Identical brain to the API.
+- **Name resolution:** the agent speaks in names ("Bancolombia", "Groceries"); the tool resolves them to entities via a read service. If it doesn't exist, it returns text suggesting the right option or to create the entity.
+- **Friendly defaults:** missing `date` → today; missing `currency` → base currency (COP). This reduces friction in natural language, but the amount is always passed explicitly.
+- **Output designed for the agent:** short, structured markdown that the LLM can paraphrase (not raw JSON). It includes the data point that closes the loop: new balance after an expense, `to_base` on a USD tx, total on a query.
+- **Growth pattern:** when P3/P4/P5 land, they register their tools via `register_*_tools` without touching `server.py` except for one line of wiring. The transport and the auth are not re-litigated.
 
-## Errores
+## Errors
 
-- Los **errores de dominio se devuelven como texto claro, no excepciones crudas.** El adaptador captura los errores tipados de `domain` (`ValidationError`, `MissingRate`, `TransferImbalance`…) y los formatea para que el agente los explique. Ej.: `MissingRate` → "No tengo la tasa USD→COP para esa fecha. Dime la tasa con `fijar_tasa_fx` y reintento." Nunca llega un stack trace al cliente.
-- **Auth:** request sin bearer válido → el transporte responde rechazado a nivel de protocolo (no se ejecuta ninguna tool).
-- **Atomicidad:** transferencias commit/rollback en el service (las dos transactions o ninguna); si falla, la tool reporta texto y la DB queda intacta.
-- **Entrada inválida** (campo faltante/tipo errado) → la valida el schema Pydantic antes de tocar el service; el SDK devuelve el detalle al cliente.
+- **Domain errors are returned as clear text, not raw exceptions.** The adapter catches the typed errors from `domain` (`ValidationError`, `MissingRate`, `TransferImbalance`…) and formats them so the agent can explain them. E.g.: `MissingRate` → "I don't have the USD→COP rate for that date. Give me the rate with `set_fx_rate` and I'll retry." A stack trace never reaches the client.
+- **Auth:** a request without a valid bearer → the transport responds with a protocol-level rejection (no tool runs).
+- **Atomicity:** transfers commit/rollback in the service (both transactions or neither); if it fails, the tool reports text and the DB stays intact.
+- **Invalid input** (missing field/wrong type) → the Pydantic schema validates it before touching the service; the SDK returns the detail to the client.
 
-## Testing y criterio de "listo"
+## Testing and the "done" criterion
 
-- **Unit/adaptador:** cada tool con service real sobre **SQLite in-memory** — registrar gasto/ingreso, transferir, fijar/consultar FX, listar/consultar. Verifica formateo de salida y traducción de errores de dominio a texto (sin excepciones crudas).
-- **Auth:** request sin token o con token errado → rechazado; con `APP_TOKEN` correcto → pasa.
-- **Patrón de registro:** todas las tools esperadas quedan expuestas tras `register_core_tools`; un `register_*` adicional se monta sin tocar el transporte.
-- **Criterio de "listo":** desde **Claude Code conectado al `/mcp` remoto**, el usuario **registra una transacción hablando en lenguaje natural** (ej. "gasté 50 mil en almuerzo con la débito") y luego **consulta el resultado** ("¿cuánto llevo gastado hoy?") obteniendo la transacción recién creada. El loop completo NL → tool → service → texto funciona contra el backend real.
+- **Unit/adapter:** each tool with the real service over **in-memory SQLite** — record expense/income, transfer, set/get FX, list/query. Verifies output formatting and the translation of domain errors into text (no raw exceptions).
+- **Auth:** a request without a token or with the wrong token → rejected; with the correct `APP_TOKEN` → passes.
+- **Registration pattern:** all the expected tools end up exposed after `register_core_tools`; an additional `register_*` mounts without touching the transport.
+- **"Done" criterion:** from **Claude Code connected to the remote `/mcp`**, the user **records a transaction speaking in natural language** (e.g. "I spent 50k on lunch with the debit card") and then **queries the result** ("how much have I spent today?") getting back the just-created transaction. The full loop NL → tool → service → text works against the real backend.
 
-## Integración con otros sub-proyectos
+## Integration with other sub-projects
 
-- **Cómo conecta Claude Code:** el equipo del usuario está en el tailnet; config de MCP apuntando a la **MagicDNS** del VPS (`https://quaestor-mcp.<tailnet>.ts.net/mcp`), con el `APP_TOKEN` en el header. El sidecar Tailscale sirve `/mcp` → MCP server (§4/ADR-013); **no pasa por Caddy ni por internet público**. **MiniMax:** se enchufa igual cuando soporte MCP remoto y esté en el tailnet; sin cambios en el servidor (es LLM-agnóstico).
-- **P0 (core):** dependencia dura. P2 consume `services` y `domain` tal cual; no los modifica.
-- **P1 (API):** hermano simétrico. Mismos services, distinta puerta (REST vs tools). Cero lógica duplicada; comparten `APP_TOKEN`.
-- **P3/P4/P5:** registran sus tools de features mediante el patrón de `registry.py`. Cada uno aporta sus services y su `register_*_tools`; P2 ya dejó el transporte, la auth y el formateo listos. P4 expone, entre otras, el **safe-to-spend** ("¿cuánto me queda libre este mes?") — la pregunta agent-native que LM no responde.
-- **P7 (despliegue):** corre el MCP server como servicio `mcp` en `docker-compose.yml`, **servido por el sidecar Tailscale** (no por Caddy, ADR-013), con `APP_TOKEN` por env y el mismo `quaestor.db` (volumen) que API y rollover.
+- **How Claude Code connects:** the user's machine is on the tailnet; MCP config points at the VPS's **MagicDNS** (`https://quaestor-mcp.<tailnet>.ts.net/mcp`), with the `APP_TOKEN` in the header. The Tailscale sidecar serves `/mcp` → MCP server (§4/ADR-013); **it doesn't go through Caddy or the public internet**. **MiniMax:** plugs in the same way once it supports remote MCP and is on the tailnet; no changes to the server (it's LLM-agnostic).
+- **P0 (core):** hard dependency. P2 consumes `services` and `domain` as-is; it doesn't modify them.
+- **P1 (API):** symmetric sibling. Same services, different door (REST vs tools). Zero duplicated logic; they share `APP_TOKEN`.
+- **P3/P4/P5:** register their feature tools through the `registry.py` pattern. Each one contributes its services and its `register_*_tools`; P2 has already left the transport, the auth, and the formatting ready. P4 exposes, among others, the **safe-to-spend** ("how much do I have free this month?") — the agent-native question that LM doesn't answer.
+- **P7 (deployment):** runs the MCP server as the `mcp` service in `docker-compose.yml`, **served by the Tailscale sidecar** (not by Caddy, ADR-013), with `APP_TOKEN` via env and the same `quaestor.db` (volume) as the API and rollover.

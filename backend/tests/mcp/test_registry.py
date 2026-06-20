@@ -45,5 +45,5 @@ def test_registered_tool_runs_against_db_engine(monkeypatch, engine):
 
     mcp = FastMCP("test")
     register_core_tools(mcp)
-    result = asyncio.run(mcp.call_tool("listar_cuentas", {}))
+    result = asyncio.run(mcp.call_tool("list_accounts", {}))
     assert "Bancolombia" in str(result)

@@ -1,204 +1,204 @@
-# Quaestor — P4 Presupuestos + Metas (sub-proyecto)
+# Quaestor — P4 Budgets + Goals (sub-project)
 
-**Fecha:** 2026-06-16
-**Depende de:** **P0** (domain/money/FX, db, `transferir`, transactions) y **P3** (seams de rollover y post-confirm de `cerrar_mes`/`confirmar_pago`; `por_pagar` para el "comprometido" del safe-to-spend).
-**Expone vía:** **P1** (routers REST) y **P2** (tools MCP) — esos sub-proyectos cablean los services aquí definidos.
-**Parte de:** `2026-06-16-quaestor-general-design.md` (diseño general). Hereda sus convenciones (ver §5 modelo, §6 metas/presupuesto, §11).
-
----
-
-## Objetivo
-
-Dar a Quaestor las capacidades de planeación que son **el diferenciador de producto** frente a Lunch Money (ADR-001/002):
-
-1. **Presupuesto híbrido** (ADR-002/003): **sobres por categoría con rollover** (lo no gastado se arrastra) + un **safe-to-spend** global = plata que aún no asignaste a ningún sobre. El safe-to-spend integra recurrentes + planned + metas — algo que LM estructuralmente no hace.
-2. **Metas de ahorro** de **monto fijo mensual**, en dos sabores: **definida** (con `target`+`deadline` → ETA y on-track/atrasado) e **indefinida** (solo acumula). Aporte **flexible** (ADR-006): el rollover lo **propone**, tú lo confirmas en "Por pagar".
-
-El presupuesto es **lógica de lectura/cálculo** sobre transactions reales; no inventa dinero. Los aportes de meta son transferencias internas a la cuenta de ahorro, **disparadas por confirmación** (no automáticas): P4 los propone vía el hook de rollover de P3 y los registra vía el hook post-confirm de P3.
+**Date:** 2026-06-16
+**Depends on:** **P0** (domain/money/FX, db, `transfer`, transactions) and **P3** (rollover and post-confirm seams of `close_month`/`confirm_payment`; `to_pay` for the safe-to-spend "committed" amount).
+**Exposed via:** **P1** (REST routers) and **P2** (MCP tools) — those sub-projects wire up the services defined here.
+**Part of:** `2026-06-16-quaestor-general-design.md` (general design). Inherits its conventions (see §5 model, §6 goals/budget, §11).
 
 ---
 
-## Alcance
+## Objective
 
-**Dentro:**
-- Modelos `Budget` (con semántica de rollover), `Goal`, `GoalContribution` (+ migración). Migración que agrega `goal_id?` a `Transaction`.
-- Services de presupuesto: `fijar_presupuesto`, `estado_presupuesto` (estado del sobre con rollover), **`safe_to_spend`** (número global).
-- Services de metas: `crear_meta`, `aporte_meta` (aporte manual suelto), `progreso_metas`.
-- Cálculo de meta **definida** (requerido mensual, on-track/atrasado, ETA) e **indefinida** (solo acumulado).
-- El hook de rollover **`proponer_aportes_meta(period)`** (crea aportes `planned`, no transfiere) y el hook **post-confirm** que registra la `GoalContribution` al confirmar — ambos registrados en los seams de P3.
+Give Quaestor the planning capabilities that are **the product differentiator** versus Lunch Money (ADR-001/002):
 
-**Fuera:**
-- Metas por % de ingreso (fuera de v1, ver general §1).
-- Recurrentes y `planned`/Por-pagar (eso es P3; P4 los **consume** para "comprometido" y propone aportes sobre esa cola).
-- Reportes y su markdown (P5 consume `estado_presupuesto`, `safe_to_spend` y `progreso_metas`).
-- Endpoints/tools concretos: P4 define las firmas; P1/P2 las exponen.
+1. **Hybrid budget** (ADR-002/003): **per-category envelopes with rollover** (what you don't spend carries over) + a global **safe-to-spend** = money you haven't yet assigned to any envelope. The safe-to-spend integrates recurring items + planned + goals — something LM structurally doesn't do.
+2. **Savings goals** with a **fixed monthly amount**, in two flavors: **defined** (with `target`+`deadline` → ETA and on-track/behind) and **open-ended** (just accumulates). **Flexible** contribution (ADR-006): the rollover **proposes** it, you confirm it in "To pay".
+
+The budget is **read/compute logic** over real transactions; it doesn't invent money. Goal contributions are internal transfers into the savings account, **triggered by confirmation** (not automatic): P4 proposes them via P3's rollover hook and records them via P3's post-confirm hook.
 
 ---
 
-## Aporte al modelo de datos
+## Scope
 
-P4 agrega tres entidades (las demás ya existen en P0/P3). Migración propia; no redefine nada ajeno.
+**In:**
+- `Budget` model (with rollover semantics), `Goal`, `GoalContribution` (+ migration). Migration that adds `goal_id?` to `Transaction`.
+- Budget services: `set_budget`, `budget_status` (envelope status with rollover), **`safe_to_spend`** (global number).
+- Goal services: `create_goal`, `goal_contribution` (standalone manual contribution), `goals_progress`.
+- **Defined** goal computation (monthly required, on-track/behind, ETA) and **open-ended** (accumulated total only).
+- The rollover hook **`propose_goal_contributions(period)`** (creates `planned` contributions, doesn't transfer) and the **post-confirm** hook that records the `GoalContribution` on confirmation — both registered in P3's seams.
 
-| Entidad | Campos clave |
+**Out:**
+- Goals as a % of income (out of v1, see general §1).
+- Recurring items and `planned`/To-pay (that's P3; P4 **consumes** them for "committed" and proposes contributions on top of that queue).
+- Reports and their markdown (P5 consumes `budget_status`, `safe_to_spend`, and `goals_progress`).
+- Concrete endpoints/tools: P4 defines the signatures; P1/P2 expose them.
+
+---
+
+## Contribution to the data model
+
+P4 adds three entities (the rest already exist in P0/P3). Its own migration; it doesn't redefine anything external.
+
+| Entity | Key fields |
 |---|---|
-| **Budget** (sobre) | `category_id` (FK Category), `year_month` (TEXT `YYYY-MM`), `amount_assigned` (centavos COP, int ≥ 0 — lo que asignas al sobre ese mes). Único por `(category_id, year_month)`. El **rollover_in es derivado** (saldo positivo del mes anterior), no se almacena; opcionalmente `cerrar_mes` lo snapshotea para rendimiento. |
-| **Goal** | `name`, `target_amount?` (centavos COP, nullable), `deadline?` (date, nullable), `monthly_amount` (centavos COP, int > 0, **fijo**), `savings_account_id` (FK Account, `type=savings`), `status` ∈ `active`/`reached`/`paused`. |
-| **GoalContribution** | `goal_id` (FK Goal), `date`, `amount` (centavos COP), `source` ∈ `confirmado`/`manual` (`confirmado` = aporte propuesto por rollover y confirmado en Por-pagar; `manual` = aporte suelto), `transaction_id?` (FK Transaction — la transferencia que respalda el aporte; nullable solo para aportes históricos sin tx). |
-| **Transaction.goal_id?** | columna que **P4 agrega por migración** a la tabla `Transaction` de P0: enlaza una tx `planned` (aporte propuesto) a su `Goal`. Al confirmarla, el hook post-confirm de P3 lee `goal_id` y crea la `GoalContribution`. |
+| **Budget** (envelope) | `category_id` (FK Category), `year_month` (TEXT `YYYY-MM`), `amount_assigned` (COP cents, int ≥ 0 — what you assign to the envelope that month). Unique per `(category_id, year_month)`. **rollover_in is derived** (positive balance of the previous month), not stored; optionally `close_month` snapshots it for performance. |
+| **Goal** | `name`, `target_amount?` (COP cents, nullable), `deadline?` (date, nullable), `monthly_amount` (COP cents, int > 0, **fixed**), `savings_account_id` (FK Account, `type=savings`), `status` ∈ `active`/`reached`/`paused`. |
+| **GoalContribution** | `goal_id` (FK Goal), `date`, `amount` (COP cents), `source` ∈ `confirmed`/`manual` (`confirmed` = contribution proposed by rollover and confirmed in To-pay; `manual` = standalone contribution), `transaction_id?` (FK Transaction — the transfer that backs the contribution; nullable only for historical contributions without a tx). |
+| **Transaction.goal_id?** | column that **P4 adds by migration** to P0's `Transaction` table: links a `planned` tx (proposed contribution) to its `Goal`. On confirmation, P3's post-confirm hook reads `goal_id` and creates the `GoalContribution`. |
 
-**Invariantes:**
-- `Goal` es **definida** sii tiene `target_amount` **y** `deadline`; es **indefinida** sii no tiene ninguno. Tener solo uno → `ValidationError` al crear.
-- `monthly_amount > 0` siempre (ambos tipos).
-- `savings_account_id` debe apuntar a una `Account` con `type=savings` y no `archived`.
-- Montos en centavos COP (los aportes ya son moneda base; las metas no manejan FX).
-
----
-
-## Componentes
-
-- `domain/rules.py` (extiende): funciones **puras** de cálculo — `estado_sobre_calc(...)` (asignado + rollover_in − gastado), `safe_to_spend_calc(...)` (cascada), `progreso_meta_calc(...)`. Reciben datos ya consultados, no tocan DB. Aquí vive la matemática de rollover, % usado, requerido mensual, ETA, on-track, y la cascada del safe-to-spend.
-- `services/budgets.py`: `fijar_presupuesto`, `estado_presupuesto` (estado del sobre con rollover), **`safe_to_spend`** (consulta ingreso forecast + comprometido vía P3 + asignaciones, delega la cascada a `rules`).
-- `services/goals.py`: `crear_meta`, `aporte_meta` (suelto), `progreso_metas`, el hook de rollover **`proponer_aportes_meta`** y el hook **post-confirm** `registrar_aporte_confirmado`.
-- `domain/models.py` (extiende): `Budget`, `Goal`, `GoalContribution` + la columna `goal_id?` en `Transaction`.
-- Migración: crea las tres tablas + índices (`Budget(category_id, year_month)` único; `GoalContribution(goal_id, date)`) y **agrega `goal_id?` a `Transaction`**.
-- **Registro de seams** (en el bootstrap de P4): `registrar_hook_rollover(proponer_aportes_meta)` y `registrar_hook_post_confirm(registrar_aporte_confirmado)`.
-
-`proponer_aportes_meta` **crea tx `planned`** (con `goal_id`), no transfiere. `registrar_aporte_confirmado` se dispara al confirmar esa tx (ya `posted`, transfer interna hecha por `confirmar_pago`) y solo **registra la `GoalContribution`**. Ningún paso escribe transactions de transfer a mano fuera de `confirmar_pago`/`transferir` de P0/P3.
+**Invariants:**
+- A `Goal` is **defined** iff it has `target_amount` **and** `deadline`; it is **open-ended** iff it has neither. Having only one → `ValidationError` on creation.
+- `monthly_amount > 0` always (both types).
+- `savings_account_id` must point to an `Account` with `type=savings` and not `archived`.
+- Amounts in COP cents (contributions are already base currency; goals don't handle FX).
 
 ---
 
-## Interfaz pública
+## Components
 
-Firmas de `services` (lo que P1/P2/P5 consumen). Montos en centavos COP.
+- `domain/rules.py` (extends): **pure** computation functions — `envelope_status_calc(...)` (assigned + rollover_in − spent), `safe_to_spend_calc(...)` (cascade), `goal_progress_calc(...)`. They receive already-queried data, don't touch the DB. This is where the math lives for rollover, % used, monthly required, ETA, on-track, and the safe-to-spend cascade.
+- `services/budgets.py`: `set_budget`, `budget_status` (envelope status with rollover), **`safe_to_spend`** (queries income forecast + committed via P3 + assignments, delegates the cascade to `rules`).
+- `services/goals.py`: `create_goal`, `goal_contribution` (standalone), `goals_progress`, the rollover hook **`propose_goal_contributions`** and the **post-confirm** hook `record_confirmed_contribution`.
+- `domain/models.py` (extends): `Budget`, `Goal`, `GoalContribution` + the `goal_id?` column on `Transaction`.
+- Migration: creates the three tables + indexes (`Budget(category_id, year_month)` unique; `GoalContribution(goal_id, date)`) and **adds `goal_id?` to `Transaction`**.
+- **Seam registration** (in P4's bootstrap): `register_rollover_hook(propose_goal_contributions)` and `register_post_confirm_hook(record_confirmed_contribution)`.
+
+`propose_goal_contributions` **creates `planned` txs** (with `goal_id`), doesn't transfer. `record_confirmed_contribution` fires when that tx is confirmed (already `posted`, internal transfer done by `confirm_payment`) and only **records the `GoalContribution`**. No step writes transfer transactions by hand outside P0/P3's `confirm_payment`/`transfer`.
+
+---
+
+## Public interface
+
+`services` signatures (what P1/P2/P5 consume). Amounts in COP cents.
 
 ```python
 # budgets.py
-def fijar_presupuesto(session, category_id: int, year_month: str, amount_assigned: int) -> Budget:
-    """Asigna (upsert) el sobre de una categoría para un mes."""
+def set_budget(session, category_id: int, year_month: str, amount_assigned: int) -> Budget:
+    """Assigns (upserts) a category's envelope for a month."""
 
-def estado_presupuesto(session, category_id: int, year_month: str) -> BudgetStatus:
-    """Estado del sobre con rollover: asignado, rollover_in, gastado, disponible, pct_usado, estado."""
+def budget_status(session, category_id: int, year_month: str) -> BudgetStatus:
+    """Envelope status with rollover: assigned, rollover_in, spent, available, pct_used, status."""
 
 def safe_to_spend(session, year_month: str) -> SafeToSpend:
-    """Número de cabecera (cascada) + desglose: ingreso forecast, comprometido, asignado, libre."""
+    """Headline number (cascade) + breakdown: income forecast, committed, assigned, free."""
 
 # goals.py
-def crear_meta(session, name: str, monthly_amount: int, savings_account_id: int,
-               target_amount: int | None = None, deadline: date | None = None) -> Goal:
-    """Definida si target+deadline; indefinida si ninguno; error si solo uno."""
+def create_goal(session, name: str, monthly_amount: int, savings_account_id: int,
+                target_amount: int | None = None, deadline: date | None = None) -> Goal:
+    """Defined if target+deadline; open-ended if neither; error if only one."""
 
-def aporte_meta(session, goal_id: int, amount: int, date: date) -> GoalContribution:
-    """Aporte suelto manual (source=manual) + transferencia interna a la cuenta de ahorro. Atómico."""
+def goal_contribution(session, goal_id: int, amount: int, date: date) -> GoalContribution:
+    """Standalone manual contribution (source=manual) + internal transfer to the savings account. Atomic."""
 
-def progreso_metas(session, goal_ids: list[int] | None = None) -> list[GoalProgress]:
-    """Estado de cada meta (todas las activas si goal_ids=None)."""
+def goals_progress(session, goal_ids: list[int] | None = None) -> list[GoalProgress]:
+    """Status of each goal (all active ones if goal_ids=None)."""
 
-# hooks registrados en los seams de P3 (no se llaman directo desde P1/P2):
-def proponer_aportes_meta(period: str, session) -> list[Transaction]:
-    """Hook de rollover: por cada Goal activa crea una tx `planned` (aporte propuesto). Idempotente."""
+# hooks registered in P3's seams (not called directly from P1/P2):
+def propose_goal_contributions(period: str, session) -> list[Transaction]:
+    """Rollover hook: for each active Goal creates a `planned` tx (proposed contribution). Idempotent."""
 
-def registrar_aporte_confirmado(tx, session) -> GoalContribution | None:
-    """Hook post-confirm: si tx.goal_id, registra GoalContribution(source=confirmado). Si no, no-op."""
+def record_confirmed_contribution(tx, session) -> GoalContribution | None:
+    """Post-confirm hook: if tx.goal_id, records GoalContribution(source=confirmed). Otherwise no-op."""
 ```
 
-**DTOs de salida** (dataclasses/Pydantic, no modelos DB):
+**Output DTOs** (dataclasses/Pydantic, not DB models):
 
 ```python
-BudgetStatus  = {category_id, year_month, asignado, rollover_in, gastado, disponible, pct_usado, estado}
-SafeToSpend   = {year_month, ingreso_forecast, comprometido, asignado_sobres, libre, desglose_comprometido[]}
-GoalProgress  = {goal_id, name, tipo("definida"|"indefinida"), monthly_amount, ahorrado,
-                 # solo definida:
-                 target_amount?, deadline?, requerido_mensual?, on_track?, eta?, faltante?}
+BudgetStatus  = {category_id, year_month, assigned, rollover_in, spent, available, pct_used, status}
+SafeToSpend   = {year_month, income_forecast, committed, assigned_envelopes, free, committed_breakdown[]}
+GoalProgress  = {goal_id, name, type("defined"|"open-ended"), monthly_amount, saved,
+                 # defined only:
+                 target_amount?, deadline?, monthly_required?, on_track?, eta?, remaining?}
 ```
 
 ---
 
-## Lógica y reglas clave
+## Key logic and rules
 
-### Presupuesto híbrido (ADR-002/003/005)
+### Hybrid budget (ADR-002/003/005)
 
-**Sobre por categoría (con rollover).**
-- `gastado = Σ to_base(tx)` sobre transactions con `type=expense`, `status=posted`, `category_id` dado, `date` dentro de `year_month`, de **todas las cuentas incluida la tarjeta de crédito** (por causación, en la fecha de compra — ADR-021). El pago del extracto es `type=transfer`, ya excluido de gasto, así que no se cuenta dos veces.
-- **Respeta los flags de Category:** si la categoría tiene `exclude_from_budget` **o** `exclude_from_totals`, su gasto **no** se agrega → no se presupuesta (informativo, no se bloquea).
-- `rollover_in(cat, mes) = max(disponible(cat, mes−1), 0)` — lo no gastado del mes anterior se arrastra; un sobre sobregirado se absorbe en el pozo global y **resetea a 0** (ADR-005), no arrastra negativo.
-- `disponible = rollover_in + amount_assigned − gastado`.
-- `pct_usado = round(gastado / (rollover_in + amount_assigned) * 100)` (0 si el denominador es 0).
-- `estado = "over"` si `gastado > rollover_in + amount_assigned`, si no `"under"`.
-- Siempre en `to_base` (COP), nunca moneda original.
+**Per-category envelope (with rollover).**
+- `spent = Σ to_base(tx)` over transactions with `type=expense`, `status=posted`, the given `category_id`, `date` within `year_month`, across **all accounts including the credit card** (on an accrual basis, on the purchase date — ADR-021). The statement payment is `type=transfer`, already excluded from spending, so it isn't counted twice.
+- **Respects Category flags:** if the category has `exclude_from_budget` **or** `exclude_from_totals`, its spending is **not** aggregated → it isn't budgeted (informational, not blocked).
+- `rollover_in(cat, month) = max(available(cat, month−1), 0)` — what wasn't spent last month carries over; an overspent envelope is absorbed into the global pool and **resets to 0** (ADR-005), it doesn't carry a negative.
+- `available = rollover_in + amount_assigned − spent`.
+- `pct_used = round(spent / (rollover_in + amount_assigned) * 100)` (0 if the denominator is 0).
+- `status = "over"` if `spent > rollover_in + amount_assigned`, otherwise `"under"`.
+- Always in `to_base` (COP), never the original currency.
 
-**Safe-to-spend global (cascada, ADR-003/005/014/016).** Sobres **opcionales** (A4): solo algunas categorías llevan sobre; el resto gasta directo del pozo.
+**Global safe-to-spend (cascade, ADR-003/005/014/016).** Envelopes are **optional** (A4): only some categories carry an envelope; the rest spend directly from the pool.
 ```
-safe_to_spend(mes) = ingreso_forecast(mes)
-                   − comprometido(mes)
-                   − Σ amount_assigned(mes)            # categorías CON sobre
-                   − Σ gasto_no_presupuestado(mes)      # gasto posted en categorías SIN sobre
-                   − Σ sobregiro(mes)                   # por sobre: max(gastado − (asignado + rollover_in), 0)
+safe_to_spend(month) = income_forecast(month)
+                     − committed(month)
+                     − Σ amount_assigned(month)        # categories WITH an envelope
+                     − Σ unbudgeted_spending(month)     # posted spending in categories WITHOUT an envelope
+                     − Σ overspend(month)               # per envelope: max(spent − (assigned + rollover_in), 0)
 ```
-- `ingreso_forecast(mes)` = suma de los `RecurringItem` de `type=income` cuyas fechas de vencimiento **caen en el mes** (ADR-004/A2); **sin override teclado**. Ingreso atípico (prima) se registra suelto y cuenta al postear.
-- `comprometido(mes)` = obligaciones del mes **contadas una sola vez** (ADR-014): recurrentes que **vencen en el mes** + tx `planned` del mes (pagos sueltos, aportes de meta propuestos). **Proyectado, no leído de las occurrences materializadas (ADR-020):** como los recurrentes se materializan **due-driven** (solo los vencidos hasta hoy existen como occurrence), `comprometido` proyecta el calendario completo del mes vía `fechas_vencimiento` de P3 → el safe-to-spend es **estable todo el mes**, no sube cada día porque aún no se haya materializado lo que falta. Una obligación se cuenta una vez sin importar su estado (no materializada / `planned` / `posted`): cuando se materializa o postea, el safe-to-spend **no se mueve**.
-- `Σ amount_assigned` = lo asignado a sobres este mes (la plata ya está "reclamada" exista o no gasto).
-- `Σ gasto_no_presupuestado` = gasto `posted` en categorías **sin sobre** (de **todas las cuentas incl. tarjeta**, descontando transfers y `exclude_*`). Sin esto, el pozo sobreestimaría la plata libre (A4).
-- `Σ sobregiro` = lo gastado de más en un sobre por encima de `asignado + rollover_in` (ADR-005). El `rollover_in` (plata de meses previos) **no** suma al pozo de este mes y **protege** contra sobregiro falso.
-- Las interacciones rollover × sobregiro × no-presupuestado las **fijan los tests** (abajo).
+- `income_forecast(month)` = sum of the `RecurringItem`s of `type=income` whose due dates **fall in the month** (ADR-004/A2); **no typed override**. Atypical income (a bonus) is recorded standalone and counts when posted.
+- `committed(month)` = the month's obligations **counted exactly once** (ADR-014): recurring items that **come due in the month** + the month's `planned` txs (standalone payments, proposed goal contributions). **Projected, not read from materialized occurrences (ADR-020):** since recurring items are materialized **due-driven** (only those due as of today exist as an occurrence), `committed` projects the full month's calendar via P3's `due_dates` → the safe-to-spend is **stable all month long**, it doesn't rise each day just because what's left hasn't yet been materialized. An obligation is counted once regardless of its state (not materialized / `planned` / `posted`): when it materializes or posts, the safe-to-spend **doesn't move**.
+- `Σ amount_assigned` = what's assigned to envelopes this month (the money is already "claimed" whether spending exists or not).
+- `Σ unbudgeted_spending` = `posted` spending in categories **without an envelope** (from **all accounts incl. the card**, discounting transfers and `exclude_*`). Without this, the pool would overstate the free money (A4).
+- `Σ overspend` = what was overspent in an envelope above `assigned + rollover_in` (ADR-005). The `rollover_in` (money from previous months) **doesn't** add to this month's pool and **protects** against false overspend.
+- The rollover × overspend × unbudgeted interactions are **pinned by the tests** (below).
 
-### Metas (monto fijo)
-- **Indefinida:** `ahorrado = Σ GoalContribution.amount`. Sin `requerido_mensual`, sin `eta`, sin `on_track`. Solo total acumulado.
-- **Definida:**
-  - `faltante = max(target_amount − ahorrado, 0)`.
-  - `meses_restantes = #meses calendario desde el mes actual hasta el mes de deadline` (≥ 1; si ya pasó el deadline → 1 para no dividir por cero).
-  - `requerido_mensual = ceil(faltante / meses_restantes)`.
-  - `on_track = (monthly_amount >= requerido_mensual)`. Si `False` → "atrasado".
-  - `eta` = al ritmo actual (`monthly_amount`): `ceil(faltante / monthly_amount)` meses → fecha proyectada; si `faltante=0` la meta está alcanzada (ETA = hoy).
-  - Si `ahorrado >= target_amount` → la meta pasa a `status=reached` (en `progreso_metas` se marca; el cambio de status persistente se hace al detectar en aporte/rollover).
+### Goals (fixed amount)
+- **Open-ended:** `saved = Σ GoalContribution.amount`. No `monthly_required`, no `eta`, no `on_track`. Accumulated total only.
+- **Defined:**
+  - `remaining = max(target_amount − saved, 0)`.
+  - `months_left = # of calendar months from the current month to the deadline month` (≥ 1; if the deadline has already passed → 1 to avoid dividing by zero).
+  - `monthly_required = ceil(remaining / months_left)`.
+  - `on_track = (monthly_amount >= monthly_required)`. If `False` → "behind".
+  - `eta` = at the current pace (`monthly_amount`): `ceil(remaining / monthly_amount)` months → projected date; if `remaining=0` the goal is reached (ETA = today).
+  - If `saved >= target_amount` → the goal moves to `status=reached` (it's marked in `goals_progress`; the persistent status change happens when detected during a contribution/rollover).
 
-### Aporte de meta = transferencia interna, **flexible** (ADR-006/007)
-El aporte mensual **no es automático**. El ciclo es **propone → confirmas**, reusando la cola "Por pagar" y los seams de P3:
+### Goal contribution = internal transfer, **flexible** (ADR-006/007)
+The monthly contribution **is not automatic**. The cycle is **propose → you confirm**, reusing the "To pay" queue and P3's seams:
 
-1. **Proponer (rollover).** `proponer_aportes_meta(period, session)` —hook de rollover— por cada `Goal` `active` crea una tx **`planned`** (`type=transfer`, `goal_id` set, **origen `Settings.default_source_account_id`** (ADR-015), destino `savings_account_id`, `amount=monthly_amount`, vence fin de periodo). **No mueve plata** (regla `planned` de P3). Cae en "Por pagar".
-2. **Confirmar.** El usuario confirma vía `confirmar_pago` (P3). Como la tx es `type=transfer` planned, `confirmar_pago` **no postea un solo lado**: materializa la **transferencia interna real** vía `transferir` de P0 (par posted, atómico) hacia `savings_account_id`. El **hook post-confirm** (`registrar_aporte_confirmado`, de P4) registra entonces la `GoalContribution(source=confirmado, amount, transaction_id=transfer)`. Si el mes vino flojo, el usuario confirma con `amount` menor u **omite** (`omitir_pago`).
-3. **Aporte suelto manual.** `aporte_meta(goal_id, amount, date)` crea directamente `GoalContribution(source=manual)` + transferencia, sin pasar por la cola (para aportes extra fuera del ritmo).
+1. **Propose (rollover).** `propose_goal_contributions(period, session)` —the rollover hook— for each `active` `Goal` creates a **`planned`** tx (`type=transfer`, `goal_id` set, **origin `Settings.default_source_account_id`** (ADR-015), destination `savings_account_id`, `amount=monthly_amount`, due at end of period). It **doesn't move money** (P3's `planned` rule). It lands in "To pay".
+2. **Confirm.** The user confirms via `confirm_payment` (P3). Since the tx is a `planned` `type=transfer`, `confirm_payment` **doesn't post a single side**: it materializes the **real internal transfer** via P0's `transfer` (an atomic posted pair) into `savings_account_id`. The **post-confirm hook** (`record_confirmed_contribution`, from P4) then records the `GoalContribution(source=confirmed, amount, transaction_id=transfer)`. If the month came up tight, the user confirms with a smaller `amount` or **skips** (`skip_payment`).
+3. **Standalone manual contribution.** `goal_contribution(goal_id, amount, date)` directly creates `GoalContribution(source=manual)` + a transfer, without going through the queue (for extra contributions outside the regular pace).
 
-- El aporte (transferencia interna) **no es gasto ni ingreso** → fuera de todos los totales/reportes (general §5).
-- **Atómico:** transferencia + `GoalContribution` se crean juntas o ninguna (la atomicidad la garantiza la transacción de `confirmar_pago` / `aporte_meta`).
-- **Idempotencia de la propuesta:** `proponer_aportes_meta` no crea una segunda propuesta `planned` si ya existe una para `(goal_id, period)`. Re-ejecutar `cerrar_mes` no duplica propuestas. Metas `paused`/`reached` se saltan.
-- Tras un aporte confirmado, si una meta definida alcanza su `target` → `status=reached`.
+- The contribution (internal transfer) **is neither expense nor income** → out of all totals/reports (general §5).
+- **Atomic:** the transfer + `GoalContribution` are created together or not at all (atomicity is guaranteed by the `confirm_payment` / `goal_contribution` transaction).
+- **Proposal idempotency:** `propose_goal_contributions` doesn't create a second `planned` proposal if one already exists for `(goal_id, period)`. Re-running `close_month` doesn't duplicate proposals. `paused`/`reached` goals are skipped.
+- After a confirmed contribution, if a defined goal reaches its `target` → `status=reached`.
 
-> **Nota de integración P3↔P4:** que `confirmar_pago` materialice un `planned` de `type=transfer` como transferencia real es una **capacidad genérica de P3** (no específica de metas): P3 soporta transferencias planeadas y delega el efecto monetario; P4 solo aporta el `goal_id` y el hook que registra la `GoalContribution`. P3 sigue **ignorando qué es una meta**.
-
----
-
-## Errores
-
-Errores tipados de `domain` (general §11). API (P1) → 4xx; MCP (P2) → texto estructurado.
-
-- `ValidationError`: `monthly_amount <= 0`; meta con solo `target` o solo `deadline`; `amount_assigned < 0`; `year_month` mal formado (no `YYYY-MM`).
-- `ValidationError`: `savings_account_id` no existe, no es `type=savings`, o está `archived`.
-- `NotFound`: `category_id` / `goal_id` inexistente.
-- Aporte confirmado / suelto **atómicos**: si la transferencia falla (cuenta inválida según P0), se revierte la `GoalContribution` (rollback dentro de `confirmar_pago` / `aporte_meta`).
-- Proponer aportes en rollover **no mueve plata** → no puede fallar por fondos; solo crea `planned`. Falla solo por datos inválidos (cuenta de ahorro archivada, etc.) y aborta el cierre (atomicidad de `cerrar_mes`, P3).
-- `MissingRate` no aplica: aportes y presupuestos son COP base, sin FX.
+> **P3↔P4 integration note:** that `confirm_payment` materializes a `planned` `type=transfer` as a real transfer is a **generic P3 capability** (not goal-specific): P3 supports planned transfers and delegates the monetary effect; P4 only supplies the `goal_id` and the hook that records the `GoalContribution`. P3 still **knows nothing about what a goal is**.
 
 ---
 
-## Testing y criterio de "listo"
+## Errors
 
-`pytest` sobre `domain` + `services` con SQLite in-memory (general §11). **Listo** cuando pasan:
+Typed `domain` errors (general §11). API (P1) → 4xx; MCP (P2) → structured text.
 
-- **`estado_presupuesto` (sobre con rollover):** suma solo `expense`+`posted` del mes/categoría; ignora `planned`, transfers, otros meses/categorías; **respeta `exclude_from_budget`/`exclude_from_totals`**; `rollover_in = max(disponible mes anterior, 0)` (positivo arrastra, negativo resetea, ADR-005); `disponible`, `pct_usado`, `over`/`under` correctos; denominador 0 no divide por cero.
-- **`safe_to_spend` (cascada):** `libre = ingreso_forecast − comprometido − asignado − gasto_no_presupuestado − sobregiro`; ingreso = suma de recurrentes `income` del mes (sin override, A2). **Sobres opcionales (A4):** gasto en categoría **sin sobre** reduce el pozo; gasto en categoría **con sobre** ya está reclamado por la asignación (no resta doble). **Double-count guard (ADR-014):** una obligación contada una sola vez esté no-materializada, `planned` o `posted` → confirmar un `planned` (o postear un recurrente auto) **no cambia** el safe-to-spend. **Estabilidad due-driven (ADR-020):** `comprometido` proyecta el calendario del mes (vía `fechas_vencimiento`), así que el safe-to-spend del día 5 y del día 25 del mismo mes coinciden aunque falten recurrentes por materializar. **Sobregiro (ADR-005):** `max(gastado−(asignado+rollover_in),0)` reduce el pozo; `rollover_in` protege contra sobregiro falso.
-- **Meta definida:** `requerido_mensual = ceil(faltante/meses_restantes)`; `on_track` true/false según `monthly_amount` vs requerido; `eta` proyectada al ritmo actual; deadline vencido no rompe; `ahorrado >= target` → `reached`.
-- **Meta indefinida:** solo `ahorrado` acumulado; sin `requerido_mensual`/`eta`/`on_track`.
-- **`aporte_meta` (suelto):** crea `GoalContribution(source=manual)` + transferencia interna; no aparece como gasto/ingreso; atómico.
-- **Proponer + confirmar (flexible, ADR-006):** `proponer_aportes_meta(period)` crea por cada meta activa una tx **`planned`** (`goal_id`, `monthly_amount`, destino ahorro), **sin mover balance**; saltea `paused`/`reached`; **idempotente** (re-ejecutar no duplica la propuesta). Al **confirmar** esa tx: se materializa la transferencia real y el hook post-confirm registra `GoalContribution(source=confirmado)`; confirmar con monto menor ajusta el aporte; **omitir** no aporta. Tras confirmar, meta definida que alcanza target → `reached`.
-- **Wire:** P1 expone los services en `/budgets` (incl. `/budgets/safe-to-spend`) y `/goals`; P2 los expone como tools MCP (incl. "¿cuánto me queda libre?"). (Verificación de cableado vive en P1/P2; P4 entrega services estables.)
+- `ValidationError`: `monthly_amount <= 0`; goal with only `target` or only `deadline`; `amount_assigned < 0`; malformed `year_month` (not `YYYY-MM`).
+- `ValidationError`: `savings_account_id` doesn't exist, isn't `type=savings`, or is `archived`.
+- `NotFound`: nonexistent `category_id` / `goal_id`.
+- Confirmed / standalone contributions are **atomic**: if the transfer fails (invalid account per P0), the `GoalContribution` is rolled back (rollback inside `confirm_payment` / `goal_contribution`).
+- Proposing contributions during rollover **doesn't move money** → it can't fail for lack of funds; it only creates `planned`. It fails only on invalid data (archived savings account, etc.) and aborts the close (atomicity of `close_month`, P3).
+- `MissingRate` doesn't apply: contributions and budgets are COP base, no FX.
 
 ---
 
-## Integración con otros sub-proyectos
+## Testing and "done" criteria
 
-- **P0 (Core):** consume `transferir` (aportes = transferencias internas), el modelo `Transaction`/`Account`/`Category`, `to_base`, y el patrón atómico. No reimplementa transferencias. Agrega `goal_id?` a `Transaction` por migración.
-- **P3 (Motor temporal):** P4 se engancha por **dos seams** sin tocar `cerrar_mes`/`confirmar_pago`: registra `proponer_aportes_meta` en el hook de rollover (crea aportes `planned`) y `registrar_aporte_confirmado` en el hook post-confirm (registra `GoalContribution`). Además **consume** las obligaciones del mes (`por_pagar`/planned + recurrentes) para el "comprometido" del `safe_to_spend`. Idempotencia de la propuesta por `(goal_id, period)`.
-- **P1 (HTTP API):** routers `/budgets` (`fijar_presupuesto`, `estado_presupuesto`, **`safe_to_spend`** en `/budgets/safe-to-spend`) y `/goals` (`crear_meta`, `aporte_meta`, `progreso_metas`) sobre estos services.
-- **P2 (MCP):** tools espejo (mismos verbos) para que el agente fije presupuesto, consulte estado, cree meta, aporte y pregunte por el avance en lenguaje natural.
-- **P5 (Reportes):** consume `estado_presupuesto` (sobres con rollover), **`safe_to_spend`** (en el reporte va **al pie como cierre**, no de cabecera — ADR-019) y `progreso_metas` (acumulado + ETA de definidas) para el reporte mensual. P4 no genera markdown.
-- **P6 (Frontend):** el dashboard v1 (general §8, ADR-008) muestra `safe_to_spend` + el widget "Por pagar"; las rutas `/budgets` y `/goals` quedan en backlog y pegan a los endpoints de P1 cuando aterricen.
+`pytest` over `domain` + `services` with in-memory SQLite (general §11). **Done** when these pass:
+
+- **`budget_status` (envelope with rollover):** sums only `expense`+`posted` for the month/category; ignores `planned`, transfers, other months/categories; **respects `exclude_from_budget`/`exclude_from_totals`**; `rollover_in = max(available previous month, 0)` (positive carries over, negative resets, ADR-005); `available`, `pct_used`, `over`/`under` correct; a 0 denominator doesn't divide by zero.
+- **`safe_to_spend` (cascade):** `free = income_forecast − committed − assigned − unbudgeted_spending − overspend`; income = sum of the month's `income` recurring items (no override, A2). **Optional envelopes (A4):** spending in a category **without an envelope** reduces the pool; spending in a category **with an envelope** is already claimed by the assignment (doesn't subtract twice). **Double-count guard (ADR-014):** an obligation counted exactly once whether not-materialized, `planned`, or `posted` → confirming a `planned` (or posting an auto recurring item) **doesn't change** the safe-to-spend. **Due-driven stability (ADR-020):** `committed` projects the month's calendar (via `due_dates`), so the safe-to-spend on day 5 and day 25 of the same month match even though recurring items remain to be materialized. **Overspend (ADR-005):** `max(spent−(assigned+rollover_in),0)` reduces the pool; `rollover_in` protects against false overspend.
+- **Defined goal:** `monthly_required = ceil(remaining/months_left)`; `on_track` true/false per `monthly_amount` vs required; `eta` projected at the current pace; a past deadline doesn't break it; `saved >= target` → `reached`.
+- **Open-ended goal:** only `saved` accumulated; no `monthly_required`/`eta`/`on_track`.
+- **`goal_contribution` (standalone):** creates `GoalContribution(source=manual)` + an internal transfer; doesn't appear as expense/income; atomic.
+- **Propose + confirm (flexible, ADR-006):** `propose_goal_contributions(period)` creates for each active goal a **`planned`** tx (`goal_id`, `monthly_amount`, savings destination), **without moving any balance**; skips `paused`/`reached`; **idempotent** (re-running doesn't duplicate the proposal). On **confirming** that tx: the real transfer is materialized and the post-confirm hook records `GoalContribution(source=confirmed)`; confirming with a smaller amount adjusts the contribution; **skipping** contributes nothing. After confirming, a defined goal that reaches target → `reached`.
+- **Wire:** P1 exposes the services at `/budgets` (incl. `/budgets/safe-to-spend`) and `/goals`; P2 exposes them as MCP tools (incl. "how much do I have free?"). (Wiring verification lives in P1/P2; P4 delivers stable services.)
+
+---
+
+## Integration with other sub-projects
+
+- **P0 (Core):** consumes `transfer` (contributions = internal transfers), the `Transaction`/`Account`/`Category` model, `to_base`, and the atomic pattern. Doesn't reimplement transfers. Adds `goal_id?` to `Transaction` by migration.
+- **P3 (Temporal engine):** P4 hooks in through **two seams** without touching `close_month`/`confirm_payment`: it registers `propose_goal_contributions` in the rollover hook (creates `planned` contributions) and `record_confirmed_contribution` in the post-confirm hook (records `GoalContribution`). It also **consumes** the month's obligations (`to_pay`/planned + recurring items) for the `safe_to_spend` "committed". Proposal idempotency per `(goal_id, period)`.
+- **P1 (HTTP API):** `/budgets` routers (`set_budget`, `budget_status`, **`safe_to_spend`** at `/budgets/safe-to-spend`) and `/goals` (`create_goal`, `goal_contribution`, `goals_progress`) on top of these services.
+- **P2 (MCP):** mirror tools (same verbs) so the agent can set a budget, check status, create a goal, contribute, and ask about progress in natural language.
+- **P5 (Reports):** consumes `budget_status` (envelopes with rollover), **`safe_to_spend`** (in the report it goes **at the foot as a closing line, not in the header** — ADR-019) and `goals_progress` (accumulated + ETA of defined goals) for the monthly report. P4 doesn't generate markdown.
+- **P6 (Frontend):** the v1 dashboard (general §8, ADR-008) shows `safe_to_spend` + the "To pay" widget; the `/budgets` and `/goals` routes stay in the backlog and hit P1's endpoints once they land.

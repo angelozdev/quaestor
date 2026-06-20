@@ -25,18 +25,18 @@ def _make_transaction(session):
 
 
 def test_create_tag_is_idempotent(session):
-    t1 = tags.create_tag(session, "viaje")
-    t2 = tags.create_tag(session, "viaje")
+    t1 = tags.create_tag(session, "trip")
+    t2 = tags.create_tag(session, "trip")
     assert t1.id == t2.id
     assert len(tags.list_tags(session)) == 1
 
 
 def test_tag_creates_missing_and_no_duplicates(session):
     tx = _make_transaction(session)
-    tags.tag_transaction(session, tx.id, ["viaje", "japón"])
-    tags.tag_transaction(session, tx.id, ["viaje"])  # ya existe -> no duplica link
-    nombres = {t.name for t in tags.list_tags(session)}
-    assert nombres == {"viaje", "japón"}
+    tags.tag_transaction(session, tx.id, ["trip", "japan"])
+    tags.tag_transaction(session, tx.id, ["trip"])  # already exists -> no duplicate link
+    names = {t.name for t in tags.list_tags(session)}
+    assert names == {"trip", "japan"}
 
 
 def test_tag_nonexistent_transaction(session):
@@ -45,20 +45,20 @@ def test_tag_nonexistent_transaction(session):
 
 
 def test_update_tag_renames(session):
-    t = tags.create_tag(session, "viaje")
-    updated = tags.update_tag(session, t.id, "vacaciones")
-    assert updated.name == "vacaciones"
+    t = tags.create_tag(session, "trip")
+    updated = tags.update_tag(session, t.id, "vacation")
+    assert updated.name == "vacation"
 
 
 def test_update_tag_to_existing_name_rejected(session):
-    tags.create_tag(session, "viaje")
-    other = tags.create_tag(session, "comida")
+    tags.create_tag(session, "trip")
+    other = tags.create_tag(session, "food")
     import pytest
 
     from quaestor.domain.errors import ValidationError
 
     with pytest.raises(ValidationError):
-        tags.update_tag(session, other.id, "viaje")
+        tags.update_tag(session, other.id, "trip")
 
 
 def test_delete_tag_removes_links(session):
@@ -69,7 +69,7 @@ def test_delete_tag_removes_links(session):
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Shop")
-    tags.tag_transaction(session, tx.id, ["viaje"])
+    tags.tag_transaction(session, tx.id, ["trip"])
     t = tags.list_tags(session)[0]
     tags.delete_tag(session, t.id)
     assert tags.list_tags(session) == []

@@ -23,7 +23,7 @@ def error_client():
             "rate": MissingRate("set usd_cop rate for 2026-06-17"),
             "imbalance": TransferImbalance("does not balance"),
             "notfound": NotFound("account 9 not found"),
-            "auth": Unauthorized("credenciales requeridas o inválidas"),
+            "auth": Unauthorized("credentials required or invalid"),
         }
         raise mapping[kind]
 

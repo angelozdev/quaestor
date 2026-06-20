@@ -1,376 +1,376 @@
 # Quaestor — Architecture Decision Records
 
-**Fecha:** 2026-06-16
-**Contexto:** sesión de revisión de producto sobre `docs/superpowers/specs/2026-06-16-quaestor-general-design.md`. Cada ADR registra un caso decidido, su alternativa descartada y la consecuencia en los sub-specs. Los specs P0–P7 fueron actualizados para reflejar estas decisiones.
+**Date:** 2026-06-16
+**Context:** product review session over `docs/superpowers/specs/2026-06-16-quaestor-general-design.md`. Each ADR records a decided case, its rejected alternative, and the consequence in the sub-specs. The P0–P7 specs were updated to reflect these decisions.
 
-> Formato: **Estado · Contexto · Decisión · Alternativas descartadas · Consecuencias.** Numeración estable; no se renumera al agregar.
-
----
-
-## ADR-001 — El driver es backend propio + agent-native (no solo los 3 dolores)
-
-**Estado:** aceptado
-
-**Contexto.** Lunch Money ya funciona. Construir un sistema entero para single-user solo se justifica si el motor es más que "tres features que a LM le faltan".
-
-**Decisión.** El driver primario es **(B) propiedad + agent-native**: DB propia, backend propio, hablarle a un agente sobre *mi* schema sin depender de la API de un tercero. Los 3 dolores (Por-pagar, metas, reportes) son la **prueba de valor de la v1**, no la justificación del sistema. El **presupuesto** es el diferenciador de producto explícito (ver ADR-002).
-
-**Alternativas descartadas.** (A) Resolver solo los 3 dolores con un script sobre la API de LM → no da propiedad ni independencia del proveedor.
-
-**Consecuencias.** Justifica el build completo (P0–P7). Prioriza el camino MCP/services sobre la UI (ver ADR-008). El presupuesto recibe inversión de diseño desproporcionada (P4).
+> Format: **Status · Context · Decision · Alternatives rejected · Consequences.** Stable numbering; decisions are not renumbered when new ones are added.
 
 ---
 
-## ADR-002 — Presupuesto híbrido: sobres con rollover + safe-to-spend
+## ADR-001 — The driver is an owned backend + agent-native (not just the 3 pains)
 
-**Estado:** aceptado · **Reemplaza** el presupuesto plano del spec original (§6, P4)
+**Status:** accepted
 
-**Contexto.** El spec original modelaba presupuesto estilo LM: categoría×mes, monto vs gasto real, % usado. Eso es exactamente lo que el usuario ya tiene en LM; no diferencia.
+**Context.** Lunch Money already works. Building an entire single-user system is only justified if the engine is more than "three features that LM is missing."
 
-**Decisión.** Presupuesto **híbrido**:
-- **Sobres por categoría con rollover.** Cada categoría tiene un sobre (`Budget` por mes); lo no gastado **se arrastra** al sobre del mes siguiente.
-- **Safe-to-spend global** (ver ADR-003): un número de cabecera que integra recurrentes + planned + metas, algo que LM estructuralmente no hace.
+**Decision.** The primary driver is **(B) ownership + agent-native**: an owned DB, an owned backend, talking to an agent about *my* schema without depending on a third party's API. The 3 pains (to-pay, goals, reports) are the **v1 proof of value**, not the justification for the system. The **budget** is the explicit product differentiator (see ADR-002).
 
-**Alternativas descartadas.** Envelope/rollover puro estilo YNAB (compite en terreno donde YNAB ya gana, no diferencia); presupuesto plano de LM (no diferencia).
+**Alternatives rejected.** (A) Solving only the 3 pains with a script over the LM API → gives neither ownership nor independence from the provider.
 
-**Consecuencias.** P4 se reescribe (es el diferenciador). `Budget` gana semántica de rollover. Nuevo service `safe_to_spend`. P4 ahora **depende de P3** (necesita planned + recurrentes para "comprometido"). P5 y el dashboard muestran ambos números.
+**Consequences.** Justifies the full build (P0–P7). Prioritizes the MCP/services path over the UI (see ADR-008). The budget gets disproportionate design investment (P4).
 
 ---
 
-## ADR-003 — safe-to-spend = plata no asignada
+## ADR-002 — Hybrid budget: envelopes with rollover + safe-to-spend
 
-**Estado:** aceptado
+**Status:** accepted · **Supersedes** the flat budget from the original spec (§6, P4)
 
-**Contexto.** Con dos capas (sobres + número global) hay riesgo de **contar la misma plata dos veces**: lo no gastado que rueda en un sobre Y cuenta como "libre". Se necesita una sola fuente de verdad.
+**Context.** The original spec modeled an LM-style budget: category×month, amount vs actual expense, % used. That is exactly what the user already has in LM; it doesn't differentiate.
 
-**Decisión.** Cascada de asignación. El ingreso baja en capas:
+**Decision.** A **hybrid** budget:
+- **Per-category envelopes with rollover.** Each category has an envelope (a `Budget` per month); whatever is not spent **rolls over** into the next month's envelope.
+- **Global safe-to-spend** (see ADR-003): a headline number that integrates recurring + planned + goals, something LM structurally doesn't do.
+
+**Alternatives rejected.** Pure YNAB-style envelope/rollover (competes on ground where YNAB already wins, doesn't differentiate); the flat LM budget (doesn't differentiate).
+
+**Consequences.** P4 is rewritten (it's the differentiator). `Budget` gains rollover semantics. New `safe_to_spend` service. P4 now **depends on P3** (it needs planned + recurring for "committed"). P5 and the dashboard show both numbers.
+
+---
+
+## ADR-003 — safe-to-spend = unassigned money
+
+**Status:** accepted
+
+**Context.** With two layers (envelopes + global number) there is a risk of **counting the same money twice**: the unspent money that rolls over in an envelope AND counts as "free." A single source of truth is needed.
+
+**Decision.** An assignment cascade. Income flows down in layers:
 
 ```
-ingreso forecast del mes
-  − comprometido (recurrentes auto + planned + aportes de meta propuestos)
-  − asignado a sobres discrecionales (con rollover)
-  = SAFE TO SPEND = plata que NO has asignado a ningún sobre
+forecast income for the month
+  − committed (auto recurring + planned + proposed goal contributions)
+  − assigned to discretionary envelopes (with rollover)
+  = SAFE TO SPEND = money you have NOT assigned to any envelope
 ```
 
-- **safe-to-spend** = plata sin asignar (análogo a "Ready to Assign").
-- **sobres** = plata ya asignada (con memoria/rollover).
-- Una vez asignas a un sobre, sale del safe-to-spend → nada se cuenta dos veces.
+- **safe-to-spend** = unassigned money (analogous to "Ready to Assign").
+- **envelopes** = already-assigned money (with memory/rollover).
+- Once you assign to an envelope, it leaves the safe-to-spend → nothing is counted twice.
 
-**Alternativas descartadas.** safe-to-spend = "lo que sobra después de repartir todo" (cojín) → tiende a ~0, pierde valor como número de cabecera.
+**Alternatives rejected.** safe-to-spend = "what's left after distributing everything" (cushion) → tends toward ~0, loses its value as a headline number.
 
-**Consecuencias.** Define la fórmula de `safe_to_spend` en P4. Depende del ADR-004 (de dónde sale el ingreso) y del ADR-014 (contar una vez).
-
----
-
-## ADR-004 — El ingreso del safe-to-spend es forecast (esperado)
-
-**Estado:** aceptado
-
-**Contexto.** safe-to-spend depende de cuánta plata hay. Con ingreso variable, un forecast miente hasta que la plata llega; con cash-on-hand no puedes planear el mes hasta que cae el sueldo.
-
-**Decisión.** **Forecast (esperado).** El ingreso esperado del mes sale **de los recurrentes `income` que tocan el mes** (sueldo, freelance fijo), **sin override teclado** (A2). Alimenta el safe-to-spend desde el día 1 → permite planear el mes de entrada. Un ingreso atípico (prima, bono) se registra como ingreso suelto y cuenta al postear, no se anticipa.
-
-**Alternativas descartadas.** Cash-on-hand estilo YNAB (solo plata que ya entró) → más honesto pero no deja planear; se reconsidera si el ingreso se vuelve muy irregular. Override teclado por mes (A2) → fricción manual recurrente, se evitó.
-
-**Consecuencias.** P4 lee el ingreso esperado de los recurrentes de tipo `income` del mes. El forecast se corrige a real conforme las tx postean, contando cada ingreso una sola vez (ADR-014).
+**Consequences.** Defines the `safe_to_spend` formula in P4. Depends on ADR-004 (where income comes from) and ADR-014 (count once).
 
 ---
 
-## ADR-005 — Sobregiro de sobre come del safe-to-spend; rollover solo positivo
+## ADR-004 — The safe-to-spend income is forecast (expected)
 
-**Estado:** aceptado
+**Status:** accepted
 
-**Contexto.** ¿Qué pasa cuando una categoría gasta más que su sobre?
+**Context.** safe-to-spend depends on how much money there is. With variable income, a forecast lies until the money arrives; with cash-on-hand you can't plan the month until the paycheck lands.
 
-**Decisión.** El exceso **come del safe-to-spend** (el pozo sin asignar). El **rollover arrastra solo saldo positivo**: un sobre sobregirado se absorbe en el pozo global y **resetea a 0** el mes siguiente (no arrastra negativo).
+**Decision.** **Forecast (expected).** The month's expected income comes **from the `income` recurring items that touch the month** (salary, fixed freelance), **without a typed override** (A2). It feeds the safe-to-spend from day 1 → lets you plan the month from the start. An atypical income (bonus, year-end bonus) is recorded as a standalone income and counts when posted; it is not anticipated.
 
-**Alternativas descartadas.** Arrastrar el negativo al mes siguiente (estilo YNAB estricto) → castiga doble y complica la lectura para single-user.
+**Alternatives rejected.** YNAB-style cash-on-hand (only money already received) → more honest but doesn't allow planning; revisit if income becomes very irregular. Typed per-month override (A2) → recurring manual friction, avoided.
 
-**Consecuencias.** Define `rollover_in = max(saldo_previo, 0)` en P4. Detalle de implementación; los tests de P4 lo fijan.
-
----
-
-## ADR-006 — Metas flexibles (propone + confirmas), no ahorro forzado
-
-**Estado:** aceptado · **Cambia** la postura del spec original (§6, P4: aporte auto-transferido en rollover)
-
-**Contexto.** El spec original hacía que `cerrar_mes` auto-creara la `GoalContribution` + transferencia: la meta se pagaba sola como un recibo. Riesgo: un mes apretado mete un transfer automático que te deja en rojo.
-
-**Decisión.** **Ahorro flexible.** El rollover **propone** el aporte como una obligación `planned` (aparece en "Por pagar"); tú la **confirmas** con el monto real (o la omites si el mes vino flojo). No mueve plata sola.
-
-**Alternativas descartadas.** Ahorro forzado / auto-transfer (disciplina máxima, pero pelea con meses irregulares y rompe el balance).
-
-**Consecuencias.** P4: el hook de rollover pasa de `aplicar_aportes_meta` (auto-transfer) a `proponer_aportes_meta` (crea `planned`). `GoalContribution` se registra al **confirmar**, no en el rollover. Reusa la maquinaria `planned`/`confirmar_pago` de P3 (ver ADR-007). P3 expone un seam post-confirm para que P4 registre la contribución sin que P3 conozca metas.
+**Consequences.** P4 reads the expected income from the month's `income`-type recurring items. The forecast is corrected to actual as transactions post, counting each income exactly once (ADR-014).
 
 ---
 
-## ADR-007 — "Por pagar" es la cola única de confirmación
+## ADR-005 — Envelope overdraft eats from safe-to-spend; rollover positive only
 
-**Estado:** aceptado
+**Status:** accepted
 
-**Contexto.** Tras ADR-006, tres cosas distintas necesitan confirmación: recurrentes manuales (luz, agua), pagos sueltos (le debo a un amigo) y aportes de meta.
+**Context.** What happens when a category spends more than its envelope?
 
-**Decisión.** Las tres convergen en **"Por pagar"** como única cola de confirmación. Todas son tx `planned` que `confirmar_pago` vuelve `posted`.
+**Decision.** The excess **eats from safe-to-spend** (the unassigned pool). The **rollover carries only a positive balance**: an overdrawn envelope is absorbed into the global pool and **resets to 0** the following month (it does not carry a negative).
 
-**Alternativas descartadas.** Flujos separados por tipo → tres mentales distintos para la misma acción ("confirmar una obligación").
+**Alternatives rejected.** Carrying the negative into the next month (strict YNAB-style) → punishes twice and complicates the reading for a single user.
 
-**Consecuencias.** `por_pagar` (P3) lista los tres orígenes. El dashboard mínimo (ADR-008) se centra en este widget. P4 enlaza sus aportes propuestos a la cola de P3.
-
----
-
-## ADR-008 — Frontend v1 mínimo (MCP-first); CRUD completo a backlog
-
-**Estado:** aceptado · **Recorta** el alcance del spec original (§8, P6: UI completa en v1)
-
-**Contexto.** El driver es agent-native (ADR-001). Un Next.js completo (10 rutas, CRUD de todo) en v1 es semanas de un producto distinto que compite con el motor. El chat hace mal **revisar** (dashboards, tablas), bien **registrar**.
-
-**Decisión.** **MCP-first.** v1 del frontend = **dos vistas read-first**: dashboard con el widget "Por pagar" + el reporte mensual. El resto de CRUD se opera por agente; las demás pantallas quedan **documentadas como backlog**, no borradas.
-
-**Alternativas descartadas.** UI completa en v1 (máximo tiempo hasta usarlo); MCP-only sin UI (pierde las dos vistas que el chat hace mal).
-
-**Consecuencias.** P6 se recorta a v1 mínimo + backlog. Orden de construcción del frontend: dashboard/Por-pagar y reporte primero; el resto cuando haga falta.
+**Consequences.** Defines `rollover_in = max(previous_balance, 0)` in P4. An implementation detail; the P4 tests pin it down.
 
 ---
 
-## ADR-009 — Arranque en frío limpio (sin backfill por ahora)
+## ADR-006 — Flexible goals (it proposes + you confirm), not forced saving
 
-**Estado:** aceptado
+**Status:** accepted · **Changes** the stance of the original spec (§6, P4: auto-transferred contribution on rollover)
 
-**Contexto.** Reportes con drift MoM, USD share y rollover de sobres necesitan historia para servir. Arrancar vacío los deja decorativos ~2-3 meses.
+**Context.** The original spec had `close_month` auto-create the `GoalContribution` + transfer: the goal paid itself like a bill. Risk: a tight month sneaks in an automatic transfer that leaves you in the red.
 
-**Decisión.** **Arranque limpio, sin backfill por ahora.** Se acepta reportes flojos los primeros meses. El **importer CSV se mantiene en alcance** (P5) por si se decide backfillear historial de LM luego (exportar LM → mapear al CSV propio → importar una vez).
+**Decision.** **Flexible saving.** The rollover **proposes** the contribution as a `planned` obligation (it shows up in "to-pay"); you **confirm** it with the actual amount (or skip it if the month was lean). It doesn't move money on its own.
 
-**Alternativas descartadas.** Backfill inmediato vía CSV (instant historia, pero trabajo ahora); migrador de LM dedicado (sobreingeniería para un import único, ya descartado en el spec).
+**Alternatives rejected.** Forced saving / auto-transfer (maximum discipline, but fights with irregular months and breaks the balance).
 
-**Consecuencias.** P5 nota que el importer sigue disponible para backfill diferido; el reporte degrada con elegancia cuando no hay mes previo.
-
----
-
-## ADR-010 — Multi-moneda COP+USD completa
-
-**Estado:** aceptado (confirma decisión del spec)
-
-**Contexto.** El usuario tiene aproximadamente la mitad de sus gastos en USD (no es metadato ocasional).
-
-**Decisión.** **Multi-moneda completa**, tal como la diseña el spec: `currency` + `fx_rate` + `to_base` **congelado** al registrar + tabla `FxRate`. Los agregados históricos quedan estables aunque cambie la tasa.
-
-**Alternativas descartadas.** Registrar solo el COP que cobró la tarjeta y dejar FX como metadato (válido solo si el USD fuera marginal); COP-only.
-
-**Consecuencias.** Sin cambios al modelo FX de P0. Destapa el problema de **de dónde sale la tasa** (ADR-011).
+**Consequences.** P4: the rollover hook changes from `apply_goal_contributions` (auto-transfer) to `propose_goal_contributions` (creates `planned`). `GoalContribution` is recorded on **confirmation**, not on rollover. Reuses the `planned`/`confirm_payment` machinery from P3 (see ADR-007). P3 exposes a post-confirm seam so P4 records the contribution without P3 knowing about goals.
 
 ---
 
-## ADR-011 — Tasa FX: auto-fetch diaria + override manual
+## ADR-007 — "to-pay" is the single confirmation queue
 
-**Estado:** aceptado · **Cambia** "manual" del spec original (§5, P0)
+**Status:** accepted
 
-**Contexto.** Con USD ~50% del volumen, mantener la tasa a mano es fricción constante y olvidable; una tasa vieja deja el `to_base` chueco.
+**Context.** After ADR-006, three different things need confirmation: manual recurring items (electricity, water), standalone payments (I owe a friend), and goal contributions.
 
-**Decisión.** Un **job diario** en el VPS pega a una API FX gratis y guarda la tasa en `FxRate`. `fijar_tasa_fx` queda como **override manual / respaldo** si la API falla. El `to_base` se sigue congelando al registrar.
+**Decision.** All three converge on **"to-pay"** as the single confirmation queue. They are all `planned` transactions that `confirm_payment` turns into `posted`.
 
-**Alternativas descartadas.** Solo manual (fricción); que el agente busque la tasa al registrar (menos reproducible, depende del cliente MCP).
+**Alternatives rejected.** Separate flows per type → three different mental models for the same action ("confirm an obligation").
 
-**Consecuencias.** P7 agrega el job programado (junto al rollover). P0 expone el hook de actualización de tasa que el job invoca. Consistencia histórica intacta (to_base congelado).
-
----
-
-## ADR-012 — Recurrentes: auto para fijo, manual para variable (asimetría intencional)
-
-**Estado:** aceptado (confirma decisión del spec)
-
-**Contexto.** Tras ADR-006/007, metas y recurrentes manuales pasan por confirmación. Los recurrentes **auto** son lo único que aún postea solo. ¿Inconsistencia?
-
-**Decisión.** Es a propósito: **confirmas donde hay una decisión real, automatizas donde no la hay.** Arriendo/Netflix = monto fijo, nada que decidir → auto-postea. Luz/agua = varía → manual, confirmas. La asimetría es feature.
-
-**Alternativas descartadas.** Todo por "Por pagar" (forzar confirmación donde no hay elección = fricción, no control).
-
-**Consecuencias.** Sin cambios a P3 en esto. Refuerza el guard de ADR-014 (un auto-recurrente que postea no debe mover el safe-to-spend si ya estaba comprometido).
+**Consequences.** `to_pay` (P3) lists all three sources. The minimal dashboard (ADR-008) centers on this widget. P4 links its proposed contributions to the P3 queue.
 
 ---
 
-## ADR-013 — Auth: /mcp tras Tailscale; frontend público con contraseña
+## ADR-008 — Minimal frontend v1 (MCP-first); full CRUD to backlog
 
-**Estado:** aceptado · **Endurece** el spec original (§4: todo público tras HTTPS con token estático)
+**Status:** accepted · **Trims** the scope of the original spec (§8, P6: full UI in v1)
 
-**Contexto.** Un `APP_TOKEN` estático es lo único entre internet y lectura/escritura total del historial financiero. No expira ni rota. El usuario opera el MCP desde sus propios equipos.
+**Context.** The driver is agent-native (ADR-001). A full Next.js app (10 routes, CRUD for everything) in v1 is weeks of a different product that competes with the engine. Chat is bad at **reviewing** (dashboards, tables), good at **recording**.
 
-**Decisión.** El endpoint sensible `/mcp` queda **fuera de internet público**, detrás de **Tailscale** (red privada); el usuario lo alcanza desde sus dispositivos. El **frontend sigue público** detrás de contraseña + HTTPS. El `APP_TOKEN` estático se mantiene (ya no expuesto en el punto crítico).
+**Decision.** **MCP-first.** Frontend v1 = **two read-first views**: a dashboard with the "to-pay" widget + the monthly report. The rest of the CRUD is operated by the agent; the other screens are **documented as backlog**, not deleted.
 
-**Alternativas descartadas.** Token estático público tal cual (un leak = acceso total, sin botón de pánico) — válido solo si se necesitaran clientes MCP en la nube; tokens rotables + expiración (overkill para una persona).
+**Alternatives rejected.** Full UI in v1 (maximum time before using it); MCP-only with no UI (loses the two views that chat does badly).
 
-**Consecuencias.** P7 agrega Tailscale para `/mcp`; Caddy sigue público para el frontend. P2 documenta que el transporte vive en la red privada. **Trade-off:** clientes MCP en la nube (claude.ai web) no alcanzan `/mcp`; si se necesitaran, se revisa.
-
----
-
-## ADR-014 — safe-to-spend cuenta cada obligación una sola vez
-
-**Estado:** aceptado · **Guard crítico**
-
-**Contexto.** Una obligación existe primero como esperada/`planned` y luego como `posted`. Si el safe-to-spend la resta en ambos estados, el número miente y se pierde la confianza.
-
-**Decisión.** safe-to-spend cuenta cada obligación **exactamente una vez**, esté `planned` o ya `posted`. Cuando un recurrente auto se postea o un `planned` se confirma, la plata pasa de "esperada" a "real" pero el safe-to-spend **no se mueve** — ya estaba descontada.
-
-**Alternativas descartadas.** Sumar planned + posted por separado (double-count).
-
-**Consecuencias.** P4 define "comprometido" como la unión (sin doble conteo) de obligaciones del mes en cualquier estado. Tests de P4 lo verifican explícitamente.
+**Consequences.** P6 is trimmed to minimal v1 + backlog. Frontend build order: dashboard/to-pay and report first; the rest when needed.
 
 ---
 
-## ADR-015 — Cuenta origen de los aportes de meta: global (Settings)
+## ADR-009 — Clean cold start (no backfill for now)
 
-**Estado:** aceptado (caso A3)
+**Status:** accepted
 
-**Contexto.** El aporte a una meta es una transferencia interna: la meta define la cuenta **destino** (ahorro), pero faltaba definir la cuenta **origen** de la que sale la plata.
+**Context.** Reports with MoM drift, USD share, and envelope rollover need history to be useful. Starting empty leaves them decorative for ~2-3 months.
 
-**Decisión.** **Una cuenta origen global** en `Settings` (`default_source_account_id`). Todos los aportes de meta salen de ahí. No importa la cuenta puntual; se prefiere simple.
+**Decision.** **Clean start, no backfill for now.** Weak reports for the first few months are accepted. The **CSV importer stays in scope** (P5) in case backfilling LM history is decided later (export LM → map to the owned CSV → import once).
 
-**Alternativas descartadas.** Cuenta origen por meta (`Goal.source_account_id`) → config de más por meta; elegir al confirmar en "Por pagar" → flexible pero innecesario para este usuario.
+**Alternatives rejected.** Immediate backfill via CSV (instant history, but work now); a dedicated LM migrator (over-engineering for a one-off import, already rejected in the spec).
 
-**Consecuencias.** `Settings` gana `default_source_account_id` (FK Account). `proponer_aportes_meta` crea la propuesta `planned` con esa cuenta como origen; al confirmar, la transferencia sale de ahí. Si se quisiera por-meta luego, se agrega sin romper.
+**Consequences.** P5 notes that the importer remains available for deferred backfill; the report degrades gracefully when there is no previous month.
 
 ---
 
-## ADR-016 — Sobres opcionales (no "cada peso un trabajo")
+## ADR-010 — Full COP+USD multi-currency
 
-**Estado:** aceptado (caso A4)
+**Status:** accepted (confirms the spec's decision)
 
-**Contexto.** ¿Toda categoría con gasto debe tener sobre (YNAB "every dollar a job"), o solo algunas?
+**Context.** The user has roughly half of their expenses in USD (it is not occasional metadata).
 
-**Decisión.** **Sobres opcionales.** Solo las categorías que el usuario quiera disciplinar llevan `Budget`; el resto gasta **directo del safe-to-spend**. Esto es lo que mantiene al safe-to-spend como número de cabecera con sentido: si todo estuviera asignado, tendería a 0 (la gracia que ADR-002/003 buscaban se perdería).
+**Decision.** **Full multi-currency**, exactly as the spec designs it: `currency` + `fx_rate` + `to_base` **frozen** at recording time + an `FxRate` table. Historical aggregates stay stable even if the rate changes.
 
-**Alternativas descartadas.** "Cada peso un trabajo" (todas las categorías con sobre) → safe-to-spend ≈ 0, y obliga a presupuestar todo cada mes (pesado).
+**Alternatives rejected.** Recording only the COP the card charged and leaving FX as metadata (valid only if USD were marginal); COP-only.
 
-**Consecuencias — corrige la fórmula del safe-to-spend.** El gasto en categorías **sin sobre** debe restarse del pozo (si no, el número sobreestima la plata libre). Fórmula completa (ADR-003/005/014/016):
+**Consequences.** No changes to the P0 FX model. Surfaces the problem of **where the rate comes from** (ADR-011).
+
+---
+
+## ADR-011 — FX rate: daily auto-fetch + manual override
+
+**Status:** accepted · **Changes** the "manual" of the original spec (§5, P0)
+
+**Context.** With USD at ~50% of the volume, keeping the rate by hand is constant, forgettable friction; a stale rate leaves `to_base` skewed.
+
+**Decision.** A **daily job** on the VPS hits a free FX API and stores the rate in `FxRate`. `set_fx_rate` remains as a **manual override / fallback** if the API fails. The `to_base` is still frozen at recording time.
+
+**Alternatives rejected.** Manual only (friction); having the agent fetch the rate when recording (less reproducible, depends on the MCP client).
+
+**Consequences.** P7 adds the scheduled job (alongside the rollover). P0 exposes the rate-update hook that the job invokes. Historical consistency intact (to_base frozen).
+
+---
+
+## ADR-012 — Recurring: auto for fixed, manual for variable (intentional asymmetry)
+
+**Status:** accepted (confirms the spec's decision)
+
+**Context.** After ADR-006/007, goals and manual recurring items go through confirmation. The **auto** recurring items are the only thing that still posts on its own. Inconsistency?
+
+**Decision.** It's on purpose: **you confirm where there is a real decision, you automate where there isn't.** Rent/Netflix = fixed amount, nothing to decide → auto-posts. Electricity/water = varies → manual, you confirm. The asymmetry is a feature.
+
+**Alternatives rejected.** Everything through "to-pay" (forcing confirmation where there's no choice = friction, not control).
+
+**Consequences.** No changes to P3 on this. Reinforces the ADR-014 guard (an auto-recurring item that posts must not move the safe-to-spend if it was already committed).
+
+---
+
+## ADR-013 — Auth: /mcp behind Tailscale; frontend public with a password
+
+**Status:** accepted · **Hardens** the original spec (§4: everything public behind HTTPS with a static token)
+
+**Context.** A static `APP_TOKEN` is the only thing between the internet and full read/write access to the financial history. It neither expires nor rotates. The user operates the MCP from their own machines.
+
+**Decision.** The sensitive `/mcp` endpoint is kept **off the public internet**, behind **Tailscale** (a private network); the user reaches it from their devices. The **frontend stays public** behind a password + HTTPS. The static `APP_TOKEN` is kept (no longer exposed at the critical point).
+
+**Alternatives rejected.** A public static token as-is (one leak = full access, no panic button) — valid only if cloud MCP clients were needed; rotatable tokens + expiration (overkill for one person).
+
+**Consequences.** P7 adds Tailscale for `/mcp`; Caddy stays public for the frontend. P2 documents that the transport lives on the private network. **Trade-off:** cloud MCP clients (claude.ai web) can't reach `/mcp`; if needed, revisit.
+
+---
+
+## ADR-014 — safe-to-spend counts each obligation exactly once
+
+**Status:** accepted · **Critical guard**
+
+**Context.** An obligation exists first as expected/`planned` and later as `posted`. If safe-to-spend subtracts it in both states, the number lies and trust is lost.
+
+**Decision.** safe-to-spend counts each obligation **exactly once**, whether it is `planned` or already `posted`. When an auto-recurring item posts or a `planned` is confirmed, the money moves from "expected" to "real" but safe-to-spend **does not move** — it was already deducted.
+
+**Alternatives rejected.** Summing planned + posted separately (double-count).
+
+**Consequences.** P4 defines "committed" as the union (without double counting) of the month's obligations in any state. The P4 tests verify it explicitly.
+
+---
+
+## ADR-015 — Source account for goal contributions: global (Settings)
+
+**Status:** accepted (case A3)
+
+**Context.** A goal contribution is an internal transfer: the goal defines the **destination** account (savings), but the **source** account the money comes from was still undefined.
+
+**Decision.** **A single global source account** in `Settings` (`default_source_account_id`). All goal contributions come out of there. The specific account doesn't matter; simplicity is preferred.
+
+**Alternatives rejected.** A source account per goal (`Goal.source_account_id`) → extra config per goal; choosing on confirmation in "to-pay" → flexible but unnecessary for this user.
+
+**Consequences.** `Settings` gains `default_source_account_id` (FK Account). `propose_goal_contributions` creates the `planned` proposal with that account as the source; on confirmation, the transfer comes out of there. If a per-goal setting is wanted later, it can be added without breaking anything.
+
+---
+
+## ADR-016 — Optional envelopes (not "every dollar a job")
+
+**Status:** accepted (case A4)
+
+**Context.** Should every category with spending have an envelope (YNAB "every dollar a job"), or only some?
+
+**Decision.** **Optional envelopes.** Only the categories the user wants to discipline get a `Budget`; the rest spends **directly from safe-to-spend**. This is what keeps safe-to-spend a meaningful headline number: if everything were assigned, it would tend toward 0 (the very point ADR-002/003 sought would be lost).
+
+**Alternatives rejected.** "Every dollar a job" (all categories with an envelope) → safe-to-spend ≈ 0, and it forces budgeting everything every month (heavy).
+
+**Consequences — corrects the safe-to-spend formula.** Spending in categories **without an envelope** must be subtracted from the pool (otherwise the number overstates free money). Full formula (ADR-003/005/014/016):
 ```
-safe_to_spend = ingreso_forecast
-              − comprometido                          # obligaciones, contadas 1 vez (ADR-014)
-              − Σ amount_assigned (categorías con sobre, este mes)
-              − Σ gasto_no_presupuestado               # gasto posted en categorías SIN sobre
-              − Σ sobregiro                            # por sobre: max(gastado − (asignado + rollover_in), 0)
+safe_to_spend = forecast_income
+              − committed                              # obligations, counted once (ADR-014)
+              − Σ amount_assigned (categories with an envelope, this month)
+              − Σ unbudgeted_spending                   # posted spending in categories WITHOUT an envelope
+              − Σ overdraft                             # per envelope: max(spent − (assigned + rollover_in), 0)
 ```
-- El `rollover_in` (plata de meses previos arrastrada al sobre) **no** suma al safe-to-spend de este mes (ya está en el sobre) y **protege** contra contar sobregiro falso.
-- Las interacciones rollover × sobregiro × no-presupuestado las **fijan los tests de P4**.
+- The `rollover_in` (money from previous months carried into the envelope) does **not** add to this month's safe-to-spend (it's already in the envelope) and **protects** against counting false overdraft.
+- The rollover × overdraft × unbudgeted interactions are **pinned by the P4 tests**.
 
 ---
 
-## ADR-017 — `cerrar_mes` se dispara automático (scheduler diario, idempotente)
+## ADR-017 — `close_month` fires automatically (daily scheduler, idempotent)
 
-**Estado:** aceptado (caso A5)
+**Status:** accepted (case A5)
 
-**Contexto.** El rollover (`cerrar_mes`) materializa el mes: postea recurrentes `auto`, manda manuales + aportes de meta a "Por pagar". Si depende de que el usuario lo corra a mano y se le olvida, "Por pagar" queda vacío → rompe el dolor #1 ("¿qué me falta por pagar?").
+**Context.** The rollover (`close_month`) materializes the month: it posts `auto` recurring items, sends manual ones + goal contributions to "to-pay." If it depends on the user running it by hand and they forget, "to-pay" stays empty → breaks pain #1 ("what do I still have to pay?").
 
-**Decisión.** **Automático, sin disparo manual relevante.** El `scheduler` (que ya corre diario para FX, ADR-011) **asegura cada día que el mes actual esté cerrado**: el día 1 materializa el mes; los demás días son no-op (idempotencia, P3); un día 1 perdido **se auto-cura** en la siguiente corrida. No es un cron mensual frágil sino un "ensure" diario.
+**Decision.** **Automatic, with no relevant manual trigger.** The `scheduler` (which already runs daily for FX, ADR-011) **ensures every day that the current month is closed**: on day 1 it materializes the month; the other days are a no-op (idempotency, P3); a missed day 1 **self-heals** on the next run. It's not a fragile monthly cron but a daily "ensure."
 
-**Alternativas descartadas.** Manual ("cierra junio") → frágil, depende de la memoria. Híbrido auto + manual → el usuario eligió auto puro; el disparo manual no se necesita (y la idempotencia ya cubre re-correr si algún día hiciera falta).
+**Alternatives rejected.** Manual ("close June") → fragile, depends on memory. Hybrid auto + manual → the user chose pure auto; the manual trigger isn't needed (and idempotency already covers re-running if it were ever required).
 
-**Consecuencias.** P7: el `scheduler` corre, diario, FX + `ensure_mes_cerrado(mes_actual)`. `cerrar_mes` sigue siendo el service que invoca (P3); deja de ser una tool MCP de cara al usuario (se opera solo). La idempotencia de P3 es ahora **requisito de robustez**, no solo de corrección.
-
----
-
-## ADR-018 — Mecanismo del aporte de meta flexible (revisado y aceptado)
-
-**Estado:** aceptado (casos B1, B2 — mecanismos propuestos por el asistente y validados por el usuario)
-
-**Contexto.** El aporte flexible (ADR-006) requiere: proponer como `planned`, confirmar moviendo plata real (transfer a ahorro) y registrar el aporte — sin que P3 (dueño de "Por pagar"/confirmar) sepa qué es una meta. El mecanismo concreto no estaba decidido por el usuario; lo propuso el asistente y se revisó.
-
-**Decisión.**
-- **B1 — registro del aporte (dos registros):** se mantiene `goal_id` FK en `Transaction` + un **hook post-confirm** en P3 que escribe la fila `GoalContribution` al confirmar. Se descartó "derivar los aportes de los transfers etiquetados" (una sola fuente de verdad) — el usuario prefirió el registro explícito.
-- **B2 — movimiento de plata (un solo confirmar):** `confirmar_pago` de P3 **materializa transferencias planeadas** (par real vía `transferir`) como capacidad **genérica** — no específica de metas. Un solo verbo de confirmación para todo (pago de una cuenta o transfer de dos). Se descartó un `confirmar_aporte` propio de P4 (dos caminos de confirmación).
-
-**Alternativas descartadas.** B1: aportes derivados de transfers con `goal_id` (menos maquinaria, pero el usuario eligió registro explícito). B2: P4 dueño de su confirmación (P3 intacto, pero dos caminos).
-
-**Consecuencias.** Sin cambios respecto a lo ya escrito en P3/P4 (el mecanismo descrito allí queda confirmado). `confirmar_pago` que materializa transfers planeados queda como capacidad reutilizable más allá de metas.
+**Consequences.** P7: the `scheduler` runs, daily, FX + `ensure_month_closed(current_month)`. `close_month` remains the service it invokes (P3); it stops being a user-facing MCP tool (it operates on its own). P3's idempotency is now a **robustness requirement**, not just a correctness one.
 
 ---
 
-## ADR-019 — Reporte mensual retrospectivo (titular = neto + desempeño de sobres; safe-to-spend al pie)
+## ADR-018 — Mechanism for the flexible goal contribution (reviewed and accepted)
 
-**Estado:** aceptado (caso C1) · **Cambia** el rol del safe-to-spend en el reporte (§9, P5: era "número de cabecera")
+**Status:** accepted (cases B1, B2 — mechanisms proposed by the assistant and validated by the user)
 
-**Contexto.** Dos superficies muestran números del mes: el **dashboard** (vivo, mes actual, headline = safe-to-spend "cuánto me queda") y el **reporte** (`/reports`, selector de mes). El spec original ponía **safe-to-spend como número de cabecera del reporte**. Pero safe-to-spend es *forward-looking* ("lo que me queda por gastar"): en un mes ya cerrado es solo el sobrante, un titular raro. Riesgo: reporte ≈ dashboard con date-picker → redundante.
+**Context.** The flexible contribution (ADR-006) requires: proposing as `planned`, confirming by moving real money (a transfer to savings), and recording the contribution — without P3 (owner of "to-pay"/confirm) knowing what a goal is. The concrete mechanism wasn't decided by the user; the assistant proposed it and it was reviewed.
 
-**Decisión.** El reporte mensual es **retrospectivo puro** y responde *"¿cómo me fue?"*. Su **titular es el neto del mes + el desempeño de los sobres** (cuántos en verde/rojo, cuánto rollover generaste para el mes siguiente) — justo lo que LM no cuenta. El **safe-to-spend baja a dato de cierre al pie** ("cerraste con $X libres"), no es el titular. El dashboard sigue dueño del safe-to-spend en vivo. Roles separados, cero redundancia.
+**Decision.**
+- **B1 — recording the contribution (two records):** keep `goal_id` FK in `Transaction` + a **post-confirm hook** in P3 that writes the `GoalContribution` row on confirmation. "Deriving contributions from tagged transfers" (a single source of truth) was rejected — the user preferred explicit recording.
+- **B2 — moving money (a single confirm):** P3's `confirm_payment` **materializes planned transfers** (a real pair via `transfer`) as a **generic** capability — not goal-specific. A single confirmation verb for everything (a one-account payment or a two-account transfer). A `confirm_contribution` of P4's own (two confirmation paths) was rejected.
 
-**Alternativas descartadas.** (B) safe-to-spend congelado como titular del reporte → reporte ≈ dashboard histórico, poco valor extra y titular sin sentido en meses cerrados. (C) sin titular, todas las secciones planas (estilo LM) → pierde el "de un vistazo".
+**Alternatives rejected.** B1: contributions derived from transfers with `goal_id` (less machinery, but the user chose explicit recording). B2: P4 owning its confirmation (P3 intact, but two paths).
 
-**Consecuencias.** P5: el `safe_to_spend` del `ReporteMensual` pasa de "número de cabecera" a **cierre al pie**; el titular se arma con `neto` + un **resumen de desempeño de sobres** (verde/rojo + rollover total generado). El renderer markdown ordena: neto → sobres → metas → … → safe-to-spend al cierre. El dashboard (P6) no cambia (sigue mostrando safe-to-spend arriba, en vivo).
-
----
-
-## ADR-020 — Motor de recurrencia genérico (intervalo cada-N) + materialización diaria due-driven
-
-**Estado:** aceptado (caso C2) · **Reemplaza** el `frequency` enum + `due_day` y la llave `(recurring_id, period)` del spec original (§5, P3)
-
-**Contexto.** El spec modelaba `frequency ∈ {monthly, weekly, biweekly, yearly}` con un `due_day` (día-del-mes) y una occurrence con llave única `(recurring_id, period=YYYY-MM)` → **una sola occurrence por recurrente por mes**. Eso choca con cualquier frecuencia sub-mensual: un recurrente semanal cae ~4 veces/mes, uno quincenal 2. Tal como estaba, semanal/quincenal disparaban una sola vez. Además el usuario pidió **variedad real**: mensual, cada 3 y 4 meses, semestral, anual, semanal, cada 2 semanas, etc.
-
-**Decisión.** **Motor genérico cada-N**, anclado a fecha:
-- `RecurringItem` reemplaza `frequency` + `due_day` por **`interval_unit ∈ {day, week, month, year}` + `interval_count` (≥1)**, anclado en `start_date`. Cada vencimiento = `start_date + k × intervalo`; clamp fin de mes para unit `month`/`year` (día 31 → 30/28). Cubre todo: mensual=`1 month`, trimestral=`3 month`, cada-4-meses=`4 month`, semestral=`6 month`, anual=`12 month`, semanal=`1 week`, quincenal/cada-2-semanas=`2 week`.
-- La occurrence se llavea por **`(recurring_id, due_date)`** (no por `period`). Más preciso y sigue idempotente.
-- **Materialización due-driven (no eager):** el `scheduler` diario (ADR-011/017) materializa cada día las occurrences con `due_date ≤ hoy` aún no creadas. Un **auto** postea en su fecha real (no el mes entero por adelantado → el balance no adelanta gastos); un **manual** se genera `planned` para el mes en curso, visible en "Por pagar". Días perdidos se auto-curan.
-
-**Alternativas descartadas.** (A) Solo mensual/anual (quincenal = 2 recurrentes separados) → simple pero parte ítems y no da la variedad pedida. Materialización **eager** (todo el mes de golpe al cerrar) → el balance de hoy adelanta gastos futuros, justo lo que un sistema "¿cuánto me queda?" debe evitar.
-
-**Consecuencias.** P3 se rediseña: `RecurringItem` con intervalo cada-N; occurrence por `due_date`; se **separa** la **materialización diaria de recurrentes** (due-driven, cualquier intervalo) del **cierre mensual** (rollover de sobres + propuesta de aportes de meta, que siguen siendo por `period` calendario, ADR-022). `domain/rules.py` cambia `toca_periodo`/`fecha_vencimiento` por un generador de fechas por intervalo. P7: el scheduler diario corre FX + materializar-vencidos(hoy) + ensure cierre mensual. Idempotencia ahora por `(recurring_id, due_date)`.
+**Consequences.** No changes relative to what's already written in P3/P4 (the mechanism described there is confirmed). `confirm_payment` that materializes planned transfers stays as a reusable capability beyond goals.
 
 ---
 
-## ADR-021 — Tarjeta de crédito por causación (gasto al comprar; pago de extracto = transferencia)
+## ADR-019 — Retrospective monthly report (headline = net + envelope performance; safe-to-spend at the bottom)
 
-**Estado:** aceptado (caso C3)
+**Status:** accepted (case C1) · **Changes** the role of safe-to-spend in the report (§9, P5: it was the "headline number")
 
-**Contexto.** `Account.type` ya incluye `credit`. Con débito/efectivo la plata sale al instante; con **tarjeta de crédito** compras hoy y el dinero sale del banco semanas después (al pagar el extracto). Faltaba decidir cuándo ese gasto golpea presupuesto y safe-to-spend.
+**Context.** Two surfaces show the month's numbers: the **dashboard** (live, current month, headline = safe-to-spend "how much I have left") and the **report** (`/reports`, month selector). The original spec put **safe-to-spend as the report's headline number**. But safe-to-spend is *forward-looking* ("what I have left to spend"): in an already-closed month it's just the leftover, an odd headline. Risk: report ≈ dashboard with a date-picker → redundant.
 
-**Decisión.** **Por causación (estilo YNAB).** El gasto con tarjeta cuenta **el día de la compra** contra el sobre de su categoría y baja el safe-to-spend en ese momento. Dos reglas firmes lo sostienen:
-1. El **pago del extracto es una transferencia** (cuenta débito → cuenta tarjeta), **nunca un gasto** — si no, se contaría dos veces.
-2. El safe-to-spend y los sobres cuentan los gastos de **todas las cuentas, incluida la tarjeta**, en la fecha de compra.
+**Decision.** The monthly report is **purely retrospective** and answers *"how did I do?"*. Its **headline is the month's net + envelope performance** (how many in the green/red, how much rollover you generated for the next month) — exactly what LM doesn't tell. The **safe-to-spend drops to a closing figure at the bottom** ("you closed with $X free"), it is not the headline. The dashboard remains owner of the live safe-to-spend. Separate roles, zero redundancy.
 
-La cuenta de tarjeta queda como una cuenta normal con **saldo negativo = deuda**; el pago la sube hacia cero sin volver a tocar el presupuesto.
+**Alternatives rejected.** (B) Frozen safe-to-spend as the report's headline → report ≈ historical dashboard, little extra value and a meaningless headline in closed months. (C) No headline, all sections flat (LM-style) → loses the "at a glance."
 
-**Alternativas descartadas.** Criterio de caja (el gasto con tarjeta no toca presupuesto hasta pagar el extracto) → el safe-to-spend se infla durante el mes y revienta de golpe al pagar; deshonesto para un sistema cuyo norte es "¿cuánto me queda?".
-
-**Consecuencias.** El **modelo actual ya soporta esto sin cambios estructurales**. Se documentan las dos reglas firmes en P0 (semántica de cuenta `credit`), §5/§6 del general y P4 (el `gastado`/`gasto_no_presupuestado` del safe-to-spend agregan **todas las cuentas**; el pago de extracto, al ser `transfer`, ya está excluido de gasto).
+**Consequences.** P5: the `safe_to_spend` of the `MonthlyReport` goes from "headline number" to **closing figure at the bottom**; the headline is built from `net` + an **envelope-performance summary** (green/red + total rollover generated). The markdown renderer orders: net → envelopes → goals → … → safe-to-spend at close. The dashboard (P6) doesn't change (it still shows safe-to-spend at the top, live).
 
 ---
 
-## ADR-022 — Período de presupuesto = mes calendario
+## ADR-020 — Generic recurrence engine (every-N interval) + daily due-driven materialization
 
-**Estado:** aceptado (caso C4) · confirma el supuesto del motor
+**Status:** accepted (case C2) · **Supersedes** the `frequency` enum + `due_day` and the `(recurring_id, period)` key of the original spec (§5, P3)
 
-**Contexto.** Todo el sistema está cableado a `YYYY-MM`: cierre mensual, sobres, rollover, safe-to-spend. La alternativa era presupuestar por **ciclo de pago** (ej. del 15 al 14, anclado a cuándo entra el sueldo), útil para quien vive "de quincena a quincena".
+**Context.** The spec modeled `frequency ∈ {monthly, weekly, biweekly, yearly}` with a `due_day` (day-of-month) and an occurrence with a unique key `(recurring_id, period=YYYY-MM)` → **a single occurrence per recurring item per month**. That clashes with any sub-monthly frequency: a weekly recurring item falls ~4 times/month, a biweekly one 2. As it stood, weekly/biweekly fired only once. Moreover the user asked for **real variety**: monthly, every 3 and 4 months, semiannual, annual, weekly, every 2 weeks, etc.
 
-**Decisión.** **Mes calendario** (1 → fin de mes). El presupuesto, los sobres y el safe-to-spend se reinician el día 1. Es como razona la mayoría y como ya está construido el motor entero.
+**Decision.** A **generic every-N engine**, anchored to a date:
+- `RecurringItem` replaces `frequency` + `due_day` with **`interval_unit ∈ {day, week, month, year}` + `interval_count` (≥1)**, anchored to `start_date`. Each due date = `start_date + k × interval`; end-of-month clamp for `month`/`year` units (day 31 → 30/28). Covers everything: monthly=`1 month`, quarterly=`3 month`, every-4-months=`4 month`, semiannual=`6 month`, annual=`12 month`, weekly=`1 week`, biweekly/every-2-weeks=`2 week`.
+- The occurrence is keyed by **`(recurring_id, due_date)`** (not by `period`). More precise and still idempotent.
+- **Due-driven materialization (not eager):** the daily `scheduler` (ADR-011/017) materializes each day the occurrences with `due_date ≤ today` not yet created. An **auto** posts on its real date (not the whole month in advance → the balance doesn't pull expenses forward); a **manual** is generated `planned` for the current month, visible in "to-pay." Missed days self-heal.
 
-**Alternativas descartadas.** Ciclo de pago configurable (15 → 14) → rompe el supuesto `YYYY-MM` que atraviesa P3/P4/P5; habría que re-llavear cierre, rollover y reportes a rangos arbitrarios. Caro, y el **rollover de sobres ya cubre** el caso (lo que sobra de la primera quincena queda disponible para la segunda dentro del mismo mes calendario).
+**Alternatives rejected.** (A) Only monthly/annual (biweekly = 2 separate recurring items) → simple but it splits items and doesn't give the requested variety. **Eager** materialization (the whole month at once on close) → today's balance pulls future expenses forward, exactly what a "how much do I have left?" system should avoid.
 
-**Consecuencias.** Ninguna al modelo (confirma lo existente). Nota: la **materialización de recurrentes** es por fecha (due-driven, ADR-020), pero el **cierre/rollover de presupuesto y la propuesta de aportes** siguen siendo por mes calendario.
-
----
-
-## ADR-023 — Grupo de categoría como entidad propia
-
-**Estado:** aceptado (caso C5) · **Cambia** `Category.group_name` (string) del spec original (§5, P0)
-
-**Contexto.** La categoría siempre fue entidad (tabla `Category`) y el reporte por categoría ya existe. El "grupo" (contenedor que junta categorías: "Esenciales" → Mercado, Arriendo) estaba como **texto libre** (`group_name`). El usuario quiere estructura y reportes por categoría **y por grupo**.
-
-**Decisión.** El grupo pasa a ser **entidad propia `CategoryGroup`**; cada `Category` apunta a un grupo por **FK (`group_id?`)**. Se gana: renombrar el grupo en un solo lugar, orden fijo (y color a futuro), cero typos/duplicados fantasma, y rollups de reporte por grupo limpios.
-
-**Alternativas descartadas.** Grupo como texto libre → permite agrupar en reportes, pero renombrar obliga a tocar cada categoría, los typos crean grupos duplicados y no hay orden/color. Para un usuario que quiere reportes por grupo, la entidad vale su CRUD mínimo.
-
-**Consecuencias.** P0: nueva entidad `CategoryGroup` (`name`, `sort_order`, `archived`) + servicios `crear_grupo`/`listar_grupos`; `Category.group_name` → `group_id?` (FK); `crear_categoria` recibe `group_id`. §5 del general agrega la fila `CategoryGroup` y cambia `Category`. P5: `SeccionCategoria` resuelve el nombre del grupo por FK y habilita rollup por grupo. P6: `/categories` y `/category-groups` (backlog) gestionan ambos.
+**Consequences.** P3 is redesigned: `RecurringItem` with an every-N interval; occurrence by `due_date`; the **daily materialization of recurring items** (due-driven, any interval) is **separated** from the **monthly close** (envelope rollover + goal-contribution proposal, which remain by calendar `period`, ADR-022). `domain/rules.py` changes `touches_period`/`due_date` to a per-interval date generator. P7: the daily scheduler runs FX + materialize-due(today) + ensure monthly close. Idempotency now by `(recurring_id, due_date)`.
 
 ---
 
-## ADR-024 — Maestros y alcance v1: categoría opcional, settings mínimo, importer sin UI (confirmaciones)
+## ADR-021 — Credit card on an accrual basis (expense at purchase; statement payment = transfer)
 
-**Estado:** aceptado (caso C5, cierres menores) · confirma supuestos del spec
+**Status:** accepted (case C3)
 
-**Contexto.** Barrido final de maestros/alcance: tres puntos que el spec ya asumía pero no estaban registrados como decisión.
+**Context.** `Account.type` already includes `credit`. With debit/cash the money leaves instantly; with a **credit card** you buy today and the money leaves the bank weeks later (when you pay the statement). It was still undecided when that expense hits the budget and safe-to-spend.
 
-**Decisión.**
-- **Categoría opcional al registrar.** `Transaction.category_id` sigue nullable: puedes registrar "gasté 30 mil" sin categoría. El gasto sin sobre cae en `gasto_no_presupuestado` del safe-to-spend (ADR-016). Baja fricción con el agente; el reporte muestra cuánto quedó sin categorizar.
-- **Settings mínimo.** Solo `base_currency=COP` (fija) y `default_source_account_id` (ADR-015). No se agregan perillas para un solo usuario; una preferencia real futura = una fila más, no un panel.
-- **Importer como service, sin UI en v1.** `importar_csv` (formato propio) queda en P5 como contrato testeado, pero se arranca limpio (ADR-009) y el frontend v1 **no** trae pantalla `/import` (ADR-008). Usable por MCP/endpoint si hace falta puntualmente.
+**Decision.** **Accrual basis (YNAB-style).** A card expense counts **on the day of purchase** against its category's envelope and lowers safe-to-spend at that moment. Two firm rules hold it up:
+1. The **statement payment is a transfer** (debit account → card account), **never an expense** — otherwise it would be counted twice.
+2. safe-to-spend and the envelopes count the expenses from **all accounts, including the card**, on the purchase date.
 
-**Alternativas descartadas.** Forzar categoría siempre (fricción); panel de settings configurable (config que nadie tocará); pantalla `/import` en v1 (UI para algo que no se usa al arrancar limpio).
+The card account stays a normal account with a **negative balance = debt**; the payment raises it toward zero without touching the budget again.
 
-**Consecuencias.** Ninguna estructural — confirma lo existente. P5 mantiene el importer disponible (backfill diferido); P6 deja `/import` y el grueso de `/settings` en backlog.
+**Alternatives rejected.** Cash basis (the card expense doesn't touch the budget until the statement is paid) → safe-to-spend inflates during the month and crashes all at once on payment; dishonest for a system whose north star is "how much do I have left?".
+
+**Consequences.** The **current model already supports this with no structural changes**. The two firm rules are documented in P0 (semantics of the `credit` account), §5/§6 of the general spec, and P4 (the safe-to-spend's `spent`/`unbudgeted_spending` aggregate **all accounts**; the statement payment, being a `transfer`, is already excluded from spending).
+
+---
+
+## ADR-022 — Budget period = calendar month
+
+**Status:** accepted (case C4) · confirms the engine's assumption
+
+**Context.** The whole system is wired to `YYYY-MM`: monthly close, envelopes, rollover, safe-to-spend. The alternative was budgeting by **pay cycle** (e.g. the 15th to the 14th, anchored to when the salary arrives), useful for someone living "paycheck to paycheck."
+
+**Decision.** **Calendar month** (1 → end of month). The budget, the envelopes, and safe-to-spend reset on day 1. It's how most people reason and how the entire engine is already built.
+
+**Alternatives rejected.** A configurable pay cycle (15 → 14) → breaks the `YYYY-MM` assumption that runs through P3/P4/P5; close, rollover, and reports would have to be re-keyed to arbitrary ranges. Expensive, and the **envelope rollover already covers** the case (whatever's left from the first half of the month stays available for the second half within the same calendar month).
+
+**Consequences.** None to the model (confirms what exists). Note: the **materialization of recurring items** is by date (due-driven, ADR-020), but the **budget close/rollover and the contribution proposal** remain by calendar month.
+
+---
+
+## ADR-023 — Category group as its own entity
+
+**Status:** accepted (case C5) · **Changes** `Category.group_name` (string) of the original spec (§5, P0)
+
+**Context.** The category was always an entity (the `Category` table) and the per-category report already exists. The "group" (a container that bundles categories: "Essentials" → Groceries, Rent) was **free text** (`group_name`). The user wants structure and reports by category **and by group**.
+
+**Decision.** The group becomes **its own entity `CategoryGroup`**; each `Category` points to a group by **FK (`group_id?`)**. We gain: renaming the group in a single place, fixed ordering (and color in the future), zero typos/phantom duplicates, and clean per-group report rollups.
+
+**Alternatives rejected.** Group as free text → allows grouping in reports, but renaming forces touching every category, typos create duplicate groups, and there's no ordering/color. For a user who wants per-group reports, the entity is worth its minimal CRUD.
+
+**Consequences.** P0: new entity `CategoryGroup` (`name`, `sort_order`, `archived`) + `create_group`/`list_groups` services; `Category.group_name` → `group_id?` (FK); `create_category` receives `group_id`. §5 of the general spec adds the `CategoryGroup` row and changes `Category`. P5: `CategorySection` resolves the group name by FK and enables per-group rollup. P6: `/categories` and `/category-groups` (backlog) manage both.
+
+---
+
+## ADR-024 — Masters and v1 scope: optional category, minimal settings, importer with no UI (confirmations)
+
+**Status:** accepted (case C5, minor closures) · confirms the spec's assumptions
+
+**Context.** A final sweep of masters/scope: three points the spec already assumed but that weren't recorded as a decision.
+
+**Decision.**
+- **Optional category when recording.** `Transaction.category_id` stays nullable: you can record "I spent 30 thousand" with no category. The expense without an envelope falls into the safe-to-spend's `unbudgeted_spending` (ADR-016). Low friction with the agent; the report shows how much was left uncategorized.
+- **Minimal settings.** Only `base_currency=COP` (fixed) and `default_source_account_id` (ADR-015). No knobs are added for a single user; a real future preference = one more row, not a panel.
+- **Importer as a service, no UI in v1.** `import_csv` (owned format) stays in P5 as a tested contract, but it starts clean (ADR-009) and the frontend v1 does **not** ship an `/import` screen (ADR-008). Usable via MCP/endpoint if needed occasionally.
+
+**Alternatives rejected.** Forcing a category always (friction); a configurable settings panel (config no one will touch); an `/import` screen in v1 (UI for something not used on a clean start).
+
+**Consequences.** None structural — confirms what exists. P5 keeps the importer available (deferred backfill); P6 leaves `/import` and the bulk of `/settings` in backlog.

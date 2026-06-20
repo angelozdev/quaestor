@@ -11,4 +11,4 @@ def test_errors_form_a_hierarchy():
 
 def test_errors_are_raisable():
     with pytest.raises(errors.MissingRate):
-        raise errors.MissingRate("fija la tasa usd_cop")
+        raise errors.MissingRate("set the usd_cop rate")

@@ -13,74 +13,74 @@ from sqlmodel import Session
 from .. import db
 from .tools import core
 from .tools.core import (
-    ConsultarTasaInput,
-    ConsultarTxInput,
-    FijarTasaInput,
-    RegistrarGastoInput,
-    RegistrarIngresoInput,
-    TransferirInput,
+    GetFxRateInput,
+    ListTransactionsInput,
+    RecordExpenseInput,
+    RecordIncomeInput,
+    SetFxRateInput,
+    TransferInput,
 )
 
 CORE_TOOL_NAMES = (
-    "registrar_gasto",
-    "registrar_ingreso",
-    "transferir",
-    "fijar_tasa_fx",
-    "consultar_transacciones",
-    "consultar_tasa_fx",
-    "listar_cuentas",
-    "listar_categorias",
-    "listar_tags",
+    "record_expense",
+    "record_income",
+    "transfer",
+    "set_fx_rate",
+    "list_transactions",
+    "get_fx_rate",
+    "list_accounts",
+    "list_categories",
+    "list_tags",
 )
 
 
 def register_core_tools(mcp) -> None:
     """Register the 9 P2 core tools on the given FastMCP instance."""
 
-    @mcp.tool(name="registrar_gasto", description="Record an expense in an account.")
-    def registrar_gasto(gasto: RegistrarGastoInput) -> str:
+    @mcp.tool(name="record_expense", description="Record an expense in an account.")
+    def record_expense(expense: RecordExpenseInput) -> str:
         with Session(db.engine) as session:
-            return core.registrar_gasto(session, gasto)
+            return core.record_expense(session, expense)
 
-    @mcp.tool(name="registrar_ingreso", description="Record income in an account.")
-    def registrar_ingreso(ingreso: RegistrarIngresoInput) -> str:
+    @mcp.tool(name="record_income", description="Record income in an account.")
+    def record_income(income: RecordIncomeInput) -> str:
         with Session(db.engine) as session:
-            return core.registrar_ingreso(session, ingreso)
+            return core.record_income(session, income)
 
-    @mcp.tool(name="transferir", description="Transfer money between two accounts.")
-    def transferir(transferencia: TransferirInput) -> str:
+    @mcp.tool(name="transfer", description="Transfer money between two accounts.")
+    def transfer(transfer: TransferInput) -> str:
         with Session(db.engine) as session:
-            return core.transferir(session, transferencia)
+            return core.transfer(session, transfer)
 
-    @mcp.tool(name="fijar_tasa_fx", description="Set the USD→COP exchange rate for a date.")
-    def fijar_tasa_fx(tasa: FijarTasaInput) -> str:
+    @mcp.tool(name="set_fx_rate", description="Set the USD→COP exchange rate for a date.")
+    def set_fx_rate(rate: SetFxRateInput) -> str:
         with Session(db.engine) as session:
-            return core.fijar_tasa_fx(session, tasa)
+            return core.set_fx_rate(session, rate)
 
     @mcp.tool(
-        name="consultar_transacciones",
+        name="list_transactions",
         description="List transactions with optional filters (dates, account, category, tag, type, status).",
     )
-    def consultar_transacciones(filtros: ConsultarTxInput) -> str:
+    def list_transactions(filters: ListTransactionsInput) -> str:
         with Session(db.engine) as session:
-            return core.consultar_transacciones(session, filtros)
+            return core.list_transactions(session, filters)
 
-    @mcp.tool(name="consultar_tasa_fx", description="Get the current USD→COP exchange rate for a date.")
-    def consultar_tasa_fx(consulta: ConsultarTasaInput) -> str:
+    @mcp.tool(name="get_fx_rate", description="Get the current USD→COP exchange rate for a date.")
+    def get_fx_rate(query: GetFxRateInput) -> str:
         with Session(db.engine) as session:
-            return core.consultar_tasa_fx(session, consulta)
+            return core.get_fx_rate(session, query)
 
-    @mcp.tool(name="listar_cuentas", description="List accounts with their balance and currency.")
-    def listar_cuentas() -> str:
+    @mcp.tool(name="list_accounts", description="List accounts with their balance and currency.")
+    def list_accounts() -> str:
         with Session(db.engine) as session:
-            return core.listar_cuentas(session)
+            return core.list_accounts(session)
 
-    @mcp.tool(name="listar_categorias", description="List categories and their group.")
-    def listar_categorias() -> str:
+    @mcp.tool(name="list_categories", description="List categories and their group.")
+    def list_categories() -> str:
         with Session(db.engine) as session:
-            return core.listar_categorias(session)
+            return core.list_categories(session)
 
-    @mcp.tool(name="listar_tags", description="List existing tags.")
-    def listar_tags() -> str:
+    @mcp.tool(name="list_tags", description="List existing tags.")
+    def list_tags() -> str:
         with Session(db.engine) as session:
-            return core.listar_tags(session)
+            return core.list_tags(session)
