@@ -220,3 +220,109 @@ def test_propose_archived_savings_raises(session):
     accounts.archive_account(session, sav.id)
     with pytest.raises(ValidationError):
         goals.propose_goal_contributions("2026-06", session)
+
+
+from quaestor.services import planned
+
+
+@pytest.fixture
+def goal_post_confirm_hook():
+    # Idempotent: from Task 13 onward init_db registers this hook globally, so only
+    # add it here when absent (and only remove what this fixture added). This keeps
+    # exactly one registration -> the hook fires once -> one contribution per confirm.
+    hook = goals.record_confirmed_contribution
+    added = hook not in planned.POST_CONFIRM_HOOKS
+    if added:
+        planned.register_post_confirm_hook(hook)
+    try:
+        yield
+    finally:
+        if added:
+            planned.POST_CONFIRM_HOOKS.remove(hook)
+
+
+def test_record_confirmed_contribution_unit(session):
+    from decimal import Decimal
+    from quaestor.domain.models import GoalContribution
+    from sqlmodel import select
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
+                     amount=200_000, currency="COP", fx_rate=Decimal("1"), to_base=200_000,
+                     account_id=sav.id, goal_id=g.id)
+    session.add(tx)
+    session.flush()
+    c = goals.record_confirmed_contribution(tx, session)
+    session.commit()
+    assert c is not None and c.source.value == "confirmed"
+    assert c.amount == 200_000 and c.transaction_id == tx.id
+    assert len(session.exec(select(GoalContribution)).all()) == 1
+
+
+def test_record_confirmed_contribution_noop_without_goal_id(session):
+    from decimal import Decimal
+    from quaestor.domain.models import GoalContribution
+    from sqlmodel import select
+    src, sav = _funded(session)
+    tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
+                     amount=100_000, currency="COP", fx_rate=Decimal("1"), to_base=100_000,
+                     account_id=sav.id)
+    session.add(tx)
+    session.flush()
+    assert goals.record_confirmed_contribution(tx, session) is None
+    session.commit()
+    assert session.exec(select(GoalContribution)).all() == []
+
+
+def test_confirm_proposal_records_contribution(session, goal_post_confirm_hook):
+    from quaestor.domain.models import GoalContribution
+    from sqlmodel import select
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    tx = _planned_transfers(session)[0]
+    planned.confirm_payment(session, tx.id)
+    [c] = session.exec(select(GoalContribution)).all()
+    assert c.source.value == "confirmed" and c.amount == 200_000 and c.transaction_id == tx.id
+    assert accounts.get_account(session, src.id).balance == 800_000
+    assert accounts.get_account(session, sav.id).balance == 200_000
+
+
+def test_confirm_with_smaller_amount_adjusts_contribution(session, goal_post_confirm_hook):
+    from quaestor.domain.models import GoalContribution
+    from sqlmodel import select
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    tx = _planned_transfers(session)[0]
+    planned.confirm_payment(session, tx.id, amount=120_000)
+    [c] = session.exec(select(GoalContribution)).all()
+    assert c.amount == 120_000
+    assert accounts.get_account(session, sav.id).balance == 120_000
+
+
+def test_skip_proposal_contributes_nothing(session, goal_post_confirm_hook):
+    from quaestor.domain.models import GoalContribution
+    from sqlmodel import select
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    tx = _planned_transfers(session)[0]
+    planned.skip_payment(session, tx.id)
+    assert session.exec(select(GoalContribution)).all() == []
+    assert accounts.get_account(session, sav.id).balance == 0
+
+
+def test_confirm_reaching_target_marks_reached(session, goal_post_confirm_hook):
+    from quaestor.domain.models import Goal, GoalStatus
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
+                          target_amount=200_000, deadline=date(2026, 12, 1))
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    tx = _planned_transfers(session)[0]
+    planned.confirm_payment(session, tx.id)
+    assert session.get(Goal, g.id).status == GoalStatus.reached

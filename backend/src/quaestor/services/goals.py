@@ -216,3 +216,23 @@ def propose_goal_contributions(period: str, session: Session) -> list[Transactio
         session.add(tx)
         created.append(tx)
     return created
+
+
+def record_confirmed_contribution(tx: Transaction, session: Session) -> GoalContribution | None:
+    """Post-confirm hook: record a confirmed GoalContribution for a goal transfer.
+
+    No-op (returns None) when tx carries no goal_id. Does NOT commit — runs inside
+    confirm_payment's transaction, which has already materialized the real transfer.
+    """
+    if tx.goal_id is None:
+        return None
+    goal = session.get(Goal, tx.goal_id)
+    if goal is None:
+        return None
+    contribution = GoalContribution(
+        goal_id=goal.id, date=tx.date, amount=tx.to_base,
+        source=ContributionSource.confirmed, transaction_id=tx.id,
+    )
+    session.add(contribution)
+    _maybe_mark_reached(session, goal)
+    return contribution
