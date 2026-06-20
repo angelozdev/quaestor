@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Optional
 
-from sqlalchemy import Column, Numeric, UniqueConstraint
+from sqlalchemy import Column, Index, Numeric, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -94,6 +94,7 @@ class Transaction(SQLModel, table=True):
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
     recurring_id: Annotated[Optional[int], Field(default=None, foreign_key="recurring_item.id")] = None
+    goal_id: Annotated[Optional[int], Field(default=None, foreign_key="goal.id")] = None
     transfer_group_id: Annotated[Optional[str], Field(default=None, index=True)] = None
     source: Source = Source.manual
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -152,3 +153,47 @@ class RecurringOccurrence(SQLModel, table=True):
     status: OccurrenceStatus
     transaction_id: Annotated[Optional[int], Field(default=None, foreign_key="transaction.id")] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class GoalStatus(str, Enum):
+    active = "active"
+    reached = "reached"
+    paused = "paused"
+
+
+class ContributionSource(str, Enum):
+    confirmed = "confirmed"  # proposed by rollover, confirmed in To-pay
+    manual = "manual"  # standalone contribution
+
+
+class Budget(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("category_id", "year_month", name="uq_budget_category_month"),
+    )
+    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
+    category_id: Annotated[int, Field(foreign_key="category.id")]
+    year_month: str  # "YYYY-MM"
+    amount_assigned: int = 0  # COP cents, >= 0
+
+
+class Goal(SQLModel, table=True):
+    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
+    name: str
+    target_amount: Optional[int] = None  # COP cents; None => open-ended
+    deadline: Optional[date] = None  # None => open-ended
+    monthly_amount: int  # COP cents, > 0, fixed
+    savings_account_id: Annotated[int, Field(foreign_key="account.id")]
+    status: GoalStatus = GoalStatus.active
+
+
+class GoalContribution(SQLModel, table=True):
+    __tablename__ = "goal_contribution"
+    __table_args__ = (
+        Index("ix_goal_contribution_goal_date", "goal_id", "date"),
+    )
+    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
+    goal_id: Annotated[int, Field(foreign_key="goal.id")]
+    date: date
+    amount: int  # COP cents
+    source: ContributionSource
+    transaction_id: Annotated[Optional[int], Field(default=None, foreign_key="transaction.id")] = None
