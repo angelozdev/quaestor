@@ -47,6 +47,9 @@ def _include_routers(app: FastAPI) -> None:
         categories,
         category_groups,
         fx,
+        planned,
+        recurring,
+        rollover,
         settings,
         tags,
         transactions,
@@ -62,6 +65,9 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(fx.router, prefix="/api", dependencies=protected)
     app.include_router(settings.router, prefix="/api", dependencies=protected)
     app.include_router(transactions.router, prefix="/api", dependencies=protected)
+    app.include_router(recurring.router, prefix="/api", dependencies=protected)
+    app.include_router(planned.router, prefix="/api", dependencies=protected)
+    app.include_router(rollover.router, prefix="/api", dependencies=protected)
 
 
 def create_app() -> FastAPI:

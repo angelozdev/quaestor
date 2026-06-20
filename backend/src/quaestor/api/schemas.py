@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from ..domain.models import AccountType, Source, TxStatus, TxType
+from ..domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, Source, TxStatus, TxType
 
 
 class AccountCreate(BaseModel):
@@ -172,3 +172,75 @@ class TransactionUpdate(BaseModel):
     notes: str | None = None
     category_id: int | None = None
     date: Date | None = None
+
+
+class RecurringCreate(BaseModel):
+    name: str
+    payee: str = ""
+    type: TxType
+    mode: RecurringMode
+    amount: int
+    currency: str = "COP"
+    category_id: int | None = None
+    account_id: int
+    interval_unit: IntervalUnit
+    interval_count: int = 1
+    start_date: Date
+    end_date: Date | None = None
+
+
+class RecurringOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    payee: str
+    type: TxType
+    mode: RecurringMode
+    amount: int
+    currency: str
+    category_id: int | None
+    account_id: int
+    interval_unit: IntervalUnit
+    interval_count: int
+    start_date: Date
+    end_date: Date | None
+    active: bool
+
+
+class OccurrenceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    recurring_id: int
+    due_date: Date
+    status: OccurrenceStatus
+    transaction_id: int | None
+
+
+class SkipRecurringIn(BaseModel):
+    due_date: Date
+
+
+class PlanPaymentIn(BaseModel):
+    payee: str
+    amount: int
+    currency: str = "COP"
+    due_date: Date
+    account_id: int
+    category_id: int | None = None
+    notes: str | None = None
+
+
+class ConfirmPaymentIn(BaseModel):
+    amount: int | None = None
+    date: Date | None = None
+
+
+class ToPayOut(BaseModel):
+    items: list[TransactionOut]
+    total_base: int
+
+
+class CloseMonthIn(BaseModel):
+    period: str  # "YYYY-MM"
