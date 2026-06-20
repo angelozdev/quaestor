@@ -19,3 +19,7 @@ class TransferImbalance(QuaestorError):
 
 class NotFound(QuaestorError):
     """Nonexistent id in a read or write operation."""
+
+
+class IllegalTransition(QuaestorError):
+    """A status transition that is not allowed (e.g. confirm/skip a non-planned tx)."""
