@@ -11,16 +11,22 @@ from datetime import date as Date
 from sqlmodel import Session, select
 
 from ..domain.errors import ValidationError
-from ..domain.models import Budget, Category, CategoryGroup, Transaction, TxStatus, TxType
+from ..domain.models import Account, Budget, Category, CategoryGroup, Transaction, TxStatus, TxType
+from ..domain.report_markdown import money
 from ..domain.report_types import (
+    AccountBalance,
     CategorySection,
     DriftMoM,
     EnvelopeLine,
     EnvelopesSummary,
+    GoalLine,
     GroupSection,
 )
 from ..domain.rules import month_bounds, prev_year_month
+from . import accounts as _accounts
 from . import budgets as _budgets
+from . import goals as _goals
+from . import planned as _planned
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -165,3 +171,40 @@ def _envelope_lines(
     return lines, EnvelopesSummary(
         n_green=n_green, n_red=n_red, rollover_generated=rollover_generated
     )
+
+
+def _goal_lines(session: Session, today: Date) -> list[GoalLine]:
+    """GoalLine per active goal; ETA/on-track only on defined goals (P4 supplies them)."""
+    lines: list[GoalLine] = []
+    for p in _goals.goals_progress(session, today=today):
+        lines.append(
+            GoalLine(
+                name=p.name, accumulated=p.saved,
+                target=p.target_amount, eta=p.eta, on_track=p.on_track,
+            )
+        )
+    return lines
+
+
+def _balance_lines(session: Session) -> list[AccountBalance]:
+    """Balance per non-archived account (account's own currency), sorted by name."""
+    accs = _accounts.list_accounts(session)  # excludes archived
+    return [
+        AccountBalance(account=a.name, currency=a.currency, balance=a.balance)
+        for a in sorted(accs, key=lambda a: a.name)
+    ]
+
+
+def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
+    """Alert lines for unconfirmed (planned) entries in the month, grouped by account."""
+    items = _planned.to_pay(session, start, end)["items"]
+    by_account: dict[int, int] = {}
+    for tx in items:
+        by_account[tx.account_id] = by_account.get(tx.account_id, 0) + tx.to_base
+    rows: list[tuple[str, int]] = []
+    for account_id, total in by_account.items():
+        acc = session.get(Account, account_id)
+        name = acc.name if acc is not None else f"account {account_id}"
+        rows.append((name, total))
+    rows.sort(key=lambda r: r[0])
+    return [f"{name}: {money(total)} pending" for name, total in rows]

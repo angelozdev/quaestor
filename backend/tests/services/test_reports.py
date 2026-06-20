@@ -174,3 +174,42 @@ def test_envelope_lines_empty_when_no_budgets(session):
     lines, summary = reports._envelope_lines(session, "2026-06")
     assert lines == []
     assert summary.n_green == 0 and summary.n_red == 0 and summary.rollover_generated == 0
+
+
+def test_goal_lines_defined_and_open_ended(session):
+    from quaestor.services import goals
+    sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
+                      target_amount=1_200_000, deadline=date(2026, 12, 1))
+    goals.create_goal(session, name="Buffer", monthly_amount=100_000, savings_account_id=sav.id)
+    lines = reports._goal_lines(session, today=date(2026, 6, 1))
+    by_name = {l.name: l for l in lines}
+    assert by_name["Trip"].target == 1_200_000 and by_name["Trip"].eta is not None
+    assert by_name["Trip"].on_track is not None
+    assert by_name["Buffer"].target is None and by_name["Buffer"].eta is None
+    assert by_name["Buffer"].on_track is None
+
+
+def test_balance_lines_exclude_archived_sorted(session):
+    a = accounts.create_account(session, "Zeta", AccountType.debit, "COP", balance=500)
+    accounts.create_account(session, "Alpha", AccountType.debit, "USD", balance=999)
+    archived = accounts.create_account(session, "Old", AccountType.debit, "COP", balance=1)
+    accounts.archive_account(session, archived.id)
+    balances = reports._balance_lines(session)
+    assert [b.account for b in balances] == ["Alpha", "Zeta"]
+    assert balances[0].currency == "USD" and balances[0].balance == 999
+
+
+def test_pending_lines_group_by_account(session):
+    from quaestor.services import planned
+    acc = _acc(session)
+    cat = _cat(session)
+    planned.plan_payment(session, payee="rent", amount=4_000_000, currency="COP",
+                         account_id=acc.id, due_date=date(2026, 6, 10), category_id=cat.id)
+    lines = reports._pending_lines(session, *month_bounds("2026-06"))
+    assert len(lines) == 1
+    assert "Acc COP" in lines[0] and "40,000.00" in lines[0]
+
+
+def test_pending_lines_empty_when_nothing_planned(session):
+    assert reports._pending_lines(session, *month_bounds("2026-06")) == []
