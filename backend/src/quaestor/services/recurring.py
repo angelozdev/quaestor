@@ -68,7 +68,9 @@ def create_recurring(
         raise ValidationError("interval_count must be >= 1")
     if end_date is not None and end_date < start_date:
         raise ValidationError("end_date must be on or after start_date")
-    _require_account(session, account_id)
+    acc = _require_account(session, account_id)
+    if currency != acc.currency:
+        raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
     if category_id is not None:
         cat = session.get(Category, category_id)
         if cat is None:

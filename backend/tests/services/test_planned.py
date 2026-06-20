@@ -39,6 +39,15 @@ def test_plan_payment_unknown_account(session):
         )
 
 
+def test_plan_payment_currency_mismatch_raises(session):
+    acc = accounts.create_account(session, "USD Account", AccountType.debit, "USD", balance=0)
+    with pytest.raises(ValidationError):
+        planned.plan_payment(
+            session, payee="x", amount=1000, currency="COP",
+            due_date=date(2026, 6, 20), account_id=acc.id,
+        )
+
+
 def test_to_pay_window_orders_and_totals(session):
     acc = _acc(session)
     planned.plan_payment(session, payee="A", amount=10_000, currency="COP",

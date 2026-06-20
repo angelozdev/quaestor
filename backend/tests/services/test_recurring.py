@@ -73,6 +73,16 @@ def test_create_recurring_unknown_account(session):
         )
 
 
+def test_create_recurring_currency_mismatch_raises(session):
+    acc = accounts.create_account(session, "USD Account", AccountType.debit, "USD", balance=0)
+    with pytest.raises(ValidationError):
+        recurring.create_recurring(
+            session, name="X", payee="Y", type=TxType.expense, mode=RecurringMode.auto,
+            amount=1000, currency="COP", category_id=None, account_id=acc.id,
+            interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        )
+
+
 def test_list_recurring_filters_by_active(session):
     acc = _acc(session)
     a = recurring.create_recurring(

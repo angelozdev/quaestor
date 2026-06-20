@@ -67,7 +67,9 @@ def plan_payment(
         raise ValidationError("amount must be > 0")
     if not is_supported(currency):
         raise ValidationError(f"unsupported currency: {currency}")
-    _require_account(session, account_id)
+    acc = _require_account(session, account_id)
+    if currency != acc.currency:
+        raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
     if category_id is not None:
         cat = session.get(Category, category_id)
         if cat is None:
