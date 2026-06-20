@@ -246,6 +246,22 @@ class CloseMonthIn(BaseModel):
     period: str  # "YYYY-MM"
 
 
+class GoalProgressOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    goal_id: int
+    name: str
+    type: str
+    monthly_amount: int
+    saved: int
+    target_amount: int | None = None
+    deadline: Date | None = None
+    monthly_required: int | None = None
+    on_track: bool | None = None
+    eta: Date | None = None
+    remaining: int | None = None
+
+
 class CommittedItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
