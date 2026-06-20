@@ -4,6 +4,7 @@ from __future__ import annotations
 import calendar
 from datetime import date, timedelta
 
+from .dtos import BudgetStatus
 from .models import IntervalUnit, TxType
 
 
@@ -80,3 +81,32 @@ def due_dates(
             results.append(d)
         k += 1
     return results
+
+
+def month_bounds(year_month: str) -> tuple[date, date]:
+    """First and last calendar day of a "YYYY-MM" string."""
+    year, month = int(year_month[:4]), int(year_month[5:7])
+    return date(year, month, 1), date(year, month, _last_day_of_month(year, month))
+
+
+def prev_year_month(year_month: str) -> str:
+    """The "YYYY-MM" of the previous calendar month."""
+    year, month = int(year_month[:4]), int(year_month[5:7])
+    if month == 1:
+        return f"{year - 1:04d}-12"
+    return f"{year:04d}-{month - 1:02d}"
+
+
+def envelope_status_calc(
+    category_id: int, year_month: str, assigned: int, rollover_in: int, spent: int
+) -> BudgetStatus:
+    """Envelope math: available, pct_used, over/under (ADR-003/005). Pure."""
+    denom = rollover_in + assigned
+    available = denom - spent
+    pct_used = round(spent / denom * 100) if denom > 0 else 0
+    status = "over" if spent > denom else "under"
+    return BudgetStatus(
+        category_id=category_id, year_month=year_month, assigned=assigned,
+        rollover_in=rollover_in, spent=spent, available=available,
+        pct_used=pct_used, status=status,
+    )
