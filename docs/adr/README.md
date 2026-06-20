@@ -15,3 +15,4 @@ New ADRs are created with the `adr` skill:
 | #    | Title | Status | Date |
 |------|-------|--------|------|
 | 0001 | English as the language for all code | accepted | 2026-06-19 |
+| 0003 | pnpm as the sole package manager for the frontend | accepted | 2026-06-20 |
