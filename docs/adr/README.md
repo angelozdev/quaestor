@@ -14,3 +14,4 @@ New ADRs are created with the `adr` skill:
 
 | #    | Title | Status | Date |
 |------|-------|--------|------|
+| 0001 | English as the language for all code | accepted | 2026-06-19 |
