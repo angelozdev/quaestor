@@ -246,6 +246,92 @@ class CloseMonthIn(BaseModel):
     period: str  # "YYYY-MM"
 
 
+class EnvelopesSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    n_green: int
+    n_red: int
+    rollover_generated: int
+
+
+class EnvelopeLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str
+    allocated: int
+    rollover_in: int
+    spent: int
+    available: int
+    status: str
+
+
+class CategorySectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str
+    group: str | None
+    total: int
+    pct: float
+
+
+class GroupSectionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    group: str
+    total: int
+    pct: float
+
+
+class GoalLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    accumulated: int
+    target: int | None = None
+    eta: Date | None = None
+    on_track: bool | None = None
+
+
+class AccountBalanceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    account: str
+    currency: str
+    balance: int
+
+
+class DriftMoMOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    prev_month: str
+    income_abs: int
+    income_pct: float | None
+    expense_abs: int
+    expense_pct: float | None
+    net_abs: int
+    net_pct: float | None
+
+
+class MonthlyReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: str
+    income: int
+    expense: int
+    net: int
+    envelopes_summary: EnvelopesSummaryOut
+    envelopes: list[EnvelopeLineOut]
+    by_category: list[CategorySectionOut]
+    by_group: list[GroupSectionOut]
+    goals: list[GoalLineOut]
+    balances: list[AccountBalanceOut]
+    drift_mom: DriftMoMOut | None
+    usd_share: float
+    pending: list[str]
+    safe_to_spend: SafeToSpendOut
+    markdown: str
+
+
 class GoalProgressOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

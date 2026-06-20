@@ -51,6 +51,7 @@ def _include_routers(app: FastAPI) -> None:
         goals,
         planned,
         recurring,
+        reports,
         rollover,
         settings,
         tags,
@@ -72,6 +73,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(rollover.router, prefix="/api", dependencies=protected)
     app.include_router(budgets.router, prefix="/api", dependencies=protected)
     app.include_router(goals.router, prefix="/api", dependencies=protected)
+    app.include_router(reports.router, prefix="/api", dependencies=protected)
 
 
 def create_app() -> FastAPI:
