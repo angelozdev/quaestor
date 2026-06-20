@@ -133,3 +133,59 @@ def test_all_errors_accumulated_across_rows(session):
     res = importer.import_csv(session, _csv(bad_date, bad_acct), dry_run=True)
     lines = sorted(e.line for e in res.errors)
     assert lines == [2, 3]
+
+
+from quaestor.domain.models import Source
+
+
+def test_successful_import_inserts_and_sets_source(session):
+    _setup_master(session)
+    res = importer.import_csv(session, _csv(
+        _row(amount="250", payee="coffee"),
+        _row(type_="income", amount="1000", payee="salary"),
+    ))
+    assert res.ok is True and res.inserted == 2 and res.errors == []
+    txs = transactions.list_transactions(session)
+    assert len(txs) == 2
+    assert all(t.source == Source.import_ for t in txs)
+    # amounts are major -> cents
+    coffee = next(t for t in txs if t.payee == "coffee")
+    assert coffee.amount == 25_000  # 250.00 -> cents
+
+
+def test_tags_auto_created_and_reported(session):
+    _setup_master(session)
+    res = importer.import_csv(session, _csv(
+        _row(payee="a", tags="groceries;weekly"),
+        _row(payee="b", tags="groceries"),
+    ))
+    assert res.ok is True and res.inserted == 2
+    assert res.tags_created == ["groceries", "weekly"]  # sorted, de-duplicated
+    from quaestor.services import tags as tags_svc
+    assert {t.name for t in tags_svc.list_tags(session)} == {"groceries", "weekly"}
+
+
+def test_atomic_one_bad_row_inserts_nothing(session):
+    _setup_master(session)
+    res = importer.import_csv(session, _csv(
+        _row(payee="good", amount="100"),
+        _row(payee="bad", date_="nope"),
+    ))
+    assert res.ok is False and res.inserted == 0
+    assert transactions.list_transactions(session) == []  # DB intact
+
+
+def test_dry_run_does_not_create_tags(session):
+    _setup_master(session)
+    res = importer.import_csv(session, _csv(_row(tags="newtag")), dry_run=True)
+    assert res.ok is True and res.inserted == 0
+    from quaestor.services import tags as tags_svc
+    assert tags_svc.list_tags(session) == []
+
+
+def test_balance_moves_only_on_real_import(session):
+    accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=1_000_000)
+    categories.create_category(session, name="Food")
+    importer.import_csv(session, _csv(_row(amount="100")))  # 100.00 -> 10_000 cents expense
+    acc = next(a for a in accounts.list_accounts(session) if a.name == "Bank")
+    assert acc.balance == 990_000

@@ -20,6 +20,8 @@ from ..domain.report_types import ImportResult, RowError
 from . import accounts as _accounts
 from . import categories as _categories
 from . import fx as _fx
+from . import tags as _tags
+from . import transactions as _tx
 
 HEADER = ["date", "type", "payee", "amount", "currency", "account", "category", "tags", "notes"]
 _VALID_TYPES = {"expense", "income", "transfer"}
@@ -150,5 +152,37 @@ def import_csv(session: Session, content: str, *, dry_run: bool = False) -> Impo
     if dry_run:
         return ImportResult(ok=True, inserted=0, tags_created=[], errors=[], dry_run=True)
 
-    # Real insertion arrives in Task 11.
-    return ImportResult(ok=True, inserted=0, tags_created=[], errors=[], dry_run=False)
+    existing = {t.name for t in _tags.list_tags(session)}
+    new_tags = sorted({t for v in valid for t in v.tags if t not in existing})
+
+    inserted_ids: list[int] = []
+    try:
+        for v in valid:
+            if v.tx_type == "income":
+                tx = _tx.record_income(
+                    session, v.account_id, v.amount_cents, v.currency, v.date,
+                    v.payee, category_id=v.category_id, notes=v.notes, source="import",
+                )
+            else:  # expense
+                tx = _tx.record_expense(
+                    session, v.account_id, v.amount_cents, v.currency, v.date,
+                    v.payee, category_id=v.category_id, notes=v.notes, source="import",
+                )
+            inserted_ids.append(tx.id)
+            if v.tags:
+                _tags.tag_transaction(session, tx.id, v.tags)
+    except Exception:
+        # Unlikely (rows were pre-validated): compensate to keep all-or-nothing.
+        for tx_id in reversed(inserted_ids):
+            try:
+                _tx.delete_transaction(session, tx_id)
+            except Exception:
+                pass
+        return ImportResult(
+            ok=False, inserted=0, tags_created=[],
+            errors=[RowError(line=0, reason="commit failed; rolled back")], dry_run=False,
+        )
+
+    return ImportResult(
+        ok=True, inserted=len(valid), tags_created=new_tags, errors=[], dry_run=False,
+    )
