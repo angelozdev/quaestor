@@ -15,6 +15,7 @@ import { MoneyAmount } from "@/components/money-amount";
 import { StatusBadge } from "@/components/status-badge";
 import { EntitySelect } from "@/components/entity-select";
 import { DataTable, type Column } from "@/components/data-table";
+import { TransactionCreateDialog } from "@/components/transaction-create-dialog";
 import { Input, Select, Button } from "@/ui";
 
 const ALL = "__all__";
@@ -33,6 +34,7 @@ const STATUS_ITEMS = [
 ];
 
 export default function TransactionsPage() {
+  const [creating, setCreating] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -246,7 +248,10 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Transacciones" />
+      <PageHeader
+        title="Transacciones"
+        action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
+      />
       <DataTable
         rows={list.data}
         columns={columns}
@@ -257,6 +262,7 @@ export default function TransactionsPage() {
         onRetry={() => list.refetch()}
         emptyMessage="No hay transacciones para estos filtros"
       />
+      <TransactionCreateDialog open={creating} onOpenChange={setCreating} />
     </div>
   );
 }
