@@ -379,3 +379,22 @@ class SafeToSpendOut(BaseModel):
     assigned_envelopes: int
     free: int
     committed_breakdown: list[CommittedItemOut]
+
+
+class BudgetLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category_id: int
+    category_name: str
+    assigned: int
+    rollover_in: int
+    spent: int
+    available: int
+    pct_used: int
+    status: str
+
+
+class BudgetAssignIn(BaseModel):
+    category_id: int
+    year_month: str
+    amount_assigned: int
