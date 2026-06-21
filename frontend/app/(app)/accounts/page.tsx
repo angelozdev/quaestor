@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Account, type AccountType } from "@/lib/api";
+import {
+  listAccounts,
+  createAccount,
+  updateAccount,
+  archiveAccount,
+  restoreAccount,
+} from "@/lib/api/accounts";
+import { ApiError } from "@/lib/api/types";
+import type { Account, AccountType } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
@@ -46,7 +54,7 @@ export default function AccountsPage() {
 
   const list = useQuery({
     queryKey: qk.accounts(showArchived),
-    queryFn: () => api.listAccounts(showArchived),
+    queryFn: () => listAccounts(showArchived),
   });
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
@@ -54,7 +62,7 @@ export default function AccountsPage() {
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
-      api.createAccount({
+      createAccount({
         name: String(v.name),
         type: v.type as AccountType,
         currency: String(v.currency),
@@ -65,17 +73,17 @@ export default function AccountsPage() {
   });
   const update = useMutation({
     mutationFn: (v: FormValues) =>
-      api.updateAccount(editing!.id, { name: String(v.name), type: v.type as AccountType }),
+      updateAccount(editing!.id, { name: String(v.name), type: v.type as AccountType }),
     onSuccess: () => { done("Cuenta actualizada"); setEditing(null); },
     onError: onErr,
   });
   const archive = useMutation({
-    mutationFn: (id: number) => api.archiveAccount(id),
+    mutationFn: (id: number) => archiveAccount(id),
     onSuccess: () => { done("Cuenta archivada"); setArchiving(null); },
     onError: onErr,
   });
   const restore = useMutation({
-    mutationFn: (id: number) => api.restoreAccount(id),
+    mutationFn: (id: number) => restoreAccount(id),
     onSuccess: () => { done("Cuenta restaurada"); },
     onError: onErr,
   });
