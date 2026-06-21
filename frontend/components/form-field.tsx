@@ -52,7 +52,9 @@ export function FormField<T extends FieldValues>({
             ? Number.isNaN(field.value)
               ? ""
               : String(field.value)
-            : ((field.value as string | number | undefined) ?? "")
+            : typeof field.value === "string" || typeof field.value === "number"
+              ? field.value
+              : ""
         }
         onChange={(e) => {
           if (valueAsNumber) {
