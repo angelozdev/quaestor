@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { logout } from "@/lib/api/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
@@ -85,7 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     try {
-      await api.logout();
+      await logout();
     } finally {
       qc.clear();
       router.replace("/login");
