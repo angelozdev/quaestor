@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
 import { toast } from "sonner";
-import { api, ApiError, type Account, type Transaction } from "@/lib/api";
+import { toPay, planPayment, confirmPayment, skipPlanned } from "@/lib/api/planned";
+import { listAccounts } from "@/lib/api/accounts";
+import { listCategories } from "@/lib/api/categories";
+import { ApiError, type Account, type Transaction } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
@@ -47,8 +50,8 @@ export default function ToPayPage() {
   const [pCategory, setPCategory] = useState<number | null>(null);
   const [pNotes, setPNotes] = useState("");
 
-  const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => api.toPay(since, until) });
-  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => api.listAccounts(false) });
+  const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => toPay(since, until) });
+  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) });
 
   const planCurrency = currencyOf(accounts.data, pAccount);
 
@@ -57,7 +60,7 @@ export default function ToPayPage() {
 
   const confirm = useMutation({
     mutationFn: () =>
-      api.confirmPayment(confirming!.id, {
+      confirmPayment(confirming!.id, {
         amount: cAmount ?? undefined,
         date: cDate || undefined,
       }),
@@ -65,13 +68,13 @@ export default function ToPayPage() {
     onError: onErr,
   });
   const skip = useMutation({
-    mutationFn: (id: number) => api.skipPlanned(id),
+    mutationFn: (id: number) => skipPlanned(id),
     onSuccess: () => done("Pago omitido"),
     onError: onErr,
   });
   const plan = useMutation({
     mutationFn: () =>
-      api.planPayment({
+      planPayment({
         payee: pPayee,
         amount: pAmount!,
         due_date: pDue,
@@ -186,7 +189,7 @@ export default function ToPayPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Cuenta *</Label>
-              <EntitySelect value={pAccount} onChange={setPAccount} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
+              <EntitySelect value={pAccount} onChange={setPAccount} queryKey={qk.accounts(false)} queryFn={() => listAccounts(false)} />
             </div>
             <div className="space-y-1.5">
               <Label>Monto * ({planCurrency})</Label>
@@ -198,7 +201,7 @@ export default function ToPayPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Categoría</Label>
-              <EntitySelect value={pCategory} onChange={setPCategory} queryKey={qk.categories(false)} queryFn={() => api.listCategories(false)} allowNullLabel="Sin categoría" />
+              <EntitySelect value={pCategory} onChange={setPCategory} queryKey={qk.categories(false)} queryFn={() => listCategories(false)} allowNullLabel="Sin categoría" />
             </div>
             <div className="space-y-1.5">
               <Label>Notas</Label>
