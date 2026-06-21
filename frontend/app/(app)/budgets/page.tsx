@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { api } from "@/lib/api";
+import { safeToSpend, listBudgets, assignBudget } from "@/lib/api/budgets";
 import { qk } from "@/lib/query";
 import { invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
@@ -12,7 +12,7 @@ import { ErrorState } from "@/components/error-state";
 import { Input, Button } from "@/ui";
 import { MoneyInput } from "@/components/money-input";
 import { toast } from "sonner";
-import { ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api/types";
 
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -26,14 +26,14 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const qc = useQueryClient();
-  const sts = useQuery({ queryKey: qk.safeToSpend(month), queryFn: () => api.safeToSpend(month) });
-  const lines = useQuery({ queryKey: qk.budgets(month), queryFn: () => api.listBudgets(month) });
+  const sts = useQuery({ queryKey: qk.safeToSpend(month), queryFn: () => safeToSpend(month) });
+  const lines = useQuery({ queryKey: qk.budgets(month), queryFn: () => listBudgets(month) });
 
   const [editingCat, setEditingCat] = useState<number | null>(null);
   const [draft, setDraft] = useState<number | null>(null);
   const assign = useMutation({
     mutationFn: (categoryId: number) =>
-      api.assignBudget({ category_id: categoryId, year_month: month, amount_assigned: draft ?? 0 }),
+      assignBudget({ category_id: categoryId, year_month: month, amount_assigned: draft ?? 0 }),
     onSuccess: () => {
       toast.success("Sobre asignado");
       invalidate(qc, "budgetWrite");
