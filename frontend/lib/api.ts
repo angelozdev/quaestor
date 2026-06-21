@@ -132,6 +132,78 @@ export interface GoalProgress {
   remaining: number | null;
 }
 
+export type GoalStatus = "active" | "reached" | "paused";
+
+export interface Goal {
+  id: number;
+  name: string;
+  target_amount: number | null;
+  deadline: string | null;
+  monthly_amount: number;
+  savings_account_id: number;
+  status: GoalStatus;
+}
+
+export interface GoalContribution {
+  id: number;
+  goal_id: number;
+  date: string;
+  amount: number;
+  source: string;
+  transaction_id: number | null;
+}
+
+export interface BudgetLine {
+  category_id: number;
+  category_name: string;
+  assigned: number;
+  rollover_in: number;
+  spent: number;
+  available: number;
+  pct_used: number;
+  status: string;
+}
+
+export interface GoalCreate {
+  name: string;
+  monthly_amount: number;
+  savings_account_id: number;
+  target_amount?: number | null;
+  deadline?: string | null;
+}
+
+export interface GoalUpdate {
+  name?: string;
+  monthly_amount?: number;
+  target_amount?: number | null;
+  deadline?: string | null;
+  savings_account_id?: number;
+}
+
+export interface GoalContributeBody {
+  amount: number;
+  date: string;
+}
+
+export interface RecurringUpdate {
+  name?: string;
+  payee?: string;
+  mode?: RecurringMode;
+  amount?: number;
+  category_id?: number | null;
+  account_id?: number;
+  interval_unit?: IntervalUnit;
+  interval_count?: number;
+  start_date?: string;
+  end_date?: string | null;
+}
+
+export interface BudgetAssign {
+  category_id: number;
+  year_month: string;
+  amount_assigned: number;
+}
+
 export interface EnvelopesSummary {
   n_green: number;
   n_red: number;
@@ -388,6 +460,11 @@ export const api = {
     request<Recurring>("/recurring", { method: "POST", body: JSON.stringify(body) }),
   skipRecurring: (id: number, due_date: string) =>
     request<Occurrence>(`/recurring/${id}/skip`, { method: "POST", body: JSON.stringify({ due_date }) }),
+  updateRecurring: (id: number, body: RecurringUpdate) =>
+    request<Recurring>(`/recurring/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteRecurring: (id: number) => request<void>(`/recurring/${id}`, { method: "DELETE" }),
+  restoreRecurring: (id: number) =>
+    request<Recurring>(`/recurring/${id}/restore`, { method: "POST", body: JSON.stringify({}) }),
 
   // accounts
   listAccounts: (archived = false) => request<Account[]>(`/accounts${qs({ archived })}`),
@@ -433,6 +510,31 @@ export const api = {
   getFx: (date?: string) => request<Fx>(`/fx${qs({ date })}`),
   setFx: (body: FxCreate) =>
     request<Fx>("/fx", { method: "POST", body: JSON.stringify(body) }),
+
+  // goals (Phase 2)
+  listGoals: () => request<Goal[]>("/goals"),
+  createGoal: (body: GoalCreate) =>
+    request<Goal>("/goals", { method: "POST", body: JSON.stringify(body) }),
+  updateGoal: (id: number, body: GoalUpdate) =>
+    request<Goal>(`/goals/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  pauseGoal: (id: number) => request<void>(`/goals/${id}`, { method: "DELETE" }),
+  restoreGoal: (id: number) =>
+    request<Goal>(`/goals/${id}/restore`, { method: "POST", body: JSON.stringify({}) }),
+  contributeGoal: (id: number, body: GoalContributeBody) =>
+    request<GoalContribution>(`/goals/${id}/contribute`, { method: "POST", body: JSON.stringify(body) }),
+
+  // budgets (Phase 2)
+  listBudgets: (month: string) => request<BudgetLine[]>(`/budgets${qs({ month })}`),
+  assignBudget: (body: BudgetAssign) =>
+    request<BudgetLine>("/budgets", { method: "PUT", body: JSON.stringify(body) }),
+
+  // masters restore (Phase 2)
+  restoreAccount: (id: number) =>
+    request<Account>(`/accounts/${id}/restore`, { method: "POST", body: JSON.stringify({}) }),
+  restoreCategory: (id: number) =>
+    request<Category>(`/categories/${id}/restore`, { method: "POST", body: JSON.stringify({}) }),
+  restoreCategoryGroup: (id: number) =>
+    request<CategoryGroup>(`/category-groups/${id}/restore`, { method: "POST", body: JSON.stringify({}) }),
 
   // planning reads
   safeToSpend: (month: string) => request<SafeToSpend>(`/budgets/safe-to-spend${qs({ month })}`),
