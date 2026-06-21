@@ -49,7 +49,7 @@ export default function DashboardPage() {
   const sts = useQuery({ queryKey: qk.safeToSpend(MONTH), queryFn: () => api.safeToSpend(MONTH) });
   const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => api.report(MONTH) });
   const goals = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => api.goalsProgress() });
-  const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => api.accounts() });
+  const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => api.listAccounts() });
 
   return (
     <div className="space-y-8">
