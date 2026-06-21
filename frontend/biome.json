@@ -1,0 +1,79 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.x/schema.json",
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/.next",
+      "!**/out",
+      "!**/build",
+      "!**/next-env.d.ts",
+      "!**/tsconfig.tsbuildinfo"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "style": {
+        "useImportType": "error",
+        "useNodejsImportProtocol": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["ui/**/*.{ts,tsx}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@/app":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/app/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/lib":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/lib/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/components":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/components/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/hooks":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/hooks/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
