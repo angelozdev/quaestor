@@ -10,20 +10,19 @@ import { z } from "zod"
 export function registerZodMessages(): void {
   z.setErrorMap((issue, _ctx) => {
     switch (issue.code) {
-      case z.ZodIssueCode.invalid_type:
-        if (issue.received === "nan") return { message: "Solo números" }
+      case "invalid_type":
         if (issue.expected === "number") return { message: "Solo números" }
         return { message: "Valor inválido" }
-      case z.ZodIssueCode.invalid_string:
+      case "invalid_format":
         return { message: "Formato inválido" }
-      case z.ZodIssueCode.too_small:
-        if (issue.type === "string" && issue.minimum === 1) return { message: "Requerido" }
-        if (issue.type === "number" && issue.minimum === 1) return { message: "Debe ser ≥ 1" }
-        if (issue.type === "number" && issue.minimum === 0) return { message: "Debe ser ≥ 0" }
+      case "too_small":
+        if (issue.origin === "string" && issue.minimum === 1) return { message: "Requerido" }
+        if (issue.origin === "number" && issue.minimum === 1) return { message: "Debe ser ≥ 1" }
+        if (issue.origin === "number" && issue.minimum === 0) return { message: "Debe ser ≥ 0" }
         return { message: "Valor demasiado pequeño" }
-      case z.ZodIssueCode.too_big:
+      case "too_big":
         return { message: "Valor demasiado grande" }
-      case z.ZodIssueCode.invalid_enum_value:
+      case "invalid_value":
         return { message: "Opción inválida" }
       default:
         return { message: "Valor inválido" }
