@@ -23,11 +23,13 @@ from .tools.core import (
 from .tools.temporal import (
     ConfirmPaymentInput,
     CreateRecurringInput,
+    DeleteRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
     SkipPaymentInput,
     SkipRecurringInput,
     ToPayInput,
+    UpdateRecurringInput,
 )
 
 TEMPORAL_TOOL_NAMES = (
@@ -38,6 +40,8 @@ TEMPORAL_TOOL_NAMES = (
     "skip_payment",
     "skip_recurring",
     "to_pay",
+    "update_recurring",
+    "delete_recurring",
 )
 
 CORE_TOOL_NAMES = (
@@ -142,3 +146,13 @@ def register_temporal_tools(mcp) -> None:
     def to_pay(window: ToPayInput) -> str:
         with Session(db.engine) as session:
             return temporal.to_pay(session, window)
+
+    @mcp.tool(name="update_recurring", description="Edit a recurring item (future occurrences only).")
+    def update_recurring(item: UpdateRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.update_recurring(session, item)
+
+    @mcp.tool(name="delete_recurring", description="Deactivate a recurring item (soft, reversible).")
+    def delete_recurring(item: DeleteRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.delete_recurring(session, item)

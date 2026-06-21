@@ -203,6 +203,14 @@ def recurring_skipped(occ: RecurringOccurrence) -> str:
     )
 
 
+def recurring_updated(item: RecurringItem) -> str:
+    return "Updated " + recurring_created(item)
+
+
+def recurring_deleted(item: RecurringItem) -> str:
+    return f"Deactivated recurring '{item.name}' (id {item.id}). Existing occurrences stay."
+
+
 def to_pay_table(result: dict) -> str:
     items = result["items"]
     if not items:
