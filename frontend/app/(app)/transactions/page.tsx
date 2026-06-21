@@ -1,21 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   api,
+  ApiError,
   type Transaction,
   type TransactionFilters,
   type TxType,
   type TxStatus,
 } from "@/lib/api";
-import { qk } from "@/lib/query";
+import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { MoneyAmount } from "@/components/money-amount";
 import { StatusBadge } from "@/components/status-badge";
 import { EntitySelect } from "@/components/entity-select";
-import { DataTable, type Column } from "@/components/data-table";
+import { DataTable, type Column, type RowAction } from "@/components/data-table";
 import { TransactionCreateDialog } from "@/components/transaction-create-dialog";
+import { TransactionEditDialog } from "@/components/transaction-edit-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Input, Select, Button } from "@/ui";
 
 const ALL = "__all__";
@@ -35,6 +39,20 @@ const STATUS_ITEMS = [
 
 export default function TransactionsPage() {
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [deleting, setDeleting] = useState<Transaction | null>(null);
+
+  const qc = useQueryClient();
+
+  const del = useMutation({
+    mutationFn: (id: number) => api.deleteTransaction(id),
+    onSuccess: () => {
+      toast.success("Transacción eliminada");
+      invalidate(qc, "transactionWrite");
+      setDeleting(null);
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+  });
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [accountId, setAccountId] = useState<number | null>(null);
@@ -124,6 +142,21 @@ export default function TransactionsPage() {
       render: (t) => (
         <MoneyAmount cents={t.amount} currency={t.currency} type={t.type} />
       ),
+    },
+  ];
+
+  const actions: RowAction<Transaction>[] = [
+    { label: "Editar", onClick: (t) => setEditing(t) },
+    {
+      label: "Eliminar",
+      variant: "destructive",
+      onClick: (t) => {
+        if (t.type === "transfer") {
+          toast.error("Las transferencias no se pueden eliminar (Fase 1).");
+          return;
+        }
+        setDeleting(t);
+      },
     },
   ];
 
@@ -256,6 +289,7 @@ export default function TransactionsPage() {
         rows={list.data}
         columns={columns}
         rowKey={(t) => t.id}
+        actions={actions}
         filterBar={filterBar}
         isLoading={list.isLoading}
         isError={list.isError}
@@ -263,6 +297,17 @@ export default function TransactionsPage() {
         emptyMessage="No hay transacciones para estos filtros"
       />
       <TransactionCreateDialog open={creating} onOpenChange={setCreating} />
+      <TransactionEditDialog tx={editing} open={editing !== null} onOpenChange={(o) => !o && setEditing(null)} />
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => !o && setDeleting(null)}
+        title="Eliminar transacción"
+        description={`Se eliminará "${deleting?.payee || "(sin beneficiario)"}". Es permanente.`}
+        confirmLabel="Eliminar"
+        destructive
+        pending={del.isPending}
+        onConfirm={() => deleting && del.mutate(deleting.id)}
+      />
     </div>
   );
 }
