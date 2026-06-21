@@ -34,3 +34,15 @@ def test_create_category_bad_group_is_422(client, auth):
         "/api/categories", headers=auth, json={"name": "X", "group_id": 9999}
     )
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
+
+
+def test_restore_category_endpoint(client, engine, auth):
+    from quaestor.services import categories
+    from sqlmodel import Session
+    with Session(engine) as s:
+        cat = categories.create_category(s, name="Food")
+        categories.archive_category(s, cat.id)
+        cat_id = cat.id
+    r = client.post(f"/api/categories/{cat_id}/restore", headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json()["archived"] is False
