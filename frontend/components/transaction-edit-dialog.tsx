@@ -1,28 +1,39 @@
 "use client"
 
-import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
-import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
-import { z } from "zod"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
+import {
+  type TransactionEditValues,
+  txEditSchema,
+} from "@/components/transaction-edit-dialog.schema"
 import { listCategories } from "@/lib/api/categories"
 import { updateTransaction } from "@/lib/api/transactions"
 import { ApiError, type Transaction } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
-import { isoDate, optionalString } from "@/lib/schemas/primitives"
 import { Button, Dialog, DialogPopup, DialogTitle, Label } from "@/ui"
 
-const txEditSchema = z.object({
-  payee: optionalString,
-  categoryId: z.number().nullable(),
-  date: isoDate,
-  notes: optionalString,
-})
-type TxEditValues = z.infer<typeof txEditSchema>
+function emptyDefaults(): TransactionEditValues {
+  return {
+    payee: "",
+    categoryId: null,
+    date: "",
+    notes: "",
+  }
+}
+
+function valuesFromTx(tx: Transaction): TransactionEditValues {
+  return {
+    payee: tx.payee ?? "",
+    categoryId: tx.category_id,
+    date: tx.date,
+    notes: tx.notes ?? "",
+  }
+}
 
 export function TransactionEditDialog({
   tx,
@@ -35,30 +46,23 @@ export function TransactionEditDialog({
 }) {
   const qc = useQueryClient()
 
-  const form = useForm<TxEditValues>({
-    resolver: zodResolver(txEditSchema),
-    defaultValues: {
-      payee: "",
-      categoryId: null,
-      date: "",
-      notes: "",
+  const form = useTanStackForm({
+    defaultValues: emptyDefaults(),
+    validators: { onChange: txEditSchema },
+    onSubmit: async ({ value }) => {
+      update.mutate(value)
     },
   })
 
   // Reseed form whenever a new tx is passed in.
   useEffect(() => {
     if (tx) {
-      form.reset({
-        payee: tx.payee ?? "",
-        categoryId: tx.category_id,
-        date: tx.date,
-        notes: tx.notes ?? "",
-      })
+      form.reset(valuesFromTx(tx))
     }
   }, [tx, form])
 
   const update = useMutation({
-    mutationFn: (values: TxEditValues) => {
+    mutationFn: (values: TransactionEditValues) => {
       if (!tx) throw new Error("tx is required")
       return updateTransaction(tx.id, {
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
@@ -70,6 +74,7 @@ export function TransactionEditDialog({
     onSuccess: () => {
       toast.success("Transacción actualizada")
       invalidate(qc, "transactionWrite")
+      form.reset(emptyDefaults())
       onOpenChange(false)
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
@@ -81,7 +86,11 @@ export function TransactionEditDialog({
         <DialogTitle>Editar transacción</DialogTitle>
         {tx && (
           <form
-            onSubmit={form.handleSubmit((values) => update.mutate(values))}
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
             className="space-y-4"
           >
             <div
@@ -93,31 +102,35 @@ export function TransactionEditDialog({
               </p>
               <p className="mt-1 text-xs">Para cambiar monto/cuenta, elimina y vuelve a crear.</p>
             </div>
-            <FormField control={form.control} name="payee" label="Beneficiario" />
-            <FormField control={form.control} name="date" label="Fecha" type="date" />
-            <Controller
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
+            <form.Field name="payee">
+              {(field) => <FormField field={field} label="Beneficiario" />}
+            </form.Field>
+            <form.Field name="date">
+              {(field) => <FormField field={field} label="Fecha" type="date" />}
+            </form.Field>
+            <form.Field name="categoryId">
+              {(field) => (
                 <div className="space-y-1.5">
                   <Label>Categoría</Label>
                   <EntitySelect
-                    value={field.value}
-                    onChange={field.onChange}
+                    value={field.state.value as number | null}
+                    onChange={(v) => field.handleChange(v as never)}
                     queryKey={qk.categories(false)}
                     queryFn={() => listCategories(false)}
                     allowNullLabel="Sin categoría"
                   />
                 </div>
               )}
-            />
-            <FormField control={form.control} name="notes" label="Notas" />
+            </form.Field>
+            <form.Field name="notes">
+              {(field) => <FormField field={field} label="Notas" />}
+            </form.Field>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={update.isPending}>
-                {update.isPending ? "…" : "Guardar"}
+              <Button type="submit" disabled={update.isPending || form.state.isSubmitting}>
+                {update.isPending || form.state.isSubmitting ? "…" : "Guardar"}
               </Button>
             </div>
           </form>
