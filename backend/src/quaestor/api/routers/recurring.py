@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from ...services import recurring
 from ..deps import get_session
-from ..schemas import OccurrenceOut, RecurringCreate, RecurringOut, SkipRecurringIn
+from ..schemas import OccurrenceOut, RecurringCreate, RecurringOut, RecurringUpdate, SkipRecurringIn
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -33,6 +33,25 @@ def create_recurring(body: RecurringCreate, session: Session = Depends(get_sessi
         start_date=body.start_date,
         end_date=body.end_date,
     )
+
+
+@router.patch("/{recurring_id}", response_model=RecurringOut)
+def update_recurring(
+    recurring_id: int, body: RecurringUpdate, session: Session = Depends(get_session)
+):
+    fields = body.model_dump(exclude_unset=True)
+    return recurring.update_recurring(session, recurring_id, **fields)
+
+
+@router.delete("/{recurring_id}", status_code=204)
+def deactivate_recurring(recurring_id: int, session: Session = Depends(get_session)):
+    recurring.deactivate_recurring(session, recurring_id)
+    return None
+
+
+@router.post("/{recurring_id}/restore", response_model=RecurringOut)
+def restore_recurring(recurring_id: int, session: Session = Depends(get_session)):
+    return recurring.restore_recurring(session, recurring_id)
 
 
 @router.post("/{recurring_id}/skip", response_model=OccurrenceOut)

@@ -189,6 +189,19 @@ class RecurringCreate(BaseModel):
     end_date: Date | None = None
 
 
+class RecurringUpdate(BaseModel):
+    name: str | None = None
+    payee: str | None = None
+    mode: RecurringMode | None = None
+    amount: int | None = None
+    category_id: int | None = None
+    account_id: int | None = None
+    interval_unit: IntervalUnit | None = None
+    interval_count: int | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
+
+
 class RecurringOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
