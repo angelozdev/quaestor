@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type CategoryGroup } from "@/lib/api";
+import { listCategoryGroups, createCategoryGroup, updateCategoryGroup, archiveCategoryGroup, restoreCategoryGroup } from "@/lib/api/category-groups";
+import { ApiError, type CategoryGroup } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
@@ -27,7 +28,7 @@ export default function CategoryGroupsPage() {
 
   const list = useQuery({
     queryKey: qk.categoryGroups(showArchived),
-    queryFn: () => api.listCategoryGroups(showArchived),
+    queryFn: () => listCategoryGroups(showArchived),
   });
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
@@ -38,23 +39,23 @@ export default function CategoryGroupsPage() {
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
-      api.createCategoryGroup({ name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
+      createCategoryGroup({ name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
     onSuccess: () => { onOk("Grupo creado"); setCreating(false); },
     onError: onErr,
   });
   const update = useMutation({
     mutationFn: (v: FormValues) =>
-      api.updateCategoryGroup(editing!.id, { name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
+      updateCategoryGroup(editing!.id, { name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
     onSuccess: () => { onOk("Grupo actualizado"); setEditing(null); },
     onError: onErr,
   });
   const archive = useMutation({
-    mutationFn: (id: number) => api.archiveCategoryGroup(id),
+    mutationFn: (id: number) => archiveCategoryGroup(id),
     onSuccess: () => { onOk("Grupo archivado"); setArchiving(null); },
     onError: onErr,
   });
   const restore = useMutation({
-    mutationFn: (id: number) => api.restoreCategoryGroup(id),
+    mutationFn: (id: number) => restoreCategoryGroup(id),
     onSuccess: () => { onOk("Grupo restaurado"); },
     onError: onErr,
   });
