@@ -72,6 +72,11 @@ export default function CategoriesPage() {
     onSuccess: () => { done("Categoría archivada"); setArchiving(null); },
     onError: onErr,
   });
+  const restore = useMutation({
+    mutationFn: (id: number) => api.restoreCategory(id),
+    onSuccess: () => { done("Categoría restaurada"); },
+    onError: onErr,
+  });
 
   return (
     <div className="space-y-6">
@@ -120,7 +125,9 @@ export default function CategoriesPage() {
                     ].filter(Boolean).join(" · ") || "—"}
                   </td>
                   <td className="px-3 py-2.5 text-right">
-                    {!c.archived && (
+                    {c.archived ? (
+                      <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(c.id)}>Restaurar</Button>
+                    ) : (
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>Editar</Button>
                         <Button variant="ghost" size="sm" onClick={() => setArchiving(c)}>Archivar</Button>
@@ -162,7 +169,7 @@ export default function CategoriesPage() {
         open={archiving !== null}
         onOpenChange={(o) => !o && setArchiving(null)}
         title="Archivar categoría"
-        description={`Se archivará "${archiving?.name}". No podrás reactivarla desde la app (Fase 2).`}
+        description={`Se archivará "${archiving?.name}". Puedes restaurarla luego con "Mostrar archivadas".`}
         confirmLabel="Archivar"
         pending={archive.isPending}
         onConfirm={() => archiving && archive.mutate(archiving.id)}

@@ -53,6 +53,11 @@ export default function CategoryGroupsPage() {
     onSuccess: () => { onOk("Grupo archivado"); setArchiving(null); },
     onError: onErr,
   });
+  const restore = useMutation({
+    mutationFn: (id: number) => api.restoreCategoryGroup(id),
+    onSuccess: () => { onOk("Grupo restaurado"); },
+    onError: onErr,
+  });
 
   return (
     <div className="space-y-6">
@@ -96,7 +101,9 @@ export default function CategoryGroupsPage() {
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{g.sort_order}</td>
                   <td className="px-3 py-2.5 text-right">
-                    {!g.archived && (
+                    {g.archived ? (
+                      <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(g.id)}>Restaurar</Button>
+                    ) : (
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(g)}>Editar</Button>
                         <Button variant="ghost" size="sm" onClick={() => setArchiving(g)}>Archivar</Button>
@@ -132,7 +139,7 @@ export default function CategoryGroupsPage() {
         open={archiving !== null}
         onOpenChange={(o) => !o && setArchiving(null)}
         title="Archivar grupo"
-        description={`Se archivará "${archiving?.name}". No podrás reactivarlo desde la app (Fase 2).`}
+        description={`Se archivará "${archiving?.name}". Puedes restaurarlo luego con "Mostrar archivados".`}
         confirmLabel="Archivar"
         pending={archive.isPending}
         onConfirm={() => archiving && archive.mutate(archiving.id)}
