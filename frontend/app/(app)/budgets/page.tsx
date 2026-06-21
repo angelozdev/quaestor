@@ -9,7 +9,7 @@ import { ErrorState } from "@/components/error-state"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { assignBudget, listBudgets, safeToSpend } from "@/lib/api/budgets"
-import { ApiError } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input } from "@/ui"
@@ -67,7 +67,10 @@ export default function BudgetsPage() {
       setEditingCat(null)
       assignForm.reset(defaultValues)
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(assignForm, e)
+      toast.error(e instanceof ApiError ? e.message : "Error")
+    },
   })
 
   return (

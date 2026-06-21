@@ -12,7 +12,7 @@ import {
 } from "@/components/transaction-edit-dialog.schema"
 import { listCategories } from "@/lib/api/categories"
 import { updateTransaction } from "@/lib/api/transactions"
-import { ApiError, type Transaction } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Dialog, DialogPopup, DialogTitle, Label } from "@/ui"
@@ -77,7 +77,10 @@ export function TransactionEditDialog({
       form.reset(emptyDefaults())
       onOpenChange(false)
     },
-    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(form, e)
+      toast.error(e instanceof ApiError ? e.message : "Error")
+    },
   })
 
   return (

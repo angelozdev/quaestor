@@ -7,7 +7,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { EntitySelect } from "@/components/entity-select"
 import { PageHeader } from "@/components/page-header"
-import { ApiError } from "@/lib/api"
+import { ApiError, applyApiErrorsToForm } from "@/lib/api"
 import { listAccounts } from "@/lib/api/accounts"
 import { getFx, setFx } from "@/lib/api/fx"
 import { getSettings, updateSettings } from "@/lib/api/settings"
@@ -78,7 +78,10 @@ export default function SettingsPage() {
       invalidate(qc, "fxWrite")
       fxForm.reset(FX_DEFAULTS)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(fxForm, e)
+      onErr(e)
+    },
   })
 
   const fxMissing = fx.isError && fx.error instanceof ApiError && fx.error.code === "MissingRate"

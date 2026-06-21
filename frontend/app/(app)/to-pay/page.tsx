@@ -15,7 +15,7 @@ import { PageHeader } from "@/components/page-header"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
-import { type Account, ApiError, type Transaction } from "@/lib/api/types"
+import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
@@ -111,7 +111,10 @@ export default function ToPayPage() {
       setPlanning(false)
       planForm.reset(PLAN_DEFAULTS)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(planForm, e)
+      onErr(e)
+    },
   })
 
   function openConfirm(item: Transaction) {

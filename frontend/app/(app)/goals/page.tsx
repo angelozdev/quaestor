@@ -22,7 +22,7 @@ import {
   restoreGoal,
   updateGoal,
 } from "@/lib/api/goals"
-import { ApiError, type Goal } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm, type Goal } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Dialog, DialogPopup, DialogTitle, Label } from "@/ui"
@@ -112,7 +112,10 @@ export default function GoalsPage() {
       setCreating(false)
       createForm.reset(CREATE_DEFAULTS)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(createForm, e)
+      onErr(e)
+    },
   })
   const update = useMutation({
     mutationFn: (values: GoalUpsertValues) => {
@@ -133,7 +136,10 @@ export default function GoalsPage() {
       setEditing(null)
       editForm.reset(EDIT_DEFAULTS)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(editForm, e)
+      onErr(e)
+    },
   })
   const pause = useMutation({
     mutationFn: () => {
@@ -161,7 +167,10 @@ export default function GoalsPage() {
       setContributing(null)
       contributeForm.reset(CONTRIBUTE_DEFAULTS)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(contributeForm, e)
+      onErr(e)
+    },
   })
 
   const savedFor = (id: number) => progress.data?.find((p) => p.goal_id === id)

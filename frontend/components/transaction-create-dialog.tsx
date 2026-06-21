@@ -15,7 +15,7 @@ import {
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
-import { type Account, ApiError } from "@/lib/api/types"
+import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
 import {
   Button,
@@ -124,7 +124,10 @@ export function TransactionCreateDialog({
       })
     },
     onSuccess: () => done("Transacción creada"),
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(normalForm, e)
+      onErr(e)
+    },
   })
 
   const createTransfer = useMutation({
@@ -143,7 +146,10 @@ export function TransactionCreateDialog({
       })
     },
     onSuccess: () => done("Transferencia creada"),
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(transferForm, e)
+      onErr(e)
+    },
   })
 
   return (

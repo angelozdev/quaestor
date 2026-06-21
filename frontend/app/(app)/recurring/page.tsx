@@ -23,7 +23,7 @@ import {
   skipRecurring,
   updateRecurring,
 } from "@/lib/api/recurring"
-import { ApiError, type IntervalUnit, type Recurring } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 import { type RecurringCreateValues, recurringCreateSchema } from "./recurring.schema"
@@ -164,7 +164,10 @@ export default function RecurringPage() {
         endDate: "",
       })
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(createForm, e)
+      onErr(e)
+    },
   })
 
   const update = useMutation({
@@ -187,7 +190,10 @@ export default function RecurringPage() {
       done("Recurrente actualizado")
       setEditing(null)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(editForm, e)
+      onErr(e)
+    },
   })
 
   const remove = useMutation({

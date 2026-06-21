@@ -390,6 +390,31 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Surface backend 422 field errors on a TanStack Form instance. Maps each
+ * `ApiError.fields` key onto `form.setFieldMeta(field, { error })` so the
+ * offending input shows the message inline instead of only in the toast.
+ *
+ * No-op when `err` is not an `ApiError` or has no field map, so callers can
+ * always combine it with the existing toast handler:
+ *
+ *   onError: (e: unknown) => {
+ *     applyApiErrorsToForm(myForm, e)
+ *     toast.error(e instanceof ApiError ? e.message : "Error")
+ *   }
+ *
+ * The form argument is typed loosely because TanStack Form's `FieldApi` /
+ * `form` are deeply generic; we only touch `setFieldMeta`, which every
+ * `@tanstack/react-form` instance exposes.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: TanStack Form generics are not worth threading.
+export function applyApiErrorsToForm(form: any, err: unknown): void {
+  if (!(err instanceof ApiError)) return
+  for (const [field, message] of Object.entries(err.fields)) {
+    form.setFieldMeta(field, { error: message })
+  }
+}
+
 // 401 interceptor: the app registers a handler (clear cache + redirect) in
 // app/providers.tsx. lib/ stays free of React/router imports.
 export let onUnauthorized: (() => void) | null = null
