@@ -1,5 +1,6 @@
 "use client"
 
+import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns"
 import { useState } from "react"
@@ -7,6 +8,7 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
+import { FormField } from "@/components/form-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
@@ -17,6 +19,7 @@ import { type Account, ApiError, type Transaction } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
+import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
 
 type Scope = "week" | "month"
 
@@ -33,6 +36,15 @@ function windowFor(scope: Scope) {
   return { since: format(since, "yyyy-MM-dd"), until: format(until, "yyyy-MM-dd") }
 }
 
+const PLAN_DEFAULTS: PlanPaymentValues = {
+  payee: "",
+  accountId: null,
+  amount: Number.NaN,
+  dueDate: "",
+  categoryId: null,
+  notes: undefined,
+}
+
 export default function ToPayPage() {
   const qc = useQueryClient()
   const [scope, setScope] = useState<Scope>("week")
@@ -43,17 +55,20 @@ export default function ToPayPage() {
   const [cDate, setCDate] = useState("")
 
   const [planning, setPlanning] = useState(false)
-  const [pPayee, setPPayee] = useState("")
-  const [pAmount, setPAmount] = useState<number | null>(null)
-  const [pDue, setPDue] = useState("")
-  const [pAccount, setPAccount] = useState<number | null>(null)
-  const [pCategory, setPCategory] = useState<number | null>(null)
-  const [pNotes, setPNotes] = useState("")
+
+  const planForm = useTanStackForm({
+    defaultValues: PLAN_DEFAULTS,
+    validators: { onChange: planPaymentSchema },
+    onSubmit: async ({ value }) => {
+      plan.mutate(value)
+    },
+  })
 
   const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => toPay(since, until) })
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
 
-  const planCurrency = currencyOf(accounts.data, pAccount)
+  const planAccountId = planForm.state.values.accountId
+  const planCurrency = currencyOf(accounts.data, planAccountId)
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const done = (msg: string) => {
@@ -81,28 +96,20 @@ export default function ToPayPage() {
     onError: onErr,
   })
   const plan = useMutation({
-    mutationFn: () => {
-      if (pAmount === null || pAccount === null) {
-        throw new Error("amount and account are required to plan a payment")
-      }
+    mutationFn: (values: PlanPaymentValues) => {
       return planPayment({
-        payee: pPayee,
-        amount: pAmount,
-        due_date: pDue,
-        account_id: pAccount,
-        category_id: pCategory,
-        notes: pNotes || undefined,
+        payee: values.payee,
+        amount: values.amount,
+        due_date: values.dueDate,
+        account_id: values.accountId as number,
+        category_id: values.categoryId,
+        notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
       })
     },
     onSuccess: () => {
       done("Pago planeado")
       setPlanning(false)
-      setPPayee("")
-      setPAmount(null)
-      setPDue("")
-      setPAccount(null)
-      setPCategory(null)
-      setPNotes("")
+      planForm.reset(PLAN_DEFAULTS)
     },
     onError: onErr,
   })
@@ -117,7 +124,16 @@ export default function ToPayPage() {
     <div className="space-y-6">
       <PageHeader
         title="Por pagar"
-        action={<Button onClick={() => setPlanning(true)}>Planear pago</Button>}
+        action={
+          <Button
+            onClick={() => {
+              planForm.reset(PLAN_DEFAULTS)
+              setPlanning(true)
+            }}
+          >
+            Planear pago
+          </Button>
+        }
       />
 
       <div
@@ -221,62 +237,117 @@ export default function ToPayPage() {
       </Dialog>
 
       {/* Plan one-off dialog */}
-      <Dialog open={planning} onOpenChange={setPlanning}>
+      <Dialog
+        open={planning}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPlanning(false)
+            planForm.reset(PLAN_DEFAULTS)
+          }
+        }}
+      >
         <DialogPopup>
           <DialogTitle>Planear pago</DialogTitle>
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              if (pPayee && pAmount !== null && pDue && pAccount !== null) plan.mutate()
+              e.stopPropagation()
+              void planForm.handleSubmit()
             }}
             className="space-y-4"
           >
-            <div className="space-y-1.5">
-              <Label>Beneficiario *</Label>
-              <Input value={pPayee} onChange={(e) => setPPayee(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Cuenta *</Label>
-              <EntitySelect
-                value={pAccount}
-                onChange={setPAccount}
-                queryKey={qk.accounts(false)}
-                queryFn={() => listAccounts(false)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Monto * ({planCurrency})</Label>
-              <MoneyInput currency={planCurrency} value={pAmount} onChange={setPAmount} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Fecha de vencimiento *</Label>
-              <Input type="date" value={pDue} onChange={(e) => setPDue(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Categoría</Label>
-              <EntitySelect
-                value={pCategory}
-                onChange={setPCategory}
-                queryKey={qk.categories(false)}
-                queryFn={() => listCategories(false)}
-                allowNullLabel="Sin categoría"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Notas</Label>
-              <Textarea value={pNotes} onChange={(e) => setPNotes(e.target.value)} />
-            </div>
+            <planForm.Field name="payee">
+              {(field) => <FormField field={field} label="Beneficiario" />}
+            </planForm.Field>
+            <planForm.Field name="accountId">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Cuenta *</Label>
+                    <EntitySelect
+                      value={field.state.value as number | null}
+                      onChange={(v) => field.handleChange(v as never)}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </planForm.Field>
+            <planForm.Field name="amount">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({planCurrency})</Label>
+                    <MoneyInput
+                      currency={planCurrency}
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </planForm.Field>
+            <planForm.Field name="dueDate">
+              {(field) => <FormField field={field} label="Fecha de vencimiento" type="date" />}
+            </planForm.Field>
+            <planForm.Field name="categoryId">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Categoría</Label>
+                    <EntitySelect
+                      value={field.state.value as number | null}
+                      onChange={(v) => field.handleChange(v as never)}
+                      queryKey={qk.categories(false)}
+                      queryFn={() => listCategories(false)}
+                      allowNullLabel="Sin categoría"
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </planForm.Field>
+            <planForm.Field name="notes">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Notas</Label>
+                    <Textarea
+                      id={field.name}
+                      value={typeof field.state.value === "string" ? field.state.value : ""}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      aria-invalid={error?.message ? true : undefined}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </planForm.Field>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setPlanning(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPlanning(false)
+                  planForm.reset(PLAN_DEFAULTS)
+                }}
+              >
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={
-                  plan.isPending || !pPayee || pAmount === null || !pDue || pAccount === null
-                }
-              >
-                {plan.isPending ? "…" : "Planear"}
+              <Button type="submit" disabled={plan.isPending || planForm.state.isSubmitting}>
+                {plan.isPending || planForm.state.isSubmitting ? "…" : "Planear"}
               </Button>
             </div>
           </form>
