@@ -63,6 +63,23 @@ export function TransactionCreateDialog({
   const [tNotes, setTNotes] = useState("");
   const [tFxRate, setTFxRate] = useState("");
 
+  function resetForm() {
+    setType("expense");
+    setAccountId(null);
+    setCategoryId(null);
+    setAmount(null);
+    setDate("");
+    setPayee("");
+    setNotes("");
+    setFxRate("");
+    setFromId(null);
+    setToId(null);
+    setTAmount(null);
+    setTDate("");
+    setTNotes("");
+    setTFxRate("");
+  }
+
   const normalCurrency = currencyOf(accounts.data, accountId);
   const transferCurrency = currencyOf(accounts.data, fromId);
 
@@ -112,7 +129,7 @@ export function TransactionCreateDialog({
     fromId === null || toId === null || tAmount === null || !tDate;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
       <DialogPopup className="max-w-lg">
         <DialogTitle>Nueva transacción</DialogTitle>
         <Tabs defaultValue="normal">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
 import { toast } from "sonner";
-import { api, ApiError, type Transaction } from "@/lib/api";
+import { api, ApiError, type Account, type Transaction } from "@/lib/api";
 import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
@@ -16,6 +16,10 @@ import { EntitySelect } from "@/components/entity-select";
 import { Dialog, DialogPopup, DialogTitle, Input, Label, Textarea, Button } from "@/ui";
 
 type Scope = "week" | "month";
+
+function currencyOf(accounts: Account[] | undefined, id: number | null): string {
+  return accounts?.find((a) => a.id === id)?.currency ?? "COP";
+}
 
 function windowFor(scope: Scope) {
   const now = new Date();
@@ -44,6 +48,9 @@ export default function ToPayPage() {
   const [pNotes, setPNotes] = useState("");
 
   const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => api.toPay(since, until) });
+  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => api.listAccounts(false) });
+
+  const planCurrency = currencyOf(accounts.data, pAccount);
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
   const done = (msg: string) => { toast.success(msg); invalidate(qc, "plannedWrite"); };
@@ -182,8 +189,8 @@ export default function ToPayPage() {
               <EntitySelect value={pAccount} onChange={setPAccount} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Monto * (COP)</Label>
-              <MoneyInput currency="COP" value={pAmount} onChange={setPAmount} />
+              <Label>Monto * ({planCurrency})</Label>
+              <MoneyInput currency={planCurrency} value={pAmount} onChange={setPAmount} />
             </div>
             <div className="space-y-1.5">
               <Label>Fecha de vencimiento *</Label>

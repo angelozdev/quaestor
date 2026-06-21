@@ -340,6 +340,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (res.status === 401 && !path.startsWith("/auth")) {
     onUnauthorized?.();
+    return undefined as unknown as T;
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => null);

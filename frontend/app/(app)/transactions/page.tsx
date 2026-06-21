@@ -243,6 +243,7 @@ export default function TransactionsPage() {
           queryKey={qk.tags()}
           queryFn={() => api.listTags()}
           allowNullLabel="Todas"
+          disabled={tags.isLoading}
         />
       </div>
       <div className="w-32 space-y-1">

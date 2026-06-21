@@ -66,6 +66,13 @@ export default function CategoryGroupsPage() {
         Mostrar archivados
       </label>
 
+      {list.isLoading && (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-10 animate-pulse rounded" style={{ background: "var(--muted)" }} />
+          ))}
+        </div>
+      )}
       {list.isError && <ErrorState message="No se pudieron cargar los grupos" onRetry={() => list.refetch()} />}
       {list.data && list.data.length === 0 && <EmptyState message="Sin grupos" />}
 
