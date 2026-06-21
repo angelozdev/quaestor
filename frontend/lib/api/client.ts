@@ -1,0 +1,40 @@
+import axios, { AxiosError } from "axios";
+import { ApiError, onUnauthorized } from "./types";
+
+export const http = axios.create({
+  baseURL: "/api",
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
+});
+
+http.interceptors.response.use(
+  (res) => (res.status === 204 ? undefined : res.data),
+  (err: AxiosError) => {
+    const url = err.config?.url ?? "";
+    if (err.response?.status === 401 && !url.startsWith("/auth")) {
+      onUnauthorized?.();
+      return undefined as unknown;
+    }
+    const data = err.response?.data as { error?: string; detail?: string } | null;
+    throw new ApiError(
+      err.response?.status ?? 0,
+      data?.error ?? "Error",
+      data?.detail ?? `Request failed (${err.response?.status})`
+    );
+  }
+);
+
+export const get   = <T>(url: string)                 => http.get<T>(url)        as unknown as Promise<T>;
+export const post  = <T>(url: string, data?: unknown) => http.post<T>(url, data) as unknown as Promise<T>;
+export const patch = <T>(url: string, data?: unknown) => http.patch<T>(url, data) as unknown as Promise<T>;
+export const put   = <T>(url: string, data?: unknown) => http.put<T>(url, data)  as unknown as Promise<T>;
+export const del   = <T>(url: string)                 => http.delete<T>(url)     as unknown as Promise<T>;
+
+export function qs(params: Record<string, string | number | boolean | undefined>): string {
+  const usp = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") usp.set(k, String(v));
+  }
+  const s = usp.toString();
+  return s ? `?${s}` : "";
+}
