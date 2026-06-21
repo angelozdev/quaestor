@@ -1,5 +1,6 @@
 "use client"
 
+import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { useEffect, useState } from "react"
@@ -12,8 +13,12 @@ import { getFx, setFx } from "@/lib/api/fx"
 import { getSettings, updateSettings } from "@/lib/api/settings"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input, Label } from "@/ui"
+import { type SetFxRateValues, setFxRateSchema } from "./settings.schema"
 
-const TODAY = format(new Date(), "yyyy-MM-dd")
+const FX_DEFAULTS: SetFxRateValues = {
+  date: format(new Date(), "yyyy-MM-dd"),
+  usdCop: Number.NaN,
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -46,8 +51,13 @@ export default function SettingsPage() {
     if (settings.data) setSourceId(settings.data.default_source_account_id)
   }, [settings.data])
 
-  const [fxDate, setFxDate] = useState(TODAY)
-  const [usdCop, setUsdCop] = useState("")
+  const fxForm = useTanStackForm({
+    defaultValues: FX_DEFAULTS,
+    validators: { onChange: setFxRateSchema },
+    onSubmit: async ({ value }) => {
+      saveFx.mutate(value)
+    },
+  })
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
 
@@ -61,11 +71,12 @@ export default function SettingsPage() {
   })
 
   const saveFx = useMutation({
-    mutationFn: () => setFx({ date: fxDate, usd_cop: usdCop }),
+    mutationFn: (values: SetFxRateValues) =>
+      setFx({ date: values.date, usd_cop: String(values.usdCop) }),
     onSuccess: () => {
       toast.success("Tasa registrada")
       invalidate(qc, "fxWrite")
-      setUsdCop("")
+      fxForm.reset(FX_DEFAULTS)
     },
     onError: onErr,
   })
@@ -111,26 +122,55 @@ export default function SettingsPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            if (usdCop) saveFx.mutate()
+            e.stopPropagation()
+            void fxForm.handleSubmit()
           }}
           className="grid grid-cols-2 gap-3"
         >
-          <div className="space-y-1.5">
-            <Label>Fecha</Label>
-            <Input type="date" value={fxDate} onChange={(e) => setFxDate(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>USD→COP</Label>
-            <Input
-              inputMode="decimal"
-              value={usdCop}
-              onChange={(e) => setUsdCop(e.target.value)}
-              placeholder="4000.00"
-            />
-          </div>
+          <fxForm.Field name="date">
+            {(field) => (
+              <div className="space-y-1.5">
+                <Label htmlFor={field.name}>Fecha *</Label>
+                <Input
+                  id={field.name}
+                  type="date"
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  onBlur={field.handleBlur}
+                />
+              </div>
+            )}
+          </fxForm.Field>
+          <fxForm.Field name="usdCop">
+            {(field) => {
+              const error = field.state.meta.errors[0] as { message?: string } | undefined
+              const raw =
+                typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                  ? String(field.state.value)
+                  : ""
+              return (
+                <div className="space-y-1.5">
+                  <Label htmlFor={field.name}>USD→COP *</Label>
+                  <Input
+                    id={field.name}
+                    inputMode="decimal"
+                    value={raw}
+                    placeholder="4000.00"
+                    onChange={(e) => {
+                      const v = e.target.value
+                      field.handleChange(v === "" ? Number.NaN : Number(v))
+                    }}
+                    onBlur={field.handleBlur}
+                    aria-invalid={error?.message ? true : undefined}
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )
+            }}
+          </fxForm.Field>
           <div className="col-span-2 flex justify-end">
-            <Button type="submit" disabled={!usdCop || saveFx.isPending}>
-              {saveFx.isPending ? "…" : "Registrar tasa"}
+            <Button type="submit" disabled={saveFx.isPending || fxForm.state.isSubmitting}>
+              {saveFx.isPending || fxForm.state.isSubmitting ? "…" : "Registrar tasa"}
             </Button>
           </div>
         </form>
