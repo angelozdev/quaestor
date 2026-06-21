@@ -1,5 +1,6 @@
 "use client"
 
+import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -7,6 +8,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
+import { FormField } from "@/components/form-field"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
@@ -23,7 +25,34 @@ import {
 import { ApiError, type Goal } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
-import { Button, Dialog, DialogPopup, DialogTitle, Input, Label } from "@/ui"
+import { Button, Dialog, DialogPopup, DialogTitle, Label } from "@/ui"
+import {
+  type ContributeGoalValues,
+  contributeGoalSchema,
+  type GoalUpsertValues,
+  goalUpsertSchema,
+} from "./goals.schema"
+
+const CREATE_DEFAULTS: GoalUpsertValues = {
+  name: "",
+  monthlyAmount: Number.NaN,
+  savingsAccountId: null,
+  targetAmount: Number.NaN,
+  deadline: "",
+}
+
+const EDIT_DEFAULTS: GoalUpsertValues = {
+  name: "",
+  monthlyAmount: Number.NaN,
+  savingsAccountId: null,
+  targetAmount: Number.NaN,
+  deadline: "",
+}
+
+const CONTRIBUTE_DEFAULTS: ContributeGoalValues = {
+  amount: Number.NaN,
+  date: new Date().toISOString().slice(0, 10),
+}
 
 export default function GoalsPage() {
   const qc = useQueryClient()
@@ -35,62 +64,74 @@ export default function GoalsPage() {
   const [pausing, setPausing] = useState<Goal | null>(null)
   const [contributing, setContributing] = useState<Goal | null>(null)
 
-  const [name, setName] = useState("")
-  const [monthly, setMonthly] = useState<number | null>(null)
-  const [savingsId, setSavingsId] = useState<number | null>(null)
-  const [target, setTarget] = useState<number | null>(null)
-  const [deadline, setDeadline] = useState("")
-  const [amount, setAmount] = useState<number | null>(null)
-  const [date, setDate] = useState("")
+  const createForm = useTanStackForm({
+    defaultValues: CREATE_DEFAULTS,
+    validators: { onChange: goalUpsertSchema },
+    onSubmit: async ({ value }) => {
+      create.mutate(value)
+    },
+  })
+
+  const editForm = useTanStackForm({
+    defaultValues: EDIT_DEFAULTS,
+    validators: { onChange: goalUpsertSchema },
+    onSubmit: async ({ value }) => {
+      update.mutate(value)
+    },
+  })
+
+  const contributeForm = useTanStackForm({
+    defaultValues: CONTRIBUTE_DEFAULTS,
+    validators: { onChange: contributeGoalSchema },
+    onSubmit: async ({ value }) => {
+      contribute.mutate(value)
+    },
+  })
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const done = (msg: string) => {
     toast.success(msg)
     invalidate(qc, "goalWrite")
   }
-  const resetForm = () => {
-    setName("")
-    setMonthly(null)
-    setSavingsId(null)
-    setTarget(null)
-    setDeadline("")
-  }
 
   const create = useMutation({
-    mutationFn: () => {
-      if (monthly === null || savingsId === null) {
-        throw new Error("monthly and savingsId are required")
-      }
+    mutationFn: (values: GoalUpsertValues) => {
       return createGoal({
-        name,
-        monthly_amount: monthly,
-        savings_account_id: savingsId,
-        target_amount: target,
-        deadline: deadline || null,
+        name: values.name,
+        monthly_amount: values.monthlyAmount,
+        savings_account_id: values.savingsAccountId as number,
+        target_amount:
+          values.targetAmount !== undefined && Number.isFinite(values.targetAmount)
+            ? values.targetAmount
+            : null,
+        deadline: values.deadline && values.deadline.length > 0 ? values.deadline : null,
       })
     },
     onSuccess: () => {
       done("Meta creada")
       setCreating(false)
-      resetForm()
+      createForm.reset(CREATE_DEFAULTS)
     },
     onError: onErr,
   })
   const update = useMutation({
-    mutationFn: () => {
+    mutationFn: (values: GoalUpsertValues) => {
       if (!editing) throw new Error("editing goal is required")
       return updateGoal(editing.id, {
-        name,
-        monthly_amount: monthly ?? undefined,
-        target_amount: target,
-        deadline: deadline || null,
-        savings_account_id: savingsId ?? undefined,
+        name: values.name,
+        monthly_amount: values.monthlyAmount,
+        target_amount:
+          values.targetAmount !== undefined && Number.isFinite(values.targetAmount)
+            ? values.targetAmount
+            : null,
+        deadline: values.deadline && values.deadline.length > 0 ? values.deadline : null,
+        savings_account_id: values.savingsAccountId ?? undefined,
       })
     },
     onSuccess: () => {
       done("Meta actualizada")
       setEditing(null)
-      resetForm()
+      editForm.reset(EDIT_DEFAULTS)
     },
     onError: onErr,
   })
@@ -111,23 +152,17 @@ export default function GoalsPage() {
     onError: onErr,
   })
   const contribute = useMutation({
-    mutationFn: () => {
-      if (!contributing || amount === null) {
-        throw new Error("contributing goal and amount are required")
-      }
-      return contributeGoal(contributing.id, { amount, date })
+    mutationFn: (values: ContributeGoalValues) => {
+      if (!contributing) throw new Error("contributing goal is required")
+      return contributeGoal(contributing.id, { amount: values.amount, date: values.date })
     },
     onSuccess: () => {
       done("Aporte registrado")
       setContributing(null)
-      setAmount(null)
-      setDate("")
+      contributeForm.reset(CONTRIBUTE_DEFAULTS)
     },
     onError: onErr,
   })
-
-  const createInvalid = !name || monthly === null || savingsId === null || !!target !== !!deadline
-  const editInvalid = !name || !!target !== !!deadline
 
   const savedFor = (id: number) => progress.data?.find((p) => p.goal_id === id)
 
@@ -138,7 +173,7 @@ export default function GoalsPage() {
         action={
           <Button
             onClick={() => {
-              resetForm()
+              createForm.reset(CREATE_DEFAULTS)
               setCreating(true)
             }}
           >
@@ -189,8 +224,7 @@ export default function GoalsPage() {
                           size="sm"
                           onClick={() => {
                             setContributing(g)
-                            setAmount(null)
-                            setDate("")
+                            contributeForm.reset(CONTRIBUTE_DEFAULTS)
                           }}
                         >
                           Aportar
@@ -200,11 +234,13 @@ export default function GoalsPage() {
                           size="sm"
                           onClick={() => {
                             setEditing(g)
-                            setName(g.name)
-                            setMonthly(g.monthly_amount)
-                            setSavingsId(g.savings_account_id)
-                            setTarget(g.target_amount)
-                            setDeadline(g.deadline ?? "")
+                            editForm.reset({
+                              name: g.name,
+                              monthlyAmount: g.monthly_amount,
+                              savingsAccountId: g.savings_account_id,
+                              targetAmount: g.target_amount ?? Number.NaN,
+                              deadline: g.deadline ?? "",
+                            })
                           }}
                         >
                           Editar
@@ -240,54 +276,96 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {/* Create / edit dialog (shared fields) */}
+      {/* Create dialog */}
       <Dialog
-        open={creating || editing !== null}
+        open={creating}
         onOpenChange={(o) => {
           if (!o) {
             setCreating(false)
-            setEditing(null)
+            createForm.reset(CREATE_DEFAULTS)
           }
         }}
       >
         <DialogPopup className="max-w-md">
-          <DialogTitle>{editing ? "Editar meta" : "Nueva meta"}</DialogTitle>
+          <DialogTitle>Nueva meta</DialogTitle>
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              if (editing ? !editInvalid : !createInvalid) (editing ? update : create).mutate()
+              e.stopPropagation()
+              void createForm.handleSubmit()
             }}
             className="space-y-4"
           >
-            <div className="space-y-1.5">
-              <Label>Nombre *</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Aporte mensual * (COP)</Label>
-              <MoneyInput currency="COP" value={monthly} onChange={setMonthly} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Cuenta de ahorro *</Label>
-              <EntitySelect
-                value={savingsId}
-                onChange={setSavingsId}
-                queryKey={qk.accounts(false)}
-                queryFn={() => listAccounts(false)}
-              />
-            </div>
+            <createForm.Field name="name">
+              {(field) => <FormField field={field} label="Nombre" />}
+            </createForm.Field>
+            <createForm.Field name="monthlyAmount">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Aporte mensual * (COP)</Label>
+                    <MoneyInput
+                      currency="COP"
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </createForm.Field>
+            <createForm.Field name="savingsAccountId">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Cuenta de ahorro *</Label>
+                    <EntitySelect
+                      value={field.state.value as number | null}
+                      onChange={(v) => field.handleChange(v as never)}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </createForm.Field>
             <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
               Meta definida: completa objetivo y fecha. Abierta: deja ambos vacíos.
             </p>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Objetivo (COP)</Label>
-                <MoneyInput currency="COP" value={target} onChange={setTarget} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha límite</Label>
-                <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
-              </div>
+              <createForm.Field name="targetAmount">
+                {(field) => {
+                  const error = field.state.meta.errors[0] as { message?: string } | undefined
+                  return (
+                    <div className="space-y-1.5">
+                      <Label>Objetivo (COP)</Label>
+                      <MoneyInput
+                        currency="COP"
+                        value={
+                          typeof field.state.value === "number" &&
+                          Number.isFinite(field.state.value)
+                            ? (field.state.value as number)
+                            : null
+                        }
+                        onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                      />
+                      {error?.message && (
+                        <p className="text-xs text-destructive">{error.message}</p>
+                      )}
+                    </div>
+                  )
+                }}
+              </createForm.Field>
+              <createForm.Field name="deadline">
+                {(field) => <FormField field={field} label="Fecha límite" type="date" />}
+              </createForm.Field>
             </div>
             <div className="flex justify-end gap-2">
               <Button
@@ -295,18 +373,123 @@ export default function GoalsPage() {
                 variant="outline"
                 onClick={() => {
                   setCreating(false)
-                  setEditing(null)
+                  createForm.reset(CREATE_DEFAULTS)
                 }}
               >
                 Cancelar
               </Button>
+              <Button type="submit" disabled={create.isPending || createForm.state.isSubmitting}>
+                {create.isPending || createForm.state.isSubmitting ? "…" : "Guardar"}
+              </Button>
+            </div>
+          </form>
+        </DialogPopup>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setEditing(null)
+            editForm.reset(EDIT_DEFAULTS)
+          }
+        }}
+      >
+        <DialogPopup className="max-w-md">
+          <DialogTitle>Editar meta</DialogTitle>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void editForm.handleSubmit()
+            }}
+            className="space-y-4"
+          >
+            <editForm.Field name="name">
+              {(field) => <FormField field={field} label="Nombre" />}
+            </editForm.Field>
+            <editForm.Field name="monthlyAmount">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Aporte mensual * (COP)</Label>
+                    <MoneyInput
+                      currency="COP"
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </editForm.Field>
+            <editForm.Field name="savingsAccountId">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Cuenta de ahorro *</Label>
+                    <EntitySelect
+                      value={field.state.value as number | null}
+                      onChange={(v) => field.handleChange(v as never)}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </editForm.Field>
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              Meta definida: completa objetivo y fecha. Abierta: deja ambos vacíos.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <editForm.Field name="targetAmount">
+                {(field) => {
+                  const error = field.state.meta.errors[0] as { message?: string } | undefined
+                  return (
+                    <div className="space-y-1.5">
+                      <Label>Objetivo (COP)</Label>
+                      <MoneyInput
+                        currency="COP"
+                        value={
+                          typeof field.state.value === "number" &&
+                          Number.isFinite(field.state.value)
+                            ? (field.state.value as number)
+                            : null
+                        }
+                        onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                      />
+                      {error?.message && (
+                        <p className="text-xs text-destructive">{error.message}</p>
+                      )}
+                    </div>
+                  )
+                }}
+              </editForm.Field>
+              <editForm.Field name="deadline">
+                {(field) => <FormField field={field} label="Fecha límite" type="date" />}
+              </editForm.Field>
+            </div>
+            <div className="flex justify-end gap-2">
               <Button
-                type="submit"
-                disabled={
-                  (editing ? editInvalid : createInvalid) || create.isPending || update.isPending
-                }
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEditing(null)
+                  editForm.reset(EDIT_DEFAULTS)
+                }}
               >
-                {create.isPending || update.isPending ? "…" : "Guardar"}
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={update.isPending || editForm.state.isSubmitting}>
+                {update.isPending || editForm.state.isSubmitting ? "…" : "Guardar"}
               </Button>
             </div>
           </form>
@@ -314,33 +497,67 @@ export default function GoalsPage() {
       </Dialog>
 
       {/* Contribute dialog */}
-      <Dialog open={contributing !== null} onOpenChange={(o) => !o && setContributing(null)}>
+      <Dialog
+        open={contributing !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setContributing(null)
+            contributeForm.reset(CONTRIBUTE_DEFAULTS)
+          }
+        }}
+      >
         <DialogPopup className="max-w-sm">
           <DialogTitle>Aportar a {contributing?.name}</DialogTitle>
           <form
             onSubmit={(e) => {
               e.preventDefault()
-              if (amount !== null && date) contribute.mutate()
+              e.stopPropagation()
+              void contributeForm.handleSubmit()
             }}
             className="space-y-4"
           >
             <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Transfiere desde tu cuenta origen predeterminada (configúrala en Ajustes).
             </p>
-            <div className="space-y-1.5">
-              <Label>Monto * (COP)</Label>
-              <MoneyInput currency="COP" value={amount} onChange={setAmount} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Fecha *</Label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            <contributeForm.Field name="amount">
+              {(field) => {
+                const error = field.state.meta.errors[0] as { message?: string } | undefined
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Monto * (COP)</Label>
+                    <MoneyInput
+                      currency="COP"
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )
+              }}
+            </contributeForm.Field>
+            <contributeForm.Field name="date">
+              {(field) => <FormField field={field} label="Fecha" type="date" />}
+            </contributeForm.Field>
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setContributing(null)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setContributing(null)
+                  contributeForm.reset(CONTRIBUTE_DEFAULTS)
+                }}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={amount === null || !date || contribute.isPending}>
-                {contribute.isPending ? "…" : "Aportar"}
+              <Button
+                type="submit"
+                disabled={contribute.isPending || contributeForm.state.isSubmitting}
+              >
+                {contribute.isPending || contributeForm.state.isSubmitting ? "…" : "Aportar"}
               </Button>
             </div>
           </form>
