@@ -264,3 +264,21 @@ def test_update_recurring_account_must_match_currency(session):
 def test_update_recurring_not_found(session):
     with pytest.raises(NotFound):
         recurring.update_recurring(session, 999, amount=1)
+
+
+def test_deactivate_then_restore_recurring(session):
+    acc = _acc(session)
+    item = recurring.create_recurring(
+        session, name="Rent", payee="", type=TxType.expense, mode=RecurringMode.auto, amount=1000,
+        currency="COP", category_id=None, account_id=acc.id, interval_unit=IntervalUnit.month,
+        interval_count=1, start_date=date(2026, 1, 1),
+    )
+    assert recurring.deactivate_recurring(session, item.id).active is False
+    assert recurring.list_recurring(session, active=True) == []
+    assert recurring.restore_recurring(session, item.id).active is True
+    assert len(recurring.list_recurring(session, active=True)) == 1
+
+
+def test_deactivate_recurring_not_found(session):
+    with pytest.raises(NotFound):
+        recurring.deactivate_recurring(session, 999)

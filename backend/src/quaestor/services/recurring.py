@@ -259,6 +259,40 @@ def materialize_due(session: Session, until_date: Date) -> list[RecurringOccurre
     return created
 
 
+def _set_active(session: Session, recurring_id: int, active: bool) -> RecurringItem:
+    """Private helper to set the active flag on a recurring item.
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    item.active = active
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+def deactivate_recurring(session: Session, recurring_id: int) -> RecurringItem:
+    """Soft-delete: stop materializing future occurrences (existing ones stay).
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    return _set_active(session, recurring_id, False)
+
+
+def restore_recurring(session: Session, recurring_id: int) -> RecurringItem:
+    """Re-activate a deactivated recurring item. Idempotent no-op if already active.
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    return _set_active(session, recurring_id, True)
+
+
 def skip_recurring(
     session: Session, recurring_id: int, due_date: Date
 ) -> RecurringOccurrence:
