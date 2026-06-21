@@ -25,6 +25,8 @@ from ..domain.money import to_base_cents
 from ..domain.rules import goal_progress_calc, month_bounds, transfer_deltas
 from . import transactions as _tx
 
+_UNSET = object()
+
 
 def create_goal(
     session: Session,
@@ -62,6 +64,64 @@ def create_goal(
         name=name, monthly_amount=monthly_amount, savings_account_id=savings_account_id,
         target_amount=target_amount, deadline=deadline, status=GoalStatus.active,
     )
+    session.add(goal)
+    session.commit()
+    session.refresh(goal)
+    return goal
+
+
+def list_goals(session: Session) -> list[Goal]:
+    """All goals (any status), ordered by id, for management UIs."""
+    return list(session.exec(select(Goal).order_by(Goal.id)).all())
+
+
+def update_goal(
+    session: Session,
+    goal_id: int,
+    *,
+    name: str | None = None,
+    monthly_amount: int | None = None,
+    target_amount=_UNSET,
+    deadline=_UNSET,
+    savings_account_id: int | None = None,
+) -> Goal:
+    """Edit a goal, preserving the defined/open-ended invariant (target+deadline
+    both set or both null).
+
+    Raises:
+        NotFound: the goal does not exist.
+        ValidationError: monthly_amount <= 0; resulting target/deadline not both-or-
+            neither; target_amount <= 0; savings account missing/not-savings/archived.
+    """
+    goal = session.get(Goal, goal_id)
+    if goal is None:
+        raise NotFound(f"goal {goal_id} not found")
+    if name is not None:
+        goal.name = name
+    if monthly_amount is not None:
+        if monthly_amount <= 0:
+            raise ValidationError("monthly_amount must be > 0")
+        goal.monthly_amount = monthly_amount
+    new_target = goal.target_amount if target_amount is _UNSET else target_amount
+    new_deadline = goal.deadline if deadline is _UNSET else deadline
+    if (new_target is None) != (new_deadline is None):
+        raise ValidationError(
+            "a defined goal needs both target_amount and deadline; "
+            "an open-ended goal needs neither"
+        )
+    if new_target is not None and new_target <= 0:
+        raise ValidationError("target_amount must be > 0")
+    goal.target_amount = new_target
+    goal.deadline = new_deadline
+    if savings_account_id is not None:
+        acc = session.get(Account, savings_account_id)
+        if acc is None:
+            raise ValidationError(f"savings account {savings_account_id} does not exist")
+        if acc.type != AccountType.savings:
+            raise ValidationError(f"account {savings_account_id} is not a savings account")
+        if acc.archived:
+            raise ValidationError(f"savings account {savings_account_id} is archived")
+        goal.savings_account_id = savings_account_id
     session.add(goal)
     session.commit()
     session.refresh(goal)

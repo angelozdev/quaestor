@@ -326,3 +326,36 @@ def test_confirm_reaching_target_marks_reached(session, goal_post_confirm_hook):
     tx = _planned_transfers(session)[0]
     planned.confirm_payment(session, tx.id)
     assert session.get(Goal, g.id).status == GoalStatus.reached
+
+
+@pytest.mark.skip(reason="pause_goal lands in Task 11")
+def test_list_goals_returns_all_statuses(session):
+    sav = _savings(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    goals.pause_goal(session, g.id)
+    goals.create_goal(session, name="B", monthly_amount=100_000, savings_account_id=sav.id)
+    names = [x.name for x in goals.list_goals(session)]
+    assert names == ["A", "B"]
+
+
+def test_update_goal_name_and_monthly(session):
+    sav = _savings(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    out = goals.update_goal(session, g.id, name="A2", monthly_amount=150_000)
+    assert out.name == "A2" and out.monthly_amount == 150_000
+
+
+def test_update_goal_to_defined_requires_both(session):
+    sav = _savings(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    with pytest.raises(ValidationError):
+        goals.update_goal(session, g.id, target_amount=1_000_000)  # deadline missing
+
+
+def test_update_goal_to_open_ended_clears_both(session):
+    sav = _savings(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000,
+                          savings_account_id=sav.id, target_amount=1_000_000,
+                          deadline=date(2026, 12, 1))
+    out = goals.update_goal(session, g.id, target_amount=None, deadline=None)
+    assert out.target_amount is None and out.deadline is None
