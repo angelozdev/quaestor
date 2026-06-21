@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { TransactionFilters } from "@/lib/api";
+import type { TransactionFilters } from "@/lib/api/types";
 
 // Query-key factory. First element is the entity root used for broad invalidation.
 export const qk = {
