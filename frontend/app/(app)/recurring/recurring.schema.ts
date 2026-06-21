@@ -7,21 +7,13 @@ export const recurringCreateSchema = z
     name: requiredString,
     payee: z.string().max(500, messages.max500).optional(),
     amount: positiveCents,
-    currency: z.enum(["COP", "USD"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
+    currency: z.enum(["COP", "USD"], { message: messages.opcionInvalida }),
     categoryId: z.number().nullable(),
     accountId: z.number().nullable(),
-    type: z.enum(["expense", "income"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
-    mode: z.enum(["auto", "manual"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
+    type: z.enum(["expense", "income"], { message: messages.opcionInvalida }),
+    mode: z.enum(["auto", "manual"], { message: messages.opcionInvalida }),
     intervalCount,
-    intervalUnit: z.enum(["day", "week", "month", "year"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
+    intervalUnit: z.enum(["day", "week", "month", "year"], { message: messages.opcionInvalida }),
     startDate: isoDate,
     endDate: isoDate.optional().or(z.literal("")),
   })
