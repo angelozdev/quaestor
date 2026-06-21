@@ -296,3 +296,36 @@ def record_confirmed_contribution(tx: Transaction, session: Session) -> GoalCont
     session.add(contribution)
     _maybe_mark_reached(session, goal)
     return contribution
+
+
+def pause_goal(session: Session, goal_id: int) -> Goal:
+    """Soft-delete: pause a goal (drops out of active progress; contributions stay).
+
+    Raises:
+        NotFound: the goal does not exist.
+    """
+    goal = session.get(Goal, goal_id)
+    if goal is None:
+        raise NotFound(f"goal {goal_id} not found")
+    goal.status = GoalStatus.paused
+    session.add(goal)
+    session.commit()
+    session.refresh(goal)
+    return goal
+
+
+def restore_goal(session: Session, goal_id: int) -> Goal:
+    """Re-activate a paused goal. Re-evaluates reached. No-op if already active.
+
+    Raises:
+        NotFound: the goal does not exist.
+    """
+    goal = session.get(Goal, goal_id)
+    if goal is None:
+        raise NotFound(f"goal {goal_id} not found")
+    goal.status = GoalStatus.active
+    _maybe_mark_reached(session, goal)
+    session.add(goal)
+    session.commit()
+    session.refresh(goal)
+    return goal

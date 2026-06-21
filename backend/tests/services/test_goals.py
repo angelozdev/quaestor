@@ -328,7 +328,6 @@ def test_confirm_reaching_target_marks_reached(session, goal_post_confirm_hook):
     assert session.get(Goal, g.id).status == GoalStatus.reached
 
 
-@pytest.mark.skip(reason="pause_goal lands in Task 11")
 def test_list_goals_returns_all_statuses(session):
     sav = _savings(session)
     g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
@@ -359,3 +358,17 @@ def test_update_goal_to_open_ended_clears_both(session):
                           deadline=date(2026, 12, 1))
     out = goals.update_goal(session, g.id, target_amount=None, deadline=None)
     assert out.target_amount is None and out.deadline is None
+
+
+def test_pause_then_restore_goal(session):
+    sav = _savings(session)
+    g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
+    assert goals.pause_goal(session, g.id).status == GoalStatus.paused
+    # paused goal drops out of active progress
+    assert goals.goals_progress(session) == []
+    assert goals.restore_goal(session, g.id).status == GoalStatus.active
+
+
+def test_pause_goal_not_found(session):
+    with pytest.raises(NotFound):
+        goals.pause_goal(session, 999)
