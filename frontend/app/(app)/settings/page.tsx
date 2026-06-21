@@ -4,11 +4,14 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { api, ApiError } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { EntitySelect } from "@/components/entity-select";
 import { Input, Label, Button } from "@/ui";
+import { getSettings, updateSettings } from "@/lib/api/settings";
+import { getFx, setFx } from "@/lib/api/fx";
+import { listAccounts } from "@/lib/api/accounts";
 
 const TODAY = format(new Date(), "yyyy-MM-dd");
 
@@ -25,10 +28,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function SettingsPage() {
   const qc = useQueryClient();
-  const settings = useQuery({ queryKey: qk.settings(), queryFn: () => api.getSettings() });
+  const settings = useQuery({ queryKey: qk.settings(), queryFn: () => getSettings() });
   const fx = useQuery({
     queryKey: qk.fx(),
-    queryFn: () => api.getFx(),
+    queryFn: () => getFx(),
     retry: false, // a 409 MissingRate is an expected "no rate yet" state, not a transient error
   });
 
@@ -44,13 +47,13 @@ export default function SettingsPage() {
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
 
   const saveSettings = useMutation({
-    mutationFn: () => api.updateSettings({ default_source_account_id: sourceId }),
+    mutationFn: () => updateSettings({ default_source_account_id: sourceId }),
     onSuccess: () => { toast.success("Ajustes guardados"); invalidate(qc, "settingsWrite"); },
     onError: onErr,
   });
 
   const saveFx = useMutation({
-    mutationFn: () => api.setFx({ date: fxDate, usd_cop: usdCop }),
+    mutationFn: () => setFx({ date: fxDate, usd_cop: usdCop }),
     onSuccess: () => { toast.success("Tasa registrada"); invalidate(qc, "fxWrite"); setUsdCop(""); },
     onError: onErr,
   });
@@ -71,7 +74,7 @@ export default function SettingsPage() {
             value={sourceId}
             onChange={setSourceId}
             queryKey={qk.accounts(false)}
-            queryFn={() => api.listAccounts(false)}
+            queryFn={() => listAccounts(false)}
             allowNullLabel="Ninguna"
           />
         </div>
