@@ -38,3 +38,13 @@ export {
   TabsContent,
   tabsListVariants,
 } from "./components/tabs"
+export {
+  Dialog,
+  DialogTrigger,
+  DialogClose,
+  DialogPortal,
+  DialogBackdrop,
+  DialogPopup,
+  DialogTitle,
+  DialogDescription,
+} from "./components/dialog"
