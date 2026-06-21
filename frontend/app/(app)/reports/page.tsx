@@ -12,7 +12,7 @@ import { ErrorState } from "@/components/error-state";
 
 const CARD_STYLE = {
   background: "var(--card)",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.07)",
+  boxShadow: "var(--shadow-card)",
   borderRadius: "var(--radius)",
 } as const;
 

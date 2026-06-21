@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   {
@@ -61,7 +62,9 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                 style={{
                   color: active ? "var(--foreground)" : "var(--muted-foreground)",
                   fontWeight: active ? 500 : 400,
-                  background: active ? "var(--muted)" : "transparent",
+                  background: active
+                    ? "color-mix(in oklch, var(--primary) 14%, transparent)"
+                    : "transparent",
                 }}
               >
                 {n.label}
@@ -98,23 +101,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         style={{ background: "var(--sidebar)", borderColor: "var(--sidebar-border)" }}
       >
         <div className="space-y-6">
-          <Link href="/" className="px-2 text-sm font-semibold tracking-tight">
+          <Link href="/" className="font-display block px-2 text-base font-semibold tracking-tight">
             Quaestor
           </Link>
           <NavLinks pathname={pathname} />
         </div>
-        <button onClick={logout} className="px-2 text-left text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Salir
-        </button>
+        <div className="flex items-center justify-between px-2">
+          <button onClick={logout} className="text-left text-sm transition-colors hover:text-[var(--foreground)]" style={{ color: "var(--muted-foreground)" }}>
+            Salir
+          </button>
+          <ThemeToggle />
+        </div>
       </aside>
 
       {/* Mobile top bar */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-white px-4 md:hidden" style={{ borderColor: "var(--border)" }}>
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b px-4 md:hidden" style={{ background: "var(--card)", borderColor: "var(--border)" }}>
           <button onClick={() => setDrawer(true)} aria-label="Abrir menú">
             <Menu className="size-5" />
           </button>
-          <span className="text-sm font-semibold tracking-tight">Quaestor</span>
+          <span className="font-display text-base font-semibold tracking-tight">Quaestor</span>
+          <ThemeToggle className="ml-auto" />
         </header>
 
         {/* Mobile drawer */}
@@ -127,7 +134,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
-                  <span className="text-sm font-semibold tracking-tight">Quaestor</span>
+                  <span className="font-display text-base font-semibold tracking-tight">Quaestor</span>
                   <button onClick={() => setDrawer(false)} aria-label="Cerrar menú">
                     <X className="size-5" />
                   </button>

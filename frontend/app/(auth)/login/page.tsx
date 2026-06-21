@@ -34,11 +34,11 @@ export default function LoginPage() {
           className="rounded-xl p-8 space-y-6"
           style={{
             background: "var(--card)",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.06)",
+            boxShadow: "var(--shadow-pop)",
           }}
         >
           <div className="space-y-1">
-            <h1 className="text-lg font-semibold tracking-tight">Quaestor</h1>
+            <h1 className="font-display text-xl font-semibold tracking-tight">Quaestor</h1>
             <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Ingresa tu contraseña para continuar
             </p>
@@ -76,8 +76,8 @@ export default function LoginPage() {
               disabled={loading}
               className="w-full rounded-md py-2 text-sm font-medium transition-opacity disabled:opacity-50"
               style={{
-                background: "var(--foreground)",
-                color: "var(--background)",
+                background: "var(--primary)",
+                color: "var(--primary-foreground)",
               }}
             >
               {loading ? "Entrando…" : "Entrar"}

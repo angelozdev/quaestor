@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Figtree } from "next/font/google";
+import { Bricolage_Grotesque, Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const figtree = Figtree({
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
-  variable: "--font-figtree",
-  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -16,7 +22,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-CO" className={figtree.variable}>
+    <html
+      lang="es-CO"
+      suppressHydrationWarning
+      className={`${bricolage.variable} ${manrope.variable}`}
+    >
       <body className="font-sans antialiased">
         <Providers>{children}</Providers>
       </body>

@@ -12,13 +12,13 @@ const MONTH = format(new Date(), "yyyy-MM");
 
 const CARD_STYLE = {
   background: "var(--card)",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.07)",
+  boxShadow: "var(--shadow-card)",
   borderRadius: "var(--radius)",
 } as const;
 
 function Card({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="p-5 space-y-4" style={CARD_STYLE}>
+    <div className="card-lift p-5 space-y-4" style={CARD_STYLE}>
       <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
         {label}
       </p>
@@ -55,14 +55,14 @@ export default function DashboardPage() {
     <div className="space-y-8">
 
       {/* Hero */}
-      <div className="animate-fade-up space-y-1">
+      <div className="hero-glow animate-fade-up space-y-1">
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Disponible para gastar · {MONTH}
         </p>
         {sts.isLoading ? (
-          <Skeleton className="h-12 w-56" />
+          <Skeleton className="h-14 w-64" />
         ) : sts.data ? (
-          <p className="text-5xl font-bold tabular-nums tracking-tight">
+          <p className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl">
             {formatCents(sts.data.free, "COP")}
           </p>
         ) : (
@@ -152,7 +152,7 @@ export default function DashboardPage() {
                         <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--muted)" }}>
                           <div
                             className="h-full rounded-full"
-                            style={{ width: `${pct}%`, background: "var(--foreground)" }}
+                            style={{ width: `${pct}%`, background: "var(--primary)" }}
                           />
                         </div>
                       )}

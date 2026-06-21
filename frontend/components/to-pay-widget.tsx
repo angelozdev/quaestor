@@ -49,7 +49,7 @@ export function ToPayWidget() {
       className="p-5 space-y-4"
       style={{
         background: "var(--card)",
-        boxShadow: "0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.07)",
+        boxShadow: "var(--shadow-card)",
         borderRadius: "var(--radius)",
       }}
     >
@@ -70,7 +70,7 @@ export function ToPayWidget() {
                   background: active ? "var(--card)" : "transparent",
                   color: active ? "var(--foreground)" : "var(--muted-foreground)",
                   fontWeight: active ? 500 : 400,
-                  boxShadow: active ? "0 1px 2px rgba(0,0,0,0.08)" : "none",
+                  border: active ? "1px solid var(--border)" : "1px solid transparent",
                 }}
               >
                 {s === "week" ? "Esta semana" : "Este mes"}
@@ -94,7 +94,7 @@ export function ToPayWidget() {
 
       {query.data && (
         <>
-          <p className="text-3xl font-bold tabular-nums tracking-tight">
+          <p className="font-display text-3xl font-bold tabular-nums tracking-tight">
             {formatCents(query.data.total_base, "COP")}
           </p>
 
