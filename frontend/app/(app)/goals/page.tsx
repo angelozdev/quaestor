@@ -16,7 +16,7 @@ export default function GoalsPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Metas" />
-      <Phase2Banner>Crear y contribuir a metas llega en la Fase 2 (requiere endpoints del backend).</Phase2Banner>
+      <Phase2Banner>Editar y eliminar metas llega en la Fase 2.</Phase2Banner>
 
       {goals.isError && <ErrorState message="No se pudieron cargar las metas" onRetry={() => goals.refetch()} />}
       {goals.data && goals.data.length === 0 && <EmptyState message="Sin metas activas" />}
