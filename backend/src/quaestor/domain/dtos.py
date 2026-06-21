@@ -18,6 +18,18 @@ class BudgetStatus:
 
 
 @dataclass(frozen=True)
+class BudgetLine:
+    category_id: int
+    category_name: str
+    assigned: int
+    rollover_in: int
+    spent: int
+    available: int
+    pct_used: int
+    status: str  # "over" | "under"
+
+
+@dataclass(frozen=True)
 class CommittedItem:
     kind: str  # "recurring" | "planned"
     name: str
