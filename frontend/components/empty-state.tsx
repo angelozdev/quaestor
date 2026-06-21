@@ -3,5 +3,5 @@ export function EmptyState({ message }: { message: string }) {
     <p className="py-6 text-center text-sm" style={{ color: "var(--muted-foreground)" }}>
       {message}
     </p>
-  );
+  )
 }

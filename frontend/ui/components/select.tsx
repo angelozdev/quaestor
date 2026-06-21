@@ -1,23 +1,23 @@
-"use client";
+"use client"
 
-import { Select as SelectPrimitive } from "@base-ui/react/select";
-import { Check, ChevronsUpDown } from "lucide-react";
-import { cn } from "../lib/cn";
+import { Select as SelectPrimitive } from "@base-ui/react/select"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "../lib/cn"
 
 export interface SelectItem {
-  value: string;
-  label: string;
+  value: string
+  label: string
 }
 
 export interface SelectProps {
-  value: string | null;
-  onValueChange: (value: string | null) => void;
-  items: SelectItem[];
-  placeholder?: string;
-  disabled?: boolean;
-  id?: string;
-  "aria-label"?: string;
-  className?: string;
+  value: string | null
+  onValueChange: (value: string | null) => void
+  items: SelectItem[]
+  placeholder?: string
+  disabled?: boolean
+  id?: string
+  "aria-label"?: string
+  className?: string
 }
 
 function Select({
@@ -30,15 +30,15 @@ function Select({
   className,
   "aria-label": ariaLabel,
 }: SelectProps) {
-  const labelFor = (v: string | null) => items.find((it) => it.value === v)?.label ?? null;
+  const labelFor = (v: string | null) => items.find((it) => it.value === v)?.label ?? null
   return (
     <SelectPrimitive.Root
       value={value}
       onValueChange={(v) => onValueChange(v)}
       disabled={disabled}
       items={items.reduce<Record<string, string>>((acc, it) => {
-        acc[it.value] = it.label;
-        return acc;
+        acc[it.value] = it.label
+        return acc
       }, {})}
     >
       <SelectPrimitive.Trigger
@@ -79,7 +79,7 @@ function Select({
         </SelectPrimitive.Positioner>
       </SelectPrimitive.Portal>
     </SelectPrimitive.Root>
-  );
+  )
 }
 
-export { Select };
+export { Select }

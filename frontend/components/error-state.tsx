@@ -1,8 +1,11 @@
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div className="space-y-3 py-6 text-center">
-      <p className="text-sm" style={{ color: "var(--expense)" }}>{message}</p>
+      <p className="text-sm" style={{ color: "var(--expense)" }}>
+        {message}
+      </p>
       <button
+        type="button"
         onClick={onRetry}
         className="text-xs px-3 py-1.5 rounded-md border transition-colors"
         style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
@@ -12,5 +15,5 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
         Reintentar
       </button>
     </div>
-  );
+  )
 }

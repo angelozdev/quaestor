@@ -1,64 +1,86 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { listCategoryGroups, createCategoryGroup, updateCategoryGroup, archiveCategoryGroup, restoreCategoryGroup } from "@/lib/api/category-groups";
-import { ApiError, type CategoryGroup } from "@/lib/api/types";
-import { qk, invalidate } from "@/lib/query";
-import { PageHeader } from "@/components/page-header";
-import { ErrorState } from "@/components/error-state";
-import { EmptyState } from "@/components/empty-state";
-import { StatusBadge } from "@/components/status-badge";
-import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog";
-import { ConfirmDialog } from "@/components/confirm-dialog";
-import { Button } from "@/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
+import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmptyState } from "@/components/empty-state"
+import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
+import { ErrorState } from "@/components/error-state"
+import { PageHeader } from "@/components/page-header"
+import { StatusBadge } from "@/components/status-badge"
+import {
+  archiveCategoryGroup,
+  createCategoryGroup,
+  listCategoryGroups,
+  restoreCategoryGroup,
+  updateCategoryGroup,
+} from "@/lib/api/category-groups"
+import { ApiError, type CategoryGroup } from "@/lib/api/types"
+import { invalidate, qk } from "@/lib/query"
+import { Button } from "@/ui"
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
   { kind: "number", name: "sort_order", label: "Orden", min: 0 },
-];
+]
 
 export default function CategoryGroupsPage() {
-  const qc = useQueryClient();
-  const [showArchived, setShowArchived] = useState(false);
-  const [editing, setEditing] = useState<CategoryGroup | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [archiving, setArchiving] = useState<CategoryGroup | null>(null);
+  const qc = useQueryClient()
+  const [showArchived, setShowArchived] = useState(false)
+  const [editing, setEditing] = useState<CategoryGroup | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [archiving, setArchiving] = useState<CategoryGroup | null>(null)
 
   const list = useQuery({
     queryKey: qk.categoryGroups(showArchived),
     queryFn: () => listCategoryGroups(showArchived),
-  });
+  })
 
-  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
+  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const onOk = (msg: string) => {
-    toast.success(msg);
-    invalidate(qc, "categoryGroupWrite");
-  };
+    toast.success(msg)
+    invalidate(qc, "categoryGroupWrite")
+  }
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
       createCategoryGroup({ name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
-    onSuccess: () => { onOk("Grupo creado"); setCreating(false); },
+    onSuccess: () => {
+      onOk("Grupo creado")
+      setCreating(false)
+    },
     onError: onErr,
-  });
+  })
   const update = useMutation({
-    mutationFn: (v: FormValues) =>
-      updateCategoryGroup(editing!.id, { name: String(v.name), sort_order: (v.sort_order as number) ?? 0 }),
-    onSuccess: () => { onOk("Grupo actualizado"); setEditing(null); },
+    mutationFn: (v: FormValues) => {
+      if (!editing) throw new Error("editing category group is required")
+      return updateCategoryGroup(editing.id, {
+        name: String(v.name),
+        sort_order: (v.sort_order as number) ?? 0,
+      })
+    },
+    onSuccess: () => {
+      onOk("Grupo actualizado")
+      setEditing(null)
+    },
     onError: onErr,
-  });
+  })
   const archive = useMutation({
     mutationFn: (id: number) => archiveCategoryGroup(id),
-    onSuccess: () => { onOk("Grupo archivado"); setArchiving(null); },
+    onSuccess: () => {
+      onOk("Grupo archivado")
+      setArchiving(null)
+    },
     onError: onErr,
-  });
+  })
   const restore = useMutation({
     mutationFn: (id: number) => restoreCategoryGroup(id),
-    onSuccess: () => { onOk("Grupo restaurado"); },
+    onSuccess: () => {
+      onOk("Grupo restaurado")
+    },
     onError: onErr,
-  });
+  })
 
   return (
     <div className="space-y-6">
@@ -67,19 +89,32 @@ export default function CategoryGroupsPage() {
         action={<Button onClick={() => setCreating(true)}>Nuevo</Button>}
       />
 
-      <label className="flex items-center gap-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
-        <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+      <label
+        className="flex items-center gap-2 text-sm"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(e) => setShowArchived(e.target.checked)}
+        />
         Mostrar archivados
       </label>
 
       {list.isLoading && (
         <div className="space-y-2">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded" style={{ background: "var(--muted)" }} />
+          {Array.from({ length: 5 }, (_, i) => `skel-${i}`).map((k) => (
+            <div
+              key={k}
+              className="h-10 animate-pulse rounded"
+              style={{ background: "var(--muted)" }}
+            />
           ))}
         </div>
       )}
-      {list.isError && <ErrorState message="No se pudieron cargar los grupos" onRetry={() => list.refetch()} />}
+      {list.isError && (
+        <ErrorState message="No se pudieron cargar los grupos" onRetry={() => list.refetch()} />
+      )}
       {list.data && list.data.length === 0 && <EmptyState message="Sin grupos" />}
 
       {list.data && list.data.length > 0 && (
@@ -103,11 +138,22 @@ export default function CategoryGroupsPage() {
                   <td className="px-3 py-2.5 text-right tabular-nums">{g.sort_order}</td>
                   <td className="px-3 py-2.5 text-right">
                     {g.archived ? (
-                      <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(g.id)}>Restaurar</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={restore.isPending}
+                        onClick={() => restore.mutate(g.id)}
+                      >
+                        Restaurar
+                      </Button>
                     ) : (
                       <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(g)}>Editar</Button>
-                        <Button variant="ghost" size="sm" onClick={() => setArchiving(g)}>Archivar</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setEditing(g)}>
+                          Editar
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setArchiving(g)}>
+                          Archivar
+                        </Button>
                       </div>
                     )}
                   </td>
@@ -146,5 +192,5 @@ export default function CategoryGroupsPage() {
         onConfirm={() => archiving && archive.mutate(archiving.id)}
       />
     </div>
-  );
+  )
 }

@@ -1,27 +1,27 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { login } from "@/lib/api/auth";
-import { ApiError } from "@/lib/api/types";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { toast } from "sonner"
+import { login } from "@/lib/api/auth"
+import { ApiError } from "@/lib/api/types"
 
 export default function LoginPage() {
-  const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const router = useRouter()
+  const [password, setPassword] = useState("")
+  const [loading, setLoading] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault()
+    setLoading(true)
     try {
-      await login(password);
-      router.replace("/");
-      router.refresh();
+      await login(password)
+      router.replace("/")
+      router.refresh()
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "No se pudo iniciar sesión");
+      toast.error(err instanceof ApiError ? err.message : "No se pudo iniciar sesión")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
@@ -47,10 +47,7 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium"
-              >
+              <label htmlFor="password" className="block text-sm font-medium">
                 Contraseña
               </label>
               <input
@@ -58,6 +55,7 @@ export default function LoginPage() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                // biome-ignore lint/a11y/noAutofocus: login form UX — focus password field on mount so users can start typing immediately
                 autoFocus
                 required
                 placeholder="••••••••"
@@ -87,5 +85,5 @@ export default function LoginPage() {
         </div>
       </div>
     </main>
-  );
+  )
 }

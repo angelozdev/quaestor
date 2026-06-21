@@ -1,28 +1,32 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { report } from "@/lib/api/reports";
-import { qk } from "@/lib/query";
-import { formatCents } from "@/lib/money";
-import { MoneyAmount } from "@/components/money-amount";
-import { PageHeader } from "@/components/page-header";
-import { ErrorState } from "@/components/error-state";
+import { useQuery } from "@tanstack/react-query"
+import { format } from "date-fns"
+import { useState } from "react"
+import { ErrorState } from "@/components/error-state"
+import { MoneyAmount } from "@/components/money-amount"
+import { PageHeader } from "@/components/page-header"
+import { report } from "@/lib/api/reports"
+import { formatCents } from "@/lib/money"
+import { qk } from "@/lib/query"
 
 const CARD_STYLE = {
   background: "var(--card)",
   boxShadow: "var(--shadow-card)",
   borderRadius: "var(--radius)",
-} as const;
+} as const
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>{title}</h2>
-      <div className="p-5" style={CARD_STYLE}>{children}</div>
+      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+        {title}
+      </h2>
+      <div className="p-5" style={CARD_STYLE}>
+        {children}
+      </div>
     </div>
-  );
+  )
 }
 
 function Row({
@@ -30,26 +34,29 @@ function Row({
   children,
   faint = false,
 }: {
-  label: string;
-  children: React.ReactNode;
-  faint?: boolean;
+  label: string
+  children: React.ReactNode
+  faint?: boolean
 }) {
   return (
     <div className="flex items-center justify-between gap-4 py-1.5">
-      <span className="text-sm" style={{ color: faint ? "var(--muted-foreground)" : "var(--foreground)" }}>
+      <span
+        className="text-sm"
+        style={{ color: faint ? "var(--muted-foreground)" : "var(--foreground)" }}
+      >
         {label}
       </span>
       {children}
     </div>
-  );
+  )
 }
 
 export default function ReportsPage() {
-  const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [month, setMonth] = useState(format(new Date(), "yyyy-MM"))
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: qk.report(month),
     queryFn: () => report(month),
-  });
+  })
 
   return (
     <div className="space-y-8">
@@ -90,12 +97,13 @@ export default function ReportsPage() {
 
       {data && (
         <div className="space-y-6 animate-fade-up">
-
           {/* Neto */}
           <Section title="Resultado del mes">
             <div className="space-y-4">
               <div className="space-y-0.5">
-                <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>Neto</p>
+                <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  Neto
+                </p>
                 <p
                   className="text-4xl font-bold tabular-nums tracking-tight"
                   style={{ color: data.net >= 0 ? "var(--income)" : "var(--expense)" }}
@@ -106,16 +114,30 @@ export default function ReportsPage() {
               <hr style={{ borderColor: "var(--border)" }} />
               <div className="space-y-1">
                 <Row label="Ingresos">
-                  <MoneyAmount cents={data.income} currency="COP" type="income" className="text-sm font-medium" />
+                  <MoneyAmount
+                    cents={data.income}
+                    currency="COP"
+                    type="income"
+                    className="text-sm font-medium"
+                  />
                 </Row>
                 <Row label="Gastos" faint>
-                  <MoneyAmount cents={data.expense} currency="COP" type="expense" className="text-sm font-medium" />
+                  <MoneyAmount
+                    cents={data.expense}
+                    currency="COP"
+                    type="expense"
+                    className="text-sm font-medium"
+                  />
                 </Row>
               </div>
               {data.drift_mom && (
                 <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
                   vs {data.drift_mom.prev_month} →{" "}
-                  <span style={{ color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)" }}>
+                  <span
+                    style={{
+                      color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)",
+                    }}
+                  >
                     {data.drift_mom.net_abs >= 0 ? "+" : ""}
                     {formatCents(data.drift_mom.net_abs, "COP")}
                   </span>
@@ -144,10 +166,16 @@ export default function ReportsPage() {
                       style={{ borderColor: "var(--border)" }}
                     >
                       <td className="py-2.5 text-sm">{e.category}</td>
-                      <td className="py-2.5 text-right tabular-nums text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      <td
+                        className="py-2.5 text-right tabular-nums text-sm"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         {formatCents(e.allocated, "COP")}
                       </td>
-                      <td className="py-2.5 text-right tabular-nums text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      <td
+                        className="py-2.5 text-right tabular-nums text-sm"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         {formatCents(e.spent, "COP")}
                       </td>
                       <td
@@ -173,7 +201,10 @@ export default function ReportsPage() {
                       <span className="text-sm font-medium tabular-nums">
                         {formatCents(c.total, "COP")}
                       </span>
-                      <span className="text-xs w-9 text-right" style={{ color: "var(--muted-foreground)" }}>
+                      <span
+                        className="text-xs w-9 text-right"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         {c.pct.toFixed(1)}%
                       </span>
                     </div>
@@ -193,7 +224,10 @@ export default function ReportsPage() {
                       <span className="text-sm font-medium tabular-nums">
                         {formatCents(g.total, "COP")}
                       </span>
-                      <span className="text-xs w-9 text-right" style={{ color: "var(--muted-foreground)" }}>
+                      <span
+                        className="text-xs w-9 text-right"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
                         {g.pct.toFixed(1)}%
                       </span>
                     </div>
@@ -212,26 +246,34 @@ export default function ReportsPage() {
               <hr style={{ borderColor: "var(--border)" }} />
               <div className="space-y-1">
                 <Row label="Ingreso previsto" faint>
-                  <span className="text-sm tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                  <span
+                    className="text-sm tabular-nums"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
                     {formatCents(data.safe_to_spend.income_forecast, "COP")}
                   </span>
                 </Row>
                 <Row label="Comprometido" faint>
-                  <span className="text-sm tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                  <span
+                    className="text-sm tabular-nums"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
                     {formatCents(data.safe_to_spend.committed, "COP")}
                   </span>
                 </Row>
                 <Row label="Asignado a sobres" faint>
-                  <span className="text-sm tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                  <span
+                    className="text-sm tabular-nums"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
                     {formatCents(data.safe_to_spend.assigned_envelopes, "COP")}
                   </span>
                 </Row>
               </div>
             </div>
           </Section>
-
         </div>
       )}
     </div>
-  );
+  )
 }

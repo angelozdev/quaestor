@@ -67,18 +67,18 @@
 
 /* Neutral default reference theme. The app may override any of these. */
 :root {
-  --background: oklch(1.0 0 0);
+  --background: oklch(1 0 0);
   --foreground: oklch(0.09 0.003 60);
-  --card: oklch(1.0 0 0);
+  --card: oklch(1 0 0);
   --card-foreground: oklch(0.09 0.003 60);
-  --popover: oklch(1.0 0 0);
+  --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.09 0.003 60);
   --primary: oklch(0.09 0.003 60);
-  --primary-foreground: oklch(1.0 0 0);
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.96 0.002 60);
   --secondary-foreground: oklch(0.09 0.003 60);
   --muted: oklch(0.96 0.002 60);
-  --muted-foreground: oklch(0.50 0.006 60);
+  --muted-foreground: oklch(0.5 0.006 60);
   --accent: oklch(0.96 0.002 60);
   --accent-foreground: oklch(0.09 0.003 60);
   --destructive: oklch(0.49 0.18 27);
@@ -90,13 +90,13 @@
   --chart-1: oklch(0.09 0.003 60);
   --chart-2: oklch(0.42 0.13 152);
   --chart-3: oklch(0.49 0.18 27);
-  --chart-4: oklch(0.50 0.006 60);
+  --chart-4: oklch(0.5 0.006 60);
   --chart-5: oklch(0.91 0.003 60);
 
   --sidebar: oklch(0.97 0.002 60);
   --sidebar-foreground: oklch(0.09 0.003 60);
   --sidebar-primary: oklch(0.09 0.003 60);
-  --sidebar-primary-foreground: oklch(1.0 0 0);
+  --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.96 0.002 60);
   --sidebar-accent-foreground: oklch(0.09 0.003 60);
   --sidebar-border: oklch(0.91 0.003 60);

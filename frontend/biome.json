@@ -35,6 +35,11 @@
     "lineWidth": 100,
     "lineEnding": "lf"
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
@@ -60,13 +65,13 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@/app":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/app": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
                   "@/app/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
-                  "@/lib":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/lib": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
                   "@/lib/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
-                  "@/components":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/components": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
                   "@/components/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
-                  "@/hooks":   "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
+                  "@/hooks": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks.",
                   "@/hooks/*": "ui/ is the app-agnostic design system (ADR-0002): do not import @/app, @/lib, @/components, or @/hooks."
                 }
               }

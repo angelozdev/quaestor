@@ -1,14 +1,12 @@
-import { get, post, qs } from "./client";
-import type { ToPay, Transaction, PlanPaymentCreate, ConfirmPaymentBody } from "./types";
+import { get, post, qs } from "./client"
+import type { ConfirmPaymentBody, PlanPaymentCreate, ToPay, Transaction } from "./types"
 
 export const toPay = (since: string, until: string) =>
-  get<ToPay>(`/planned/to-pay${qs({ since, until })}`);
+  get<ToPay>(`/planned/to-pay${qs({ since, until })}`)
 
-export const planPayment = (body: PlanPaymentCreate) =>
-  post<Transaction>("/planned", body);
+export const planPayment = (body: PlanPaymentCreate) => post<Transaction>("/planned", body)
 
 export const confirmPayment = (id: number, body: ConfirmPaymentBody = {}) =>
-  post<Transaction>(`/planned/${id}/confirm`, body);
+  post<Transaction>(`/planned/${id}/confirm`, body)
 
-export const skipPlanned = (id: number) =>
-  post<Transaction>(`/planned/${id}/skip`, {});
+export const skipPlanned = (id: number) => post<Transaction>(`/planned/${id}/skip`, {})

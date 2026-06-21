@@ -1,14 +1,7 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import {
-  Dialog,
-  DialogPopup,
-  DialogTitle,
-  DialogDescription,
-  Button,
-  Input,
-} from "@/ui";
+import { useEffect, useState } from "react"
+import { Button, Dialog, DialogDescription, DialogPopup, DialogTitle, Input } from "@/ui"
 
 export function ConfirmDialog({
   open,
@@ -21,24 +14,24 @@ export function ConfirmDialog({
   pending = false,
   requireTextMatch,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: React.ReactNode;
-  confirmLabel?: string;
-  onConfirm: () => void;
-  destructive?: boolean;
-  pending?: boolean;
-  requireTextMatch?: string;
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  description: React.ReactNode
+  confirmLabel?: string
+  onConfirm: () => void
+  destructive?: boolean
+  pending?: boolean
+  requireTextMatch?: string
 }) {
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState("")
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!open) setTyped("");
-  }, [open]);
+    if (!open) setTyped("")
+  }, [open])
 
-  const blocked = requireTextMatch !== undefined && typed.trim() !== requireTextMatch;
+  const blocked = requireTextMatch !== undefined && typed.trim() !== requireTextMatch
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -70,5 +63,5 @@ export function ConfirmDialog({
         </div>
       </DialogPopup>
     </Dialog>
-  );
+  )
 }

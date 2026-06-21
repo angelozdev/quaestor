@@ -1,25 +1,27 @@
-import { get, post, patch, del, qs } from "./client";
+import { del, get, patch, post, qs } from "./client"
 import type {
   Transaction,
-  TransactionFilters,
   TransactionCreate,
+  TransactionFilters,
   TransactionUpdate,
   TransferCreate,
   TransferOut,
-} from "./types";
+} from "./types"
 
 export const listTransactions = (filters: TransactionFilters = {}) =>
-  get<Transaction[]>(`/transactions${qs(filters as Record<string, string | number | boolean | undefined>)}`);
+  get<Transaction[]>(
+    `/transactions${qs(filters as Record<string, string | number | boolean | undefined>)}`,
+  )
 
-export const getTransaction = (id: number) => get<Transaction>(`/transactions/${id}`);
+export const getTransaction = (id: number) => get<Transaction>(`/transactions/${id}`)
 
 export const createTransaction = (body: TransactionCreate) =>
-  post<Transaction>("/transactions", body);
+  post<Transaction>("/transactions", body)
 
 export const createTransfer = (body: TransferCreate) =>
-  post<TransferOut>("/transactions/transfer", body);
+  post<TransferOut>("/transactions/transfer", body)
 
 export const updateTransaction = (id: number, body: TransactionUpdate) =>
-  patch<Transaction>(`/transactions/${id}`, body);
+  patch<Transaction>(`/transactions/${id}`, body)
 
-export const deleteTransaction = (id: number) => del<void>(`/transactions/${id}`);
+export const deleteTransaction = (id: number) => del<void>(`/transactions/${id}`)

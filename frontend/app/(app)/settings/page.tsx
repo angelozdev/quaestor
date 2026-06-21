@@ -1,64 +1,76 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { toast } from "sonner";
-import { ApiError } from "@/lib/api";
-import { qk, invalidate } from "@/lib/query";
-import { PageHeader } from "@/components/page-header";
-import { EntitySelect } from "@/components/entity-select";
-import { Input, Label, Button } from "@/ui";
-import { getSettings, updateSettings } from "@/lib/api/settings";
-import { getFx, setFx } from "@/lib/api/fx";
-import { listAccounts } from "@/lib/api/accounts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { format } from "date-fns"
+import { useEffect, useState } from "react"
+import { toast } from "sonner"
+import { EntitySelect } from "@/components/entity-select"
+import { PageHeader } from "@/components/page-header"
+import { ApiError } from "@/lib/api"
+import { listAccounts } from "@/lib/api/accounts"
+import { getFx, setFx } from "@/lib/api/fx"
+import { getSettings, updateSettings } from "@/lib/api/settings"
+import { invalidate, qk } from "@/lib/query"
+import { Button, Input, Label } from "@/ui"
 
-const TODAY = format(new Date(), "yyyy-MM-dd");
+const TODAY = format(new Date(), "yyyy-MM-dd")
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>{title}</h2>
-      <div className="space-y-4 rounded-lg border p-5" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+        {title}
+      </h2>
+      <div
+        className="space-y-4 rounded-lg border p-5"
+        style={{ borderColor: "var(--border)", background: "var(--card)" }}
+      >
         {children}
       </div>
     </div>
-  );
+  )
 }
 
 export default function SettingsPage() {
-  const qc = useQueryClient();
-  const settings = useQuery({ queryKey: qk.settings(), queryFn: () => getSettings() });
+  const qc = useQueryClient()
+  const settings = useQuery({ queryKey: qk.settings(), queryFn: () => getSettings() })
   const fx = useQuery({
     queryKey: qk.fx(),
     queryFn: () => getFx(),
     retry: false, // a 409 MissingRate is an expected "no rate yet" state, not a transient error
-  });
+  })
 
-  const [sourceId, setSourceId] = useState<number | null>(null);
+  const [sourceId, setSourceId] = useState<number | null>(null)
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (settings.data) setSourceId(settings.data.default_source_account_id);
-  }, [settings.data]);
+    if (settings.data) setSourceId(settings.data.default_source_account_id)
+  }, [settings.data])
 
-  const [fxDate, setFxDate] = useState(TODAY);
-  const [usdCop, setUsdCop] = useState("");
+  const [fxDate, setFxDate] = useState(TODAY)
+  const [usdCop, setUsdCop] = useState("")
 
-  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
+  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
 
   const saveSettings = useMutation({
     mutationFn: () => updateSettings({ default_source_account_id: sourceId }),
-    onSuccess: () => { toast.success("Ajustes guardados"); invalidate(qc, "settingsWrite"); },
+    onSuccess: () => {
+      toast.success("Ajustes guardados")
+      invalidate(qc, "settingsWrite")
+    },
     onError: onErr,
-  });
+  })
 
   const saveFx = useMutation({
     mutationFn: () => setFx({ date: fxDate, usd_cop: usdCop }),
-    onSuccess: () => { toast.success("Tasa registrada"); invalidate(qc, "fxWrite"); setUsdCop(""); },
+    onSuccess: () => {
+      toast.success("Tasa registrada")
+      invalidate(qc, "fxWrite")
+      setUsdCop("")
+    },
     onError: onErr,
-  });
+  })
 
-  const fxMissing = fx.isError && fx.error instanceof ApiError && fx.error.code === "MissingRate";
+  const fxMissing = fx.isError && fx.error instanceof ApiError && fx.error.code === "MissingRate"
 
   return (
     <div className="space-y-6">
@@ -91,13 +103,16 @@ export default function SettingsPage() {
           {fx.isLoading
             ? "…"
             : fxMissing
-            ? "Sin tasa registrada"
-            : fx.data
-            ? `${fx.data.usd_cop} (${fx.data.date})`
-            : "—"}
+              ? "Sin tasa registrada"
+              : fx.data
+                ? `${fx.data.usd_cop} (${fx.data.date})`
+                : "—"}
         </p>
         <form
-          onSubmit={(e) => { e.preventDefault(); if (usdCop) saveFx.mutate(); }}
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (usdCop) saveFx.mutate()
+          }}
           className="grid grid-cols-2 gap-3"
         >
           <div className="space-y-1.5">
@@ -106,13 +121,20 @@ export default function SettingsPage() {
           </div>
           <div className="space-y-1.5">
             <Label>USD→COP</Label>
-            <Input inputMode="decimal" value={usdCop} onChange={(e) => setUsdCop(e.target.value)} placeholder="4000.00" />
+            <Input
+              inputMode="decimal"
+              value={usdCop}
+              onChange={(e) => setUsdCop(e.target.value)}
+              placeholder="4000.00"
+            />
           </div>
           <div className="col-span-2 flex justify-end">
-            <Button type="submit" disabled={!usdCop || saveFx.isPending}>{saveFx.isPending ? "…" : "Registrar tasa"}</Button>
+            <Button type="submit" disabled={!usdCop || saveFx.isPending}>
+              {saveFx.isPending ? "…" : "Registrar tasa"}
+            </Button>
           </div>
         </form>
       </Section>
     </div>
-  );
+  )
 }

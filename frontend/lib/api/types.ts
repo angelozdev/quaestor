@@ -1,396 +1,396 @@
 // Types mirror the P1 /api JSON contract (cents are integers).
-export type TxType = "income" | "expense" | "transfer";
-export type TxStatus = "planned" | "posted" | "skipped";
-export type AccountType = "debit" | "credit" | "cash" | "savings";
-export type IntervalUnit = "day" | "week" | "month" | "year";
-export type RecurringMode = "auto" | "manual";
-export type RecurringType = "expense" | "income";
-export type OccurrenceStatus = "posted" | "planned" | "skipped";
+export type TxType = "income" | "expense" | "transfer"
+export type TxStatus = "planned" | "posted" | "skipped"
+export type AccountType = "debit" | "credit" | "cash" | "savings"
+export type IntervalUnit = "day" | "week" | "month" | "year"
+export type RecurringMode = "auto" | "manual"
+export type RecurringType = "expense" | "income"
+export type OccurrenceStatus = "posted" | "planned" | "skipped"
 
 export interface Transaction {
-  id: number;
-  date: string;
-  payee: string;
-  notes: string | null;
-  type: TxType;
-  status: TxStatus;
-  amount: number;
-  currency: string;
-  fx_rate: string;
-  to_base: number;
-  account_id: number;
-  category_id: number | null;
-  transfer_group_id: string | null;
-  source: string;
-  created_at: string;
+  id: number
+  date: string
+  payee: string
+  notes: string | null
+  type: TxType
+  status: TxStatus
+  amount: number
+  currency: string
+  fx_rate: string
+  to_base: number
+  account_id: number
+  category_id: number | null
+  transfer_group_id: string | null
+  source: string
+  created_at: string
 }
 
 export interface Account {
-  id: number;
-  name: string;
-  type: AccountType;
-  currency: string;
-  balance: number;
-  archived: boolean;
+  id: number
+  name: string
+  type: AccountType
+  currency: string
+  balance: number
+  archived: boolean
 }
 
 export interface Category {
-  id: number;
-  name: string;
-  group_id: number | null;
-  is_income: boolean;
-  exclude_from_budget: boolean;
-  exclude_from_totals: boolean;
-  archived: boolean;
+  id: number
+  name: string
+  group_id: number | null
+  is_income: boolean
+  exclude_from_budget: boolean
+  exclude_from_totals: boolean
+  archived: boolean
 }
 
 export interface CategoryGroup {
-  id: number;
-  name: string;
-  sort_order: number;
-  archived: boolean;
+  id: number
+  name: string
+  sort_order: number
+  archived: boolean
 }
 
 export interface Tag {
-  id: number;
-  name: string;
+  id: number
+  name: string
 }
 
 export interface Recurring {
-  id: number;
-  name: string;
-  payee: string;
-  type: RecurringType;
-  mode: RecurringMode;
-  amount: number;
-  currency: string;
-  category_id: number | null;
-  account_id: number;
-  interval_unit: IntervalUnit;
-  interval_count: number;
-  start_date: string;
-  end_date: string | null;
-  active: boolean;
+  id: number
+  name: string
+  payee: string
+  type: RecurringType
+  mode: RecurringMode
+  amount: number
+  currency: string
+  category_id: number | null
+  account_id: number
+  interval_unit: IntervalUnit
+  interval_count: number
+  start_date: string
+  end_date: string | null
+  active: boolean
 }
 
 export interface Occurrence {
-  id: number;
-  recurring_id: number;
-  due_date: string;
-  status: OccurrenceStatus;
-  transaction_id: number | null;
+  id: number
+  recurring_id: number
+  due_date: string
+  status: OccurrenceStatus
+  transaction_id: number | null
 }
 
 export interface Settings {
-  id: number;
-  base_currency: string;
-  default_source_account_id: number | null;
+  id: number
+  base_currency: string
+  default_source_account_id: number | null
 }
 
 export interface Fx {
-  date: string;
-  usd_cop: string;
+  date: string
+  usd_cop: string
 }
 
 export interface TransferOut {
-  from_leg: Transaction;
-  to_leg: Transaction;
+  from_leg: Transaction
+  to_leg: Transaction
 }
 
 export interface ToPay {
-  items: Transaction[];
-  total_base: number;
+  items: Transaction[]
+  total_base: number
 }
 
 export interface CommittedItem {
-  kind: string;
-  name: string;
-  date: string;
-  amount: number;
+  kind: string
+  name: string
+  date: string
+  amount: number
 }
 
 export interface SafeToSpend {
-  year_month: string;
-  income_forecast: number;
-  committed: number;
-  assigned_envelopes: number;
-  free: number;
-  committed_breakdown: CommittedItem[];
+  year_month: string
+  income_forecast: number
+  committed: number
+  assigned_envelopes: number
+  free: number
+  committed_breakdown: CommittedItem[]
 }
 
 export interface GoalProgress {
-  goal_id: number;
-  name: string;
-  type: string;
-  monthly_amount: number;
-  saved: number;
-  target_amount: number | null;
-  deadline: string | null;
-  monthly_required: number | null;
-  on_track: boolean | null;
-  eta: string | null;
-  remaining: number | null;
+  goal_id: number
+  name: string
+  type: string
+  monthly_amount: number
+  saved: number
+  target_amount: number | null
+  deadline: string | null
+  monthly_required: number | null
+  on_track: boolean | null
+  eta: string | null
+  remaining: number | null
 }
 
-export type GoalStatus = "active" | "reached" | "paused";
+export type GoalStatus = "active" | "reached" | "paused"
 
 export interface Goal {
-  id: number;
-  name: string;
-  target_amount: number | null;
-  deadline: string | null;
-  monthly_amount: number;
-  savings_account_id: number;
-  status: GoalStatus;
+  id: number
+  name: string
+  target_amount: number | null
+  deadline: string | null
+  monthly_amount: number
+  savings_account_id: number
+  status: GoalStatus
 }
 
 export interface GoalContribution {
-  id: number;
-  goal_id: number;
-  date: string;
-  amount: number;
-  source: string;
-  transaction_id: number | null;
+  id: number
+  goal_id: number
+  date: string
+  amount: number
+  source: string
+  transaction_id: number | null
 }
 
 export interface BudgetLine {
-  category_id: number;
-  category_name: string;
-  assigned: number;
-  rollover_in: number;
-  spent: number;
-  available: number;
-  pct_used: number;
-  status: string;
+  category_id: number
+  category_name: string
+  assigned: number
+  rollover_in: number
+  spent: number
+  available: number
+  pct_used: number
+  status: string
 }
 
 export interface GoalCreate {
-  name: string;
-  monthly_amount: number;
-  savings_account_id: number;
-  target_amount?: number | null;
-  deadline?: string | null;
+  name: string
+  monthly_amount: number
+  savings_account_id: number
+  target_amount?: number | null
+  deadline?: string | null
 }
 
 export interface GoalUpdate {
-  name?: string;
-  monthly_amount?: number;
-  target_amount?: number | null;
-  deadline?: string | null;
-  savings_account_id?: number;
+  name?: string
+  monthly_amount?: number
+  target_amount?: number | null
+  deadline?: string | null
+  savings_account_id?: number
 }
 
 export interface GoalContributeBody {
-  amount: number;
-  date: string;
+  amount: number
+  date: string
 }
 
 export interface RecurringUpdate {
-  name?: string;
-  payee?: string;
-  mode?: RecurringMode;
-  amount?: number;
-  category_id?: number | null;
-  account_id?: number;
-  interval_unit?: IntervalUnit;
-  interval_count?: number;
-  start_date?: string;
-  end_date?: string | null;
+  name?: string
+  payee?: string
+  mode?: RecurringMode
+  amount?: number
+  category_id?: number | null
+  account_id?: number
+  interval_unit?: IntervalUnit
+  interval_count?: number
+  start_date?: string
+  end_date?: string | null
 }
 
 export interface BudgetAssign {
-  category_id: number;
-  year_month: string;
-  amount_assigned: number;
+  category_id: number
+  year_month: string
+  amount_assigned: number
 }
 
 export interface EnvelopesSummary {
-  n_green: number;
-  n_red: number;
-  rollover_generated: number;
+  n_green: number
+  n_red: number
+  rollover_generated: number
 }
 export interface EnvelopeLine {
-  category: string;
-  allocated: number;
-  rollover_in: number;
-  spent: number;
-  available: number;
-  status: string;
+  category: string
+  allocated: number
+  rollover_in: number
+  spent: number
+  available: number
+  status: string
 }
 export interface CategorySection {
-  category: string;
-  group: string | null;
-  total: number;
-  pct: number;
+  category: string
+  group: string | null
+  total: number
+  pct: number
 }
 export interface GroupSection {
-  group: string;
-  total: number;
-  pct: number;
+  group: string
+  total: number
+  pct: number
 }
 export interface GoalLine {
-  name: string;
-  accumulated: number;
-  target: number | null;
-  eta: string | null;
-  on_track: boolean | null;
+  name: string
+  accumulated: number
+  target: number | null
+  eta: string | null
+  on_track: boolean | null
 }
 export interface AccountBalance {
-  account: string;
-  currency: string;
-  balance: number;
+  account: string
+  currency: string
+  balance: number
 }
 export interface DriftMoM {
-  prev_month: string;
-  income_abs: number;
-  income_pct: number | null;
-  expense_abs: number;
-  expense_pct: number | null;
-  net_abs: number;
-  net_pct: number | null;
+  prev_month: string
+  income_abs: number
+  income_pct: number | null
+  expense_abs: number
+  expense_pct: number | null
+  net_abs: number
+  net_pct: number | null
 }
 export interface MonthlyReport {
-  month: string;
-  income: number;
-  expense: number;
-  net: number;
-  envelopes_summary: EnvelopesSummary;
-  envelopes: EnvelopeLine[];
-  by_category: CategorySection[];
-  by_group: GroupSection[];
-  goals: GoalLine[];
-  balances: AccountBalance[];
-  drift_mom: DriftMoM | null;
-  usd_share: number;
-  pending: string[];
-  safe_to_spend: SafeToSpend;
-  markdown: string;
+  month: string
+  income: number
+  expense: number
+  net: number
+  envelopes_summary: EnvelopesSummary
+  envelopes: EnvelopeLine[]
+  by_category: CategorySection[]
+  by_group: GroupSection[]
+  goals: GoalLine[]
+  balances: AccountBalance[]
+  drift_mom: DriftMoM | null
+  usd_share: number
+  pending: string[]
+  safe_to_spend: SafeToSpend
+  markdown: string
 }
 
 // ---- Request payloads (only fields the API accepts) ----
 export interface TransactionFilters {
-  date_from?: string;
-  date_to?: string;
-  account_id?: number;
-  category_id?: number;
-  tag?: string;
-  type?: TxType;
-  status?: TxStatus;
+  date_from?: string
+  date_to?: string
+  account_id?: number
+  category_id?: number
+  tag?: string
+  type?: TxType
+  status?: TxStatus
 }
 export interface TransactionCreate {
-  type: "expense" | "income";
-  account_id: number;
-  amount: number;
-  currency: string;
-  date: string;
-  payee?: string;
-  category_id?: number | null;
-  notes?: string | null;
-  fx_rate?: string;
+  type: "expense" | "income"
+  account_id: number
+  amount: number
+  currency: string
+  date: string
+  payee?: string
+  category_id?: number | null
+  notes?: string | null
+  fx_rate?: string
 }
 export interface TransferCreate {
-  from_account_id: number;
-  to_account_id: number;
-  amount: number;
-  currency: string;
-  date: string;
-  notes?: string | null;
-  fx_rate?: string;
+  from_account_id: number
+  to_account_id: number
+  amount: number
+  currency: string
+  date: string
+  notes?: string | null
+  fx_rate?: string
 }
 export interface TransactionUpdate {
-  payee?: string;
-  notes?: string | null;
-  category_id?: number | null;
-  date?: string;
+  payee?: string
+  notes?: string | null
+  category_id?: number | null
+  date?: string
 }
 export interface PlanPaymentCreate {
-  payee: string;
-  amount: number;
-  due_date: string;
-  account_id: number;
-  currency?: string;
-  category_id?: number | null;
-  notes?: string | null;
+  payee: string
+  amount: number
+  due_date: string
+  account_id: number
+  currency?: string
+  category_id?: number | null
+  notes?: string | null
 }
 export interface ConfirmPaymentBody {
-  amount?: number;
-  date?: string;
+  amount?: number
+  date?: string
 }
 export interface RecurringCreate {
-  name: string;
-  type: RecurringType;
-  mode: RecurringMode;
-  amount: number;
-  account_id: number;
-  interval_unit: IntervalUnit;
-  start_date: string;
-  payee?: string;
-  currency?: string;
-  category_id?: number | null;
-  interval_count?: number;
-  end_date?: string | null;
+  name: string
+  type: RecurringType
+  mode: RecurringMode
+  amount: number
+  account_id: number
+  interval_unit: IntervalUnit
+  start_date: string
+  payee?: string
+  currency?: string
+  category_id?: number | null
+  interval_count?: number
+  end_date?: string | null
 }
 export interface AccountCreate {
-  name: string;
-  type: AccountType;
-  currency: string;
-  balance?: number;
+  name: string
+  type: AccountType
+  currency: string
+  balance?: number
 }
 export interface AccountUpdate {
-  name?: string;
-  type?: AccountType;
+  name?: string
+  type?: AccountType
 }
 export interface CategoryCreate {
-  name: string;
-  group_id?: number | null;
-  is_income?: boolean;
-  exclude_from_budget?: boolean;
-  exclude_from_totals?: boolean;
+  name: string
+  group_id?: number | null
+  is_income?: boolean
+  exclude_from_budget?: boolean
+  exclude_from_totals?: boolean
 }
 export interface CategoryUpdate {
-  name?: string;
-  group_id?: number | null;
-  is_income?: boolean;
-  exclude_from_budget?: boolean;
-  exclude_from_totals?: boolean;
+  name?: string
+  group_id?: number | null
+  is_income?: boolean
+  exclude_from_budget?: boolean
+  exclude_from_totals?: boolean
 }
 export interface CategoryGroupCreate {
-  name: string;
-  sort_order?: number;
+  name: string
+  sort_order?: number
 }
 export interface CategoryGroupUpdate {
-  name?: string;
-  sort_order?: number;
+  name?: string
+  sort_order?: number
 }
 export interface TagCreate {
-  name: string;
+  name: string
 }
 export interface TagUpdate {
-  name: string;
+  name: string
 }
 export interface SettingsUpdate {
-  default_source_account_id?: number | null;
-  base_currency?: string;
+  default_source_account_id?: number | null
+  base_currency?: string
 }
 export interface FxCreate {
-  date: string;
-  usd_cop: string;
+  date: string
+  usd_cop: string
 }
 
 export class ApiError extends Error {
-  status: number;
-  code: string;
+  status: number
+  code: string
   constructor(status: number, code: string, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
+    super(message)
+    this.name = "ApiError"
+    this.status = status
+    this.code = code
   }
 }
 
 // 401 interceptor: the app registers a handler (clear cache + redirect) in
 // app/providers.tsx. lib/ stays free of React/router imports.
-export let onUnauthorized: (() => void) | null = null;
+export let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: (() => void) | null) {
-  onUnauthorized = fn;
+  onUnauthorized = fn
 }

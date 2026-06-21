@@ -1,28 +1,28 @@
-"use client";
+"use client"
 
-import { useMemo, useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react"
+import { useMemo, useState } from "react"
+import { EmptyState } from "@/components/empty-state"
+import { ErrorState } from "@/components/error-state"
 import {
   Button,
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@/ui";
-import { ErrorState } from "@/components/error-state";
-import { EmptyState } from "@/components/empty-state";
+  DropdownMenuTrigger,
+} from "@/ui"
 
 export interface Column<T> {
-  key: string;
-  header: string;
-  align?: "left" | "right";
-  render: (row: T) => React.ReactNode;
+  key: string
+  header: string
+  align?: "left" | "right"
+  render: (row: T) => React.ReactNode
 }
 
 export interface RowAction<T> {
-  label: string;
-  onClick: (row: T) => void;
-  variant?: "default" | "destructive";
+  label: string
+  onClick: (row: T) => void
+  variant?: "default" | "destructive"
 }
 
 export function DataTable<T>({
@@ -37,25 +37,25 @@ export function DataTable<T>({
   onRetry,
   emptyMessage = "Sin resultados",
 }: {
-  rows: T[] | undefined;
-  columns: Column<T>[];
-  rowKey: (row: T) => string | number;
-  actions?: RowAction<T>[];
-  pageSize?: number;
-  filterBar?: React.ReactNode;
-  isLoading?: boolean;
-  isError?: boolean;
-  onRetry?: () => void;
-  emptyMessage?: string;
+  rows: T[] | undefined
+  columns: Column<T>[]
+  rowKey: (row: T) => string | number
+  actions?: RowAction<T>[]
+  pageSize?: number
+  filterBar?: React.ReactNode
+  isLoading?: boolean
+  isError?: boolean
+  onRetry?: () => void
+  emptyMessage?: string
 }) {
-  const [page, setPage] = useState(0);
-  const all = useMemo(() => rows ?? [], [rows]);
-  const pageCount = Math.max(1, Math.ceil(all.length / pageSize));
-  const clampedPage = Math.min(page, pageCount - 1);
+  const [page, setPage] = useState(0)
+  const all = useMemo(() => rows ?? [], [rows])
+  const pageCount = Math.max(1, Math.ceil(all.length / pageSize))
+  const clampedPage = Math.min(page, pageCount - 1)
   const slice = useMemo(
     () => all.slice(clampedPage * pageSize, clampedPage * pageSize + pageSize),
     [all, clampedPage, pageSize],
-  );
+  )
 
   return (
     <div className="space-y-3">
@@ -66,14 +66,21 @@ export function DataTable<T>({
       ) : isLoading ? (
         <div className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="h-10 animate-pulse rounded" style={{ background: "var(--muted)" }} />
+            <div
+              key={i}
+              className="h-10 animate-pulse rounded"
+              style={{ background: "var(--muted)" }}
+            />
           ))}
         </div>
       ) : all.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-lg border" style={{ borderColor: "var(--border)" }}>
+          <div
+            className="overflow-x-auto rounded-lg border"
+            style={{ borderColor: "var(--border)" }}
+          >
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ color: "var(--muted-foreground)" }}>
@@ -90,7 +97,11 @@ export function DataTable<T>({
               </thead>
               <tbody>
                 {slice.map((row) => (
-                  <tr key={rowKey(row)} className="border-t" style={{ borderColor: "var(--border)" }}>
+                  <tr
+                    key={rowKey(row)}
+                    className="border-t"
+                    style={{ borderColor: "var(--border)" }}
+                  >
                     {columns.map((c) => (
                       <td
                         key={c.key}
@@ -128,7 +139,10 @@ export function DataTable<T>({
           </div>
 
           {pageCount > 1 && (
-            <div className="flex items-center justify-between text-xs" style={{ color: "var(--muted-foreground)" }}>
+            <div
+              className="flex items-center justify-between text-xs"
+              style={{ color: "var(--muted-foreground)" }}
+            >
               <span>
                 {all.length} resultados · página {clampedPage + 1} de {pageCount}
               </span>
@@ -155,5 +169,5 @@ export function DataTable<T>({
         </>
       )}
     </div>
-  );
+  )
 }

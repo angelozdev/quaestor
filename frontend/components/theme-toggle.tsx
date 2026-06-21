@@ -1,15 +1,15 @@
-"use client";
+"use client"
 
-import { useTheme } from "next-themes";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
 
 export function ThemeToggle({ className = "" }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme()
 
   // Dark is the default, so treat "unresolved" (server / pre-hydration) as dark.
   // `suppressHydrationWarning` on the icon absorbs the brief server/client glyph
   // mismatch when the persisted theme is light.
-  const isDark = resolvedTheme !== "light";
+  const isDark = resolvedTheme !== "light"
 
   return (
     <button
@@ -23,5 +23,5 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
         {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
       </span>
     </button>
-  );
+  )
 }

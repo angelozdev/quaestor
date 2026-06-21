@@ -1,48 +1,48 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
-import { toPay, confirmPayment } from "@/lib/api/planned";
-import { qk } from "@/lib/query";
-import { formatCents } from "@/lib/money";
-import { MoneyAmount } from "@/components/money-amount";
-import { ErrorState } from "@/components/error-state";
-import { toast } from "sonner";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns"
+import { useState } from "react"
+import { toast } from "sonner"
+import { ErrorState } from "@/components/error-state"
+import { MoneyAmount } from "@/components/money-amount"
+import { confirmPayment, toPay } from "@/lib/api/planned"
+import { formatCents } from "@/lib/money"
+import { qk } from "@/lib/query"
 
-type Scope = "week" | "month";
+type Scope = "week" | "month"
 
 function windowFor(scope: Scope) {
-  const now = new Date();
+  const now = new Date()
   const [since, until] =
     scope === "week"
       ? [startOfWeek(now, { weekStartsOn: 1 }), endOfWeek(now, { weekStartsOn: 1 })]
-      : [startOfMonth(now), endOfMonth(now)];
-  return { since: format(since, "yyyy-MM-dd"), until: format(until, "yyyy-MM-dd") };
+      : [startOfMonth(now), endOfMonth(now)]
+  return { since: format(since, "yyyy-MM-dd"), until: format(until, "yyyy-MM-dd") }
 }
 
 export function ToPayWidget() {
-  const qc = useQueryClient();
-  const [scope, setScope] = useState<Scope>("week");
-  const { since, until } = windowFor(scope);
+  const qc = useQueryClient()
+  const [scope, setScope] = useState<Scope>("week")
+  const { since, until } = windowFor(scope)
 
   const query = useQuery({
     queryKey: qk.toPay(since, until),
     queryFn: () => toPay(since, until),
-  });
+  })
 
   const markPaid = useMutation({
     mutationFn: (id: number) => confirmPayment(id),
     onSuccess: () => {
-      toast.success("Pago confirmado");
-      qc.invalidateQueries({ queryKey: ["planned"] });
-      qc.invalidateQueries({ queryKey: ["reports"] });
-      qc.invalidateQueries({ queryKey: ["accounts"] });
-      qc.invalidateQueries({ queryKey: ["budgets"] });
+      toast.success("Pago confirmado")
+      qc.invalidateQueries({ queryKey: ["planned"] })
+      qc.invalidateQueries({ queryKey: ["reports"] })
+      qc.invalidateQueries({ queryKey: ["accounts"] })
+      qc.invalidateQueries({ queryKey: ["budgets"] })
     },
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "No se pudo confirmar el pago"),
-  });
+  })
 
   return (
     <div
@@ -55,15 +55,22 @@ export function ToPayWidget() {
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+        <p
+          className="text-xs font-medium uppercase tracking-wider"
+          style={{ color: "var(--muted-foreground)" }}
+        >
           Por pagar
         </p>
-        <div className="flex items-center gap-1 rounded-md p-0.5" style={{ background: "var(--muted)" }}>
+        <div
+          className="flex items-center gap-1 rounded-md p-0.5"
+          style={{ background: "var(--muted)" }}
+        >
           {(["week", "month"] as Scope[]).map((s) => {
-            const active = scope === s;
+            const active = scope === s
             return (
               <button
                 key={s}
+                type="button"
                 onClick={() => setScope(s)}
                 className="px-2.5 py-1 text-xs rounded transition-all"
                 style={{
@@ -75,7 +82,7 @@ export function ToPayWidget() {
               >
                 {s === "week" ? "Esta semana" : "Este mes"}
               </button>
-            );
+            )
           })}
         </div>
       </div>
@@ -83,7 +90,11 @@ export function ToPayWidget() {
       {query.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
-            <div key={i} className="h-11 rounded animate-pulse" style={{ background: "var(--muted)" }} />
+            <div
+              key={i}
+              className="h-11 rounded animate-pulse"
+              style={{ background: "var(--muted)" }}
+            />
           ))}
         </div>
       )}
@@ -112,11 +123,18 @@ export function ToPayWidget() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{item.payee}</p>
-                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>{item.date}</p>
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      {item.date}
+                    </p>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
-                    <MoneyAmount cents={item.amount} currency={item.currency} className="text-sm font-medium" />
+                    <MoneyAmount
+                      cents={item.amount}
+                      currency={item.currency}
+                      className="text-sm font-medium"
+                    />
                     <button
+                      type="button"
                       disabled={markPaid.isPending}
                       onClick={() => markPaid.mutate(item.id)}
                       className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50"
@@ -126,14 +144,14 @@ export function ToPayWidget() {
                         border: "1px solid var(--border)",
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--foreground)";
-                        e.currentTarget.style.color = "var(--background)";
-                        e.currentTarget.style.borderColor = "var(--foreground)";
+                        e.currentTarget.style.background = "var(--foreground)"
+                        e.currentTarget.style.color = "var(--background)"
+                        e.currentTarget.style.borderColor = "var(--foreground)"
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "var(--muted)";
-                        e.currentTarget.style.color = "var(--foreground)";
-                        e.currentTarget.style.borderColor = "var(--border)";
+                        e.currentTarget.style.background = "var(--muted)"
+                        e.currentTarget.style.color = "var(--foreground)"
+                        e.currentTarget.style.borderColor = "var(--border)"
                       }}
                     >
                       Marcar pagado
@@ -146,5 +164,5 @@ export function ToPayWidget() {
         </>
       )}
     </div>
-  );
+  )
 }

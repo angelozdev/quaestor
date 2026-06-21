@@ -1,4 +1,4 @@
-import { get, qs } from "./client";
-import type { MonthlyReport } from "./types";
+import { get, qs } from "./client"
+import type { MonthlyReport } from "./types"
 
-export const report = (month: string) => get<MonthlyReport>(`/reports${qs({ month })}`);
+export const report = (month: string) => get<MonthlyReport>(`/reports${qs({ month })}`)

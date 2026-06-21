@@ -1,15 +1,15 @@
-"use client";
+"use client"
 
-import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
-import { Check } from "lucide-react";
-import { cn } from "../lib/cn";
+import { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox"
+import { Check } from "lucide-react"
+import { cn } from "../lib/cn"
 
 export interface CheckboxProps {
-  checked: boolean;
-  onCheckedChange: (checked: boolean) => void;
-  id?: string;
-  disabled?: boolean;
-  className?: string;
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  id?: string
+  disabled?: boolean
+  className?: string
 }
 
 function Checkbox({ checked, onCheckedChange, id, disabled, className }: CheckboxProps) {
@@ -29,7 +29,7 @@ function Checkbox({ checked, onCheckedChange, id, disabled, className }: Checkbo
         <Check className="size-3" />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
-  );
+  )
 }
 
-export { Checkbox };
+export { Checkbox }

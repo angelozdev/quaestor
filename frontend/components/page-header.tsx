@@ -3,9 +3,9 @@ export function PageHeader({
   subtitle,
   action,
 }: {
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
+  title: string
+  subtitle?: string
+  action?: React.ReactNode
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -19,5 +19,5 @@ export function PageHeader({
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
-  );
+  )
 }

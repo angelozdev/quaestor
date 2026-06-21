@@ -1,22 +1,22 @@
-"use client";
+"use client"
 
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import { cn } from "../lib/cn";
+import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
+import { cn } from "../lib/cn"
 
 function Dialog(props: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root {...props} />;
+  return <DialogPrimitive.Root {...props} />
 }
 
 function DialogTrigger(props: DialogPrimitive.Trigger.Props) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
 
 function DialogClose(props: DialogPrimitive.Close.Props) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />
 }
 
 function DialogPortal(props: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal {...props} />;
+  return <DialogPrimitive.Portal {...props} />
 }
 
 function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props) {
@@ -29,7 +29,7 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
       )}
       {...props}
     />
-  );
+  )
 }
 
 function DialogPopup({ className, children, ...props }: DialogPrimitive.Popup.Props) {
@@ -47,7 +47,7 @@ function DialogPopup({ className, children, ...props }: DialogPrimitive.Popup.Pr
         {children}
       </DialogPrimitive.Popup>
     </DialogPortal>
-  );
+  )
 }
 
 function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
@@ -57,7 +57,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
       className={cn("text-base font-semibold tracking-tight", className)}
       {...props}
     />
-  );
+  )
 }
 
 function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
@@ -67,16 +67,16 @@ function DialogDescription({ className, ...props }: DialogPrimitive.Description.
       className={cn("text-sm text-muted-foreground", className)}
       {...props}
     />
-  );
+  )
 }
 
 export {
   Dialog,
-  DialogTrigger,
-  DialogClose,
-  DialogPortal,
   DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
-};
+  DialogPopup,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+}

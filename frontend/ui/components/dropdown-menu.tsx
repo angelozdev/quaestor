@@ -1,14 +1,14 @@
-"use client";
+"use client"
 
-import { Menu as MenuPrimitive } from "@base-ui/react/menu";
-import { cn } from "../lib/cn";
+import { Menu as MenuPrimitive } from "@base-ui/react/menu"
+import { cn } from "../lib/cn"
 
 function DropdownMenu(props: MenuPrimitive.Root.Props) {
-  return <MenuPrimitive.Root {...props} />;
+  return <MenuPrimitive.Root {...props} />
 }
 
 function DropdownMenuTrigger(props: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-trigger" {...props} />;
+  return <MenuPrimitive.Trigger data-slot="dropdown-trigger" {...props} />
 }
 
 function DropdownMenuContent({ className, children, ...props }: MenuPrimitive.Popup.Props) {
@@ -27,7 +27,7 @@ function DropdownMenuContent({ className, children, ...props }: MenuPrimitive.Po
         </MenuPrimitive.Popup>
       </MenuPrimitive.Positioner>
     </MenuPrimitive.Portal>
-  );
+  )
 }
 
 function DropdownMenuItem({
@@ -45,7 +45,7 @@ function DropdownMenuItem({
       )}
       {...props}
     />
-  );
+  )
 }
 
-export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem };
+export { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger }

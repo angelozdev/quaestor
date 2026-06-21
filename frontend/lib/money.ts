@@ -6,14 +6,14 @@
  */
 export function formatCents(cents: number, currency: string): string {
   if (currency === "USD") {
-    const major = cents / 100;
+    const major = cents / 100
     const formatted = new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(major);
-    return `US$ ${formatted}`;
+    }).format(major)
+    return `US$ ${formatted}`
   }
-  const pesos = Math.round(cents / 100);
-  const formatted = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(pesos);
-  return `$ ${formatted}`;
+  const pesos = Math.round(cents / 100)
+  const formatted = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(pesos)
+  return `$ ${formatted}`
 }
