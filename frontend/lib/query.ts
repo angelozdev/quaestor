@@ -16,6 +16,8 @@ export const qk = {
   fx: (date?: string) => ["fx", date ?? "latest"] as const,
   safeToSpend: (month: string) => ["budgets", "safe-to-spend", month] as const,
   goalsProgress: () => ["goals", "progress"] as const,
+  goals: () => ["goals", "list"] as const,
+  budgets: (month: string) => ["budgets", "lines", month] as const,
   report: (month: string) => ["reports", month] as const,
 };
 
@@ -31,6 +33,8 @@ export const INVALIDATION = {
   tagWrite: [["tags"], ["transactions"]],
   settingsWrite: [["settings"]],
   fxWrite: [["fx"], ["reports"], ["budgets"], ["accounts"]],
+  goalWrite: [["goals"], ["accounts"], ["transactions"], ["reports"]],
+  budgetWrite: [["budgets"], ["reports"]],
 } as const;
 
 export type InvalidationGroup = keyof typeof INVALIDATION;
