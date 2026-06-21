@@ -1,28 +1,30 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useState } from "react"
+import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { z } from "zod"
 import { EntitySelect } from "@/components/entity-select"
+import { FormField } from "@/components/form-field"
 import { MoneyInput } from "@/components/money-input"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
 import { type Account, ApiError } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
+import { fxRate, isoDate, optionalString, positiveCents } from "@/lib/schemas/primitives"
 import {
   Button,
   Dialog,
   DialogPopup,
   DialogTitle,
-  Input,
   Label,
   Select,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  Textarea,
 } from "@/ui"
 
 const TYPE_ITEMS = [
@@ -34,6 +36,45 @@ function currencyOf(accounts: Account[] | undefined, id: number | null): string 
   if (id === null) return "COP"
   return accounts?.find((a) => a.id === id)?.currency ?? "COP"
 }
+
+// Normal tab: expense/income transaction. The category field is an ID
+// (number | null) selected via EntitySelect, matching the existing UI.
+const txNormalSchema = z
+  .object({
+    type: z.enum(["expense", "income"]),
+    accountId: z.number().nullable(),
+    amount: positiveCents,
+    categoryId: z.number().nullable(),
+    date: isoDate,
+    payee: z.string().trim().max(500, "Máximo 500 caracteres").optional().or(z.literal("")),
+    fxRate: fxRate.optional().or(z.literal(Number.NaN)),
+    notes: optionalString,
+  })
+  .refine((d) => d.accountId !== null, {
+    message: "Requerido",
+    path: ["accountId"],
+  })
+type TxNormalValues = z.infer<typeof txNormalSchema>
+
+// Transfer tab: between two accounts. Amount/date/from/to required.
+const txTransferSchema = z
+  .object({
+    fromId: z.number().nullable(),
+    toId: z.number().nullable(),
+    amount: positiveCents,
+    date: isoDate,
+    fxRate: fxRate.optional().or(z.literal(Number.NaN)),
+    notes: optionalString,
+  })
+  .refine((d) => d.fromId !== null, {
+    message: "Requerido",
+    path: ["fromId"],
+  })
+  .refine((d) => d.toId !== null, {
+    message: "Requerido",
+    path: ["toId"],
+  })
+type TxTransferValues = z.infer<typeof txTransferSchema>
 
 export function TransactionCreateDialog({
   open,
@@ -48,43 +89,55 @@ export function TransactionCreateDialog({
     queryFn: () => listAccounts(false),
   })
 
-  // normal tab state
-  const [type, setType] = useState<string | null>("expense")
-  const [accountId, setAccountId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [amount, setAmount] = useState<number | null>(null)
-  const [date, setDate] = useState("")
-  const [payee, setPayee] = useState("")
-  const [notes, setNotes] = useState("")
-  const [fxRate, setFxRate] = useState("")
+  const normalForm = useForm<TxNormalValues>({
+    resolver: zodResolver(txNormalSchema),
+    defaultValues: {
+      type: "expense",
+      accountId: null,
+      amount: Number.NaN,
+      categoryId: null,
+      date: new Date().toISOString().slice(0, 10),
+      payee: "",
+      fxRate: Number.NaN,
+      notes: "",
+    },
+  })
 
-  // transfer tab state
-  const [fromId, setFromId] = useState<number | null>(null)
-  const [toId, setToId] = useState<number | null>(null)
-  const [tAmount, setTAmount] = useState<number | null>(null)
-  const [tDate, setTDate] = useState("")
-  const [tNotes, setTNotes] = useState("")
-  const [tFxRate, setTFxRate] = useState("")
+  const transferForm = useForm<TxTransferValues>({
+    resolver: zodResolver(txTransferSchema),
+    defaultValues: {
+      fromId: null,
+      toId: null,
+      amount: Number.NaN,
+      date: new Date().toISOString().slice(0, 10),
+      fxRate: Number.NaN,
+      notes: "",
+    },
+  })
 
-  function resetForm() {
-    setType("expense")
-    setAccountId(null)
-    setCategoryId(null)
-    setAmount(null)
-    setDate("")
-    setPayee("")
-    setNotes("")
-    setFxRate("")
-    setFromId(null)
-    setToId(null)
-    setTAmount(null)
-    setTDate("")
-    setTNotes("")
-    setTFxRate("")
+  const normalCurrency = currencyOf(accounts.data, normalForm.watch("accountId"))
+  const transferCurrency = currencyOf(accounts.data, transferForm.watch("fromId"))
+
+  function resetForms() {
+    normalForm.reset({
+      type: "expense",
+      accountId: null,
+      amount: Number.NaN,
+      categoryId: null,
+      date: new Date().toISOString().slice(0, 10),
+      payee: "",
+      fxRate: Number.NaN,
+      notes: "",
+    })
+    transferForm.reset({
+      fromId: null,
+      toId: null,
+      amount: Number.NaN,
+      date: new Date().toISOString().slice(0, 10),
+      fxRate: Number.NaN,
+      notes: "",
+    })
   }
-
-  const normalCurrency = currencyOf(accounts.data, accountId)
-  const transferCurrency = currencyOf(accounts.data, fromId)
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
 
@@ -92,23 +145,24 @@ export function TransactionCreateDialog({
     toast.success(msg)
     invalidate(qc, "transactionWrite")
     onOpenChange(false)
+    resetForms()
   }
 
   const createNormal = useMutation({
-    mutationFn: () => {
-      if (accountId === null || amount === null) {
-        throw new Error("account and amount are required")
-      }
+    mutationFn: (values: TxNormalValues) => {
       return createTransaction({
-        type: type as "expense" | "income",
-        account_id: accountId,
-        amount,
+        type: values.type,
+        account_id: values.accountId as number,
+        amount: values.amount,
         currency: normalCurrency,
-        date,
-        payee: payee || undefined,
-        category_id: categoryId,
-        notes: notes || undefined,
-        fx_rate: normalCurrency !== "COP" && fxRate ? fxRate : undefined,
+        date: values.date,
+        payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
+        category_id: values.categoryId,
+        notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
+        fx_rate:
+          normalCurrency !== "COP" && Number.isFinite(values.fxRate)
+            ? String(values.fxRate)
+            : undefined,
       })
     },
     onSuccess: () => done("Transacción creada"),
@@ -116,32 +170,29 @@ export function TransactionCreateDialog({
   })
 
   const createTransfer = useMutation({
-    mutationFn: () => {
-      if (fromId === null || toId === null || tAmount === null) {
-        throw new Error("from, to, and amount are required for a transfer")
-      }
+    mutationFn: (values: TxTransferValues) => {
       return createTransferApi({
-        from_account_id: fromId,
-        to_account_id: toId,
-        amount: tAmount,
+        from_account_id: values.fromId as number,
+        to_account_id: values.toId as number,
+        amount: values.amount,
         currency: transferCurrency,
-        date: tDate,
-        notes: tNotes || undefined,
-        fx_rate: transferCurrency !== "COP" && tFxRate ? tFxRate : undefined,
+        date: values.date,
+        notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
+        fx_rate:
+          transferCurrency !== "COP" && Number.isFinite(values.fxRate)
+            ? String(values.fxRate)
+            : undefined,
       })
     },
     onSuccess: () => done("Transferencia creada"),
     onError: onErr,
   })
 
-  const normalInvalid = !type || accountId === null || amount === null || !date
-  const transferInvalid = fromId === null || toId === null || tAmount === null || !tDate
-
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
-        if (!o) resetForm()
+        if (!o) resetForms()
         onOpenChange(o)
       }}
     >
@@ -155,66 +206,93 @@ export function TransactionCreateDialog({
 
           <TabsContent value="normal">
             <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (!normalInvalid) createNormal.mutate()
-              }}
+              onSubmit={normalForm.handleSubmit((values) => createNormal.mutate(values))}
               className="space-y-4 pt-2"
             >
-              <div className="space-y-1.5">
-                <Label>Tipo *</Label>
-                <Select value={type} onValueChange={setType} items={TYPE_ITEMS} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Cuenta *</Label>
-                <EntitySelect
-                  value={accountId}
-                  onChange={setAccountId}
-                  queryKey={qk.accounts(false)}
-                  queryFn={() => listAccounts(false)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monto * ({normalCurrency})</Label>
-                <MoneyInput currency={normalCurrency} value={amount} onChange={setAmount} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha *</Label>
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Beneficiario</Label>
-                <Input value={payee} onChange={(e) => setPayee(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Categoría</Label>
-                <EntitySelect
-                  value={categoryId}
-                  onChange={setCategoryId}
-                  queryKey={qk.categories(false)}
-                  queryFn={() => listCategories(false)}
-                  allowNullLabel="Sin categoría"
-                />
-              </div>
+              <Controller
+                control={normalForm.control}
+                name="type"
+                render={({ field }) => (
+                  <div className="space-y-1.5">
+                    <Label>Tipo *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={TYPE_ITEMS}
+                    />
+                  </div>
+                )}
+              />
+              <Controller
+                control={normalForm.control}
+                name="accountId"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Cuenta *</Label>
+                    <EntitySelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
+              <Controller
+                control={normalForm.control}
+                name="amount"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({normalCurrency})</Label>
+                    <MoneyInput
+                      currency={normalCurrency}
+                      value={
+                        typeof field.value === "number" && Number.isFinite(field.value)
+                          ? field.value
+                          : null
+                      }
+                      onChange={(cents) => field.onChange(cents ?? Number.NaN)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
+              <FormField control={normalForm.control} name="date" label="Fecha" type="date" />
+              <FormField control={normalForm.control} name="payee" label="Beneficiario" />
+              <Controller
+                control={normalForm.control}
+                name="categoryId"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Categoría</Label>
+                    <EntitySelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      queryKey={qk.categories(false)}
+                      queryFn={() => listCategories(false)}
+                      allowNullLabel="Sin categoría"
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
               {normalCurrency !== "COP" && (
-                <div className="space-y-1.5">
-                  <Label>Tasa USD→COP (opcional)</Label>
-                  <Input
-                    value={fxRate}
-                    onChange={(e) => setFxRate(e.target.value)}
-                    placeholder="Se resuelve sola si la dejas vacía"
-                  />
-                </div>
+                <FormField
+                  control={normalForm.control}
+                  name="fxRate"
+                  label="Tasa USD→COP (opcional)"
+                  type="number"
+                  placeholder="Se resuelve sola si la dejas vacía"
+                  valueAsNumber
+                />
               )}
-              <div className="space-y-1.5">
-                <Label>Notas</Label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </div>
+              <FormField control={normalForm.control} name="notes" label="Notas" />
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={normalInvalid || createNormal.isPending}>
+                <Button type="submit" disabled={createNormal.isPending}>
                   {createNormal.isPending ? "…" : "Crear"}
                 </Button>
               </div>
@@ -223,48 +301,71 @@ export function TransactionCreateDialog({
 
           <TabsContent value="transfer">
             <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (!transferInvalid) createTransfer.mutate()
-              }}
+              onSubmit={transferForm.handleSubmit((values) => createTransfer.mutate(values))}
               className="space-y-4 pt-2"
             >
-              <div className="space-y-1.5">
-                <Label>Desde *</Label>
-                <EntitySelect
-                  value={fromId}
-                  onChange={setFromId}
-                  queryKey={qk.accounts(false)}
-                  queryFn={() => listAccounts(false)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Hacia *</Label>
-                <EntitySelect
-                  value={toId}
-                  onChange={setToId}
-                  queryKey={qk.accounts(false)}
-                  queryFn={() => listAccounts(false)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Monto * ({transferCurrency})</Label>
-                <MoneyInput currency={transferCurrency} value={tAmount} onChange={setTAmount} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha *</Label>
-                <Input type="date" value={tDate} onChange={(e) => setTDate(e.target.value)} />
-              </div>
+              <Controller
+                control={transferForm.control}
+                name="fromId"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Desde *</Label>
+                    <EntitySelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
+              <Controller
+                control={transferForm.control}
+                name="toId"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Hacia *</Label>
+                    <EntitySelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      queryKey={qk.accounts(false)}
+                      queryFn={() => listAccounts(false)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
+              <Controller
+                control={transferForm.control}
+                name="amount"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({transferCurrency})</Label>
+                    <MoneyInput
+                      currency={transferCurrency}
+                      value={
+                        typeof field.value === "number" && Number.isFinite(field.value)
+                          ? field.value
+                          : null
+                      }
+                      onChange={(cents) => field.onChange(cents ?? Number.NaN)}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
+              />
+              <FormField control={transferForm.control} name="date" label="Fecha" type="date" />
               {transferCurrency !== "COP" && (
-                <div className="space-y-1.5">
-                  <Label>Tasa USD→COP (opcional)</Label>
-                  <Input value={tFxRate} onChange={(e) => setTFxRate(e.target.value)} />
-                </div>
+                <FormField
+                  control={transferForm.control}
+                  name="fxRate"
+                  label="Tasa USD→COP (opcional)"
+                  type="number"
+                  valueAsNumber
+                />
               )}
-              <div className="space-y-1.5">
-                <Label>Notas</Label>
-                <Textarea value={tNotes} onChange={(e) => setTNotes(e.target.value)} />
-              </div>
+              <FormField control={transferForm.control} name="notes" label="Notas" />
               <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
                 Ambas cuentas deben tener la misma moneda.
               </p>
@@ -272,7 +373,7 @@ export function TransactionCreateDialog({
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancelar
                 </Button>
-                <Button type="submit" disabled={transferInvalid || createTransfer.isPending}>
+                <Button type="submit" disabled={createTransfer.isPending}>
                   {createTransfer.isPending ? "…" : "Crear"}
                 </Button>
               </div>
