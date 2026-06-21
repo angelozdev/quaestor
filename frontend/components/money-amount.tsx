@@ -1,5 +1,5 @@
 import { formatCents } from "@/lib/money";
-import type { TxType } from "@/lib/api";
+import type { TxType } from "@/lib/api/types";
 
 export function MoneyAmount({
   cents,
