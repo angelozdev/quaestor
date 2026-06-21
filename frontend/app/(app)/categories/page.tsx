@@ -3,7 +3,16 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Category } from "@/lib/api";
+import {
+  listCategories,
+  createCategory,
+  updateCategory,
+  archiveCategory,
+  restoreCategory,
+} from "@/lib/api/categories";
+import { listCategoryGroups } from "@/lib/api/category-groups";
+import { ApiError } from "@/lib/api/types";
+import type { Category } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
@@ -20,7 +29,7 @@ const FIELDS: Field[] = [
     name: "group_id",
     label: "Grupo",
     queryKey: qk.categoryGroups(false),
-    queryFn: () => api.listCategoryGroups(false),
+    queryFn: () => listCategoryGroups(false),
     allowNullLabel: "Sin grupo",
   },
   { kind: "checkbox", name: "is_income", label: "Es ingreso" },
@@ -37,11 +46,11 @@ export default function CategoriesPage() {
 
   const list = useQuery({
     queryKey: qk.categories(showArchived),
-    queryFn: () => api.listCategories(showArchived),
+    queryFn: () => listCategories(showArchived),
   });
   const groups = useQuery({
     queryKey: qk.categoryGroups(true),
-    queryFn: () => api.listCategoryGroups(true),
+    queryFn: () => listCategoryGroups(true),
   });
   const groupName = (id: number | null) =>
     id === null ? "—" : groups.data?.find((g) => g.id === id)?.name ?? "—";
@@ -58,22 +67,22 @@ export default function CategoriesPage() {
   });
 
   const create = useMutation({
-    mutationFn: (v: FormValues) => api.createCategory(toBody(v)),
+    mutationFn: (v: FormValues) => createCategory(toBody(v)),
     onSuccess: () => { done("Categoría creada"); setCreating(false); },
     onError: onErr,
   });
   const update = useMutation({
-    mutationFn: (v: FormValues) => api.updateCategory(editing!.id, toBody(v)),
+    mutationFn: (v: FormValues) => updateCategory(editing!.id, toBody(v)),
     onSuccess: () => { done("Categoría actualizada"); setEditing(null); },
     onError: onErr,
   });
   const archive = useMutation({
-    mutationFn: (id: number) => api.archiveCategory(id),
+    mutationFn: (id: number) => archiveCategory(id),
     onSuccess: () => { done("Categoría archivada"); setArchiving(null); },
     onError: onErr,
   });
   const restore = useMutation({
-    mutationFn: (id: number) => api.restoreCategory(id),
+    mutationFn: (id: number) => restoreCategory(id),
     onSuccess: () => { done("Categoría restaurada"); },
     onError: onErr,
   });
