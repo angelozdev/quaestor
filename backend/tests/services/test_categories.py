@@ -100,3 +100,17 @@ def test_archive_category_hides_from_default_list(session):
     cat = categories.create_category(session, "Temp")
     categories.archive_category(session, cat.id)
     assert all(c.id != cat.id for c in categories.list_categories(session))
+
+
+def test_unarchive_category_clears_flag(session):
+    from quaestor.services import categories
+    cat = categories.create_category(session, name="Food")
+    categories.archive_category(session, cat.id)
+    assert categories.unarchive_category(session, cat.id).archived is False
+
+
+def test_unarchive_group_clears_flag(session):
+    from quaestor.services import categories
+    g = categories.create_group(session, name="Bills")
+    categories.archive_group(session, g.id)
+    assert categories.unarchive_group(session, g.id).archived is False

@@ -19,3 +19,15 @@ def test_category_groups_crud(client, auth):
     assert client.delete(f"/api/category-groups/{gid}", headers=auth).status_code == 204
     assert client.get("/api/category-groups", headers=auth).json() == []
     assert len(client.get("/api/category-groups?archived=true", headers=auth).json()) == 1
+
+
+def test_restore_group_endpoint(client, engine, auth):
+    from quaestor.services import categories
+    from sqlmodel import Session
+    with Session(engine) as s:
+        g = categories.create_group(s, name="Bills")
+        categories.archive_group(s, g.id)
+        gid = g.id
+    r = client.post(f"/api/category-groups/{gid}/restore", headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json()["archived"] is False

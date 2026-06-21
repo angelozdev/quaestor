@@ -207,3 +207,33 @@ def archive_category(session: Session, category_id: int) -> Category:
     session.commit()
     session.refresh(cat)
     return cat
+
+
+def unarchive_category(session: Session, category_id: int) -> Category:
+    """Re-activate an archived category. Idempotent no-op if already active.
+
+    Raises:
+        NotFound: If the category does not exist.
+    """
+    cat = get_category(session, category_id)
+    cat.archived = False
+    session.add(cat)
+    session.commit()
+    session.refresh(cat)
+    return cat
+
+
+def unarchive_group(session: Session, group_id: int) -> CategoryGroup:
+    """Re-activate an archived category group. Idempotent no-op if already active.
+
+    Raises:
+        NotFound: If the group does not exist.
+    """
+    group = session.get(CategoryGroup, group_id)
+    if group is None:
+        raise NotFound(f"group {group_id} not found")
+    group.archived = False
+    session.add(group)
+    session.commit()
+    session.refresh(group)
+    return group

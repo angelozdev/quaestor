@@ -45,3 +45,8 @@ def update_category(
 def archive_category(category_id: int, session: Session = Depends(get_session)):
     categories.archive_category(session, category_id)
     return None
+
+
+@router.post("/{category_id}/restore", response_model=CategoryOut)
+def restore_category(category_id: int, session: Session = Depends(get_session)):
+    return categories.unarchive_category(session, category_id)

@@ -34,3 +34,8 @@ def update_group(
 def archive_group(group_id: int, session: Session = Depends(get_session)):
     categories.archive_group(session, group_id)
     return None
+
+
+@router.post("/{group_id}/restore", response_model=CategoryGroupOut)
+def restore_group(group_id: int, session: Session = Depends(get_session)):
+    return categories.unarchive_group(session, group_id)
