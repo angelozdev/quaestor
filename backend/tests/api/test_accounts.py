@@ -42,3 +42,15 @@ def test_create_account_bad_currency_is_422(client, auth):
         json={"name": "X", "type": "cash", "currency": "EUR"},
     )
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
+
+
+def test_restore_account_endpoint(client, engine, auth):
+    from quaestor.services import accounts
+    from sqlmodel import Session
+    with Session(engine) as s:
+        acc = accounts.create_account(s, "Bank", "debit", "COP", balance=0)
+        accounts.archive_account(s, acc.id)
+        acc_id = acc.id
+    r = client.post(f"/api/accounts/{acc_id}/restore", headers=auth)
+    assert r.status_code == 200, r.text
+    assert r.json()["archived"] is False

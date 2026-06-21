@@ -102,6 +102,27 @@ def archive_account(session: Session, account_id: int) -> Account:
     return acc
 
 
+def unarchive_account(session: Session, account_id: int) -> Account:
+    """Re-activate an archived account. Idempotent no-op if already active.
+
+    Args:
+        session: Database session
+        account_id: The account ID to restore
+
+    Returns:
+        The restored Account
+
+    Raises:
+        NotFound: If account does not exist
+    """
+    acc = get_account(session, account_id)
+    acc.archived = False
+    session.add(acc)
+    session.commit()
+    session.refresh(acc)
+    return acc
+
+
 def update_account(session: Session, account_id: int, name=None, type=None) -> Account:
     """Update an account's name and/or type. None leaves a field unchanged.
 
