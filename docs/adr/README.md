@@ -17,3 +17,4 @@ New ADRs are created with the `adr` skill:
 | 0001 | English as the language for all code | accepted | 2026-06-19 |
 | 0002 | App-agnostic frontend design system in `ui/` module | accepted | 2026-06-20 |
 | 0003 | pnpm as the sole package manager for the frontend | accepted | 2026-06-20 |
+| 0004 | Dark-first theming via next-themes with an app-level elevation token layer | accepted | 2026-06-20 |
