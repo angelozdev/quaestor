@@ -20,3 +20,4 @@ New ADRs are created with the `adr` skill:
 | 0004 | Dark-first theming via next-themes with an app-level elevation token layer | accepted | 2026-06-20 |
 | 0005 | Soft-delete and restore as the uniform lifecycle for goals, recurring, and masters | accepted | 2026-06-21 |
 | 0006 | Goals and budgets write API with MCP parity | accepted | 2026-06-21 |
+| 0008 | TanStack Form as the sole form library, restoring zod to v4 | accepted | 2026-06-21 |

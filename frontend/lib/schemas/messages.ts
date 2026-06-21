@@ -21,6 +21,7 @@ export const messages = {
   demasiadoPequeno: "Valor demasiado pequeño",
   demasiadoGrande: "Valor demasiado grande",
   finDebeSerMayorOIgual: "Fin debe ser ≥ inicio",
+  mesInvalido: "Mes inválido",
 } as const
 
 /** `Debe ser ≥ N` — use with zod `.min(n, ...)`. */
