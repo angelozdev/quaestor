@@ -53,3 +53,9 @@ export type { SelectItem, SelectProps } from "./components/select"
 export { Checkbox } from "./components/checkbox"
 export type { CheckboxProps } from "./components/checkbox"
 export { Textarea } from "./components/textarea"
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./components/dropdown-menu"
