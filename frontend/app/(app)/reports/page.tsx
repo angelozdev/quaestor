@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { api } from "@/lib/api";
+import { report } from "@/lib/api/reports";
 import { qk } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { MoneyAmount } from "@/components/money-amount";
@@ -48,7 +48,7 @@ export default function ReportsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: qk.report(month),
-    queryFn: () => api.report(month),
+    queryFn: () => report(month),
   });
 
   return (
