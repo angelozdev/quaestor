@@ -189,6 +189,19 @@ class RecurringCreate(BaseModel):
     end_date: Date | None = None
 
 
+class RecurringUpdate(BaseModel):
+    name: str | None = None
+    payee: str | None = None
+    mode: RecurringMode | None = None
+    amount: int | None = None
+    category_id: int | None = None
+    account_id: int | None = None
+    interval_unit: IntervalUnit | None = None
+    interval_count: int | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
+
+
 class RecurringOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -332,6 +345,50 @@ class MonthlyReportOut(BaseModel):
     markdown: str
 
 
+class GoalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    target_amount: int | None
+    deadline: Date | None
+    monthly_amount: int
+    savings_account_id: int
+    status: str
+
+
+class GoalCreate(BaseModel):
+    name: str
+    monthly_amount: int
+    savings_account_id: int
+    target_amount: int | None = None
+    deadline: Date | None = None
+
+
+class GoalUpdate(BaseModel):
+    name: str | None = None
+    monthly_amount: int | None = None
+    target_amount: int | None = None
+    deadline: Date | None = None
+    savings_account_id: int | None = None
+
+
+class GoalContributeIn(BaseModel):
+    amount: int
+    date: Date
+
+
+class GoalContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    goal_id: int
+    date: Date
+    amount: int
+    source: str
+    transaction_id: int | None
+
+
 class GoalProgressOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -366,3 +423,22 @@ class SafeToSpendOut(BaseModel):
     assigned_envelopes: int
     free: int
     committed_breakdown: list[CommittedItemOut]
+
+
+class BudgetLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category_id: int
+    category_name: str
+    assigned: int
+    rollover_in: int
+    spent: int
+    available: int
+    pct_used: int
+    status: str
+
+
+class BudgetAssignIn(BaseModel):
+    category_id: int
+    year_month: str
+    amount_assigned: int

@@ -58,3 +58,16 @@ def test_update_account_empty_name_rejected(session):
 def test_update_account_missing_id_raises(session):
     with pytest.raises(NotFound):
         accounts.update_account(session, 999, name="X")
+
+
+def test_unarchive_account_clears_flag(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=0)
+    accounts.archive_account(session, acc.id)
+    restored = accounts.unarchive_account(session, acc.id)
+    assert restored.archived is False
+
+
+def test_unarchive_active_account_is_noop(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=0)
+    restored = accounts.unarchive_account(session, acc.id)
+    assert restored.archived is False

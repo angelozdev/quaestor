@@ -39,3 +39,8 @@ def update_account(
 def archive_account(account_id: int, session: Session = Depends(get_session)):
     accounts.archive_account(session, account_id)
     return None
+
+
+@router.post("/{account_id}/restore", response_model=AccountOut)
+def restore_account(account_id: int, session: Session = Depends(get_session)):
+    return accounts.unarchive_account(session, account_id)

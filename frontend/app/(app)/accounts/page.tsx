@@ -74,6 +74,11 @@ export default function AccountsPage() {
     onSuccess: () => { done("Cuenta archivada"); setArchiving(null); },
     onError: onErr,
   });
+  const restore = useMutation({
+    mutationFn: (id: number) => api.restoreAccount(id),
+    onSuccess: () => { done("Cuenta restaurada"); },
+    onError: onErr,
+  });
 
   return (
     <div className="space-y-6">
@@ -118,7 +123,9 @@ export default function AccountsPage() {
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{formatCents(a.balance, a.currency)}</td>
                   <td className="px-3 py-2.5 text-right">
-                    {!a.archived && (
+                    {a.archived ? (
+                      <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(a.id)}>Restaurar</Button>
+                    ) : (
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setEditing(a)}>Editar</Button>
                         <Button variant="ghost" size="sm" onClick={() => setArchiving(a)}>Archivar</Button>
@@ -154,7 +161,7 @@ export default function AccountsPage() {
         open={archiving !== null}
         onOpenChange={(o) => !o && setArchiving(null)}
         title="Archivar cuenta"
-        description={`Se archivará "${archiving?.name}". No podrás reactivarla desde la app (Fase 2).`}
+        description={`Se archivará "${archiving?.name}". Puedes restaurarla luego con "Mostrar archivadas".`}
         confirmLabel="Archivar"
         pending={archive.isPending}
         onConfirm={() => archiving && archive.mutate(archiving.id)}

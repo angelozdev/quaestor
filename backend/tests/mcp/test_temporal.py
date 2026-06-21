@@ -4,11 +4,13 @@ from quaestor.mcp.tools import temporal
 from quaestor.mcp.tools.temporal import (
     ConfirmPaymentInput,
     CreateRecurringInput,
+    DeleteRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
     SkipPaymentInput,
     SkipRecurringInput,
     ToPayInput,
+    UpdateRecurringInput,
 )
 from quaestor.services import accounts
 
@@ -98,7 +100,7 @@ def test_skip_recurring_tool(session):
     assert "Skipped" in out
 
 
-def test_register_temporal_tools_exposes_all_seven():
+def test_register_temporal_tools_exposes_all_nine():
     import asyncio
     from mcp.server.fastmcp import FastMCP
     from quaestor.mcp.registry import TEMPORAL_TOOL_NAMES, register_temporal_tools
@@ -107,4 +109,33 @@ def test_register_temporal_tools_exposes_all_seven():
     register_temporal_tools(mcp)
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert names == set(TEMPORAL_TOOL_NAMES)
-    assert len(TEMPORAL_TOOL_NAMES) == 7
+    assert len(TEMPORAL_TOOL_NAMES) == 9
+
+
+def test_mcp_update_recurring(session):
+    _bank(session)
+    temporal.create_recurring(session, CreateRecurringInput(
+        name="Rent", payee="Landlord", type="expense", mode="auto",
+        amount=2_000_000, account="Bancolombia", interval_unit="month",
+        interval_count=1, start_date=date(2026, 1, 1),
+    ))
+    from quaestor.services import recurring as _rec_svc
+    item_id = _rec_svc.list_recurring(session)[0].id
+    out = temporal.update_recurring(session, UpdateRecurringInput(
+        recurring_id=item_id, amount=5_000_000
+    ))
+    assert "5" in out  # formatted amount appears
+    assert _rec_svc.list_recurring(session)[0].amount == 5_000_000
+
+
+def test_mcp_delete_recurring(session):
+    _bank(session)
+    temporal.create_recurring(session, CreateRecurringInput(
+        name="Rent", payee="Landlord", type="expense", mode="auto",
+        amount=2_000_000, account="Bancolombia", interval_unit="month",
+        interval_count=1, start_date=date(2026, 1, 1),
+    ))
+    from quaestor.services import recurring as _rec_svc
+    item_id = _rec_svc.list_recurring(session)[0].id
+    temporal.delete_recurring(session, DeleteRecurringInput(recurring_id=item_id))
+    assert _rec_svc.list_recurring(session, active=True) == []

@@ -229,3 +229,22 @@ def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
     # Goal proposals are transfers, not expenses — must NOT be in committed
     assert sts.committed == 0
     assert sts.free == 1_000_000
+
+
+def test_list_budgets_one_line_per_eligible_category(session):
+    food = categories.create_category(session, name="Food")
+    categories.create_category(session, name="Hidden", exclude_from_budget=True)
+    budgets.set_budget(session, food.id, "2026-06", 500_000)
+    lines = budgets.list_budgets(session, "2026-06")
+    names = [l.category_name for l in lines]
+    assert "Food" in names and "Hidden" not in names
+    food_line = next(l for l in lines if l.category_name == "Food")
+    assert food_line.assigned == 500_000
+    assert food_line.category_id == food.id
+
+
+def test_list_budgets_includes_unassigned_eligible_category(session):
+    categories.create_category(session, name="Transport")
+    lines = budgets.list_budgets(session, "2026-06")
+    line = next(l for l in lines if l.category_name == "Transport")
+    assert line.assigned == 0

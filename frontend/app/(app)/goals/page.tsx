@@ -1,61 +1,183 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { qk } from "@/lib/query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { api, ApiError, type Goal } from "@/lib/api";
+import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge } from "@/components/status-badge";
-import { Phase2Banner } from "@/components/phase2-banner";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { MoneyInput } from "@/components/money-input";
+import { EntitySelect } from "@/components/entity-select";
+import { Dialog, DialogPopup, DialogTitle, Input, Label, Button } from "@/ui";
 
 export default function GoalsPage() {
-  const goals = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => api.goalsProgress() });
+  const qc = useQueryClient();
+  const goals = useQuery({ queryKey: qk.goals(), queryFn: () => api.listGoals() });
+  const progress = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => api.goalsProgress() });
+
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Goal | null>(null);
+  const [pausing, setPausing] = useState<Goal | null>(null);
+  const [contributing, setContributing] = useState<Goal | null>(null);
+
+  const [name, setName] = useState("");
+  const [monthly, setMonthly] = useState<number | null>(null);
+  const [savingsId, setSavingsId] = useState<number | null>(null);
+  const [target, setTarget] = useState<number | null>(null);
+  const [deadline, setDeadline] = useState("");
+  const [amount, setAmount] = useState<number | null>(null);
+  const [date, setDate] = useState("");
+
+  const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
+  const done = (msg: string) => { toast.success(msg); invalidate(qc, "goalWrite"); };
+  const resetForm = () => { setName(""); setMonthly(null); setSavingsId(null); setTarget(null); setDeadline(""); };
+
+  const create = useMutation({
+    mutationFn: () => api.createGoal({
+      name, monthly_amount: monthly!, savings_account_id: savingsId!,
+      target_amount: target, deadline: deadline || null,
+    }),
+    onSuccess: () => { done("Meta creada"); setCreating(false); resetForm(); },
+    onError: onErr,
+  });
+  const update = useMutation({
+    mutationFn: () => api.updateGoal(editing!.id, {
+      name, monthly_amount: monthly ?? undefined,
+      target_amount: target, deadline: deadline || null, savings_account_id: savingsId ?? undefined,
+    }),
+    onSuccess: () => { done("Meta actualizada"); setEditing(null); resetForm(); },
+    onError: onErr,
+  });
+  const pause = useMutation({
+    mutationFn: () => api.pauseGoal(pausing!.id),
+    onSuccess: () => { done("Meta pausada"); setPausing(null); },
+    onError: onErr,
+  });
+  const restore = useMutation({
+    mutationFn: (g: Goal) => api.restoreGoal(g.id),
+    onSuccess: () => done("Meta restaurada"),
+    onError: onErr,
+  });
+  const contribute = useMutation({
+    mutationFn: () => api.contributeGoal(contributing!.id, { amount: amount!, date }),
+    onSuccess: () => { done("Aporte registrado"); setContributing(null); setAmount(null); setDate(""); },
+    onError: onErr,
+  });
+
+  const createInvalid = !name || monthly === null || savingsId === null || (!!target !== !!deadline);
+  const editInvalid = !name || (!!target !== !!deadline);
+
+  const savedFor = (id: number) => progress.data?.find((p) => p.goal_id === id);
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Metas" />
-      <Phase2Banner>Crear y contribuir a metas llega en la Fase 2 (requiere endpoints del backend).</Phase2Banner>
+      <PageHeader title="Metas" action={<Button onClick={() => { resetForm(); setCreating(true); }}>Nueva</Button>} />
 
       {goals.isError && <ErrorState message="No se pudieron cargar las metas" onRetry={() => goals.refetch()} />}
-      {goals.data && goals.data.length === 0 && <EmptyState message="Sin metas activas" />}
+      {goals.data && goals.data.length === 0 && <EmptyState message="Sin metas" />}
 
       {goals.data && goals.data.length > 0 && (
         <div className="space-y-3">
           {goals.data.map((g) => {
-            const pct = g.target_amount ? Math.min(100, Math.round((g.saved / g.target_amount) * 100)) : null;
+            const p = savedFor(g.id);
+            const pct = g.target_amount && p ? Math.min(100, Math.round((p.saved / g.target_amount) * 100)) : null;
             return (
-              <div key={g.goal_id} className="space-y-3 rounded-lg border p-5" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
+              <div key={g.id} className="space-y-3 rounded-lg border p-5" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium">{g.name}</span>
-                  {g.on_track !== null && <StatusBadge kind="onTrack" value={g.on_track} />}
+                  <span className="flex items-center gap-2 font-medium">{g.name} <StatusBadge kind="goal" value={g.status} /></span>
+                  <div className="flex gap-1">
+                    {g.status === "paused" || g.status === "reached" ? (
+                      g.status === "paused"
+                        ? <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(g)}>Restaurar</Button>
+                        : null
+                    ) : (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={() => { setContributing(g); setAmount(null); setDate(""); }}>Aportar</Button>
+                        <Button variant="ghost" size="sm" onClick={() => {
+                          setEditing(g); setName(g.name); setMonthly(g.monthly_amount);
+                          setSavingsId(g.savings_account_id); setTarget(g.target_amount); setDeadline(g.deadline ?? "");
+                        }}>Editar</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPausing(g)}>Pausar</Button>
+                      </>
+                    )}
+                  </div>
                 </div>
-
                 <div className="flex items-baseline justify-between gap-2 text-sm">
                   <span style={{ color: "var(--muted-foreground)" }}>
-                    {formatCents(g.saved, "COP")}{g.target_amount !== null && ` / ${formatCents(g.target_amount, "COP")}`}
+                    {formatCents(p?.saved ?? 0, "COP")}{g.target_amount !== null && ` / ${formatCents(g.target_amount, "COP")}`}
                   </span>
                   {pct !== null && <span className="tabular-nums">{pct}%</span>}
                 </div>
-
                 {pct !== null && (
                   <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--muted)" }}>
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--foreground)" }} />
                   </div>
                 )}
-
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                  {g.monthly_required !== null && <span>Requerido/mes: {formatCents(g.monthly_required, "COP")}</span>}
-                  {g.remaining !== null && <span>Restante: {formatCents(g.remaining, "COP")}</span>}
-                  {g.eta && <span>ETA: {g.eta}</span>}
-                  {g.deadline && <span>Fecha límite: {g.deadline}</span>}
-                </div>
               </div>
             );
           })}
         </div>
       )}
+
+      {/* Create / edit dialog (shared fields) */}
+      <Dialog open={creating || editing !== null} onOpenChange={(o) => { if (!o) { setCreating(false); setEditing(null); } }}>
+        <DialogPopup className="max-w-md">
+          <DialogTitle>{editing ? "Editar meta" : "Nueva meta"}</DialogTitle>
+          <form
+            onSubmit={(e) => { e.preventDefault(); if (editing ? !editInvalid : !createInvalid) (editing ? update : create).mutate(); }}
+            className="space-y-4"
+          >
+            <div className="space-y-1.5"><Label>Nombre *</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+            <div className="space-y-1.5"><Label>Aporte mensual * (COP)</Label><MoneyInput currency="COP" value={monthly} onChange={setMonthly} /></div>
+            <div className="space-y-1.5">
+              <Label>Cuenta de ahorro *</Label>
+              <EntitySelect value={savingsId} onChange={setSavingsId} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
+            </div>
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>Meta definida: completa objetivo y fecha. Abierta: deja ambos vacíos.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5"><Label>Objetivo (COP)</Label><MoneyInput currency="COP" value={target} onChange={setTarget} /></div>
+              <div className="space-y-1.5"><Label>Fecha límite</Label><Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} /></div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => { setCreating(false); setEditing(null); }}>Cancelar</Button>
+              <Button type="submit" disabled={(editing ? editInvalid : createInvalid) || create.isPending || update.isPending}>
+                {create.isPending || update.isPending ? "…" : "Guardar"}
+              </Button>
+            </div>
+          </form>
+        </DialogPopup>
+      </Dialog>
+
+      {/* Contribute dialog */}
+      <Dialog open={contributing !== null} onOpenChange={(o) => !o && setContributing(null)}>
+        <DialogPopup className="max-w-sm">
+          <DialogTitle>Aportar a {contributing?.name}</DialogTitle>
+          <form onSubmit={(e) => { e.preventDefault(); if (amount !== null && date) contribute.mutate(); }} className="space-y-4">
+            <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>Transfiere desde tu cuenta origen predeterminada (configúrala en Ajustes).</p>
+            <div className="space-y-1.5"><Label>Monto * (COP)</Label><MoneyInput currency="COP" value={amount} onChange={setAmount} /></div>
+            <div className="space-y-1.5"><Label>Fecha *</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setContributing(null)}>Cancelar</Button>
+              <Button type="submit" disabled={amount === null || !date || contribute.isPending}>{contribute.isPending ? "…" : "Aportar"}</Button>
+            </div>
+          </form>
+        </DialogPopup>
+      </Dialog>
+
+      <ConfirmDialog
+        open={pausing !== null}
+        onOpenChange={(o) => !o && setPausing(null)}
+        title="Pausar meta"
+        description={`Se pausará "${pausing?.name}". Tus aportes se mantienen. Puedes restaurarla luego.`}
+        confirmLabel="Pausar"
+        pending={pause.isPending}
+        onConfirm={() => pausing && pause.mutate()}
+      />
     </div>
   );
 }

@@ -23,6 +23,8 @@ from ..domain.money import is_supported, to_base_cents
 from ..domain.rules import delta_balance, due_dates
 from . import transactions as _tx
 
+_UNSET = object()
+
 
 def _require_account(session: Session, account_id: int) -> Account:
     acc = session.get(Account, account_id)
@@ -105,6 +107,77 @@ def list_recurring(session: Session, active: bool | None = None) -> list[Recurri
     return list(session.exec(stmt.order_by(RecurringItem.id)).all())
 
 
+def update_recurring(
+    session: Session,
+    recurring_id: int,
+    *,
+    name: str | None = None,
+    payee: str | None = None,
+    mode: RecurringMode | None = None,
+    amount: int | None = None,
+    category_id=_UNSET,
+    account_id: int | None = None,
+    interval_unit: IntervalUnit | None = None,
+    interval_count: int | None = None,
+    start_date: Date | None = None,
+    end_date=_UNSET,
+) -> RecurringItem:
+    """Edit a recurring item. type and currency are immutable. Changes affect only
+    future un-materialized occurrences (materialize_due reads current fields).
+
+    `category_id=_UNSET`/`end_date=_UNSET` leave unchanged; `=None` clears them.
+
+    Raises:
+        NotFound: the item or a new account does not exist.
+        ValidationError: amount <= 0, interval_count < 1, end_date < start_date,
+            account currency mismatch, unknown/archived category.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    if name is not None:
+        item.name = name
+    if payee is not None:
+        item.payee = payee
+    if mode is not None:
+        item.mode = RecurringMode(mode)
+    if amount is not None:
+        if amount <= 0:
+            raise ValidationError("amount must be > 0")
+        item.amount = amount
+    if interval_unit is not None:
+        item.interval_unit = IntervalUnit(interval_unit)
+    if interval_count is not None:
+        if interval_count < 1:
+            raise ValidationError("interval_count must be >= 1")
+        item.interval_count = interval_count
+    if start_date is not None:
+        item.start_date = start_date
+    if end_date is not _UNSET:
+        item.end_date = end_date
+    if item.end_date is not None and item.end_date < item.start_date:
+        raise ValidationError("end_date must be on or after start_date")
+    if account_id is not None:
+        acc = _require_account(session, account_id)
+        if item.currency != acc.currency:
+            raise ValidationError(
+                f"currency {item.currency} does not match account currency {acc.currency}"
+            )
+        item.account_id = account_id
+    if category_id is not _UNSET:
+        if category_id is not None:
+            cat = session.get(Category, category_id)
+            if cat is None:
+                raise ValidationError(f"category {category_id} not found")
+            if cat.archived:
+                raise ValidationError(f"category {category_id} is archived")
+        item.category_id = category_id
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
 def _existing_due_dates(session: Session, recurring_id: int) -> set[Date]:
     rows = session.exec(
         select(RecurringOccurrence.due_date).where(
@@ -184,6 +257,40 @@ def materialize_due(session: Session, until_date: Date) -> list[RecurringOccurre
     for occ in created:
         session.refresh(occ)
     return created
+
+
+def _set_active(session: Session, recurring_id: int, active: bool) -> RecurringItem:
+    """Private helper to set the active flag on a recurring item.
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    item.active = active
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+def deactivate_recurring(session: Session, recurring_id: int) -> RecurringItem:
+    """Soft-delete: stop materializing future occurrences (existing ones stay).
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    return _set_active(session, recurring_id, False)
+
+
+def restore_recurring(session: Session, recurring_id: int) -> RecurringItem:
+    """Re-activate a deactivated recurring item. Idempotent no-op if already active.
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    return _set_active(session, recurring_id, True)
 
 
 def skip_recurring(

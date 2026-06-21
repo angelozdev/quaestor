@@ -1,15 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { api } from "@/lib/api";
 import { qk } from "@/lib/query";
+import { invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
-import { Phase2Banner } from "@/components/phase2-banner";
-import { Input } from "@/ui";
+import { Input, Button } from "@/ui";
+import { MoneyInput } from "@/components/money-input";
+import { toast } from "sonner";
+import { ApiError } from "@/lib/api";
 
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
@@ -22,8 +25,22 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
 
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
+  const qc = useQueryClient();
   const sts = useQuery({ queryKey: qk.safeToSpend(month), queryFn: () => api.safeToSpend(month) });
-  const report = useQuery({ queryKey: qk.report(month), queryFn: () => api.report(month) });
+  const lines = useQuery({ queryKey: qk.budgets(month), queryFn: () => api.listBudgets(month) });
+
+  const [editingCat, setEditingCat] = useState<number | null>(null);
+  const [draft, setDraft] = useState<number | null>(null);
+  const assign = useMutation({
+    mutationFn: (categoryId: number) =>
+      api.assignBudget({ category_id: categoryId, year_month: month, amount_assigned: draft ?? 0 }),
+    onSuccess: () => {
+      toast.success("Sobre asignado");
+      invalidate(qc, "budgetWrite");
+      setEditingCat(null); setDraft(null);
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+  });
 
   return (
     <div className="space-y-6">
@@ -32,7 +49,6 @@ export default function BudgetsPage() {
         subtitle={month}
         action={<Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-40" />}
       />
-      <Phase2Banner>Asignar a sobres y manejar presupuestos llega en la Fase 2 (requiere endpoints del backend).</Phase2Banner>
 
       {sts.isError && <ErrorState message="No se pudo cargar disponible para gastar" onRetry={() => sts.refetch()} />}
 
@@ -63,7 +79,7 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      {report.data && report.data.envelopes.length > 0 && (
+      {lines.data && lines.data.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>Sobres</h2>
           <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
@@ -74,16 +90,31 @@ export default function BudgetsPage() {
                   <th className="px-3 py-2.5 text-right text-xs font-medium">Asignado</th>
                   <th className="px-3 py-2.5 text-right text-xs font-medium">Gastado</th>
                   <th className="px-3 py-2.5 text-right text-xs font-medium">Disponible</th>
+                  <th className="w-32 px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {report.data.envelopes.map((e) => (
-                  <tr key={e.category} className="border-t" style={{ borderColor: "var(--border)" }}>
-                    <td className="px-3 py-2.5">{e.category}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: "var(--muted-foreground)" }}>{formatCents(e.allocated, "COP")}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: "var(--muted-foreground)" }}>{formatCents(e.spent, "COP")}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums font-medium" style={{ color: e.status === "over" ? "var(--expense)" : "var(--income)" }}>
-                      {formatCents(e.available, "COP")}
+                {lines.data.map((l) => (
+                  <tr key={l.category_id} className="border-t" style={{ borderColor: "var(--border)" }}>
+                    <td className="px-3 py-2.5">{l.category_name}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+                      {editingCat === l.category_id
+                        ? <MoneyInput currency="COP" value={draft} onChange={setDraft} />
+                        : formatCents(l.assigned, "COP")}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: "var(--muted-foreground)" }}>{formatCents(l.spent, "COP")}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-medium" style={{ color: l.status === "over" ? "var(--expense)" : "var(--income)" }}>
+                      {formatCents(l.available, "COP")}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {editingCat === l.category_id ? (
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => { setEditingCat(null); setDraft(null); }}>Cancelar</Button>
+                          <Button size="sm" disabled={assign.isPending} onClick={() => assign.mutate(l.category_id)}>Guardar</Button>
+                        </div>
+                      ) : (
+                        <Button variant="ghost" size="sm" onClick={() => { setEditingCat(l.category_id); setDraft(l.assigned); }}>Asignar</Button>
+                      )}
                     </td>
                   </tr>
                 ))}

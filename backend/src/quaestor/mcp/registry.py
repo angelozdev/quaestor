@@ -11,7 +11,7 @@ already translates domain errors to text.
 from sqlmodel import Session
 
 from .. import db
-from .tools import core, temporal
+from .tools import core, planning, temporal
 from .tools.core import (
     GetFxRateInput,
     ListTransactionsInput,
@@ -20,14 +20,23 @@ from .tools.core import (
     SetFxRateInput,
     TransferInput,
 )
+from .tools.planning import (
+    AssignBudgetInput,
+    ContributeGoalInput,
+    CreateGoalInput,
+    GoalIdInput,
+    UpdateGoalInput,
+)
 from .tools.temporal import (
     ConfirmPaymentInput,
     CreateRecurringInput,
+    DeleteRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
     SkipPaymentInput,
     SkipRecurringInput,
     ToPayInput,
+    UpdateRecurringInput,
 )
 
 TEMPORAL_TOOL_NAMES = (
@@ -38,6 +47,17 @@ TEMPORAL_TOOL_NAMES = (
     "skip_payment",
     "skip_recurring",
     "to_pay",
+    "update_recurring",
+    "delete_recurring",
+)
+
+PLANNING_TOOL_NAMES = (
+    "assign_budget",
+    "create_goal",
+    "update_goal",
+    "contribute_goal",
+    "pause_goal",
+    "restore_goal",
 )
 
 CORE_TOOL_NAMES = (
@@ -142,3 +162,47 @@ def register_temporal_tools(mcp) -> None:
     def to_pay(window: ToPayInput) -> str:
         with Session(db.engine) as session:
             return temporal.to_pay(session, window)
+
+    @mcp.tool(name="update_recurring", description="Edit a recurring item (future occurrences only).")
+    def update_recurring(item: UpdateRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.update_recurring(session, item)
+
+    @mcp.tool(name="delete_recurring", description="Deactivate a recurring item (soft, reversible).")
+    def delete_recurring(item: DeleteRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.delete_recurring(session, item)
+
+
+def register_planning_tools(mcp) -> None:
+    """Register the P4 planning tools (budgets + goals) on the FastMCP instance."""
+
+    @mcp.tool(name="assign_budget", description="Assign (set) a category envelope for a month.")
+    def assign_budget(item: AssignBudgetInput) -> str:
+        with Session(db.engine) as session:
+            return planning.assign_budget(session, item)
+
+    @mcp.tool(name="create_goal", description="Create a savings goal (defined or open-ended).")
+    def create_goal(item: CreateGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.create_goal(session, item)
+
+    @mcp.tool(name="update_goal", description="Edit a goal's name or monthly amount.")
+    def update_goal(item: UpdateGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.update_goal(session, item)
+
+    @mcp.tool(name="contribute_goal", description="Record a manual contribution to a goal.")
+    def contribute_goal(item: ContributeGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.contribute_goal(session, item)
+
+    @mcp.tool(name="pause_goal", description="Pause a goal (soft-delete, reversible).")
+    def pause_goal(item: GoalIdInput) -> str:
+        with Session(db.engine) as session:
+            return planning.pause_goal(session, item)
+
+    @mcp.tool(name="restore_goal", description="Restore a paused goal.")
+    def restore_goal(item: GoalIdInput) -> str:
+        with Session(db.engine) as session:
+            return planning.restore_goal(session, item)

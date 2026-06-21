@@ -5,7 +5,7 @@ import re
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import BudgetStatus, CommittedItem, SafeToSpend
+from ..domain.dtos import BudgetLine, BudgetStatus, CommittedItem, SafeToSpend
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import (
     Budget,
@@ -257,3 +257,37 @@ def budget_status(session: Session, category_id: int, year_month: str) -> Budget
     spent = _spent(session, category_id, year_month)
     rollover_in = max(_available(session, category_id, prev_year_month(year_month)), 0)
     return envelope_status_calc(category_id, year_month, assigned, rollover_in, spent)
+
+
+def list_budgets(session: Session, year_month: str) -> list[BudgetLine]:
+    """One envelope line per budget-eligible category for the month.
+
+    Eligible = not archived and not excluded from budget. Unassigned categories
+    appear with assigned=0 so the UI can assign to them.
+
+    Raises:
+        ValidationError: malformed year_month.
+    """
+    _validate_year_month(year_month)
+    cats = session.exec(
+        select(Category).where(
+            Category.archived == False,  # noqa: E712
+            Category.exclude_from_budget == False,  # noqa: E712
+        ).order_by(Category.id)
+    ).all()
+    lines: list[BudgetLine] = []
+    for cat in cats:
+        st = budget_status(session, cat.id, year_month)
+        lines.append(
+            BudgetLine(
+                category_id=cat.id,
+                category_name=cat.name,
+                assigned=st.assigned,
+                rollover_in=st.rollover_in,
+                spent=st.spent,
+                available=st.available,
+                pct_used=st.pct_used,
+                status=st.status,
+            )
+        )
+    return lines

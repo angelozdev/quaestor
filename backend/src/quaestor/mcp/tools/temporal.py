@@ -73,6 +73,24 @@ class ToPayInput(BaseModel):
     until: Date = Field(description="Window end, YYYY-MM-DD")
 
 
+class UpdateRecurringInput(BaseModel):
+    recurring_id: int = Field(description="The recurring item id")
+    name: str | None = Field(default=None, description="New display name")
+    payee: str | None = Field(default=None, description="New payee")
+    mode: Literal["auto", "manual"] | None = Field(default=None, description="New mode")
+    amount: int | None = Field(default=None, gt=0, description="New amount in cents")
+    interval_unit: Literal["day", "week", "month", "year"] | None = Field(
+        default=None, description="New interval unit"
+    )
+    interval_count: int | None = Field(default=None, ge=1, description="New interval count")
+    start_date: Date | None = Field(default=None, description="New anchor date YYYY-MM-DD")
+    end_date: Date | None = Field(default=None, description="New last date YYYY-MM-DD")
+
+
+class DeleteRecurringInput(BaseModel):
+    recurring_id: int = Field(description="The recurring item id to deactivate")
+
+
 # ----- impls -----
 
 
@@ -141,3 +159,16 @@ def skip_recurring(session: Session, inp: SkipRecurringInput) -> str:
 @_as_text
 def to_pay(session: Session, inp: ToPayInput) -> str:
     return format.to_pay_table(planned.to_pay(session, inp.since, inp.until))
+
+
+@_as_text
+def update_recurring(session: Session, inp: UpdateRecurringInput) -> str:
+    fields = inp.model_dump(exclude_unset=True, exclude={"recurring_id"})
+    item = recurring.update_recurring(session, inp.recurring_id, **fields)
+    return format.recurring_updated(item)
+
+
+@_as_text
+def delete_recurring(session: Session, inp: DeleteRecurringInput) -> str:
+    item = recurring.deactivate_recurring(session, inp.recurring_id)
+    return format.recurring_deleted(item)
