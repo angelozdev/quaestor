@@ -345,6 +345,50 @@ class MonthlyReportOut(BaseModel):
     markdown: str
 
 
+class GoalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    target_amount: int | None
+    deadline: Date | None
+    monthly_amount: int
+    savings_account_id: int
+    status: str
+
+
+class GoalCreate(BaseModel):
+    name: str
+    monthly_amount: int
+    savings_account_id: int
+    target_amount: int | None = None
+    deadline: Date | None = None
+
+
+class GoalUpdate(BaseModel):
+    name: str | None = None
+    monthly_amount: int | None = None
+    target_amount: int | None = None
+    deadline: Date | None = None
+    savings_account_id: int | None = None
+
+
+class GoalContributeIn(BaseModel):
+    amount: int
+    date: Date
+
+
+class GoalContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    goal_id: int
+    date: Date
+    amount: int
+    source: str
+    transaction_id: int | None
+
+
 class GoalProgressOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
