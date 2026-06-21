@@ -48,3 +48,5 @@ export {
   DialogTitle,
   DialogDescription,
 } from "./components/dialog"
+export { Select } from "./components/select"
+export type { SelectItem, SelectProps } from "./components/select"
