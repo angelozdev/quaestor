@@ -36,12 +36,19 @@ def _body(error: str, detail: str) -> dict[str, str]:
     return {"error": error, "detail": detail}
 
 
-def _format_validation(exc: RequestValidationError) -> str:
-    parts = []
+def _format_validation(exc: RequestValidationError) -> tuple[str, dict[str, str]]:
+    parts: list[str] = []
+    fields: dict[str, str] = {}
     for err in exc.errors():
-        loc = ".".join(str(p) for p in err.get("loc", ()) if p != "body")
-        parts.append(f"{loc}: {err.get('msg', 'invalid')}".strip(": "))
-    return "; ".join(parts) or "invalid request body"
+        loc_parts = [str(p) for p in err.get("loc", ()) if p != "body"]
+        loc = ".".join(loc_parts)
+        msg = err.get("msg", "invalid")
+        if loc:
+            fields[loc] = msg
+            parts.append(f"{loc}: {msg}".strip(": "))
+        else:
+            parts.append(msg)
+    return ("; ".join(parts) or "invalid request body"), fields
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -56,6 +63,8 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+        detail, fields = _format_validation(exc)
         return JSONResponse(
-            status_code=422, content=_body("ValidationError", _format_validation(exc))
+            status_code=422,
+            content={"error": "ValidationError", "detail": detail, "fields": fields},
         )

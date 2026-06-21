@@ -41,6 +41,10 @@ def test_recurring_create_interval_count_zero_is_422(client, engine, auth):
     }
     r = client.post("/api/recurring", json=body, headers=auth)
     assert r.status_code == 422, r.text
+    data = r.json()
+    assert data["error"] == "ValidationError"
+    assert "fields" in data, r.text
+    assert "interval_count" in data["fields"], r.text
 
 
 def test_recurring_create_interval_count_over_1000_is_422(client, engine, auth):
