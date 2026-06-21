@@ -6,10 +6,6 @@
 
 /* App-specific theme: brand fonts and domain (income/expense) color tokens. */
 @theme inline {
-  --font-sans: var(--font-figtree);
-  --font-mono: var(--font-figtree);
-  --font-display: var(--font-figtree);
-  --font-heading: var(--font-figtree);
   --color-income: var(--income);
   --color-expense: var(--expense);
 }
@@ -20,6 +16,10 @@
   --expense: oklch(0.49 0.18 27);
   /* alias usado en componentes */
   --amber: oklch(0.09 0.003 60);
+  /* Font override: @theme inline can't resolve Next.js runtime vars at build-time;
+     unlayered :root declarations beat @layer theme, so this wins. */
+  --font-sans: var(--font-figtree);
+  --font-heading: var(--font-figtree);
 }
 
 @keyframes fade-up {
