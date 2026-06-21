@@ -5,7 +5,7 @@ from datetime import date as Date
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, Source, TxStatus, TxType
 
@@ -97,7 +97,7 @@ class TagOut(BaseModel):
 
 class FxIn(BaseModel):
     date: Date
-    usd_cop: Decimal
+    usd_cop: Decimal = Field(gt=0, le=100000)
 
 
 class FxOut(BaseModel):
@@ -184,7 +184,7 @@ class RecurringCreate(BaseModel):
     category_id: int | None = None
     account_id: int
     interval_unit: IntervalUnit
-    interval_count: int = 1
+    interval_count: int = Field(default=1, gt=0, le=1000)
     start_date: Date
     end_date: Date | None = None
 
@@ -193,11 +193,11 @@ class RecurringUpdate(BaseModel):
     name: str | None = None
     payee: str | None = None
     mode: RecurringMode | None = None
-    amount: int | None = None
+    amount: int | None = Field(default=None, gt=0)
     category_id: int | None = None
     account_id: int | None = None
     interval_unit: IntervalUnit | None = None
-    interval_count: int | None = None
+    interval_count: int | None = Field(default=None, gt=0, le=1000)
     start_date: Date | None = None
     end_date: Date | None = None
 
@@ -237,7 +237,7 @@ class SkipRecurringIn(BaseModel):
 
 class PlanPaymentIn(BaseModel):
     payee: str
-    amount: int
+    amount: int = Field(gt=0)
     currency: str = "COP"
     due_date: Date
     account_id: int
@@ -359,22 +359,22 @@ class GoalOut(BaseModel):
 
 class GoalCreate(BaseModel):
     name: str
-    monthly_amount: int
+    monthly_amount: int = Field(gt=0)
     savings_account_id: int
-    target_amount: int | None = None
+    target_amount: int | None = Field(default=None, gt=0)
     deadline: Date | None = None
 
 
 class GoalUpdate(BaseModel):
     name: str | None = None
-    monthly_amount: int | None = None
+    monthly_amount: int | None = Field(default=None, gt=0)
     target_amount: int | None = None
     deadline: Date | None = None
     savings_account_id: int | None = None
 
 
 class GoalContributeIn(BaseModel):
-    amount: int
+    amount: int = Field(gt=0)
     date: Date
 
 
