@@ -1,9 +1,12 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { useState } from "react"
+import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { z } from "zod"
 import { ErrorState } from "@/components/error-state"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
@@ -11,6 +14,7 @@ import { assignBudget, listBudgets, safeToSpend } from "@/lib/api/budgets"
 import { ApiError } from "@/lib/api/types"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { positiveCents } from "@/lib/schemas/primitives"
 import { Button, Input } from "@/ui"
 
 function Row({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
@@ -29,6 +33,13 @@ function Row({ label, value, strong = false }: { label: string; value: string; s
   )
 }
 
+const assignBudgetSchema = z.object({
+  amount: positiveCents,
+  yearMonth: z.string().regex(/^\d{4}-\d{2}$/, "Mes inválido"),
+})
+
+type AssignBudgetValues = z.infer<typeof assignBudgetSchema>
+
 export default function BudgetsPage() {
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"))
   const qc = useQueryClient()
@@ -36,15 +47,32 @@ export default function BudgetsPage() {
   const lines = useQuery({ queryKey: qk.budgets(month), queryFn: () => listBudgets(month) })
 
   const [editingCat, setEditingCat] = useState<number | null>(null)
-  const [draft, setDraft] = useState<number | null>(null)
+  const assignForm = useForm<AssignBudgetValues>({
+    resolver: zodResolver(assignBudgetSchema),
+    defaultValues: {
+      amount: Number.NaN,
+      yearMonth: format(new Date(), "yyyy-MM"),
+    },
+  })
+  const { reset: resetAssign } = assignForm
+
   const assign = useMutation({
-    mutationFn: (categoryId: number) =>
-      assignBudget({ category_id: categoryId, year_month: month, amount_assigned: draft ?? 0 }),
+    mutationFn: (values: AssignBudgetValues) => {
+      if (editingCat === null) throw new Error("editingCat is required")
+      return assignBudget({
+        category_id: editingCat,
+        year_month: values.yearMonth,
+        amount_assigned: values.amount,
+      })
+    },
     onSuccess: () => {
       toast.success("Sobre asignado")
       invalidate(qc, "budgetWrite")
       setEditingCat(null)
-      setDraft(null)
+      resetAssign({
+        amount: Number.NaN,
+        yearMonth: format(new Date(), "yyyy-MM"),
+      })
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })
@@ -149,7 +177,26 @@ export default function BudgetsPage() {
                       style={{ color: "var(--muted-foreground)" }}
                     >
                       {editingCat === l.category_id ? (
-                        <MoneyInput currency="COP" value={draft} onChange={setDraft} />
+                        <Controller
+                          control={assignForm.control}
+                          name="amount"
+                          render={({ field, fieldState: { error } }) => (
+                            <div className="space-y-1">
+                              <MoneyInput
+                                currency="COP"
+                                value={
+                                  typeof field.value === "number" && Number.isFinite(field.value)
+                                    ? field.value
+                                    : null
+                                }
+                                onChange={(cents) => field.onChange(cents ?? Number.NaN)}
+                              />
+                              {error?.message && (
+                                <p className="text-xs text-destructive">{error.message}</p>
+                              )}
+                            </div>
+                          )}
+                        />
                       ) : (
                         formatCents(l.assigned, "COP")
                       )}
@@ -172,17 +219,22 @@ export default function BudgetsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            type="button"
                             onClick={() => {
                               setEditingCat(null)
-                              setDraft(null)
+                              resetAssign({
+                                amount: Number.NaN,
+                                yearMonth: format(new Date(), "yyyy-MM"),
+                              })
                             }}
                           >
                             Cancelar
                           </Button>
                           <Button
                             size="sm"
+                            type="button"
                             disabled={assign.isPending}
-                            onClick={() => assign.mutate(l.category_id)}
+                            onClick={assignForm.handleSubmit((values) => assign.mutate(values))}
                           >
                             Guardar
                           </Button>
@@ -193,7 +245,10 @@ export default function BudgetsPage() {
                           size="sm"
                           onClick={() => {
                             setEditingCat(l.category_id)
-                            setDraft(l.assigned)
+                            resetAssign({
+                              amount: l.assigned,
+                              yearMonth: month,
+                            })
                           }}
                         >
                           Asignar
