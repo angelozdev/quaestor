@@ -18,3 +18,5 @@ New ADRs are created with the `adr` skill:
 | 0002 | App-agnostic frontend design system in `ui/` module | accepted | 2026-06-20 |
 | 0003 | pnpm as the sole package manager for the frontend | accepted | 2026-06-20 |
 | 0004 | Dark-first theming via next-themes with an app-level elevation token layer | accepted | 2026-06-20 |
+| 0005 | Soft-delete and restore as the uniform lifecycle for goals, recurring, and masters | accepted | 2026-06-21 |
+| 0006 | Goals and budgets write API with MCP parity | accepted | 2026-06-21 |
