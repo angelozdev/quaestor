@@ -1,11 +1,11 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
-import { z } from "zod"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
@@ -27,9 +27,8 @@ import {
 } from "@/lib/api/recurring"
 import { ApiError, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
-import { messages } from "@/lib/schemas/messages"
-import { intervalCount, isoDate, positiveCents, requiredString } from "@/lib/schemas/primitives"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
+import { type RecurringCreateValues, recurringCreateSchema } from "./recurring.schema"
 
 const TYPE_ITEMS = [
   { value: "expense", label: "Gasto" },
@@ -64,40 +63,6 @@ function intervalLabel(unit: IntervalUnit, count: number): string {
   return `Cada ${count} ${UNIT_PLURAL[unit]}`
 }
 
-const recurringCreateSchema = z
-  .object({
-    name: requiredString,
-    payee: z.string().max(500, "Máximo 500 caracteres").optional(),
-    amount: positiveCents,
-    currency: z.enum(["COP", "USD"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
-    categoryId: z.number().nullable(),
-    accountId: z.number().nullable(),
-    type: z.enum(["expense", "income"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
-    mode: z.enum(["auto", "manual"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
-    intervalCount,
-    intervalUnit: z.enum(["day", "week", "month", "year"], {
-      errorMap: () => ({ message: messages.opcionInvalida }),
-    }),
-    startDate: isoDate,
-    endDate: isoDate.optional().or(z.literal("")),
-  })
-  .refine((d) => !d.endDate || d.endDate >= d.startDate, {
-    message: "Fin debe ser ≥ inicio",
-    path: ["endDate"],
-  })
-  .refine((d) => d.accountId !== null, {
-    message: "Requerido",
-    path: ["accountId"],
-  })
-
-type RecurringCreateValues = z.infer<typeof recurringCreateSchema>
-
 const recurringEditSchema = recurringCreateSchema
 type RecurringEditValues = z.infer<typeof recurringEditSchema>
 
@@ -114,8 +79,7 @@ export default function RecurringPage() {
   const [editing, setEditing] = useState<Recurring | null>(null)
   const [deleting, setDeleting] = useState<Recurring | null>(null)
 
-  const createForm = useForm<RecurringCreateValues>({
-    resolver: zodResolver(recurringCreateSchema),
+  const createForm = useTanStackForm({
     defaultValues: {
       name: "",
       payee: "",
@@ -129,9 +93,16 @@ export default function RecurringPage() {
       intervalUnit: "month",
       startDate: new Date().toISOString().slice(0, 10),
       endDate: "",
+    } as RecurringCreateValues,
+    validators: { onChange: recurringCreateSchema },
+    onSubmit: async ({ value }) => {
+      create.mutate(value as RecurringCreateValues)
     },
   })
-  const { reset: resetCreate } = createForm
+
+  const resetCreate = (values?: RecurringCreateValues) => {
+    createForm.reset(values)
+  }
 
   const editForm = useForm<RecurringEditValues>({
     resolver: zodResolver(recurringEditSchema),
@@ -364,133 +335,145 @@ export default function RecurringPage() {
         <DialogPopup className="max-w-lg">
           <DialogTitle>Nuevo recurrente</DialogTitle>
           <form
-            onSubmit={createForm.handleSubmit((values) => create.mutate(values))}
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void createForm.handleSubmit()
+            }}
             className="space-y-4"
           >
-            <FormField control={createForm.control} name="name" label="Nombre" />
+            <createForm.Field name="name">
+              {(field) => <FormField field={field} label="Nombre" />}
+            </createForm.Field>
             <div className="grid grid-cols-2 gap-3">
-              <Controller
-                control={createForm.control}
-                name="type"
-                render={({ field }) => (
+              <createForm.Field name="type">
+                {(field) => (
                   <div className="space-y-1.5">
                     <Label>Tipo *</Label>
                     <Select
-                      value={field.value}
-                      onValueChange={(v) => field.onChange(v)}
+                      value={field.state.value as string}
+                      onValueChange={(v) => v && field.handleChange(v as never)}
                       items={TYPE_ITEMS}
                     />
                   </div>
                 )}
-              />
-              <Controller
-                control={createForm.control}
-                name="mode"
-                render={({ field }) => (
+              </createForm.Field>
+              <createForm.Field name="mode">
+                {(field) => (
                   <div className="space-y-1.5">
                     <Label>Modo *</Label>
                     <Select
-                      value={field.value}
-                      onValueChange={(v) => field.onChange(v)}
+                      value={field.state.value as string}
+                      onValueChange={(v) => v && field.handleChange(v as never)}
                       items={MODE_ITEMS}
                     />
                   </div>
                 )}
-              />
+              </createForm.Field>
             </div>
-            <Controller
-              control={createForm.control}
-              name="accountId"
-              render={({ field, fieldState: { error } }) => (
+            <createForm.Field name="accountId">
+              {(field) => (
                 <div className="space-y-1.5">
                   <Label>Cuenta *</Label>
                   <EntitySelect
-                    value={field.value}
-                    onChange={field.onChange}
+                    value={field.state.value as number | null}
+                    onChange={(v) => field.handleChange(v as never)}
                     queryKey={qk.accounts(false)}
                     queryFn={() => listAccounts(false)}
                   />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                    <p className="text-xs text-destructive">
+                      {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                    </p>
+                  )}
                 </div>
               )}
-            />
-            <Controller
-              control={createForm.control}
-              name="amount"
-              render={({ field, fieldState: { error } }) => (
-                <div className="space-y-1.5">
-                  <Label>Monto * ({createForm.watch("currency")})</Label>
-                  <MoneyInput
-                    currency={createForm.watch("currency")}
-                    value={
-                      typeof field.value === "number" && Number.isFinite(field.value)
-                        ? field.value
-                        : null
-                    }
-                    onChange={(cents) => field.onChange(cents ?? Number.NaN)}
-                  />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
-                </div>
-              )}
-            />
+            </createForm.Field>
+            <createForm.Field name="amount">
+              {(field) => {
+                const currency = createForm.getFieldValue("currency") as string
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({currency})</Label>
+                    <MoneyInput
+                      currency={currency}
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                      <p className="text-xs text-destructive">
+                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                      </p>
+                    )}
+                  </div>
+                )
+              }}
+            </createForm.Field>
             <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={createForm.control}
-                name="intervalCount"
-                label="Cada (cantidad)"
-                type="number"
-                min={1}
-                valueAsNumber
-              />
-              <Controller
-                control={createForm.control}
-                name="intervalUnit"
-                render={({ field, fieldState: { error } }) => (
+              <createForm.Field name="intervalCount">
+                {(field) => (
+                  <FormField
+                    field={field}
+                    label="Cada (cantidad)"
+                    type="number"
+                    min={1}
+                    valueAsNumber
+                  />
+                )}
+              </createForm.Field>
+              <createForm.Field name="intervalUnit">
+                {(field) => (
                   <div className="space-y-1.5">
                     <Label>Unidad *</Label>
                     <Select
-                      value={field.value}
-                      onValueChange={(v) => field.onChange(v)}
+                      value={field.state.value as string}
+                      onValueChange={(v) => v && field.handleChange(v as never)}
                       items={UNIT_ITEMS}
                     />
-                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                      <p className="text-xs text-destructive">
+                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                      </p>
+                    )}
                   </div>
                 )}
-              />
+              </createForm.Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <FormField control={createForm.control} name="startDate" label="Inicio" type="date" />
-              <FormField
-                control={createForm.control}
-                name="endDate"
-                label="Fin (opcional)"
-                type="date"
-              />
+              <createForm.Field name="startDate">
+                {(field) => <FormField field={field} label="Inicio" type="date" />}
+              </createForm.Field>
+              <createForm.Field name="endDate">
+                {(field) => <FormField field={field} label="Fin (opcional)" type="date" />}
+              </createForm.Field>
             </div>
-            <Controller
-              control={createForm.control}
-              name="categoryId"
-              render={({ field, fieldState: { error } }) => (
+            <createForm.Field name="categoryId">
+              {(field) => (
                 <div className="space-y-1.5">
                   <Label>Categoría</Label>
                   <EntitySelect
-                    value={field.value}
-                    onChange={field.onChange}
+                    value={field.state.value as number | null}
+                    onChange={(v) => field.handleChange(v as never)}
                     queryKey={qk.categories(false)}
                     queryFn={() => listCategories(false)}
                     allowNullLabel="Sin categoría"
                   />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
                 </div>
               )}
-            />
-            <FormField control={createForm.control} name="payee" label="Beneficiario" />
+            </createForm.Field>
+            <createForm.Field name="payee">
+              {(field) => <FormField field={field} label="Beneficiario" />}
+            </createForm.Field>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreating(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={create.isPending}>
-                {create.isPending ? "…" : "Crear"}
+              <Button type="submit" disabled={create.isPending || createForm.state.isSubmitting}>
+                {create.isPending || createForm.state.isSubmitting ? "…" : "Crear"}
               </Button>
             </div>
           </form>
