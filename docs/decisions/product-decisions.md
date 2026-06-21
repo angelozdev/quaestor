@@ -374,3 +374,24 @@ The card account stays a normal account with a **negative balance = debt**; the 
 **Alternatives rejected.** Forcing a category always (friction); a configurable settings panel (config no one will touch); an `/import` screen in v1 (UI for something not used on a clean start).
 
 **Consequences.** None structural — confirms what exists. P5 keeps the importer available (deferred backfill); P6 leaves `/import` and the bulk of `/settings` in backlog.
+
+---
+
+## ADR-025 — Graduate the backlog frontend CRUD to a built UI, in two phases
+
+**Status:** accepted · **Extends** ADR-008 (does not supersede it: the backlog screens were always the documented target, "built feature by feature when needed")
+
+**Context.** ADR-008 shipped a minimal MCP-first frontend (dashboard + report) and deferred all CRUD to backlog, operated through the agent. Before P7 (deployment), the user wants the **full day-to-day workflow doable from the frontend**, not only through the agent. But the frontend is a thin client (P6: zero business logic), so it can only build CRUD for endpoints the API already exposes — and a sweep shows the differentiators (goals, budgets) and `recurring` edit/delete have only **read** (or partial) endpoints today; building their management would mean backend work in P4/P3 territory.
+
+**Decision.** Graduate the backlog to a built UI in **two phases**:
+
+- **Phase 1 (before P7):** frontend CRUD for **every entity the API already exposes** — `/transactions` (full CRUD + transfer + filters), `/to-pay` (confirm/skip/plan one-off), `/recurring` (create + list + skip), the four masters (`/accounts`, `/categories`, `/category-groups`, `/tags`), thin `/settings` (default source account + manual FX override), and **read-only** `/goals` and `/budgets`. Navigation moves to a grouped sidebar. The frontend stays a **thin client**: no business arithmetic in the client.
+- **Phase 2 (later sub-project, possibly post-P7):** add the missing backend endpoints (goals CRUD + contribute, budgets assign/status, recurring edit/delete) and their management UI; enable re-activating archived masters.
+
+**`/import` stays out of the UI** (reaffirms ADR-024): usable through the endpoint/MCP if ever needed.
+
+**Build approach:** tiered — a generic schema-driven CRUD modal (`EntityFormDialog`) for the four uniform masters only; bespoke pages for the entities with their own shape (transactions, to-pay, recurring) and for the read-only planning views.
+
+**Alternatives rejected.** (A) **Full-stack now** — also add the missing P3/P4 endpoints in this push so the differentiators are manageable from the UI: most complete, but balloons the scope back into P4 backend territory right before deployment. (B) **Stay MCP-only** for CRUD (status quo of ADR-008): keeps the frontend minimal but leaves the day-to-day workflow agent-only, which the user explicitly wants to change. (C) Build the CRUD without recording it: a real posture shift from "minimal v1" should be governed by a decision.
+
+**Consequences.** New sub-project spec `docs/superpowers/specs/2026-06-20-P6-frontend-crud-design.md` (Phase 1). P6 grows from 2 views to 12 routes; `ui/` gains form primitives (dialog, select, checkbox, textarea, dropdown-menu) under the ADR-0002 boundary; `lib/api.ts` grows to ~35 methods + a `lib/query.ts` invalidation map. The agent (MCP, P2) remains a **co-equal write path** — the UI does not replace it. Phase 2 becomes the trigger for exposing the goals/budgets/recurring write endpoints in P4/P3. The thin-client rule (no business logic in the frontend) is preserved across both phases.
