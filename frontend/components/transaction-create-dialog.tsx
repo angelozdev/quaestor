@@ -13,6 +13,7 @@ import { listCategories } from "@/lib/api/categories"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
 import { type Account, ApiError } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
+import { messages } from "@/lib/schemas/messages"
 import { fxRate, isoDate, optionalString, positiveCents } from "@/lib/schemas/primitives"
 import {
   Button,
@@ -41,7 +42,9 @@ function currencyOf(accounts: Account[] | undefined, id: number | null): string 
 // (number | null) selected via EntitySelect, matching the existing UI.
 const txNormalSchema = z
   .object({
-    type: z.enum(["expense", "income"]),
+    type: z.enum(["expense", "income"], {
+      errorMap: () => ({ message: messages.opcionInvalida }),
+    }),
     accountId: z.number().nullable(),
     amount: positiveCents,
     categoryId: z.number().nullable(),

@@ -27,6 +27,7 @@ import {
 } from "@/lib/api/recurring"
 import { ApiError, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
+import { messages } from "@/lib/schemas/messages"
 import { intervalCount, isoDate, positiveCents, requiredString } from "@/lib/schemas/primitives"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 
@@ -68,13 +69,21 @@ const recurringCreateSchema = z
     name: requiredString,
     payee: z.string().max(500, "Máximo 500 caracteres").optional(),
     amount: positiveCents,
-    currency: z.enum(["COP", "USD"]),
+    currency: z.enum(["COP", "USD"], {
+      errorMap: () => ({ message: messages.opcionInvalida }),
+    }),
     categoryId: z.number().nullable(),
     accountId: z.number().nullable(),
-    type: z.enum(["expense", "income"]),
-    mode: z.enum(["auto", "manual"]),
+    type: z.enum(["expense", "income"], {
+      errorMap: () => ({ message: messages.opcionInvalida }),
+    }),
+    mode: z.enum(["auto", "manual"], {
+      errorMap: () => ({ message: messages.opcionInvalida }),
+    }),
     intervalCount,
-    intervalUnit: z.enum(["day", "week", "month", "year"]),
+    intervalUnit: z.enum(["day", "week", "month", "year"], {
+      errorMap: () => ({ message: messages.opcionInvalida }),
+    }),
     startDate: isoDate,
     endDate: isoDate.optional().or(z.literal("")),
   })
