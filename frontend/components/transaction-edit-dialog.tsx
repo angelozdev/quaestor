@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Transaction } from "@/lib/api";
+import { updateTransaction } from "@/lib/api/transactions";
+import { listCategories } from "@/lib/api/categories";
+import { ApiError, type Transaction } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { EntitySelect } from "@/components/entity-select";
@@ -36,7 +38,7 @@ export function TransactionEditDialog({
 
   const update = useMutation({
     mutationFn: () =>
-      api.updateTransaction(tx!.id, {
+      updateTransaction(tx!.id, {
         payee,
         date,
         category_id: categoryId,
@@ -74,7 +76,7 @@ export function TransactionEditDialog({
                 value={categoryId}
                 onChange={setCategoryId}
                 queryKey={qk.categories(false)}
-                queryFn={() => api.listCategories(false)}
+                queryFn={() => listCategories(false)}
                 allowNullLabel="Sin categoría"
               />
             </div>

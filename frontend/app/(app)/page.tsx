@@ -2,11 +2,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { api } from "@/lib/api";
 import { qk } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { MoneyAmount } from "@/components/money-amount";
 import { ToPayWidget } from "@/components/to-pay-widget";
+import { safeToSpend } from "@/lib/api/budgets";
+import { report as fetchReport } from "@/lib/api/reports";
+import { goalsProgress } from "@/lib/api/goals";
+import { listAccounts } from "@/lib/api/accounts";
 
 const MONTH = format(new Date(), "yyyy-MM");
 
@@ -46,10 +49,10 @@ function Skeleton({ className = "" }: { className?: string }) {
 }
 
 export default function DashboardPage() {
-  const sts = useQuery({ queryKey: qk.safeToSpend(MONTH), queryFn: () => api.safeToSpend(MONTH) });
-  const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => api.report(MONTH) });
-  const goals = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => api.goalsProgress() });
-  const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => api.listAccounts() });
+  const sts = useQuery({ queryKey: qk.safeToSpend(MONTH), queryFn: () => safeToSpend(MONTH) });
+  const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) });
+  const goals = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => goalsProgress() });
+  const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() });
 
   return (
     <div className="space-y-8">

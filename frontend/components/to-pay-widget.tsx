@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
-import { api } from "@/lib/api";
+import { toPay, confirmPayment } from "@/lib/api/planned";
 import { qk } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { MoneyAmount } from "@/components/money-amount";
@@ -28,11 +28,11 @@ export function ToPayWidget() {
 
   const query = useQuery({
     queryKey: qk.toPay(since, until),
-    queryFn: () => api.toPay(since, until),
+    queryFn: () => toPay(since, until),
   });
 
   const markPaid = useMutation({
-    mutationFn: (id: number) => api.confirmPayment(id),
+    mutationFn: (id: number) => confirmPayment(id),
     onSuccess: () => {
       toast.success("Pago confirmado");
       qc.invalidateQueries({ queryKey: ["planned"] });

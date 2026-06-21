@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Tag } from "@/lib/api";
+import { listTags, createTag, updateTag, deleteTag } from "@/lib/api/tags";
+import { ApiError, type Tag } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
@@ -20,23 +21,23 @@ export default function TagsPage() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Tag | null>(null);
 
-  const list = useQuery({ queryKey: qk.tags(), queryFn: () => api.listTags() });
+  const list = useQuery({ queryKey: qk.tags(), queryFn: () => listTags() });
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error");
   const done = (msg: string) => { toast.success(msg); invalidate(qc, "tagWrite"); };
 
   const create = useMutation({
-    mutationFn: (v: FormValues) => api.createTag({ name: String(v.name) }),
+    mutationFn: (v: FormValues) => createTag({ name: String(v.name) }),
     onSuccess: () => { done("Etiqueta creada"); setCreating(false); },
     onError: onErr,
   });
   const update = useMutation({
-    mutationFn: (v: FormValues) => api.updateTag(editing!.id, { name: String(v.name) }),
+    mutationFn: (v: FormValues) => updateTag(editing!.id, { name: String(v.name) }),
     onSuccess: () => { done("Etiqueta actualizada"); setEditing(null); },
     onError: onErr,
   });
   const remove = useMutation({
-    mutationFn: (id: number) => api.deleteTag(id),
+    mutationFn: (id: number) => deleteTag(id),
     onSuccess: () => { done("Etiqueta eliminada"); setDeleting(null); },
     onError: onErr,
   });

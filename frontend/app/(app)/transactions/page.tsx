@@ -4,13 +4,15 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  api,
-  ApiError,
-  type Transaction,
-  type TransactionFilters,
-  type TxType,
-  type TxStatus,
-} from "@/lib/api";
+  deleteTransaction,
+  listTransactions,
+} from "@/lib/api/transactions";
+import { listAccounts } from "@/lib/api/accounts";
+import { listCategories } from "@/lib/api/categories";
+import { listTags } from "@/lib/api/tags";
+import { ApiError } from "@/lib/api/types";
+import type { Transaction } from "@/lib/api/types";
+import type { TransactionFilters, TxType, TxStatus } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { MoneyAmount } from "@/components/money-amount";
@@ -45,7 +47,7 @@ export default function TransactionsPage() {
   const qc = useQueryClient();
 
   const del = useMutation({
-    mutationFn: (id: number) => api.deleteTransaction(id),
+    mutationFn: (id: number) => deleteTransaction(id),
     onSuccess: () => {
       toast.success("Transacción eliminada");
       invalidate(qc, "transactionWrite");
@@ -63,15 +65,15 @@ export default function TransactionsPage() {
 
   const accounts = useQuery({
     queryKey: qk.accounts(true),
-    queryFn: () => api.listAccounts(true),
+    queryFn: () => listAccounts(true),
   });
   const categories = useQuery({
     queryKey: qk.categories(true),
-    queryFn: () => api.listCategories(true),
+    queryFn: () => listCategories(true),
   });
   const tags = useQuery({
     queryKey: qk.tags(),
-    queryFn: () => api.listTags(),
+    queryFn: () => listTags(),
   });
 
   const accountName = (id: number | null) =>
@@ -100,7 +102,7 @@ export default function TransactionsPage() {
 
   const list = useQuery({
     queryKey: qk.transactions(filters),
-    queryFn: () => api.listTransactions(filters),
+    queryFn: () => listTransactions(filters),
   });
 
   const columns: Column<Transaction>[] = [
@@ -211,7 +213,7 @@ export default function TransactionsPage() {
           value={accountId}
           onChange={setAccountId}
           queryKey={qk.accounts(true)}
-          queryFn={() => api.listAccounts(true)}
+          queryFn={() => listAccounts(true)}
           allowNullLabel="Todas"
         />
       </div>
@@ -226,7 +228,7 @@ export default function TransactionsPage() {
           value={categoryId}
           onChange={setCategoryId}
           queryKey={qk.categories(true)}
-          queryFn={() => api.listCategories(true)}
+          queryFn={() => listCategories(true)}
           allowNullLabel="Todas"
         />
       </div>
@@ -241,7 +243,7 @@ export default function TransactionsPage() {
           value={tag}
           onChange={setTag}
           queryKey={qk.tags()}
-          queryFn={() => api.listTags()}
+          queryFn={() => listTags()}
           allowNullLabel="Todas"
           disabled={tags.isLoading}
         />

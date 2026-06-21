@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Account } from "@/lib/api";
+import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions";
+import { listAccounts } from "@/lib/api/accounts";
+import { listCategories } from "@/lib/api/categories";
+import { ApiError, type Account } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { MoneyInput } from "@/components/money-input";
 import { EntitySelect } from "@/components/entity-select";
@@ -42,7 +45,7 @@ export function TransactionCreateDialog({
   const qc = useQueryClient();
   const accounts = useQuery({
     queryKey: qk.accounts(false),
-    queryFn: () => api.listAccounts(false),
+    queryFn: () => listAccounts(false),
   });
 
   // normal tab state
@@ -94,7 +97,7 @@ export function TransactionCreateDialog({
 
   const createNormal = useMutation({
     mutationFn: () =>
-      api.createTransaction({
+      createTransaction({
         type: type as "expense" | "income",
         account_id: accountId!,
         amount: amount!,
@@ -111,7 +114,7 @@ export function TransactionCreateDialog({
 
   const createTransfer = useMutation({
     mutationFn: () =>
-      api.createTransfer({
+      createTransferApi({
         from_account_id: fromId!,
         to_account_id: toId!,
         amount: tAmount!,
@@ -156,7 +159,7 @@ export function TransactionCreateDialog({
                   value={accountId}
                   onChange={setAccountId}
                   queryKey={qk.accounts(false)}
-                  queryFn={() => api.listAccounts(false)}
+                  queryFn={() => listAccounts(false)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -188,7 +191,7 @@ export function TransactionCreateDialog({
                   value={categoryId}
                   onChange={setCategoryId}
                   queryKey={qk.categories(false)}
-                  queryFn={() => api.listCategories(false)}
+                  queryFn={() => listCategories(false)}
                   allowNullLabel="Sin categoría"
                 />
               </div>
@@ -241,7 +244,7 @@ export function TransactionCreateDialog({
                   value={fromId}
                   onChange={setFromId}
                   queryKey={qk.accounts(false)}
-                  queryFn={() => api.listAccounts(false)}
+                  queryFn={() => listAccounts(false)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -250,7 +253,7 @@ export function TransactionCreateDialog({
                   value={toId}
                   onChange={setToId}
                   queryKey={qk.accounts(false)}
-                  queryFn={() => api.listAccounts(false)}
+                  queryFn={() => listAccounts(false)}
                 />
               </div>
               <div className="space-y-1.5">

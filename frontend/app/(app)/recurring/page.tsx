@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { listRecurring, createRecurring, updateRecurring, deleteRecurring, restoreRecurring, skipRecurring } from "@/lib/api/recurring";
+import { listAccounts } from "@/lib/api/accounts";
+import { listCategories } from "@/lib/api/categories";
 import {
-  api, ApiError, type Recurring, type Account,
+  ApiError, type Recurring, type Account,
   type IntervalUnit, type RecurringMode, type RecurringType,
-} from "@/lib/api";
+} from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { PageHeader } from "@/components/page-header";
 import { ErrorState } from "@/components/error-state";
@@ -48,12 +51,12 @@ function currencyOf(accounts: Account[] | undefined, id: number | null): string 
 
 export default function RecurringPage() {
   const qc = useQueryClient();
-  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => api.listAccounts(false) });
+  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) });
 
   const [showInactive, setShowInactive] = useState(false);
   const list = useQuery({
     queryKey: qk.recurring(showInactive ? undefined : true),
-    queryFn: () => api.listRecurring(showInactive ? undefined : true),
+    queryFn: () => listRecurring(showInactive ? undefined : true),
   });
 
   const [creating, setCreating] = useState(false);
@@ -80,7 +83,7 @@ export default function RecurringPage() {
 
   const create = useMutation({
     mutationFn: () =>
-      api.createRecurring({
+      createRecurring({
         name,
         type: type as RecurringType,
         mode: mode as RecurringMode,
@@ -105,7 +108,7 @@ export default function RecurringPage() {
 
   const update = useMutation({
     mutationFn: () =>
-      api.updateRecurring(editing!.id, {
+      updateRecurring(editing!.id, {
         name, amount: amount ?? undefined, payee: payee || undefined,
         category_id: categoryId, account_id: accountId ?? undefined,
         mode: mode as RecurringMode, interval_unit: unit as IntervalUnit,
@@ -117,19 +120,19 @@ export default function RecurringPage() {
   });
 
   const remove = useMutation({
-    mutationFn: () => api.deleteRecurring(deleting!.id),
+    mutationFn: () => deleteRecurring(deleting!.id),
     onSuccess: () => { done("Recurrente desactivado"); setDeleting(null); },
     onError: onErr,
   });
 
   const restore = useMutation({
-    mutationFn: (r: Recurring) => api.restoreRecurring(r.id),
+    mutationFn: (r: Recurring) => restoreRecurring(r.id),
     onSuccess: () => done("Recurrente restaurado"),
     onError: onErr,
   });
 
   const skip = useMutation({
-    mutationFn: () => api.skipRecurring(skipping!.id, skipDate),
+    mutationFn: () => skipRecurring(skipping!.id, skipDate),
     onSuccess: () => { done("Ocurrencia omitida"); setSkipping(null); setSkipDate(""); },
     onError: onErr,
   });
@@ -209,7 +212,7 @@ export default function RecurringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Cuenta *</Label>
-              <EntitySelect value={accountId} onChange={setAccountId} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
+              <EntitySelect value={accountId} onChange={setAccountId} queryKey={qk.accounts(false)} queryFn={() => listAccounts(false)} />
             </div>
             <div className="space-y-1.5"><Label>Monto * ({currency})</Label><MoneyInput currency={currency} value={amount} onChange={setAmount} /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -224,7 +227,7 @@ export default function RecurringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Categoría</Label>
-              <EntitySelect value={categoryId} onChange={setCategoryId} queryKey={qk.categories(false)} queryFn={() => api.listCategories(false)} allowNullLabel="Sin categoría" />
+              <EntitySelect value={categoryId} onChange={setCategoryId} queryKey={qk.categories(false)} queryFn={() => listCategories(false)} allowNullLabel="Sin categoría" />
             </div>
             <div className="space-y-1.5"><Label>Beneficiario</Label><Input value={payee} onChange={(e) => setPayee(e.target.value)} /></div>
             <div className="flex justify-end gap-2">
@@ -247,7 +250,7 @@ export default function RecurringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Cuenta *</Label>
-              <EntitySelect value={accountId} onChange={setAccountId} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
+              <EntitySelect value={accountId} onChange={setAccountId} queryKey={qk.accounts(false)} queryFn={() => listAccounts(false)} />
             </div>
             <div className="space-y-1.5"><Label>Monto * ({currency})</Label><MoneyInput currency={currency} value={amount} onChange={setAmount} /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -262,7 +265,7 @@ export default function RecurringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Categoría</Label>
-              <EntitySelect value={categoryId} onChange={setCategoryId} queryKey={qk.categories(false)} queryFn={() => api.listCategories(false)} allowNullLabel="Sin categoría" />
+              <EntitySelect value={categoryId} onChange={setCategoryId} queryKey={qk.categories(false)} queryFn={() => listCategories(false)} allowNullLabel="Sin categoría" />
             </div>
             <div className="space-y-1.5"><Label>Beneficiario</Label><Input value={payee} onChange={(e) => setPayee(e.target.value)} /></div>
             <div className="flex justify-end gap-2">

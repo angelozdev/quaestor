@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, ApiError, type Goal } from "@/lib/api";
+import { listGoals, goalsProgress, createGoal, updateGoal, pauseGoal, restoreGoal, contributeGoal } from "@/lib/api/goals";
+import { listAccounts } from "@/lib/api/accounts";
+import { ApiError, type Goal } from "@/lib/api/types";
 import { qk, invalidate } from "@/lib/query";
 import { formatCents } from "@/lib/money";
 import { PageHeader } from "@/components/page-header";
@@ -17,8 +19,8 @@ import { Dialog, DialogPopup, DialogTitle, Input, Label, Button } from "@/ui";
 
 export default function GoalsPage() {
   const qc = useQueryClient();
-  const goals = useQuery({ queryKey: qk.goals(), queryFn: () => api.listGoals() });
-  const progress = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => api.goalsProgress() });
+  const goals = useQuery({ queryKey: qk.goals(), queryFn: () => listGoals() });
+  const progress = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => goalsProgress() });
 
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
@@ -38,7 +40,7 @@ export default function GoalsPage() {
   const resetForm = () => { setName(""); setMonthly(null); setSavingsId(null); setTarget(null); setDeadline(""); };
 
   const create = useMutation({
-    mutationFn: () => api.createGoal({
+    mutationFn: () => createGoal({
       name, monthly_amount: monthly!, savings_account_id: savingsId!,
       target_amount: target, deadline: deadline || null,
     }),
@@ -46,7 +48,7 @@ export default function GoalsPage() {
     onError: onErr,
   });
   const update = useMutation({
-    mutationFn: () => api.updateGoal(editing!.id, {
+    mutationFn: () => updateGoal(editing!.id, {
       name, monthly_amount: monthly ?? undefined,
       target_amount: target, deadline: deadline || null, savings_account_id: savingsId ?? undefined,
     }),
@@ -54,17 +56,17 @@ export default function GoalsPage() {
     onError: onErr,
   });
   const pause = useMutation({
-    mutationFn: () => api.pauseGoal(pausing!.id),
+    mutationFn: () => pauseGoal(pausing!.id),
     onSuccess: () => { done("Meta pausada"); setPausing(null); },
     onError: onErr,
   });
   const restore = useMutation({
-    mutationFn: (g: Goal) => api.restoreGoal(g.id),
+    mutationFn: (g: Goal) => restoreGoal(g.id),
     onSuccess: () => done("Meta restaurada"),
     onError: onErr,
   });
   const contribute = useMutation({
-    mutationFn: () => api.contributeGoal(contributing!.id, { amount: amount!, date }),
+    mutationFn: () => contributeGoal(contributing!.id, { amount: amount!, date }),
     onSuccess: () => { done("Aporte registrado"); setContributing(null); setAmount(null); setDate(""); },
     onError: onErr,
   });
@@ -136,7 +138,7 @@ export default function GoalsPage() {
             <div className="space-y-1.5"><Label>Aporte mensual * (COP)</Label><MoneyInput currency="COP" value={monthly} onChange={setMonthly} /></div>
             <div className="space-y-1.5">
               <Label>Cuenta de ahorro *</Label>
-              <EntitySelect value={savingsId} onChange={setSavingsId} queryKey={qk.accounts(false)} queryFn={() => api.listAccounts(false)} />
+              <EntitySelect value={savingsId} onChange={setSavingsId} queryKey={qk.accounts(false)} queryFn={() => listAccounts(false)} />
             </div>
             <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>Meta definida: completa objetivo y fecha. Abierta: deja ambos vacíos.</p>
             <div className="grid grid-cols-2 gap-3">

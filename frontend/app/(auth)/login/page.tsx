@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError } from "@/lib/api";
+import { login } from "@/lib/api/auth";
+import { ApiError } from "@/lib/api/types";
 import { toast } from "sonner";
 
 export default function LoginPage() {
@@ -14,7 +15,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.login(password);
+      await login(password);
       router.replace("/");
       router.refresh();
     } catch (err) {
