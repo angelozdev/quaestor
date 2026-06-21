@@ -1,19 +1,84 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { Menu, X } from "lucide-react";
 import { api } from "@/lib/api";
 
-const NAV = [
-  { href: "/", label: "Dashboard" },
-  { href: "/reports", label: "Reportes" },
+const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
+  {
+    title: "Resumen",
+    items: [
+      { href: "/", label: "Dashboard" },
+      { href: "/reports", label: "Reportes" },
+    ],
+  },
+  {
+    title: "Movimiento",
+    items: [
+      { href: "/transactions", label: "Transacciones" },
+      { href: "/to-pay", label: "Por pagar" },
+      { href: "/recurring", label: "Recurrentes" },
+    ],
+  },
+  {
+    title: "Planeación",
+    items: [
+      { href: "/goals", label: "Metas" },
+      { href: "/budgets", label: "Presupuestos" },
+    ],
+  },
+  {
+    title: "Configuración",
+    items: [
+      { href: "/accounts", label: "Cuentas" },
+      { href: "/categories", label: "Categorías" },
+      { href: "/category-groups", label: "Grupos" },
+      { href: "/tags", label: "Etiquetas" },
+      { href: "/settings", label: "Ajustes" },
+    ],
+  },
 ];
+
+function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  return (
+    <nav className="space-y-5">
+      {GROUPS.map((g) => (
+        <div key={g.title} className="space-y-1">
+          <p className="px-2 text-[0.7rem] font-medium uppercase tracking-wider" style={{ color: "var(--muted-foreground)" }}>
+            {g.title}
+          </p>
+          {g.items.map((n) => {
+            const active = pathname === n.href;
+            return (
+              <Link
+                key={n.href}
+                href={n.href}
+                onClick={onNavigate}
+                className="block rounded-md px-2 py-1.5 text-sm transition-colors"
+                style={{
+                  color: active ? "var(--foreground)" : "var(--muted-foreground)",
+                  fontWeight: active ? 500 : 400,
+                  background: active ? "var(--muted)" : "transparent",
+                }}
+              >
+                {n.label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const qc = useQueryClient();
+  const [drawer, setDrawer] = useState(false);
 
   async function logout() {
     try {
@@ -26,46 +91,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-40 border-b bg-white">
-        <nav className="mx-auto flex h-12 max-w-5xl items-center gap-7 px-5">
-          <Link href="/" className="text-sm font-semibold tracking-tight text-foreground">
+    <div className="flex min-h-screen">
+      {/* Desktop sidebar */}
+      <aside
+        className="sticky top-0 hidden h-screen w-56 shrink-0 flex-col justify-between border-r p-4 md:flex"
+        style={{ background: "var(--sidebar)", borderColor: "var(--sidebar-border)" }}
+      >
+        <div className="space-y-6">
+          <Link href="/" className="px-2 text-sm font-semibold tracking-tight">
             Quaestor
           </Link>
+          <NavLinks pathname={pathname} />
+        </div>
+        <button onClick={logout} className="px-2 text-left text-sm" style={{ color: "var(--muted-foreground)" }}>
+          Salir
+        </button>
+      </aside>
 
-          <div className="flex items-center gap-1">
-            {NAV.map((n) => {
-              const active = pathname === n.href;
-              return (
-                <Link
-                  key={n.href}
-                  href={n.href}
-                  className="px-2.5 py-1 text-sm rounded transition-colors"
-                  style={{
-                    color: active ? "var(--foreground)" : "var(--muted-foreground)",
-                    fontWeight: active ? 500 : 400,
-                    background: active ? "var(--muted)" : "transparent",
-                  }}
-                >
-                  {n.label}
-                </Link>
-              );
-            })}
-          </div>
-
-          <button
-            onClick={logout}
-            className="ml-auto text-sm transition-colors"
-            style={{ color: "var(--muted-foreground)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--foreground)")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-foreground)")}
-          >
-            Salir
+      {/* Mobile top bar */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b bg-white px-4 md:hidden" style={{ borderColor: "var(--border)" }}>
+          <button onClick={() => setDrawer(true)} aria-label="Abrir menú">
+            <Menu className="size-5" />
           </button>
-        </nav>
-      </header>
+          <span className="text-sm font-semibold tracking-tight">Quaestor</span>
+        </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">{children}</main>
+        {/* Mobile drawer */}
+        {drawer && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setDrawer(false)} />
+            <aside
+              className="absolute left-0 top-0 flex h-full w-64 flex-col justify-between p-4"
+              style={{ background: "var(--sidebar)" }}
+            >
+              <div className="space-y-6">
+                <div className="flex items-center justify-between px-2">
+                  <span className="text-sm font-semibold tracking-tight">Quaestor</span>
+                  <button onClick={() => setDrawer(false)} aria-label="Cerrar menú">
+                    <X className="size-5" />
+                  </button>
+                </div>
+                <NavLinks pathname={pathname} onNavigate={() => setDrawer(false)} />
+              </div>
+              <button onClick={logout} className="px-2 text-left text-sm" style={{ color: "var(--muted-foreground)" }}>
+                Salir
+              </button>
+            </aside>
+          </div>
+        )}
+
+        <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">{children}</main>
+      </div>
     </div>
   );
 }
