@@ -8,6 +8,7 @@ from ...domain.dtos import BudgetLine
 from ...domain.models import Category
 from ...services import budgets
 from ..deps import get_session
+from ...domain.errors import NotFound
 from ..schemas import BudgetAssignIn, BudgetLineOut, SafeToSpendOut
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])
@@ -20,9 +21,11 @@ def list_budgets(month: str, session: Session = Depends(get_session)):
 
 @router.put("", response_model=BudgetLineOut)
 def assign_budget(body: BudgetAssignIn, session: Session = Depends(get_session)):
+    cat = session.get(Category, body.category_id)
+    if cat is None:
+        raise NotFound(f"category {body.category_id} not found")
     budgets.set_budget(session, body.category_id, body.year_month, body.amount_assigned)
     st = budgets.budget_status(session, body.category_id, body.year_month)
-    cat = session.get(Category, body.category_id)
     return BudgetLine(
         category_id=st.category_id, category_name=cat.name, assigned=st.assigned,
         rollover_in=st.rollover_in, spent=st.spent, available=st.available,

@@ -91,8 +91,10 @@ export default function GoalsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 font-medium">{g.name} <StatusBadge kind="goal" value={g.status} /></span>
                   <div className="flex gap-1">
-                    {g.status === "paused" ? (
-                      <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(g)}>Restaurar</Button>
+                    {g.status === "paused" || g.status === "reached" ? (
+                      g.status === "paused"
+                        ? <Button variant="ghost" size="sm" disabled={restore.isPending} onClick={() => restore.mutate(g)}>Restaurar</Button>
+                        : null
                     ) : (
                       <>
                         <Button variant="ghost" size="sm" onClick={() => { setContributing(g); setAmount(null); setDate(""); }}>Aportar</Button>

@@ -114,27 +114,28 @@ def test_register_temporal_tools_exposes_all_nine():
 
 def test_mcp_update_recurring(session):
     _bank(session)
-    item = temporal.create_recurring(session, CreateRecurringInput(
+    temporal.create_recurring(session, CreateRecurringInput(
         name="Rent", payee="Landlord", type="expense", mode="auto",
         amount=2_000_000, account="Bancolombia", interval_unit="month",
         interval_count=1, start_date=date(2026, 1, 1),
     ))
+    from quaestor.services import recurring as _rec_svc
+    item_id = _rec_svc.list_recurring(session)[0].id
     out = temporal.update_recurring(session, UpdateRecurringInput(
-        recurring_id=int(item.split("id=")[1]), amount=5_000_000
+        recurring_id=item_id, amount=5_000_000
     ))
     assert "5" in out  # formatted amount appears
-    from quaestor.services import recurring
-    assert recurring.list_recurring(session)[0].amount == 5_000_000
+    assert _rec_svc.list_recurring(session)[0].amount == 5_000_000
 
 
 def test_mcp_delete_recurring(session):
     _bank(session)
-    item = temporal.create_recurring(session, CreateRecurringInput(
+    temporal.create_recurring(session, CreateRecurringInput(
         name="Rent", payee="Landlord", type="expense", mode="auto",
         amount=2_000_000, account="Bancolombia", interval_unit="month",
         interval_count=1, start_date=date(2026, 1, 1),
     ))
-    item_id = int(item.split("id=")[1])
+    from quaestor.services import recurring as _rec_svc
+    item_id = _rec_svc.list_recurring(session)[0].id
     temporal.delete_recurring(session, DeleteRecurringInput(recurring_id=item_id))
-    from quaestor.services import recurring
-    assert recurring.list_recurring(session, active=True) == []
+    assert _rec_svc.list_recurring(session, active=True) == []
