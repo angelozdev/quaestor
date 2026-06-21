@@ -1,10 +1,8 @@
 "use client"
 
-import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
-import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
@@ -63,9 +61,6 @@ function intervalLabel(unit: IntervalUnit, count: number): string {
   return `Cada ${count} ${UNIT_PLURAL[unit]}`
 }
 
-const recurringEditSchema = recurringCreateSchema
-type RecurringEditValues = z.infer<typeof recurringEditSchema>
-
 export default function RecurringPage() {
   const qc = useQueryClient()
 
@@ -104,8 +99,7 @@ export default function RecurringPage() {
     createForm.reset(values)
   }
 
-  const editForm = useForm<RecurringEditValues>({
-    resolver: zodResolver(recurringEditSchema),
+  const editForm = useTanStackForm({
     defaultValues: {
       name: "",
       payee: "",
@@ -119,9 +113,12 @@ export default function RecurringPage() {
       intervalUnit: "month",
       startDate: "",
       endDate: "",
+    } as RecurringCreateValues,
+    validators: { onChange: recurringCreateSchema },
+    onSubmit: async ({ value }) => {
+      update.mutate(value as RecurringCreateValues)
     },
   })
-  const { reset: resetEdit } = editForm
 
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
@@ -171,7 +168,7 @@ export default function RecurringPage() {
   })
 
   const update = useMutation({
-    mutationFn: (values: RecurringEditValues) => {
+    mutationFn: (values: RecurringCreateValues) => {
       if (!editing) throw new Error("editing recurring is required")
       return updateRecurring(editing.id, {
         name: values.name,
@@ -287,9 +284,9 @@ export default function RecurringPage() {
                           size="sm"
                           onClick={() => {
                             setEditing(r)
-                            resetEdit({
+                            editForm.reset({
                               name: r.name,
-                              payee: r.payee,
+                              payee: r.payee ?? "",
                               amount: r.amount,
                               currency: r.currency as "COP" | "USD",
                               categoryId: r.category_id,
@@ -485,134 +482,146 @@ export default function RecurringPage() {
         <DialogPopup className="max-w-lg">
           <DialogTitle>Editar recurrente</DialogTitle>
           <form
-            onSubmit={editForm.handleSubmit((values) => update.mutate(values))}
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void editForm.handleSubmit()
+            }}
             className="space-y-4"
           >
-            <FormField control={editForm.control} name="name" label="Nombre" />
+            <editForm.Field name="name">
+              {(field) => <FormField field={field} label="Nombre" />}
+            </editForm.Field>
             <div className="grid grid-cols-2 gap-3">
-              <Controller
-                control={editForm.control}
-                name="type"
-                render={() => (
+              <editForm.Field name="type">
+                {() => (
                   <div className="space-y-1.5">
                     <Label>Tipo (no editable)</Label>
                     <Select
-                      value={editForm.watch("type")}
+                      value={editForm.getFieldValue("type") as string}
                       onValueChange={() => {}}
                       items={TYPE_ITEMS}
                       disabled
                     />
                   </div>
                 )}
-              />
-              <Controller
-                control={editForm.control}
-                name="mode"
-                render={({ field }) => (
+              </editForm.Field>
+              <editForm.Field name="mode">
+                {(field) => (
                   <div className="space-y-1.5">
                     <Label>Modo *</Label>
                     <Select
-                      value={field.value}
-                      onValueChange={(v) => field.onChange(v)}
+                      value={field.state.value as string}
+                      onValueChange={(v) => v && field.handleChange(v as never)}
                       items={MODE_ITEMS}
                     />
                   </div>
                 )}
-              />
+              </editForm.Field>
             </div>
-            <Controller
-              control={editForm.control}
-              name="accountId"
-              render={({ field, fieldState: { error } }) => (
+            <editForm.Field name="accountId">
+              {(field) => (
                 <div className="space-y-1.5">
                   <Label>Cuenta *</Label>
                   <EntitySelect
-                    value={field.value}
-                    onChange={field.onChange}
+                    value={field.state.value as number | null}
+                    onChange={(v) => field.handleChange(v as never)}
                     queryKey={qk.accounts(false)}
                     queryFn={() => listAccounts(false)}
                   />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                    <p className="text-xs text-destructive">
+                      {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                    </p>
+                  )}
                 </div>
               )}
-            />
-            <Controller
-              control={editForm.control}
-              name="amount"
-              render={({ field, fieldState: { error } }) => (
-                <div className="space-y-1.5">
-                  <Label>Monto * ({editForm.watch("currency")})</Label>
-                  <MoneyInput
-                    currency={editForm.watch("currency")}
-                    value={
-                      typeof field.value === "number" && Number.isFinite(field.value)
-                        ? field.value
-                        : null
-                    }
-                    onChange={(cents) => field.onChange(cents ?? Number.NaN)}
-                  />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
-                </div>
-              )}
-            />
+            </editForm.Field>
+            <editForm.Field name="amount">
+              {(field) => {
+                const currency = editForm.getFieldValue("currency") as string
+                return (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({currency})</Label>
+                    <MoneyInput
+                      currency={currency}
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    />
+                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                      <p className="text-xs text-destructive">
+                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                      </p>
+                    )}
+                  </div>
+                )
+              }}
+            </editForm.Field>
             <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={editForm.control}
-                name="intervalCount"
-                label="Cada (cantidad)"
-                type="number"
-                min={1}
-                valueAsNumber
-              />
-              <Controller
-                control={editForm.control}
-                name="intervalUnit"
-                render={({ field, fieldState: { error } }) => (
+              <editForm.Field name="intervalCount">
+                {(field) => (
+                  <FormField
+                    field={field}
+                    label="Cada (cantidad)"
+                    type="number"
+                    min={1}
+                    valueAsNumber
+                  />
+                )}
+              </editForm.Field>
+              <editForm.Field name="intervalUnit">
+                {(field) => (
                   <div className="space-y-1.5">
                     <Label>Unidad *</Label>
                     <Select
-                      value={field.value}
-                      onValueChange={(v) => field.onChange(v)}
+                      value={field.state.value as string}
+                      onValueChange={(v) => v && field.handleChange(v as never)}
                       items={UNIT_ITEMS}
                     />
-                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                      <p className="text-xs text-destructive">
+                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                      </p>
+                    )}
                   </div>
                 )}
-              />
+              </editForm.Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <FormField control={editForm.control} name="startDate" label="Inicio" type="date" />
-              <FormField
-                control={editForm.control}
-                name="endDate"
-                label="Fin (opcional)"
-                type="date"
-              />
+              <editForm.Field name="startDate">
+                {(field) => <FormField field={field} label="Inicio" type="date" />}
+              </editForm.Field>
+              <editForm.Field name="endDate">
+                {(field) => <FormField field={field} label="Fin (opcional)" type="date" />}
+              </editForm.Field>
             </div>
-            <Controller
-              control={editForm.control}
-              name="categoryId"
-              render={({ field, fieldState: { error } }) => (
+            <editForm.Field name="categoryId">
+              {(field) => (
                 <div className="space-y-1.5">
                   <Label>Categoría</Label>
                   <EntitySelect
-                    value={field.value}
-                    onChange={field.onChange}
+                    value={field.state.value as number | null}
+                    onChange={(v) => field.handleChange(v as never)}
                     queryKey={qk.categories(false)}
                     queryFn={() => listCategories(false)}
                     allowNullLabel="Sin categoría"
                   />
-                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
                 </div>
               )}
-            />
-            <FormField control={editForm.control} name="payee" label="Beneficiario" />
+            </editForm.Field>
+            <editForm.Field name="payee">
+              {(field) => <FormField field={field} label="Beneficiario" />}
+            </editForm.Field>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={update.isPending}>
-                {update.isPending ? "…" : "Guardar"}
+              <Button type="submit" disabled={update.isPending || editForm.state.isSubmitting}>
+                {update.isPending || editForm.state.isSubmitting ? "…" : "Guardar"}
               </Button>
             </div>
           </form>
