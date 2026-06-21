@@ -15,11 +15,16 @@ http.interceptors.response.use(
       onUnauthorized?.()
       return undefined as unknown
     }
-    const data = err.response?.data as { error?: string; detail?: string } | null
+    const data = err.response?.data as {
+      error?: string
+      detail?: string
+      fields?: Record<string, string>
+    } | null
     throw new ApiError(
       err.response?.status ?? 0,
       data?.error ?? "Error",
       data?.detail ?? `Request failed (${err.response?.status})`,
+      data?.fields,
     )
   },
 )
