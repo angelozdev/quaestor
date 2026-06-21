@@ -20,7 +20,13 @@ from .tools.core import (
     SetFxRateInput,
     TransferInput,
 )
-from .tools.planning import AssignBudgetInput
+from .tools.planning import (
+    AssignBudgetInput,
+    ContributeGoalInput,
+    CreateGoalInput,
+    GoalIdInput,
+    UpdateGoalInput,
+)
 from .tools.temporal import (
     ConfirmPaymentInput,
     CreateRecurringInput,
@@ -45,7 +51,14 @@ TEMPORAL_TOOL_NAMES = (
     "delete_recurring",
 )
 
-PLANNING_TOOL_NAMES = ("assign_budget",)
+PLANNING_TOOL_NAMES = (
+    "assign_budget",
+    "create_goal",
+    "update_goal",
+    "contribute_goal",
+    "pause_goal",
+    "restore_goal",
+)
 
 CORE_TOOL_NAMES = (
     "record_expense",
@@ -168,3 +181,28 @@ def register_planning_tools(mcp) -> None:
     def assign_budget(item: AssignBudgetInput) -> str:
         with Session(db.engine) as session:
             return planning.assign_budget(session, item)
+
+    @mcp.tool(name="create_goal", description="Create a savings goal (defined or open-ended).")
+    def create_goal(item: CreateGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.create_goal(session, item)
+
+    @mcp.tool(name="update_goal", description="Edit a goal's name or monthly amount.")
+    def update_goal(item: UpdateGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.update_goal(session, item)
+
+    @mcp.tool(name="contribute_goal", description="Record a manual contribution to a goal.")
+    def contribute_goal(item: ContributeGoalInput) -> str:
+        with Session(db.engine) as session:
+            return planning.contribute_goal(session, item)
+
+    @mcp.tool(name="pause_goal", description="Pause a goal (soft-delete, reversible).")
+    def pause_goal(item: GoalIdInput) -> str:
+        with Session(db.engine) as session:
+            return planning.pause_goal(session, item)
+
+    @mcp.tool(name="restore_goal", description="Restore a paused goal.")
+    def restore_goal(item: GoalIdInput) -> str:
+        with Session(db.engine) as session:
+            return planning.restore_goal(session, item)
