@@ -25,14 +25,7 @@ import {
   skipRecurring,
   updateRecurring,
 } from "@/lib/api/recurring"
-import {
-  type Account,
-  ApiError,
-  type IntervalUnit,
-  type Recurring,
-  type RecurringMode,
-  type RecurringType,
-} from "@/lib/api/types"
+import { ApiError, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
 import { intervalCount, isoDate, positiveCents, requiredString } from "@/lib/schemas/primitives"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
@@ -70,11 +63,6 @@ function intervalLabel(unit: IntervalUnit, count: number): string {
   return `Cada ${count} ${UNIT_PLURAL[unit]}`
 }
 
-function currencyOf(accounts: Account[] | undefined, id: number | null): string {
-  if (id === null) return "COP"
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
-}
-
 const recurringCreateSchema = z
   .object({
     name: requiredString,
@@ -83,6 +71,8 @@ const recurringCreateSchema = z
     currency: z.enum(["COP", "USD"]),
     categoryId: z.number().nullable(),
     accountId: z.number().nullable(),
+    type: z.enum(["expense", "income"]),
+    mode: z.enum(["auto", "manual"]),
     intervalCount,
     intervalUnit: z.enum(["day", "week", "month", "year"]),
     startDate: isoDate,
@@ -99,9 +89,11 @@ const recurringCreateSchema = z
 
 type RecurringCreateValues = z.infer<typeof recurringCreateSchema>
 
+const recurringEditSchema = recurringCreateSchema
+type RecurringEditValues = z.infer<typeof recurringEditSchema>
+
 export default function RecurringPage() {
   const qc = useQueryClient()
-  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
 
   const [showInactive, setShowInactive] = useState(false)
   const list = useQuery({
@@ -112,17 +104,6 @@ export default function RecurringPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Recurring | null>(null)
   const [deleting, setDeleting] = useState<Recurring | null>(null)
-  const [name, setName] = useState("")
-  const [type, setType] = useState<string | null>("expense")
-  const [mode, setMode] = useState<string | null>("manual")
-  const [accountId, setAccountId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [amount, setAmount] = useState<number | null>(null)
-  const [unit, setUnit] = useState<string | null>("month")
-  const [count, setCount] = useState<number | null>(1)
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
-  const [payee, setPayee] = useState("")
 
   const createForm = useForm<RecurringCreateValues>({
     resolver: zodResolver(recurringCreateSchema),
@@ -133,6 +114,8 @@ export default function RecurringPage() {
       currency: "COP",
       categoryId: null,
       accountId: null,
+      type: "expense",
+      mode: "manual",
       intervalCount: 1,
       intervalUnit: "month",
       startDate: new Date().toISOString().slice(0, 10),
@@ -141,10 +124,28 @@ export default function RecurringPage() {
   })
   const { reset: resetCreate } = createForm
 
+  const editForm = useForm<RecurringEditValues>({
+    resolver: zodResolver(recurringEditSchema),
+    defaultValues: {
+      name: "",
+      payee: "",
+      amount: Number.NaN,
+      currency: "COP",
+      categoryId: null,
+      accountId: null,
+      type: "expense",
+      mode: "manual",
+      intervalCount: 1,
+      intervalUnit: "month",
+      startDate: "",
+      endDate: "",
+    },
+  })
+  const { reset: resetEdit } = editForm
+
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
 
-  const currency = currencyOf(accounts.data, accountId)
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const done = (msg: string) => {
     toast.success(msg)
@@ -155,8 +156,8 @@ export default function RecurringPage() {
     mutationFn: (values: RecurringCreateValues) => {
       return createRecurring({
         name: values.name,
-        type: type as RecurringType,
-        mode: mode as RecurringMode,
+        type: values.type,
+        mode: values.mode,
         amount: values.amount,
         account_id: values.accountId as number,
         interval_unit: values.intervalUnit,
@@ -178,37 +179,31 @@ export default function RecurringPage() {
         currency: "COP",
         categoryId: null,
         accountId: null,
+        type: "expense",
+        mode: "manual",
         intervalCount: 1,
         intervalUnit: "month",
         startDate: new Date().toISOString().slice(0, 10),
         endDate: "",
       })
-      setName("")
-      setAmount(null)
-      setStartDate("")
-      setEndDate("")
-      setPayee("")
-      setAccountId(null)
-      setCategoryId(null)
-      setCount(1)
     },
     onError: onErr,
   })
 
   const update = useMutation({
-    mutationFn: () => {
+    mutationFn: (values: RecurringEditValues) => {
       if (!editing) throw new Error("editing recurring is required")
       return updateRecurring(editing.id, {
-        name,
-        amount: amount ?? undefined,
-        payee: payee || undefined,
-        category_id: categoryId,
-        account_id: accountId ?? undefined,
-        mode: mode as RecurringMode,
-        interval_unit: unit as IntervalUnit,
-        interval_count: count ?? 1,
-        start_date: startDate || undefined,
-        end_date: endDate || null,
+        name: values.name,
+        amount: values.amount,
+        payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
+        category_id: values.categoryId,
+        account_id: values.accountId ?? undefined,
+        mode: values.mode,
+        interval_unit: values.intervalUnit,
+        interval_count: values.intervalCount,
+        start_date: values.startDate,
+        end_date: values.endDate ? values.endDate : null,
       })
     },
     onSuccess: () => {
@@ -248,9 +243,6 @@ export default function RecurringPage() {
     },
     onError: onErr,
   })
-
-  const invalid =
-    !name || amount === null || accountId === null || !unit || !startDate || !type || !mode
 
   return (
     <div className="space-y-6">
@@ -315,17 +307,20 @@ export default function RecurringPage() {
                           size="sm"
                           onClick={() => {
                             setEditing(r)
-                            setName(r.name)
-                            setPayee(r.payee)
-                            setType(r.type)
-                            setMode(r.mode)
-                            setAccountId(r.account_id)
-                            setCategoryId(r.category_id)
-                            setAmount(r.amount)
-                            setUnit(r.interval_unit)
-                            setCount(r.interval_count)
-                            setStartDate(r.start_date)
-                            setEndDate(r.end_date ?? "")
+                            resetEdit({
+                              name: r.name,
+                              payee: r.payee,
+                              amount: r.amount,
+                              currency: r.currency as "COP" | "USD",
+                              categoryId: r.category_id,
+                              accountId: r.account_id,
+                              type: r.type,
+                              mode: r.mode,
+                              intervalCount: r.interval_count,
+                              intervalUnit: r.interval_unit,
+                              startDate: r.start_date,
+                              endDate: r.end_date ?? "",
+                            })
                           }}
                         >
                           Editar
@@ -365,14 +360,34 @@ export default function RecurringPage() {
           >
             <FormField control={createForm.control} name="name" label="Nombre" />
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Tipo *</Label>
-                <Select value={type} onValueChange={setType} items={TYPE_ITEMS} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Modo *</Label>
-                <Select value={mode} onValueChange={setMode} items={MODE_ITEMS} />
-              </div>
+              <Controller
+                control={createForm.control}
+                name="type"
+                render={({ field }) => (
+                  <div className="space-y-1.5">
+                    <Label>Tipo *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={TYPE_ITEMS}
+                    />
+                  </div>
+                )}
+              />
+              <Controller
+                control={createForm.control}
+                name="mode"
+                render={({ field }) => (
+                  <div className="space-y-1.5">
+                    <Label>Modo *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={MODE_ITEMS}
+                    />
+                  </div>
+                )}
+              />
             </div>
             <Controller
               control={createForm.control}
@@ -478,87 +493,133 @@ export default function RecurringPage() {
         <DialogPopup className="max-w-lg">
           <DialogTitle>Editar recurrente</DialogTitle>
           <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!invalid) update.mutate()
-            }}
+            onSubmit={editForm.handleSubmit((values) => update.mutate(values))}
             className="space-y-4"
           >
-            <div className="space-y-1.5">
-              <Label>Nombre *</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
+            <FormField control={editForm.control} name="name" label="Nombre" />
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Tipo (no editable)</Label>
-                <Select value={type} onValueChange={() => {}} items={TYPE_ITEMS} disabled />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Modo *</Label>
-                <Select value={mode} onValueChange={setMode} items={MODE_ITEMS} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Cuenta *</Label>
-              <EntitySelect
-                value={accountId}
-                onChange={setAccountId}
-                queryKey={qk.accounts(false)}
-                queryFn={() => listAccounts(false)}
+              <Controller
+                control={editForm.control}
+                name="type"
+                render={() => (
+                  <div className="space-y-1.5">
+                    <Label>Tipo (no editable)</Label>
+                    <Select
+                      value={editForm.watch("type")}
+                      onValueChange={() => {}}
+                      items={TYPE_ITEMS}
+                      disabled
+                    />
+                  </div>
+                )}
+              />
+              <Controller
+                control={editForm.control}
+                name="mode"
+                render={({ field }) => (
+                  <div className="space-y-1.5">
+                    <Label>Modo *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={MODE_ITEMS}
+                    />
+                  </div>
+                )}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Monto * ({currency})</Label>
-              <MoneyInput currency={currency} value={amount} onChange={setAmount} />
-            </div>
+            <Controller
+              control={editForm.control}
+              name="accountId"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Cuenta *</Label>
+                  <EntitySelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    queryKey={qk.accounts(false)}
+                    queryFn={() => listAccounts(false)}
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
+            <Controller
+              control={editForm.control}
+              name="amount"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Monto * ({editForm.watch("currency")})</Label>
+                  <MoneyInput
+                    currency={editForm.watch("currency")}
+                    value={
+                      typeof field.value === "number" && Number.isFinite(field.value)
+                        ? field.value
+                        : null
+                    }
+                    onChange={(cents) => field.onChange(cents ?? Number.NaN)}
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Cada (cantidad) *</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={count === null ? "" : String(count)}
-                  onChange={(e) => setCount(e.target.value === "" ? null : Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unidad *</Label>
-                <Select value={unit} onValueChange={setUnit} items={UNIT_ITEMS} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Inicio *</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fin (opcional)</Label>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Categoría</Label>
-              <EntitySelect
-                value={categoryId}
-                onChange={setCategoryId}
-                queryKey={qk.categories(false)}
-                queryFn={() => listCategories(false)}
-                allowNullLabel="Sin categoría"
+              <FormField
+                control={editForm.control}
+                name="intervalCount"
+                label="Cada (cantidad)"
+                type="number"
+                min={1}
+                valueAsNumber
+              />
+              <Controller
+                control={editForm.control}
+                name="intervalUnit"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Unidad *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={UNIT_ITEMS}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Beneficiario</Label>
-              <Input value={payee} onChange={(e) => setPayee(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={editForm.control} name="startDate" label="Inicio" type="date" />
+              <FormField
+                control={editForm.control}
+                name="endDate"
+                label="Fin (opcional)"
+                type="date"
+              />
             </div>
+            <Controller
+              control={editForm.control}
+              name="categoryId"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Categoría</Label>
+                  <EntitySelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    queryKey={qk.categories(false)}
+                    queryFn={() => listCategories(false)}
+                    allowNullLabel="Sin categoría"
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
+            <FormField control={editForm.control} name="payee" label="Beneficiario" />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setEditing(null)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={invalid || update.isPending}>
+              <Button type="submit" disabled={update.isPending}>
                 {update.isPending ? "…" : "Guardar"}
               </Button>
             </div>
