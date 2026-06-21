@@ -1,12 +1,16 @@
 "use client"
 
+import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
+import { Controller, useForm } from "react-hook-form"
 import { toast } from "sonner"
+import { z } from "zod"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
+import { FormField } from "@/components/form-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
@@ -30,6 +34,7 @@ import {
   type RecurringType,
 } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
+import { intervalCount, isoDate, positiveCents, requiredString } from "@/lib/schemas/primitives"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 
 const TYPE_ITEMS = [
@@ -70,6 +75,30 @@ function currencyOf(accounts: Account[] | undefined, id: number | null): string 
   return accounts?.find((a) => a.id === id)?.currency ?? "COP"
 }
 
+const recurringCreateSchema = z
+  .object({
+    name: requiredString,
+    payee: z.string().max(500, "Máximo 500 caracteres").optional(),
+    amount: positiveCents,
+    currency: z.enum(["COP", "USD"]),
+    categoryId: z.number().nullable(),
+    accountId: z.number().nullable(),
+    intervalCount,
+    intervalUnit: z.enum(["day", "week", "month", "year"]),
+    startDate: isoDate,
+    endDate: isoDate.optional().or(z.literal("")),
+  })
+  .refine((d) => !d.endDate || d.endDate >= d.startDate, {
+    message: "Fin debe ser ≥ inicio",
+    path: ["endDate"],
+  })
+  .refine((d) => d.accountId !== null, {
+    message: "Requerido",
+    path: ["accountId"],
+  })
+
+type RecurringCreateValues = z.infer<typeof recurringCreateSchema>
+
 export default function RecurringPage() {
   const qc = useQueryClient()
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
@@ -95,6 +124,23 @@ export default function RecurringPage() {
   const [endDate, setEndDate] = useState("")
   const [payee, setPayee] = useState("")
 
+  const createForm = useForm<RecurringCreateValues>({
+    resolver: zodResolver(recurringCreateSchema),
+    defaultValues: {
+      name: "",
+      payee: "",
+      amount: Number.NaN,
+      currency: "COP",
+      categoryId: null,
+      accountId: null,
+      intervalCount: 1,
+      intervalUnit: "month",
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: "",
+    },
+  })
+  const { reset: resetCreate } = createForm
+
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
 
@@ -106,28 +152,37 @@ export default function RecurringPage() {
   }
 
   const create = useMutation({
-    mutationFn: () => {
-      if (amount === null || accountId === null) {
-        throw new Error("amount and account are required")
-      }
+    mutationFn: (values: RecurringCreateValues) => {
       return createRecurring({
-        name,
+        name: values.name,
         type: type as RecurringType,
         mode: mode as RecurringMode,
-        amount,
-        account_id: accountId,
-        interval_unit: unit as IntervalUnit,
-        interval_count: count ?? 1,
-        start_date: startDate,
-        end_date: endDate || null,
-        currency,
-        category_id: categoryId,
-        payee: payee || undefined,
+        amount: values.amount,
+        account_id: values.accountId as number,
+        interval_unit: values.intervalUnit,
+        interval_count: values.intervalCount,
+        start_date: values.startDate,
+        end_date: values.endDate ? values.endDate : null,
+        currency: values.currency,
+        category_id: values.categoryId,
+        payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
       })
     },
     onSuccess: () => {
       done("Recurrente creado")
       setCreating(false)
+      resetCreate({
+        name: "",
+        payee: "",
+        amount: Number.NaN,
+        currency: "COP",
+        categoryId: null,
+        accountId: null,
+        intervalCount: 1,
+        intervalUnit: "month",
+        startDate: new Date().toISOString().slice(0, 10),
+        endDate: "",
+      })
       setName("")
       setAmount(null)
       setStartDate("")
@@ -305,16 +360,10 @@ export default function RecurringPage() {
         <DialogPopup className="max-w-lg">
           <DialogTitle>Nuevo recurrente</DialogTitle>
           <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!invalid) create.mutate()
-            }}
+            onSubmit={createForm.handleSubmit((values) => create.mutate(values))}
             className="space-y-4"
           >
-            <div className="space-y-1.5">
-              <Label>Nombre *</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
+            <FormField control={createForm.control} name="name" label="Nombre" />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Tipo *</Label>
@@ -325,67 +374,98 @@ export default function RecurringPage() {
                 <Select value={mode} onValueChange={setMode} items={MODE_ITEMS} />
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Cuenta *</Label>
-              <EntitySelect
-                value={accountId}
-                onChange={setAccountId}
-                queryKey={qk.accounts(false)}
-                queryFn={() => listAccounts(false)}
+            <Controller
+              control={createForm.control}
+              name="accountId"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Cuenta *</Label>
+                  <EntitySelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    queryKey={qk.accounts(false)}
+                    queryFn={() => listAccounts(false)}
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
+            <Controller
+              control={createForm.control}
+              name="amount"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Monto * ({createForm.watch("currency")})</Label>
+                  <MoneyInput
+                    currency={createForm.watch("currency")}
+                    value={
+                      typeof field.value === "number" && Number.isFinite(field.value)
+                        ? field.value
+                        : null
+                    }
+                    onChange={(cents) => field.onChange(cents ?? Number.NaN)}
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={createForm.control}
+                name="intervalCount"
+                label="Cada (cantidad)"
+                type="number"
+                min={1}
+                valueAsNumber
+              />
+              <Controller
+                control={createForm.control}
+                name="intervalUnit"
+                render={({ field, fieldState: { error } }) => (
+                  <div className="space-y-1.5">
+                    <Label>Unidad *</Label>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => field.onChange(v)}
+                      items={UNIT_ITEMS}
+                    />
+                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                  </div>
+                )}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Monto * ({currency})</Label>
-              <MoneyInput currency={currency} value={amount} onChange={setAmount} />
-            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Cada (cantidad) *</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={count === null ? "" : String(count)}
-                  onChange={(e) => setCount(e.target.value === "" ? null : Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unidad *</Label>
-                <Select value={unit} onValueChange={setUnit} items={UNIT_ITEMS} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Inicio *</Label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fin (opcional)</Label>
-                <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Categoría</Label>
-              <EntitySelect
-                value={categoryId}
-                onChange={setCategoryId}
-                queryKey={qk.categories(false)}
-                queryFn={() => listCategories(false)}
-                allowNullLabel="Sin categoría"
+              <FormField control={createForm.control} name="startDate" label="Inicio" type="date" />
+              <FormField
+                control={createForm.control}
+                name="endDate"
+                label="Fin (opcional)"
+                type="date"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Beneficiario</Label>
-              <Input value={payee} onChange={(e) => setPayee(e.target.value)} />
-            </div>
+            <Controller
+              control={createForm.control}
+              name="categoryId"
+              render={({ field, fieldState: { error } }) => (
+                <div className="space-y-1.5">
+                  <Label>Categoría</Label>
+                  <EntitySelect
+                    value={field.value}
+                    onChange={field.onChange}
+                    queryKey={qk.categories(false)}
+                    queryFn={() => listCategories(false)}
+                    allowNullLabel="Sin categoría"
+                  />
+                  {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
+                </div>
+              )}
+            />
+            <FormField control={createForm.control} name="payee" label="Beneficiario" />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setCreating(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={invalid || create.isPending}>
+              <Button type="submit" disabled={create.isPending}>
                 {create.isPending ? "…" : "Crear"}
               </Button>
             </div>
