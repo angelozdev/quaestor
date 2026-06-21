@@ -11,7 +11,7 @@ already translates domain errors to text.
 from sqlmodel import Session
 
 from .. import db
-from .tools import core, temporal
+from .tools import core, planning, temporal
 from .tools.core import (
     GetFxRateInput,
     ListTransactionsInput,
@@ -20,6 +20,7 @@ from .tools.core import (
     SetFxRateInput,
     TransferInput,
 )
+from .tools.planning import AssignBudgetInput
 from .tools.temporal import (
     ConfirmPaymentInput,
     CreateRecurringInput,
@@ -43,6 +44,8 @@ TEMPORAL_TOOL_NAMES = (
     "update_recurring",
     "delete_recurring",
 )
+
+PLANNING_TOOL_NAMES = ("assign_budget",)
 
 CORE_TOOL_NAMES = (
     "record_expense",
@@ -156,3 +159,12 @@ def register_temporal_tools(mcp) -> None:
     def delete_recurring(item: DeleteRecurringInput) -> str:
         with Session(db.engine) as session:
             return temporal.delete_recurring(session, item)
+
+
+def register_planning_tools(mcp) -> None:
+    """Register the P4 planning tools (budgets + goals) on the FastMCP instance."""
+
+    @mcp.tool(name="assign_budget", description="Assign (set) a category envelope for a month.")
+    def assign_budget(item: AssignBudgetInput) -> str:
+        with Session(db.engine) as session:
+            return planning.assign_budget(session, item)

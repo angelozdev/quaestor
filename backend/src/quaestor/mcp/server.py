@@ -13,7 +13,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .. import db
 from .auth import BearerAuthMiddleware
-from .registry import register_core_tools, register_temporal_tools
+from .registry import register_core_tools, register_planning_tools, register_temporal_tools
 
 
 def build_mcp() -> FastMCP:
@@ -21,6 +21,7 @@ def build_mcp() -> FastMCP:
     mcp = FastMCP("Quaestor", json_response=True)
     register_core_tools(mcp)
     register_temporal_tools(mcp)
+    register_planning_tools(mcp)
     return mcp
 
 

@@ -211,6 +211,13 @@ def recurring_deleted(item: RecurringItem) -> str:
     return f"Deactivated recurring '{item.name}' (id {item.id}). Existing occurrences stay."
 
 
+def budget_assigned(status, category_name: str) -> str:
+    return (
+        f"Assigned {category_name} envelope for {status.year_month}: "
+        f"{status.assigned} (available {status.available})."
+    )
+
+
 def to_pay_table(result: dict) -> str:
     items = result["items"]
     if not items:
