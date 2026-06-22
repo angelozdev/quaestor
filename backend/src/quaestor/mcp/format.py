@@ -23,9 +23,11 @@ from ..domain.models import (
     FxRate,
     RecurringItem,
     RecurringOccurrence,
+    Settings,
     Tag,
     Transaction,
 )
+from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
 from ..domain.money import cents_to_major
 
 
@@ -242,3 +244,126 @@ def to_pay_table(result: dict) -> str:
         f"**To pay (COP): {cents_to_major(result['total_base'])}** · {len(items)} item(s)"
     )
     return "\n".join(rows)
+
+
+# ----- new renderers (ADR-0009: MCP parity gap closure) -----
+
+
+def account_card(account: Account) -> str:
+    return (
+        f"Account **{account.name}** (id={account.id}, "
+        f"{account.type.value}, {account.currency}) — "
+        f"balance {money(account.balance, account.currency)}"
+    )
+
+
+def category_card(category: Category, group: CategoryGroup | None) -> str:
+    group_name = group.name if group is not None else "(no group)"
+    kind = "income" if category.is_income else "expense"
+    return (
+        f"Category **{category.name}** (id={category.id}, {kind}, "
+        f"group: {group_name})"
+    )
+
+
+def category_group_card(group: CategoryGroup) -> str:
+    return f"Category group **{group.name}** (id={group.id}, order={group.sort_order})"
+
+
+def tag_card(tag: Tag) -> str:
+    return f"Tag '{tag.name}' (id {tag.id})."
+
+
+def transaction_card(tx: Transaction) -> str:
+    return (
+        f"Transaction **{tx.payee}** (id={tx.id}, {tx.type.value}, {tx.status.value}, "
+        f"{tx.date.isoformat()}) — {money(tx.amount, tx.currency)} "
+        f"({money(tx.to_base, 'COP')})"
+    )
+
+
+def settings_card(settings) -> str:
+    src = (
+        f"{settings.default_source_account_id}"
+        if settings.default_source_account_id is not None
+        else "(none)"
+    )
+    return (
+        f"Settings — Base currency: {settings.base_currency}; "
+        f"default source account: {src}"
+    )
+
+
+def budgets_table(lines: list) -> str:
+    if not lines:
+        return "No budgets for that month."
+    rows = [
+        "| Category | Assigned | Rollover in | Spent | Available | Used |",
+        "|---|---|---|---|---|---|",
+    ]
+    for ln in lines:
+        rows.append(
+            f"| {ln.category_name} | {cents_to_major(ln.assigned)} | "
+            f"{cents_to_major(ln.rollover_in)} | {cents_to_major(ln.spent)} | "
+            f"{cents_to_major(ln.available)} | {ln.pct_used:.0f}% |"
+        )
+    return "\n".join(rows)
+
+
+def safe_to_spend_card(sts: SafeToSpend) -> str:
+    return "\n".join([
+        f"Safe to spend for **{sts.year_month}**: {money(sts.free, 'COP')} free to spend.",
+        f"- Income forecast: {money(sts.income_forecast, 'COP')}",
+        f"- Committed: {money(sts.committed, 'COP')}",
+        f"- Assigned to envelopes: {money(sts.assigned_envelopes, 'COP')}",
+    ])
+
+
+def goals_table(goals) -> str:
+    if not goals:
+        return "No goals."
+    rows = [
+        "| id | Name | Status | Monthly | Target | Deadline |",
+        "|---|---|---|---|---|---|",
+    ]
+    for g in goals:
+        kind = "defined" if g.target_amount is not None else "open-ended"
+        target = cents_to_major(g.target_amount) if g.target_amount is not None else "—"
+        deadline = g.deadline.isoformat() if g.deadline is not None else "—"
+        rows.append(
+            f"| id={g.id} | {g.name} | {g.status.value} ({kind}) | "
+            f"{cents_to_major(g.monthly_amount)} COP | {target} | {deadline} |"
+        )
+    return "\n".join(rows)
+
+
+def goals_progress_table(progress: list) -> str:
+    if not progress:
+        return "No goal progress."
+    rows = [
+        "| id | Name | Saved | Target | On track |",
+        "|---|---|---|---|---|",
+    ]
+    for p in progress:
+        target = cents_to_major(p.target_amount) if p.target_amount is not None else "—"
+        track = "on-track" if p.on_track else "behind"
+        rows.append(
+            f"| {p.goal_id} | {p.name} | {cents_to_major(p.saved)} COP | "
+            f"{target} | {track} |"
+        )
+    return "\n".join(rows)
+
+
+def monthly_report_card(report) -> str:
+    return "\n".join([
+        f"# Monthly report — {report.month}",
+        f"- Income: {money(report.income, 'COP')}",
+        f"- Expense: {money(report.expense, 'COP')}",
+        f"- Net: {money(report.net, 'COP')}",
+        "",
+        report.markdown,
+    ])
+
+
+def recurring_restored(item: RecurringItem) -> str:
+    return f"✅ Recurring restored: '{item.name}' (id={item.id})."
