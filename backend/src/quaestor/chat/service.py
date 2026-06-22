@@ -50,6 +50,7 @@ class ChatService:
     async def stream(self, messages: list[dict[str, Any]]) -> AsyncIterator[bytes]:
         message_id = "msg_unknown"
         tools: list[dict[str, Any]] = []
+        # shallow copy — caller must not mutate dicts after handing off
         conversation: list[dict[str, Any]] = list(messages)
 
         try:

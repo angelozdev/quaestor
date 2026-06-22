@@ -23,7 +23,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from ..chat.llm.factory import build_llm_provider
 from ..chat.service import ChatService
