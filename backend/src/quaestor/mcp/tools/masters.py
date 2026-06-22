@@ -138,7 +138,7 @@ class GetCategoryInput(BaseModel):
 
 def _resolve_category_group(session: Session, name: str):
     """Resolve a category group by name (case-insensitive). Raise ValidationError with hints."""
-    all_groups = categories.list_groups(session, include_archived=False)
+    all_groups = categories.list_groups(session, include_archived=True)
     target = name.strip().lower()
     for g in all_groups:
         if g.name.lower() == target:
@@ -216,3 +216,54 @@ def get_category(session: Session, inp: GetCategoryInput) -> str:
     cat = _resolve_category(session, inp.category)
     group = _category_group_by_id(session, cat.group_id)
     return format.category_card(cat, group)
+
+
+# ===== category groups =====
+
+
+class CreateCategoryGroupInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80, description="Group name")
+    sort_order: int = Field(default=0, description="Display order")
+
+
+class UpdateCategoryGroupInput(BaseModel):
+    group: str = Field(description="Category group name")
+    name: str | None = Field(default=None, description="New name")
+    sort_order: int | None = Field(default=None, description="New display order")
+
+
+class ArchiveCategoryGroupInput(BaseModel):
+    group: str = Field(description="Category group name")
+
+
+class RestoreCategoryGroupInput(BaseModel):
+    group: str = Field(description="Category group name")
+
+
+@_as_text
+def create_category_group(session: Session, inp: CreateCategoryGroupInput) -> str:
+    g = categories.create_group(session, name=inp.name, sort_order=inp.sort_order)
+    return format.category_group_card(g)
+
+
+@_as_text
+def update_category_group(session: Session, inp: UpdateCategoryGroupInput) -> str:
+    g = _resolve_category_group(session, inp.group)
+    updated = categories.update_group(
+        session, g.id, name=inp.name, sort_order=inp.sort_order
+    )
+    return format.category_group_card(updated)
+
+
+@_as_text
+def archive_category_group(session: Session, inp: ArchiveCategoryGroupInput) -> str:
+    g = _resolve_category_group(session, inp.group)
+    archived = categories.archive_group(session, g.id)
+    return f"✅ archived **{archived.name}** (id={archived.id})."
+
+
+@_as_text
+def restore_category_group(session: Session, inp: RestoreCategoryGroupInput) -> str:
+    g = _resolve_category_group(session, inp.group)
+    restored = categories.unarchive_group(session, g.id)
+    return f"✅ restored **{restored.name}** (id={restored.id})."
