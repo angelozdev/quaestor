@@ -100,14 +100,14 @@ class LiteLLMProvider:
                                 slot["started"] = True
                                 yield LLMEvent(
                                     type=LLMEventType.TOOL_INPUT_START,
-                                    tool_call_id=slot["id"] or "",
+                                    tool_call_id=slot["id"],
                                     tool_name=slot["name"],
                                 )
                         if func.arguments:
                             slot["args_buf"] += func.arguments
                             yield LLMEvent(
                                 type=LLMEventType.TOOL_INPUT_DELTA,
-                                tool_call_id=slot["id"] or "",
+                                tool_call_id=slot["id"],
                                 arguments_delta=func.arguments,
                             )
 
@@ -130,7 +130,7 @@ class LiteLLMProvider:
                             args_obj = {"value": args_obj}
                         yield LLMEvent(
                             type=LLMEventType.TOOL_INPUT_AVAILABLE,
-                            tool_call_id=slot["id"] or "",
+                            tool_call_id=slot["id"],
                             tool_name=slot["name"] or "",
                             arguments=args_obj,
                         )
