@@ -11,6 +11,10 @@ already translates domain errors to text.
 from sqlmodel import Session
 
 from .. import db
+from .tools import (
+    budgets_reads, goals_reads, masters, recurring_restore, reports,
+    settings as settings_tools, transactions as tx_tools,
+)
 from .tools import core, planning, temporal
 from .tools.core import (
     GetFxRateInput,
@@ -28,9 +32,9 @@ from .tools.planning import (
     UpdateGoalInput,
 )
 from .tools.temporal import (
+    ArchiveRecurringInput,
     ConfirmPaymentInput,
     CreateRecurringInput,
-    DeleteRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
     SkipPaymentInput,
@@ -38,6 +42,35 @@ from .tools.temporal import (
     ToPayInput,
     UpdateRecurringInput,
 )
+from .tools.masters import (
+    ArchiveAccountInput,
+    ArchiveCategoryGroupInput,
+    ArchiveCategoryInput,
+    CreateAccountInput,
+    CreateCategoryGroupInput,
+    CreateCategoryInput,
+    CreateTagInput,
+    DeleteTagInput,
+    GetAccountInput,
+    GetCategoryInput,
+    RestoreAccountInput,
+    RestoreCategoryGroupInput,
+    RestoreCategoryInput,
+    UpdateAccountInput,
+    UpdateCategoryGroupInput,
+    UpdateCategoryInput,
+    UpdateTagInput,
+)
+from .tools.transactions import (
+    DeleteTransactionInput,
+    GetTransactionInput,
+    UpdateTransactionInput,
+)
+from .tools.settings import GetSettingsInput, UpdateSettingsInput
+from .tools.budgets_reads import ListBudgetsInput, SafeToSpendInput
+from .tools.goals_reads import GoalsProgressInput, ListGoalsInput
+from .tools.reports import MonthlyReportInput
+from .tools.recurring_restore import RestoreRecurringInput
 
 TEMPORAL_TOOL_NAMES = (
     "create_recurring",
@@ -48,7 +81,7 @@ TEMPORAL_TOOL_NAMES = (
     "skip_recurring",
     "to_pay",
     "update_recurring",
-    "delete_recurring",
+    "archive_recurring",
 )
 
 PLANNING_TOOL_NAMES = (
@@ -70,6 +103,64 @@ CORE_TOOL_NAMES = (
     "list_accounts",
     "list_categories",
     "list_tags",
+)
+
+ACCOUNTS_TOOL_NAMES = (
+    "create_account",
+    "update_account",
+    "archive_account",
+    "restore_account",
+    "get_account",
+)
+
+CATEGORIES_TOOL_NAMES = (
+    "create_category",
+    "update_category",
+    "archive_category",
+    "restore_category",
+    "get_category",
+)
+
+CATEGORY_GROUPS_TOOL_NAMES = (
+    "create_category_group",
+    "update_category_group",
+    "archive_category_group",
+    "restore_category_group",
+)
+
+TAGS_TOOL_NAMES = (
+    "create_tag",
+    "update_tag",
+    "delete_tag",
+)
+
+TRANSACTIONS_WRITES_TOOL_NAMES = (
+    "get_transaction",
+    "update_transaction",
+    "delete_transaction",
+)
+
+SETTINGS_TOOL_NAMES = (
+    "get_settings",
+    "update_settings",
+)
+
+BUDGETS_READS_TOOL_NAMES = (
+    "list_budgets",
+    "safe_to_spend",
+)
+
+GOALS_READS_TOOL_NAMES = (
+    "list_goals",
+    "goals_progress",
+)
+
+REPORTS_TOOL_NAMES = (
+    "monthly_report",
+)
+
+RECURRING_RESTORE_TOOL_NAMES = (
+    "restore_recurring",
 )
 
 
@@ -168,10 +259,10 @@ def register_temporal_tools(mcp) -> None:
         with Session(db.engine) as session:
             return temporal.update_recurring(session, item)
 
-    @mcp.tool(name="delete_recurring", description="Deactivate a recurring item (soft, reversible).")
-    def delete_recurring(item: DeleteRecurringInput) -> str:
+    @mcp.tool(name="archive_recurring", description="Deactivate a recurring item (soft, reversible).")
+    def archive_recurring(item: ArchiveRecurringInput) -> str:
         with Session(db.engine) as session:
-            return temporal.delete_recurring(session, item)
+            return temporal.archive_recurring(session, item)
 
 
 def register_planning_tools(mcp) -> None:
@@ -206,3 +297,163 @@ def register_planning_tools(mcp) -> None:
     def restore_goal(item: GoalIdInput) -> str:
         with Session(db.engine) as session:
             return planning.restore_goal(session, item)
+
+
+def register_accounts_tools(mcp) -> None:
+    @mcp.tool(name="create_account", description="Create a new account.")
+    def create_account(inp: CreateAccountInput) -> str:
+        with Session(db.engine) as session:
+            return masters.create_account(session, inp)
+
+    @mcp.tool(name="update_account", description="Update an account's name or type.")
+    def update_account(inp: UpdateAccountInput) -> str:
+        with Session(db.engine) as session:
+            return masters.update_account(session, inp)
+
+    @mcp.tool(name="archive_account", description="Archive an account (soft, reversible).")
+    def archive_account(inp: ArchiveAccountInput) -> str:
+        with Session(db.engine) as session:
+            return masters.archive_account(session, inp)
+
+    @mcp.tool(name="restore_account", description="Restore an archived account.")
+    def restore_account(inp: RestoreAccountInput) -> str:
+        with Session(db.engine) as session:
+            return masters.restore_account(session, inp)
+
+    @mcp.tool(name="get_account", description="Fetch one account by name.")
+    def get_account(inp: GetAccountInput) -> str:
+        with Session(db.engine) as session:
+            return masters.get_account(session, inp)
+
+
+def register_categories_tools(mcp) -> None:
+    @mcp.tool(name="create_category", description="Create a new category.")
+    def create_category(inp: CreateCategoryInput) -> str:
+        with Session(db.engine) as session:
+            return masters.create_category(session, inp)
+
+    @mcp.tool(name="update_category", description="Update a category's fields.")
+    def update_category(inp: UpdateCategoryInput) -> str:
+        with Session(db.engine) as session:
+            return masters.update_category(session, inp)
+
+    @mcp.tool(name="archive_category", description="Archive a category (soft, reversible).")
+    def archive_category(inp: ArchiveCategoryInput) -> str:
+        with Session(db.engine) as session:
+            return masters.archive_category(session, inp)
+
+    @mcp.tool(name="restore_category", description="Restore an archived category.")
+    def restore_category(inp: RestoreCategoryInput) -> str:
+        with Session(db.engine) as session:
+            return masters.restore_category(session, inp)
+
+    @mcp.tool(name="get_category", description="Fetch one category by name.")
+    def get_category(inp: GetCategoryInput) -> str:
+        with Session(db.engine) as session:
+            return masters.get_category(session, inp)
+
+
+def register_category_groups_tools(mcp) -> None:
+    @mcp.tool(name="create_category_group", description="Create a new category group.")
+    def create_category_group(inp: CreateCategoryGroupInput) -> str:
+        with Session(db.engine) as session:
+            return masters.create_category_group(session, inp)
+
+    @mcp.tool(name="update_category_group", description="Update a category group's fields.")
+    def update_category_group(inp: UpdateCategoryGroupInput) -> str:
+        with Session(db.engine) as session:
+            return masters.update_category_group(session, inp)
+
+    @mcp.tool(name="archive_category_group", description="Archive a category group (soft, reversible).")
+    def archive_category_group(inp: ArchiveCategoryGroupInput) -> str:
+        with Session(db.engine) as session:
+            return masters.archive_category_group(session, inp)
+
+    @mcp.tool(name="restore_category_group", description="Restore an archived category group.")
+    def restore_category_group(inp: RestoreCategoryGroupInput) -> str:
+        with Session(db.engine) as session:
+            return masters.restore_category_group(session, inp)
+
+
+def register_tags_tools(mcp) -> None:
+    @mcp.tool(name="create_tag", description="Create a tag (idempotent by name).")
+    def create_tag(inp: CreateTagInput) -> str:
+        with Session(db.engine) as session:
+            return masters.create_tag(session, inp)
+
+    @mcp.tool(name="update_tag", description="Rename a tag.")
+    def update_tag(inp: UpdateTagInput) -> str:
+        with Session(db.engine) as session:
+            return masters.update_tag(session, inp)
+
+    @mcp.tool(name="delete_tag", description="Hard-delete a tag and its transaction links.")
+    def delete_tag(inp: DeleteTagInput) -> str:
+        with Session(db.engine) as session:
+            return masters.delete_tag(session, inp)
+
+
+def register_transactions_writes_tools(mcp) -> None:
+    @mcp.tool(name="get_transaction", description="Fetch one transaction by id.")
+    def get_transaction(inp: GetTransactionInput) -> str:
+        with Session(db.engine) as session:
+            return tx_tools.get_transaction(session, inp)
+
+    @mcp.tool(name="update_transaction", description="Edit a transaction's payee/notes/category/date.")
+    def update_transaction(inp: UpdateTransactionInput) -> str:
+        with Session(db.engine) as session:
+            return tx_tools.update_transaction(session, inp)
+
+    @mcp.tool(name="delete_transaction", description="Delete a transaction and reverse its balance effect.")
+    def delete_transaction(inp: DeleteTransactionInput) -> str:
+        with Session(db.engine) as session:
+            return tx_tools.delete_transaction(session, inp)
+
+
+def register_settings_tools(mcp) -> None:
+    @mcp.tool(name="get_settings", description="Fetch app settings.")
+    def get_settings(inp: GetSettingsInput) -> str:
+        with Session(db.engine) as session:
+            return settings_tools.get_settings(session, inp)
+
+    @mcp.tool(name="update_settings", description="Update app settings.")
+    def update_settings(inp: UpdateSettingsInput) -> str:
+        with Session(db.engine) as session:
+            return settings_tools.update_settings(session, inp)
+
+
+def register_budgets_reads_tools(mcp) -> None:
+    @mcp.tool(name="list_budgets", description="List budget envelopes for a month.")
+    def list_budgets(inp: ListBudgetsInput) -> str:
+        with Session(db.engine) as session:
+            return budgets_reads.list_budgets(session, inp)
+
+    @mcp.tool(name="safe_to_spend", description="Get the safe-to-spend headline for a month.")
+    def safe_to_spend(inp: SafeToSpendInput) -> str:
+        with Session(db.engine) as session:
+            return budgets_reads.safe_to_spend(session, inp)
+
+
+def register_goals_reads_tools(mcp) -> None:
+    @mcp.tool(name="list_goals", description="List all savings goals.")
+    def list_goals(inp: ListGoalsInput) -> str:
+        with Session(db.engine) as session:
+            return goals_reads.list_goals(session, inp)
+
+    @mcp.tool(name="goals_progress", description="Show progress for active goals.")
+    def goals_progress(inp: GoalsProgressInput) -> str:
+        with Session(db.engine) as session:
+            return goals_reads.goals_progress(session, inp)
+
+
+def register_reports_tools(mcp) -> None:
+    @mcp.tool(name="monthly_report", description="Build the retrospective monthly report.")
+    def monthly_report(inp: MonthlyReportInput) -> str:
+        with Session(db.engine) as session:
+            return reports.monthly_report(session, inp)
+
+
+def register_recurring_restore_tools(mcp) -> None:
+    @mcp.tool(name="restore_recurring", description="Re-activate a deactivated recurring item.")
+    def restore_recurring(inp: RestoreRecurringInput) -> str:
+        with Session(db.engine) as session:
+            return recurring_restore.restore_recurring(session, inp)

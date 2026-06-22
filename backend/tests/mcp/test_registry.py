@@ -3,7 +3,31 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from quaestor import db
-from quaestor.mcp.registry import CORE_TOOL_NAMES, register_core_tools
+from quaestor.mcp import server
+from quaestor.mcp.registry import (
+    ACCOUNTS_TOOL_NAMES,
+    BUDGETS_READS_TOOL_NAMES,
+    CATEGORIES_TOOL_NAMES,
+    CATEGORY_GROUPS_TOOL_NAMES,
+    CORE_TOOL_NAMES,
+    GOALS_READS_TOOL_NAMES,
+    RECURRING_RESTORE_TOOL_NAMES,
+    REPORTS_TOOL_NAMES,
+    SETTINGS_TOOL_NAMES,
+    TAGS_TOOL_NAMES,
+    TRANSACTIONS_WRITES_TOOL_NAMES,
+    register_accounts_tools,
+    register_budgets_reads_tools,
+    register_categories_tools,
+    register_category_groups_tools,
+    register_core_tools,
+    register_goals_reads_tools,
+    register_recurring_restore_tools,
+    register_reports_tools,
+    register_settings_tools,
+    register_tags_tools,
+    register_transactions_writes_tools,
+)
 
 
 def _tool_names(mcp):
@@ -47,3 +71,90 @@ def test_registered_tool_runs_against_db_engine(monkeypatch, engine):
     register_core_tools(mcp)
     result = asyncio.run(mcp.call_tool("list_accounts", {}))
     assert "Bancolombia" in str(result)
+
+
+def test_register_accounts_tools_exposes_all_five():
+    mcp = FastMCP("test")
+    register_accounts_tools(mcp)
+    names = _tool_names(mcp)
+    assert set(ACCOUNTS_TOOL_NAMES) <= names
+    assert len(ACCOUNTS_TOOL_NAMES) == 5
+
+
+def test_register_categories_tools_exposes_all_five():
+    mcp = FastMCP("test")
+    register_categories_tools(mcp)
+    assert set(CATEGORIES_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(CATEGORIES_TOOL_NAMES) == 5
+
+
+def test_register_category_groups_tools_exposes_all_four():
+    mcp = FastMCP("test")
+    register_category_groups_tools(mcp)
+    assert set(CATEGORY_GROUPS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(CATEGORY_GROUPS_TOOL_NAMES) == 4
+
+
+def test_register_tags_tools_exposes_all_three():
+    mcp = FastMCP("test")
+    register_tags_tools(mcp)
+    assert set(TAGS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(TAGS_TOOL_NAMES) == 3
+
+
+def test_register_transactions_writes_tools_exposes_all_three():
+    mcp = FastMCP("test")
+    register_transactions_writes_tools(mcp)
+    assert set(TRANSACTIONS_WRITES_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(TRANSACTIONS_WRITES_TOOL_NAMES) == 3
+
+
+def test_register_settings_tools_exposes_both():
+    mcp = FastMCP("test")
+    register_settings_tools(mcp)
+    assert set(SETTINGS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(SETTINGS_TOOL_NAMES) == 2
+
+
+def test_register_budgets_reads_tools_exposes_both():
+    mcp = FastMCP("test")
+    register_budgets_reads_tools(mcp)
+    assert set(BUDGETS_READS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(BUDGETS_READS_TOOL_NAMES) == 2
+
+
+def test_register_goals_reads_tools_exposes_both():
+    mcp = FastMCP("test")
+    register_goals_reads_tools(mcp)
+    assert set(GOALS_READS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(GOALS_READS_TOOL_NAMES) == 2
+
+
+def test_register_reports_tools_exposes_one():
+    mcp = FastMCP("test")
+    register_reports_tools(mcp)
+    assert set(REPORTS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(REPORTS_TOOL_NAMES) == 1
+
+
+def test_register_recurring_restore_tools_exposes_one():
+    mcp = FastMCP("test")
+    register_recurring_restore_tools(mcp)
+    assert set(RECURRING_RESTORE_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(RECURRING_RESTORE_TOOL_NAMES) == 1
+
+
+def test_build_mcp_registers_every_new_group():
+    import asyncio
+    mcp = server.build_mcp()
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    for grp in (
+        ACCOUNTS_TOOL_NAMES, CATEGORIES_TOOL_NAMES, CATEGORY_GROUPS_TOOL_NAMES,
+        TAGS_TOOL_NAMES, TRANSACTIONS_WRITES_TOOL_NAMES, SETTINGS_TOOL_NAMES,
+        BUDGETS_READS_TOOL_NAMES, GOALS_READS_TOOL_NAMES, REPORTS_TOOL_NAMES,
+        RECURRING_RESTORE_TOOL_NAMES,
+    ):
+        assert set(grp) <= names, f"missing tools: {set(grp) - names}"
+    # And the renamed one is present, not the old name.
+    assert "archive_recurring" in names
+    assert "delete_recurring" not in names

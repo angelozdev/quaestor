@@ -84,3 +84,12 @@ def test_nl_loop_register_then_query(monkeypatch, engine):
     )
     assert "Lunch" in str(query)
     assert "Total (COP): 50000.00" in str(query)
+
+
+def test_build_mcp_exposes_all_fifty_two_tools(monkeypatch, engine):
+    """ADR-0009: total tool count after the gap closure is 52."""
+    import asyncio
+    monkeypatch.setattr(db, "engine", engine)
+    mcp = server.build_mcp()
+    names = {t.name for t in asyncio.run(mcp.list_tools())}
+    assert len(names) == 52
