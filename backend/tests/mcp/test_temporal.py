@@ -2,9 +2,9 @@ from datetime import date
 
 from quaestor.mcp.tools import temporal
 from quaestor.mcp.tools.temporal import (
+    ArchiveRecurringInput,
     ConfirmPaymentInput,
     CreateRecurringInput,
-    DeleteRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
     SkipPaymentInput,
@@ -128,7 +128,7 @@ def test_mcp_update_recurring(session):
     assert _rec_svc.list_recurring(session)[0].amount == 5_000_000
 
 
-def test_mcp_delete_recurring(session):
+def test_mcp_archive_recurring(session):
     _bank(session)
     temporal.create_recurring(session, CreateRecurringInput(
         name="Rent", payee="Landlord", type="expense", mode="auto",
@@ -137,5 +137,5 @@ def test_mcp_delete_recurring(session):
     ))
     from quaestor.services import recurring as _rec_svc
     item_id = _rec_svc.list_recurring(session)[0].id
-    temporal.delete_recurring(session, DeleteRecurringInput(recurring_id=item_id))
+    temporal.archive_recurring(session, ArchiveRecurringInput(recurring_id=item_id))
     assert _rec_svc.list_recurring(session, active=True) == []

@@ -87,8 +87,8 @@ class UpdateRecurringInput(BaseModel):
     end_date: Date | None = Field(default=None, description="New last date YYYY-MM-DD")
 
 
-class DeleteRecurringInput(BaseModel):
-    recurring_id: int = Field(description="The recurring item id to deactivate")
+class ArchiveRecurringInput(BaseModel):
+    recurring_id: int = Field(description="The recurring item id to archive")
 
 
 # ----- impls -----
@@ -169,6 +169,6 @@ def update_recurring(session: Session, inp: UpdateRecurringInput) -> str:
 
 
 @_as_text
-def delete_recurring(session: Session, inp: DeleteRecurringInput) -> str:
+def archive_recurring(session: Session, inp: ArchiveRecurringInput) -> str:
     item = recurring.deactivate_recurring(session, inp.recurring_id)
     return format.recurring_deleted(item)
