@@ -1,0 +1,11 @@
+# Quaestor front door — serves frontend + /api/* on the public domain.
+# /mcp is NOT routed here: Tailscale serves it on the tailnet (ADR-0011).
+{
+    email {$LETSENCRYPT_EMAIL:admin@example.com}
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+    reverse_proxy /api/* api:8000
+    reverse_proxy frontend:3000
+}
