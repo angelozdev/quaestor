@@ -266,3 +266,90 @@ async def test_upstream_error_emits_error_event(fake_mcp):
     events = _parse_sse(blob)
     err = [e for e in events if e["type"] == "error"]
     assert err and "rate limited" in err[0]["errorText"]
+
+
+@pytest.mark.asyncio
+async def test_provider_timeout_emits_error_and_dones(fake_mcp):
+    """When provider.stream stalls past request_timeout_s, the service must
+    emit a code='timeout' error event and a [DONE] sentinel, then stop.
+    """
+
+    class StallProvider(LLMProvider):
+        async def stream(self, messages, tools):
+            # Sleep longer than the test timeout so wait_for trips.
+            import asyncio
+
+            await asyncio.sleep(1.0)
+            yield LLMEvent(type=LLMEventType.MESSAGE_START, message_id="x")  # pragma: no cover
+
+    service = ChatService(
+        provider=StallProvider(), mcp=None, max_iterations=2, request_timeout_s=0.05
+    )
+    blob = b""
+    async for chunk in service.stream(messages=[{"role": "user", "content": "?"}]):
+        blob += chunk
+
+    events = _parse_sse(blob)
+    errs = [e for e in events if e["type"] == "error"]
+    assert errs and errs[0]["errorText"] == "upstream timeout"
+    # Last event must be the [DONE] sentinel.
+    assert events[-1]["type"] == "__DONE__"
+
+
+@pytest.mark.asyncio
+async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
+    """A timed-out MCP tool call emits tool-output-available with is_error and
+    a tool message of 'timeout', then the loop keeps going (does not abort).
+    """
+    import asyncio
+
+    class HangingToolMCP(FakeMCPClient):
+        async def call_tool(self, name, arguments):
+            await asyncio.sleep(1.0)
+            return await super().call_tool(name, arguments)  # pragma: no cover
+
+    fake_mcp["client"] = HangingToolMCP(
+        {
+            "list_transactions": CallToolResult(
+                output='[{"id":1}]', is_error=False
+            )
+        }
+    )
+
+    provider = ScriptedProvider(
+        [
+            [
+                LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m1", model="MiniMax-M3"),
+                LLMEvent(
+                    type=LLMEventType.TOOL_INPUT_AVAILABLE,
+                    tool_call_id="tc_1",
+                    tool_name="list_transactions",
+                    arguments={},
+                ),
+                LLMEvent(type=LLMEventType.STEP_FINISH),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+            ],
+            [
+                LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
+                LLMEvent(type=LLMEventType.TEXT_START, content_index=0),
+                LLMEvent(type=LLMEventType.TEXT_DELTA, delta="ok"),
+                LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
+                LLMEvent(type=LLMEventType.STEP_FINISH),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1),
+            ],
+        ]
+    )
+    service = ChatService(
+        provider=provider, mcp=None, max_iterations=4, request_timeout_s=0.05
+    )
+    blob = b""
+    async for chunk in service.stream(messages=[{"role": "user", "content": "?"}]):
+        blob += chunk
+
+    events = _parse_sse(blob)
+    outputs = [e for e in events if e["type"] == "tool-output-available"]
+    assert outputs and outputs[0].get("isError") is True
+    assert outputs[0]["output"] == "timeout"
+    # Loop survived: a text-delta event appeared in the second iteration.
+    deltas = [e for e in events if e["type"] == "text-delta"]
+    assert any(d.get("delta") == "ok" for d in deltas)

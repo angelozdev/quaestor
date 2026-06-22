@@ -15,6 +15,7 @@ The service:
 """
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -39,10 +40,12 @@ class ChatService:
         provider: LLMProvider,
         mcp: FastMCP,
         max_iterations: int = 8,
+        request_timeout_s: float | None = None,
     ) -> None:
         self._provider = provider
         self._mcp = mcp
         self._max_iterations = max_iterations
+        self._request_timeout_s = request_timeout_s
 
     async def stream(self, messages: list[dict[str, Any]]) -> AsyncIterator[bytes]:
         message_id = "msg_unknown"
@@ -57,7 +60,12 @@ class ChatService:
                     tool_calls_this_iter: list[dict[str, Any]] = []
 
                     try:
-                        async for event in self._provider.stream(conversation, tools):
+                        provider_iter = self._provider.stream(conversation, tools)
+                        if self._request_timeout_s is not None:
+                            provider_iter = _timeout_iter(
+                                provider_iter, self._request_timeout_s
+                            )
+                        async for event in provider_iter:
                             if event.type == LLMEventType.MESSAGE_START and event.message_id:
                                 message_id = event.message_id
                             if event.type == LLMEventType.TOOL_INPUT_AVAILABLE:
@@ -78,6 +86,18 @@ class ChatService:
                                 type=LLMEventType.ERROR,
                                 code="upstream",
                                 message=str(exc),
+                                retryable=True,
+                            ),
+                            message_id=message_id,
+                        )
+                        yield done_bytes()
+                        return
+                    except asyncio.TimeoutError:
+                        yield serialize_event(
+                            LLMEvent(
+                                type=LLMEventType.ERROR,
+                                code="timeout",
+                                message="upstream timeout",
                                 retryable=True,
                             ),
                             message_id=message_id,
@@ -116,7 +136,13 @@ class ChatService:
                         tc_name = tc["function"]["name"]
                         tc_args = tc["function"]["arguments"]
                         try:
-                            result = await mcp_client.call_tool(tc_name, tc_args)
+                            if self._request_timeout_s is not None:
+                                result = await asyncio.wait_for(
+                                    mcp_client.call_tool(tc_name, tc_args),
+                                    timeout=self._request_timeout_s,
+                                )
+                            else:
+                                result = await mcp_client.call_tool(tc_name, tc_args)
                         except ToolNotFoundError as exc:
                             yield serialize_event(
                                 LLMEvent(
@@ -132,6 +158,24 @@ class ChatService:
                                     "role": "tool",
                                     "tool_call_id": tc_id,
                                     "content": f"tool not found: {exc}",
+                                }
+                            )
+                            continue
+                        except asyncio.TimeoutError:
+                            yield serialize_event(
+                                LLMEvent(
+                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    tool_call_id=tc_id,
+                                    output="timeout",
+                                    is_error=True,
+                                ),
+                                message_id=message_id,
+                            )
+                            conversation.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc_id,
+                                    "content": "timeout",
                                 }
                             )
                             continue
@@ -195,3 +239,22 @@ def _json_dumps(obj: Any) -> str:
     import json
 
     return json.dumps(obj, ensure_ascii=False)
+
+
+async def _timeout_iter(
+    source: AsyncIterator[LLMEvent], timeout_s: float
+) -> AsyncIterator[LLMEvent]:
+    """Yield events from `source`, aborting with asyncio.TimeoutError when the
+    gap between events exceeds `timeout_s`.
+
+    `asyncio.wait_for` cannot wrap an async generator directly, so we drain
+    events one-by-one via `wait_for(anext(source), timeout_s)`. A long idle
+    upstream (e.g. a stalled SSE connection) raises TimeoutError, which the
+    caller turns into the `error` SSE event.
+    """
+    while True:
+        try:
+            event = await asyncio.wait_for(anext(source), timeout=timeout_s)
+        except StopAsyncIteration:
+            return
+        yield event

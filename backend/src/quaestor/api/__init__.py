@@ -40,7 +40,7 @@ def _include_routers(app: FastAPI) -> None:
     """Register routers. Resource routers are protected by require_auth."""
     from fastapi import Depends
 
-    from . import auth
+    from . import auth, chat as chat_module
     from .deps import require_auth
     from .routers import (
         accounts,
@@ -74,6 +74,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(budgets.router, prefix="/api", dependencies=protected)
     app.include_router(goals.router, prefix="/api", dependencies=protected)
     app.include_router(reports.router, prefix="/api", dependencies=protected)
+    app.include_router(chat_module.router, prefix="/api", dependencies=protected)
 
 
 def create_app() -> FastAPI:
