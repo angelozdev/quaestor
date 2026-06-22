@@ -107,6 +107,14 @@ services:
     volumes:
       - ./.dev-data:/.dev-data
 
+  # Inherited from docker-compose.yml but skipped in dev:
+  caddy:
+    profiles: ["never"]
+  tailscale:
+    profiles: ["never"]
+  litestream:
+    profiles: ["never"]
+
 volumes:
   frontend_node_modules:
 ```
@@ -239,7 +247,7 @@ http://localhost:9000/mcp # MCP (uvicorn --reload when MCP_RELOAD=1)
 
 **Scheduler stays idle in dev.** The override replaces the production `cron.sh` command with a long-running sleep loop. The container stays up so the developer can `docker compose exec scheduler ...` into it without paying the container-start cost every time. Trigger the daily job with `just dev-trigger-scheduler`. To test the FX job alone, target it directly: `docker compose exec scheduler uv run python -m quaestor.jobs.fx_fetch` (the spec for `quaestor.jobs.fx_fetch` already exists from P7 Task 3; if not yet shipped, this command will not work and the developer runs the orchestration instead).
 
-**Caddy/Tailscale/Litestream stay up but are not in the developer's critical path.** They are inherited from `docker-compose.yml` unchanged. The browser talks to the frontend at `localhost:3000` directly, bypassing Caddy. Claude Code on the same Mac talks to the MCP at `localhost:9000` directly, bypassing Tailscale. The developer can stop them with `docker compose stop caddy tailscale` to free ports `80`/`443` and reduce noise, but it is not required.
+**Caddy/Tailscale/Litestream are excluded from `docker compose up` in dev.** The override file tags them with `profiles: ["never"]` so a plain `docker compose up` (no `--profile`) skips them. They remain defined in `docker-compose.yml` for production use unchanged. To run them explicitly in dev (rare — only if you want to test the full HTTPS / tailnet path locally), invoke `docker compose --profile never up` (Docker Compose treats `profiles: ["never"]` as an opt-in profile). The browser talks to the frontend at `localhost:3000` directly; Claude Code on the same Mac talks to the MCP at `localhost:9000` directly.
 
 **Single-writer SQLite invariant is preserved.** The dev DB is one file, mounted into all three services that write. WAL + `busy_timeout` (from P7 Task 2) serialize writes. There is no second host. If the developer runs tests on the host with `cd backend && uv run pytest`, those tests use an in-memory SQLite (`tests/conftest.py`) and never touch the dev DB, so they do not race with the containers.
 
@@ -247,7 +255,7 @@ http://localhost:9000/mcp # MCP (uvicorn --reload when MCP_RELOAD=1)
 
 ## Errors/Risks
 
-- **Port already in use.** If `3000`/`8000`/`9000` is bound by another process on the host, `docker compose up` fails. The developer checks with `lsof -i :3000`. Caddy on port `80`/`443` may conflict with a local reverse-proxy dev tool (e.g., `nginx`); stop Caddy with `docker compose stop caddy`.
+- **Port already in use.** If `3000`/`8000`/`9000` is bound by another process on the host, `docker compose up` fails. The developer checks with `lsof -i :3000`. (Caddy/Tailscale are excluded in dev via `profiles: ["never"]`, so they will not bind `80`/`443`.)
 - **Frontend `.next/` mismatch.** The first `pnpm dev` run after switching from production standalone may complain about `.next/` artifacts left over from the prior build. Fix: `rm -rf frontend/.next && just dev-build`. (Already gitignored.)
 - **`.env.local` missing.** The first run fails because Compose cannot read the file. The developer creates it (a template is in `backend/.env.example`; copy and edit).
 - **`uv sync --frozen` drift.** If `backend/uv.lock` changes after the dev image is built, `uv run` may complain. Fix: `just dev-build`.
