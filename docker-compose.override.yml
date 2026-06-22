@@ -17,10 +17,13 @@ services:
     environment:
       QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
       COOKIE_SECURE: "false"
+    # Direct uvicorn CLI flags: explicit host/port + reload + reload-dir.
     command: >-
       uv run uvicorn quaestor.api:app
       --host 0.0.0.0 --port 8000
       --reload --reload-dir /app/src
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend/src:/app/src:rw
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -37,7 +40,13 @@ services:
     environment:
       QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
       MCP_RELOAD: "1"
+    # Helper-based reload: quaestor.mcp.__main__ -> main() reads MCP_RELOAD
+    # and turns on uvicorn autoreload. Asymmetric vs `api` (direct uvicorn
+    # CLI flags) but intentional: MCP_RELOAD is the dev knob documented in
+    # quaestor.mcp.server.main().
     command: ["uv", "run", "python", "-m", "quaestor.mcp"]
+    ports:
+      - "9000:9000"
     volumes:
       - ./backend/src:/app/src:rw
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
@@ -50,6 +59,8 @@ services:
     environment:
       API_INTERNAL_URL: http://api:8000
     command: ["pnpm", "dev"]
+    ports:
+      - "3000:3000"
     volumes:
       - ./frontend/app:/app/app
       - ./frontend/components:/app/components
