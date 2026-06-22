@@ -14,11 +14,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...domain.errors import NotFound
+from ...domain.errors import NotFound, ValidationError
 from ...domain.models import Account
 from ...services import accounts, categories, tags
 from .. import format
-from .core import _as_text, _resolve_account
+from .core import _as_text, _resolve_account, _resolve_category
 
 
 # ===== accounts =====
@@ -102,3 +102,117 @@ def restore_account(session: Session, inp: RestoreAccountInput) -> str:
 def get_account(session: Session, inp: GetAccountInput) -> str:
     acc = _resolve_account(session, inp.account)
     return format.account_card(acc)
+
+
+# ===== categories =====
+
+
+class CreateCategoryInput(BaseModel):
+    name: str = Field(min_length=1, max_length=80, description="Category name")
+    group: str | None = Field(default=None, description="Category group name (optional)")
+    is_income: bool = Field(default=False, description="Income category flag")
+    exclude_from_budget: bool = Field(default=False, description="Exclude from budget")
+    exclude_from_totals: bool = Field(default=False, description="Exclude from totals")
+
+
+class UpdateCategoryInput(BaseModel):
+    category: str = Field(description="Category name")
+    name: str | None = Field(default=None, description="New name")
+    group: str | None = Field(default=None, description="New group name (None to clear)")
+    is_income: bool | None = Field(default=None, description="New income flag")
+    exclude_from_budget: bool | None = Field(default=None, description="New exclude_from_budget")
+    exclude_from_totals: bool | None = Field(default=None, description="New exclude_from_totals")
+
+
+class ArchiveCategoryInput(BaseModel):
+    category: str = Field(description="Category name")
+
+
+class RestoreCategoryInput(BaseModel):
+    category: str = Field(description="Category name")
+
+
+class GetCategoryInput(BaseModel):
+    category: str = Field(description="Category name")
+
+
+def _resolve_category_group(session: Session, name: str):
+    """Resolve a category group by name (case-insensitive). Raise ValidationError with hints."""
+    all_groups = categories.list_groups(session, include_archived=False)
+    target = name.strip().lower()
+    for g in all_groups:
+        if g.name.lower() == target:
+            return g
+    available = ", ".join(g.name for g in all_groups) or "(none)"
+    raise ValidationError(
+        f"category group '{name}' not found. Available: {available}."
+    )
+
+
+def _category_group_by_id(session: Session, group_id: int):
+    """Look up a category group by id; returns None if missing."""
+    for g in categories.list_groups(session, include_archived=True):
+        if g.id == group_id:
+            return g
+    return None
+
+
+@_as_text
+def create_category(session: Session, inp: CreateCategoryInput) -> str:
+    group = _resolve_category_group(session, inp.group) if inp.group else None
+    cat = categories.create_category(
+        session,
+        name=inp.name,
+        group_id=group.id if group else None,
+        is_income=inp.is_income,
+        exclude_from_budget=inp.exclude_from_budget,
+        exclude_from_totals=inp.exclude_from_totals,
+    )
+    return format.category_card(cat, group)
+
+
+@_as_text
+def update_category(session: Session, inp: UpdateCategoryInput) -> str:
+    cat = _resolve_category(session, inp.category)
+    group_id = categories._UNSET  # unchanged by default
+    group_for_card = None
+    if inp.group is not None:
+        if inp.group == "":
+            group_id = None  # explicitly clear
+            group_for_card = None
+        else:
+            g = _resolve_category_group(session, inp.group)
+            group_id = g.id
+            group_for_card = g
+    updated = categories.update_category(
+        session,
+        cat.id,
+        name=inp.name,
+        group_id=group_id,
+        is_income=inp.is_income,
+        exclude_from_budget=inp.exclude_from_budget,
+        exclude_from_totals=inp.exclude_from_totals,
+    )
+    return format.category_card(updated, group_for_card)
+
+
+@_as_text
+def archive_category(session: Session, inp: ArchiveCategoryInput) -> str:
+    cat = _resolve_category(session, inp.category)
+    archived = categories.archive_category(session, cat.id)
+    return f"✅ archived **{archived.name}** (id={archived.id})."
+
+
+@_as_text
+def restore_category(session: Session, inp: RestoreCategoryInput) -> str:
+    cat = _resolve_category(session, inp.category)
+    restored = categories.unarchive_category(session, cat.id)
+    group = _category_group_by_id(session, restored.group_id)
+    return format.category_card(restored, group)
+
+
+@_as_text
+def get_category(session: Session, inp: GetCategoryInput) -> str:
+    cat = _resolve_category(session, inp.category)
+    group = _category_group_by_id(session, cat.group_id)
+    return format.category_card(cat, group)
