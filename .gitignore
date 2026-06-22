@@ -35,3 +35,6 @@ out/
 
 # MCP — keep template .mcp.json committed, local overrides stay private
 .mcp.local.json
+
+# Local dev DB and WAL siblings (bind-mounted into api/mcp/scheduler in dev)
+.dev-data/
