@@ -267,3 +267,48 @@ def restore_category_group(session: Session, inp: RestoreCategoryGroupInput) -> 
     g = _resolve_category_group(session, inp.group)
     restored = categories.unarchive_group(session, g.id)
     return f"✅ restored **{restored.name}** (id={restored.id})."
+
+
+# ===== tags =====
+
+
+class CreateTagInput(BaseModel):
+    name: str = Field(min_length=1, max_length=40, description="Tag name")
+
+
+class UpdateTagInput(BaseModel):
+    tag: str = Field(description="Existing tag name")
+    name: str = Field(min_length=1, max_length=40, description="New name")
+
+
+class DeleteTagInput(BaseModel):
+    tag: str = Field(description="Tag name to delete")
+
+
+def _resolve_tag(session: Session, name: str):
+    target = name.strip().lower()
+    for t in tags.list_tags(session):
+        if t.name.lower() == target:
+            return t
+    available = ", ".join(t.name for t in tags.list_tags(session)) or "(none)"
+    raise NotFound(f"Tag '{name}' not found. Available: {available}.")
+
+
+@_as_text
+def create_tag(session: Session, inp: CreateTagInput) -> str:
+    tag = tags.create_tag(session, inp.name)
+    return format.tag_card(tag)
+
+
+@_as_text
+def update_tag(session: Session, inp: UpdateTagInput) -> str:
+    tag = _resolve_tag(session, inp.tag)
+    updated = tags.update_tag(session, tag.id, inp.name)
+    return format.tag_card(updated)
+
+
+@_as_text
+def delete_tag(session: Session, inp: DeleteTagInput) -> str:
+    tag = _resolve_tag(session, inp.tag)
+    tags.delete_tag(session, tag.id)
+    return f"Deleted tag '{tag.name}'."
