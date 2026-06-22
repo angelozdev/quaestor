@@ -14,11 +14,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...domain.errors import NotFound, ValidationError
-from ...domain.models import Account
 from ...services import accounts, categories, tags
 from .. import format
-from .core import _as_text, _resolve_account, _resolve_category
+from .core import (
+    _as_text,
+    _resolve_account_by_name,
+    _resolve_category_by_name,
+    _resolve_category_group_by_name,
+    _resolve_tag_by_name,
+)
 
 
 # ===== accounts =====
@@ -65,7 +69,7 @@ def create_account(session: Session, inp: CreateAccountInput) -> str:
 
 @_as_text
 def update_account(session: Session, inp: UpdateAccountInput) -> str:
-    acc = _resolve_account(session, inp.account)
+    acc = _resolve_account_by_name(session, inp.account)
     updated = accounts.update_account(
         session, acc.id, name=inp.name, type=inp.type
     )
@@ -75,32 +79,22 @@ def update_account(session: Session, inp: UpdateAccountInput) -> str:
 @_as_text
 def archive_account(session: Session, inp: ArchiveAccountInput) -> str:
     # Include archived so re-archiving / restoring an already-archived account still resolves.
-    all_accounts = accounts.list_accounts(session, include_archived=True)
-    target = inp.account.strip().lower()
-    match = next((a for a in all_accounts if a.name.lower() == target), None)
-    if match is None:
-        available = ", ".join(a.name for a in all_accounts) or "(none)"
-        raise NotFound(f"Account '{inp.account}' not found. Available: {available}.")
-    archived = accounts.archive_account(session, match.id)
+    acc = _resolve_account_by_name(session, inp.account, allow_archived=True)
+    archived = accounts.archive_account(session, acc.id)
     return f"✅ archived **{archived.name}** (id={archived.id})."
 
 
 @_as_text
 def restore_account(session: Session, inp: RestoreAccountInput) -> str:
     # Include archived so restoring an archived account resolves.
-    all_accounts = accounts.list_accounts(session, include_archived=True)
-    target = inp.account.strip().lower()
-    match = next((a for a in all_accounts if a.name.lower() == target), None)
-    if match is None:
-        available = ", ".join(a.name for a in all_accounts) or "(none)"
-        raise NotFound(f"Account '{inp.account}' not found. Available: {available}.")
-    restored = accounts.unarchive_account(session, match.id)
+    acc = _resolve_account_by_name(session, inp.account, allow_archived=True)
+    restored = accounts.unarchive_account(session, acc.id)
     return f"✅ restored **{restored.name}** (id={restored.id})."
 
 
 @_as_text
 def get_account(session: Session, inp: GetAccountInput) -> str:
-    acc = _resolve_account(session, inp.account)
+    acc = _resolve_account_by_name(session, inp.account)
     return format.account_card(acc)
 
 
@@ -136,19 +130,6 @@ class GetCategoryInput(BaseModel):
     category: str = Field(description="Category name")
 
 
-def _resolve_category_group(session: Session, name: str):
-    """Resolve a category group by name (case-insensitive). Raise ValidationError with hints."""
-    all_groups = categories.list_groups(session, include_archived=True)
-    target = name.strip().lower()
-    for g in all_groups:
-        if g.name.lower() == target:
-            return g
-    available = ", ".join(g.name for g in all_groups) or "(none)"
-    raise ValidationError(
-        f"category group '{name}' not found. Available: {available}."
-    )
-
-
 def _category_group_by_id(session: Session, group_id: int):
     """Look up a category group by id; returns None if missing."""
     for g in categories.list_groups(session, include_archived=True):
@@ -159,7 +140,7 @@ def _category_group_by_id(session: Session, group_id: int):
 
 @_as_text
 def create_category(session: Session, inp: CreateCategoryInput) -> str:
-    group = _resolve_category_group(session, inp.group) if inp.group else None
+    group = _resolve_category_group_by_name(session, inp.group) if inp.group else None
     cat = categories.create_category(
         session,
         name=inp.name,
@@ -173,7 +154,7 @@ def create_category(session: Session, inp: CreateCategoryInput) -> str:
 
 @_as_text
 def update_category(session: Session, inp: UpdateCategoryInput) -> str:
-    cat = _resolve_category(session, inp.category)
+    cat = _resolve_category_by_name(session, inp.category)
     group_id = categories._UNSET  # unchanged by default
     group_for_card = None
     if inp.group is not None:
@@ -181,7 +162,7 @@ def update_category(session: Session, inp: UpdateCategoryInput) -> str:
             group_id = None  # explicitly clear
             group_for_card = None
         else:
-            g = _resolve_category_group(session, inp.group)
+            g = _resolve_category_group_by_name(session, inp.group)
             group_id = g.id
             group_for_card = g
     updated = categories.update_category(
@@ -198,14 +179,14 @@ def update_category(session: Session, inp: UpdateCategoryInput) -> str:
 
 @_as_text
 def archive_category(session: Session, inp: ArchiveCategoryInput) -> str:
-    cat = _resolve_category(session, inp.category)
+    cat = _resolve_category_by_name(session, inp.category)
     archived = categories.archive_category(session, cat.id)
     return f"✅ archived **{archived.name}** (id={archived.id})."
 
 
 @_as_text
 def restore_category(session: Session, inp: RestoreCategoryInput) -> str:
-    cat = _resolve_category(session, inp.category)
+    cat = _resolve_category_by_name(session, inp.category)
     restored = categories.unarchive_category(session, cat.id)
     group = _category_group_by_id(session, restored.group_id)
     return format.category_card(restored, group)
@@ -213,7 +194,7 @@ def restore_category(session: Session, inp: RestoreCategoryInput) -> str:
 
 @_as_text
 def get_category(session: Session, inp: GetCategoryInput) -> str:
-    cat = _resolve_category(session, inp.category)
+    cat = _resolve_category_by_name(session, inp.category)
     group = _category_group_by_id(session, cat.group_id)
     return format.category_card(cat, group)
 
@@ -248,7 +229,7 @@ def create_category_group(session: Session, inp: CreateCategoryGroupInput) -> st
 
 @_as_text
 def update_category_group(session: Session, inp: UpdateCategoryGroupInput) -> str:
-    g = _resolve_category_group(session, inp.group)
+    g = _resolve_category_group_by_name(session, inp.group)
     updated = categories.update_group(
         session, g.id, name=inp.name, sort_order=inp.sort_order
     )
@@ -257,14 +238,14 @@ def update_category_group(session: Session, inp: UpdateCategoryGroupInput) -> st
 
 @_as_text
 def archive_category_group(session: Session, inp: ArchiveCategoryGroupInput) -> str:
-    g = _resolve_category_group(session, inp.group)
+    g = _resolve_category_group_by_name(session, inp.group)
     archived = categories.archive_group(session, g.id)
     return f"✅ archived **{archived.name}** (id={archived.id})."
 
 
 @_as_text
 def restore_category_group(session: Session, inp: RestoreCategoryGroupInput) -> str:
-    g = _resolve_category_group(session, inp.group)
+    g = _resolve_category_group_by_name(session, inp.group)
     restored = categories.unarchive_group(session, g.id)
     return f"✅ restored **{restored.name}** (id={restored.id})."
 
@@ -285,15 +266,6 @@ class DeleteTagInput(BaseModel):
     tag: str = Field(description="Tag name to delete")
 
 
-def _resolve_tag(session: Session, name: str):
-    target = name.strip().lower()
-    for t in tags.list_tags(session):
-        if t.name.lower() == target:
-            return t
-    available = ", ".join(t.name for t in tags.list_tags(session)) or "(none)"
-    raise NotFound(f"Tag '{name}' not found. Available: {available}.")
-
-
 @_as_text
 def create_tag(session: Session, inp: CreateTagInput) -> str:
     tag = tags.create_tag(session, inp.name)
@@ -302,13 +274,13 @@ def create_tag(session: Session, inp: CreateTagInput) -> str:
 
 @_as_text
 def update_tag(session: Session, inp: UpdateTagInput) -> str:
-    tag = _resolve_tag(session, inp.tag)
+    tag = _resolve_tag_by_name(session, inp.tag)
     updated = tags.update_tag(session, tag.id, inp.name)
     return format.tag_card(updated)
 
 
 @_as_text
 def delete_tag(session: Session, inp: DeleteTagInput) -> str:
-    tag = _resolve_tag(session, inp.tag)
+    tag = _resolve_tag_by_name(session, inp.tag)
     tags.delete_tag(session, tag.id)
     return f"Deleted tag '{tag.name}'."

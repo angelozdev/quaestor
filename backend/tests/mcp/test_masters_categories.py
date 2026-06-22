@@ -30,7 +30,7 @@ def test_create_category_unknown_group_returns_text(session):
     out = masters.create_category(
         session, CreateCategoryInput(name="X", group="Nonexistent")
     )
-    assert "Invalid input" in out
+    assert "not found" in out
 
 
 def test_update_category_renames_and_regroups(session):

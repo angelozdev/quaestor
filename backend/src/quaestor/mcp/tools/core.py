@@ -8,14 +8,15 @@ Pydantic input model.
 from __future__ import annotations
 
 import functools
+import re
 from datetime import date as Date
 from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...domain.errors import NotFound, QuaestorError
-from ...domain.models import Account, Category
+from ...domain.errors import NotFound, QuaestorError, ValidationError
+from ...domain.models import Account, Category, CategoryGroup, Tag
 from ...services import accounts, categories, fx, tags, transactions
 from .. import format
 
@@ -98,17 +99,19 @@ def _as_text(fn):
 # ----- name resolution (agent speaks names; services speak ids) -----
 
 
-def _resolve_account(session: Session, name: str) -> Account:
-    all_accounts = accounts.list_accounts(session)
+def _resolve_account_by_name(
+    session: Session, name: str, *, allow_archived: bool = False
+) -> Account:
+    all_accounts = accounts.list_accounts(session, include_archived=allow_archived)
     target = name.strip().lower()
-    for account in all_accounts:
-        if account.name.lower() == target:
-            return account
+    match = next((a for a in all_accounts if a.name.lower() == target), None)
+    if match is not None:
+        return match
     available = ", ".join(a.name for a in all_accounts) or "(none)"
     raise NotFound(f"Account '{name}' not found. Available: {available}.")
 
 
-def _resolve_category(session: Session, name: str) -> Category:
+def _resolve_category_by_name(session: Session, name: str) -> Category:
     target = name.strip().lower()
     for category in categories.list_categories(session):
         if category.name.lower() == target:
@@ -116,6 +119,50 @@ def _resolve_category(session: Session, name: str) -> Category:
     raise NotFound(
         f"Category '{name}' not found. You can create it or record without a category."
     )
+
+
+def _resolve_category_group_by_name(session: Session, name: str) -> CategoryGroup:
+    all_groups = categories.list_groups(session, include_archived=True)
+    target = name.strip().lower()
+    match = next((g for g in all_groups if g.name.lower() == target), None)
+    if match is not None:
+        return match
+    available = ", ".join(g.name for g in all_groups) or "(none)"
+    raise NotFound(
+        f"Category group '{name}' not found. Available: {available}."
+    )
+
+
+def _resolve_tag_by_name(session: Session, name: str) -> Tag:
+    all_tags = tags.list_tags(session)
+    target = name.strip().lower()
+    match = next((t for t in all_tags if t.name.lower() == target), None)
+    if match is not None:
+        return match
+    available = ", ".join(t.name for t in all_tags) or "(none)"
+    raise NotFound(f"Tag '{name}' not found. Available: {available}.")
+
+
+# ----- YYYY-MM validation (shared by budget reads + monthly report) -----
+
+
+_YEAR_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+def _validate_month(month: str) -> None:
+    if not _YEAR_MONTH_RE.match(month):
+        raise ValidationError(f"malformed year_month (expected YYYY-MM): {month!r}")
+
+
+# ----- legacy aliases kept for backward-compatible imports -----
+
+
+def _resolve_account(session: Session, name: str) -> Account:
+    return _resolve_account_by_name(session, name)
+
+
+def _resolve_category(session: Session, name: str) -> Category:
+    return _resolve_category_by_name(session, name)
 
 
 # ----- write tools -----
