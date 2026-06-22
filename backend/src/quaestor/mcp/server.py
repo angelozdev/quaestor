@@ -8,6 +8,7 @@ auth-wrapped app instead.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 
 from mcp.server.fastmcp import FastMCP
 
@@ -62,9 +63,28 @@ def build_app():
     return app
 
 
+_TRUTHY = {"1", "true", "yes"}
+
+
+def _uvicorn_kwargs_from_env(env: Mapping[str, str]) -> dict:
+    """Translate env vars into kwargs for uvicorn.run().
+
+    `MCP_RELOAD` in {"1", "true", "yes"} (case-insensitive) enables uvicorn's
+    autoreload, watching `/app/src` so edits to backend source trigger a
+    restart. In production this env var is unset and reload is off.
+    """
+    reload_raw = env.get("MCP_RELOAD", "")
+    reload = reload_raw.strip().lower() in _TRUTHY
+    return {
+        "factory": True,
+        "host": env.get("MCP_HOST", "0.0.0.0"),
+        "port": int(env.get("MCP_PORT", "9000")),
+        "reload": reload,
+        "reload_dirs": ["/app/src"] if reload else None,
+    }
+
+
 def main() -> None:
     import uvicorn
 
-    host = os.environ.get("MCP_HOST", "0.0.0.0")
-    port = int(os.environ.get("MCP_PORT", "9000"))
-    uvicorn.run(build_app(), host=host, port=port)
+    uvicorn.run("quaestor.mcp.server:build_app", **_uvicorn_kwargs_from_env(os.environ))
