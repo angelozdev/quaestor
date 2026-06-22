@@ -4,18 +4,12 @@ Writes (`assign_budget`) live in `planning.py`.
 """
 from __future__ import annotations
 
-import re
-
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...domain.errors import ValidationError
 from ...services import budgets
 from .. import format
-from .core import _as_text
-
-
-_YEAR_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+from .core import _as_text, _validate_month
 
 
 class _MonthField(BaseModel):
@@ -28,11 +22,6 @@ class ListBudgetsInput(_MonthField):
 
 class SafeToSpendInput(_MonthField):
     pass
-
-
-def _validate_month(month: str) -> None:
-    if not _YEAR_MONTH_RE.match(month):
-        raise ValidationError(f"malformed year_month (expected YYYY-MM): {month!r}")
 
 
 @_as_text
