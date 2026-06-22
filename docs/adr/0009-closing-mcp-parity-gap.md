@@ -42,6 +42,9 @@ Excluded from MCP (by design, not by omission):
 - ADR-0006's invariant becomes enforceable at code review: any new HTTP write
   merged without a sibling MCP tool can be flagged against this ADR plus
   ADR-0006.
+- The `delete_recurring` → `archive_recurring` rename is a breaking change for
+  any external MCP caller; no such caller exists in this repository as of
+  2026-06-21.
 - Follow-up ADR may codegen MCP tools from FastAPI's OpenAPI schema; that work
   is explicitly out of scope here.
 
