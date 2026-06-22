@@ -32,3 +32,6 @@ out/
 
 # OS
 .DS_Store
+
+# MCP — keep template .mcp.json committed, local overrides stay private
+.mcp.local.json
