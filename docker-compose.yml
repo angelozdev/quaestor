@@ -1,0 +1,120 @@
+# Quaestor production stack (ADR-0010-0013).
+# Only `caddy` publishes host ports; /mcp lives on the tailnet (ADR-0011).
+services:
+  api:
+    build: ./backend
+    image: quaestor-backend:latest
+    environment:
+      QUAESTOR_DB: sqlite:////data/quaestor.db
+      APP_TOKEN: ${APP_TOKEN}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET required}
+      FRONTEND_ORIGIN: https://${DOMAIN}
+      COOKIE_SECURE: "true"
+    volumes:
+      - quaestor-data:/data
+    expose: ["8000"]
+    healthcheck:
+      test: ["CMD", "uv", "run", "python", "-c", "import httpx,os,sys; sys.exit(0 if httpx.get('http://localhost:8000/api/auth/me', headers={'Authorization': f'Bearer {os.environ[\"APP_TOKEN\"]}'}, timeout=5).status_code in (200,401) else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mcp:
+    build: ./backend
+    image: quaestor-backend:latest
+    command: ["uv", "run", "python", "-m", "quaestor.mcp"]
+    environment:
+      QUAESTOR_DB: sqlite:////data/quaestor.db
+      APP_TOKEN: ${APP_TOKEN}
+    volumes:
+      - quaestor-data:/data
+    expose: ["9000"]
+    healthcheck:
+      test: ["CMD-SHELL", "uv run python -c \"import httpx,sys; r=httpx.get('http://localhost:9000/mcp', headers={'Authorization': 'Bearer '+__import__('os').environ['APP_TOKEN']}, timeout=5); sys.exit(0 if r.status_code in (200,400) else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        API_INTERNAL_URL: http://api:8000
+    image: quaestor-frontend:latest
+    environment:
+      FRONTEND_PASSWORD_HASH: ${FRONTEND_PASSWORD_HASH}
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    hostname: ${TS_HOSTNAME:-quaestor-mcp}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY required}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/ts-serve.json
+      TS_HOSTNAME: ${TS_HOSTNAME:-quaestor-mcp}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./ts-serve.json:/config/ts-serve.json:ro
+    cap_add: [NET_ADMIN]
+    depends_on:
+      mcp:
+        condition: service_healthy
+    restart: unless-stopped
+
+  litestream:
+    image: litestream/litestream:latest
+    volumes:
+      - quaestor-data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: ["replicate", "-config", "/etc/litestream.yml"]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    build: ./backend
+    image: quaestor-backend:latest
+    command: ["./scripts/cron.sh"]
+    environment:
+      QUAESTOR_DB: sqlite:////data/quaestor.db
+      FX_API_URL: ${FX_API_URL:-}
+      FX_API_KEY: ${FX_API_KEY:-}
+      RUN_ON_BOOT: "1"
+      INTERVAL_SECONDS: "86400"
+    volumes:
+      - quaestor-data:/data
+    restart: unless-stopped
+
+volumes:
+  quaestor-data:
+  caddy-data:
+  caddy-config:
+  tailscale-state:

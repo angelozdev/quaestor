@@ -38,3 +38,13 @@ out/
 
 # Local dev DB and WAL siblings (bind-mounted into api/mcp/scheduler in dev)
 .dev-data/
+
+# Deploy artifacts / state
+.env
+.env.*
+!.env.example
+ts-serve.local.json
+litestream.state
+backend/.docker_cache/
+frontend/.next/
+frontend/.docker_cache/
