@@ -23,7 +23,14 @@ and ports `80` and `443` open.
    - `curl -H "Authorization: Bearer $APP_TOKEN" https://$DOMAIN/api/accounts`
      returns 200 (or 401 if no accounts yet).
    - `curl https://$DOMAIN/mcp` returns 404 (Caddy doesn't route it).
-7. Verify the tailnet surface: from a machine on the tailnet,
+   - `curl https://$DOMAIN/api/chat` returns 404 (Caddy returns 404 for the
+     chat route on the public listener — chat is tailnet-only, ADR-0014).
+7. Smoke-test `/api/chat` from a tailnet client (ADR-0014). See
+   `docs/superpowers/plans/2026-06-22-chat-endpoint.md` for the canonical
+   curl recipe; the route requires `ANTHROPIC_API_KEY` in `.env` to actually
+   stream a model response, but the auth/validation boundaries (401, 413,
+   422) work without one.
+8. Verify the tailnet surface: from a machine on the tailnet,
    `curl -H "Authorization: Bearer $APP_TOKEN" https://$TS_HOSTNAME.<tailnet>.ts.net/mcp`
    should respond (200/4xx depending on protocol); from outside the tailnet
    it should be unreachable.
