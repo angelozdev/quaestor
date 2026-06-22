@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .dates import display_date
 from .money import cents_to_major
 
 if TYPE_CHECKING:
@@ -84,7 +85,7 @@ def render_markdown(report: "MonthlyReport") -> str:
         for g in report.goals:
             if g.target is not None:
                 track = "on track" if g.on_track else "behind"
-                eta = g.eta.isoformat() if g.eta else "—"
+                eta = display_date(g.eta) if g.eta else "—"
                 lines.append(
                     f"- **{g.name}**: {money(g.accumulated)} / {money(g.target)} "
                     f"· ETA {eta} · {track}"

@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import date as Date
 from decimal import Decimal
 
+from ..domain.dates import display_date
 from ..domain.errors import (
     IllegalTransition,
     MissingRate,
@@ -89,7 +90,7 @@ def transfer_confirmation(
 def fx_set(fr: FxRate) -> str:
     # Strip trailing zeros while preserving significant digits
     rate_str = str(fr.usd_cop) if fr.usd_cop % 1 else str(fr.usd_cop.to_integral_value())
-    return f"✅ USD→COP rate for {fr.date.isoformat()}: {rate_str}"
+    return f"✅ USD→COP rate for {display_date(fr.date)}: {rate_str}"
 
 
 def fx_current(rate, on: Date) -> str:
@@ -98,7 +99,7 @@ def fx_current(rate, on: Date) -> str:
     else:
         d = Decimal(str(rate)) if not isinstance(rate, Decimal) else rate
         rate_str = str(d) if d % 1 else str(d.to_integral_value())
-    return f"Current USD→COP rate on {on.isoformat()}: {rate_str}"
+    return f"Current USD→COP rate on {display_date(on)}: {rate_str}"
 
 
 def accounts_table(accounts: list[Account]) -> str:
@@ -140,7 +141,7 @@ def transactions_table(txs: list[Transaction]) -> str:
     for t in txs:
         total += t.to_base
         rows.append(
-            f"| {t.date.isoformat()} | {t.type.value} | {t.payee} | "
+            f"| {display_date(t.date)} | {t.type.value} | {t.payee} | "
             f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
         )
     rows.append("")
@@ -154,11 +155,11 @@ def recurring_created(item: RecurringItem) -> str:
         if item.interval_count != 1
         else item.interval_unit.value
     )
-    end = f", until {item.end_date.isoformat()}" if item.end_date else ""
+    end = f", until {display_date(item.end_date)}" if item.end_date else ""
     return (
         f"✅ Recurring **{item.name}** ({item.type.value}, {item.mode.value}) — "
         f"{money(item.amount, item.currency)} every {every}, "
-        f"from {item.start_date.isoformat()}{end}. id={item.id}"
+        f"from {display_date(item.start_date)}{end}. id={item.id}"
     )
 
 
@@ -183,14 +184,14 @@ def recurring_list(items: list[RecurringItem]) -> str:
 def payment_planned(tx: Transaction) -> str:
     return (
         f"✅ Planned payment **{tx.payee}** — {money(tx.amount, tx.currency)} "
-        f"due {tx.date.isoformat()}. id={tx.id} (not yet posted)"
+        f"due {display_date(tx.date)}. id={tx.id} (not yet posted)"
     )
 
 
 def payment_confirmed(tx: Transaction) -> str:
     return (
         f"✅ Confirmed **{tx.payee}** — {money(tx.amount, tx.currency)} "
-        f"posted on {tx.date.isoformat()}. id={tx.id}"
+        f"posted on {display_date(tx.date)}. id={tx.id}"
     )
 
 
@@ -201,7 +202,7 @@ def payment_skipped(tx: Transaction) -> str:
 def recurring_skipped(occ: RecurringOccurrence) -> str:
     return (
         f"✅ Skipped the occurrence for recurring item {occ.recurring_id} "
-        f"due {occ.due_date.isoformat()}."
+        f"due {display_date(occ.due_date)}."
     )
 
 
@@ -236,7 +237,7 @@ def to_pay_table(result: dict) -> str:
     rows = ["| id | Due | Payee | Amount | Currency | COP |", "|---|---|---|---|---|---|"]
     for t in items:
         rows.append(
-            f"| {t.id} | {t.date.isoformat()} | {t.payee} | "
+            f"| {t.id} | {display_date(t.date)} | {t.payee} | "
             f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
         )
     rows.append("")
@@ -277,7 +278,7 @@ def tag_card(tag: Tag) -> str:
 def transaction_card(tx: Transaction) -> str:
     return (
         f"Transaction **{tx.payee}** (id={tx.id}, {tx.type.value}, {tx.status.value}, "
-        f"{tx.date.isoformat()}) — {money(tx.amount, tx.currency)} "
+        f"{display_date(tx.date)}) — {money(tx.amount, tx.currency)} "
         f"({money(tx.to_base, 'COP')})"
     )
 
@@ -329,7 +330,7 @@ def goals_table(goals) -> str:
     for g in goals:
         kind = "defined" if g.target_amount is not None else "open-ended"
         target = cents_to_major(g.target_amount) if g.target_amount is not None else "—"
-        deadline = g.deadline.isoformat() if g.deadline is not None else "—"
+        deadline = display_date(g.deadline) if g.deadline is not None else "—"
         rows.append(
             f"| id={g.id} | {g.name} | {g.status.value} ({kind}) | "
             f"{cents_to_major(g.monthly_amount)} COP | {target} | {deadline} |"

@@ -96,7 +96,7 @@ def test_transfer_same_account_returns_imbalance_text(session, seeded):
 
 def test_set_fx_rate_confirms(session):
     out = core.set_fx_rate(session, SetFxRateInput(date=date(2026, 6, 18), usd_cop=4150))
-    assert "USD→COP rate for 2026-06-18" in out
+    assert "USD→COP rate for Thu, 18 Jun 2026" in out
     assert "4150" in out
 
 

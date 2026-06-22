@@ -51,6 +51,13 @@ def test_money_renders_major_units_and_currency():
     assert format.money(4_000_000, "COP") == "40000.00 COP"
 
 
+def test_display_date_renders_app_wide_format():
+    # 2026-05-10 is a Sunday
+    assert format.display_date(date(2026, 5, 10)) == "Sun, 10 May 2026"
+    assert format.display_date(date(2026, 6, 18)) == "Thu, 18 Jun 2026"
+    assert format.display_date(date(2026, 1, 1)) == "Thu, 1 Jan 2026"
+
+
 def test_missing_rate_uses_canonical_sentence():
     text = format.domain_error_text(MissingRate("set usd_cop rate for 2026-06-18"))
     assert "USD→COP" in text
@@ -102,9 +109,9 @@ def test_transfer_confirmation_lists_both_balances():
 
 def test_fx_set_and_current():
     fr = FxRate(date=date(2026, 6, 18), usd_cop=Decimal("4150"))
-    assert "2026-06-18" in format.fx_set(fr) and "4150" in format.fx_set(fr)
+    assert "Thu, 18 Jun 2026" in format.fx_set(fr) and "4150" in format.fx_set(fr)
     assert format.fx_current(Decimal("4150"), date(2026, 6, 18)) == (
-        "Current USD→COP rate on 2026-06-18: 4150"
+        "Current USD→COP rate on Thu, 18 Jun 2026: 4150"
     )
 
 
@@ -181,7 +188,7 @@ def test_transaction_card():
     )
     text = format.transaction_card(tx)
     assert "Lunch" in text and "50000.00 COP" in text
-    assert "2026-06-18" in text and "id=42" in text
+    assert "Thu, 18 Jun 2026" in text and "id=42" in text
 
 
 def test_settings_card():

@@ -11,6 +11,7 @@ import { ApiError, applyApiErrorsToForm } from "@/lib/api"
 import { listAccounts } from "@/lib/api/accounts"
 import { getFx, setFx } from "@/lib/api/fx"
 import { getSettings, updateSettings } from "@/lib/api/settings"
+import { formatDate } from "@/lib/date"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input, Label } from "@/ui"
 import { type SetFxRateValues, setFxRateSchema } from "./settings.schema"
@@ -119,7 +120,7 @@ export default function SettingsPage() {
             : fxMissing
               ? "Sin tasa registrada"
               : fx.data
-                ? `${fx.data.usd_cop} (${fx.data.date})`
+                ? `${fx.data.usd_cop} (${formatDate(fx.data.date)})`
                 : "—"}
         </p>
         <form

@@ -16,9 +16,10 @@ import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import { formatDate, isOverdue } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
-import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
+import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
 
 type Scope = "week" | "month"
@@ -173,13 +174,32 @@ export default function ToPayPage() {
             <EmptyState message="Nada pendiente en este periodo." />
           ) : (
             <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-              {list.data.items.map((item) => (
-                <li key={item.id} className="flex items-center justify-between gap-4 py-3">
+              {list.data.items.map((item) => {
+                const overdue = isOverdue(item.date)
+                return (
+                <li
+                  key={item.id}
+                  className="relative flex items-center justify-between gap-4 py-3 pl-3"
+                >
+                  {overdue && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 w-[2px] rounded-full"
+                      style={{ background: "var(--destructive)" }}
+                    />
+                  )}
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{item.payee || "—"}</p>
-                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                      {item.date}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-medium">{item.payee || "—"}</p>
+                      {overdue && <Badge variant="destructive">Vencido</Badge>}
+                    </div>
+                    <time
+                      dateTime={item.date}
+                      className="text-xs"
+                      style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}
+                    >
+                      {formatDate(item.date)}
+                    </time>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <MoneyAmount
@@ -200,7 +220,8 @@ export default function ToPayPage() {
                     </Button>
                   </div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </>

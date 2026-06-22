@@ -23,7 +23,7 @@ def test_list_tags(session, seeded):
 def test_get_fx_rate_returns_rate(session):
     fx.set_fx_rate(session, date(2026, 6, 18), "4150")
     out = core.get_fx_rate(session, GetFxRateInput(date=date(2026, 6, 18)))
-    assert "4150" in out and "2026-06-18" in out
+    assert "4150" in out and "Thu, 18 Jun 2026" in out
 
 
 def test_get_fx_rate_missing_returns_text(session):

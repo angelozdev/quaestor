@@ -10,6 +10,7 @@ import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { assignBudget, listBudgets, safeToSpend } from "@/lib/api/budgets"
 import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { formatDate } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input } from "@/ui"
@@ -131,7 +132,7 @@ export default function BudgetsPage() {
                 {sts.data.committed_breakdown.map((c) => (
                   <Row
                     key={`${c.kind}-${c.name}-${c.date}-${c.amount}`}
-                    label={`${c.name} · ${c.date}`}
+                    label={`${c.name} · ${formatDate(c.date)}`}
                     value={formatCents(c.amount, "COP")}
                   />
                 ))}

@@ -71,7 +71,7 @@ def test_render_headline_and_section_order():
 
 def test_render_goal_eta_only_on_defined_goals():
     out = render_markdown(_full_report())
-    assert "Trip" in out and "ETA 2026-12-01" in out and "on track" in out
+    assert "Trip" in out and "ETA Tue, 1 Dec 2026" in out and "on track" in out
     assert "Buffer" in out and "open-ended" in out
 
 

@@ -7,8 +7,10 @@ import { toast } from "sonner"
 import { ErrorState } from "@/components/error-state"
 import { MoneyAmount } from "@/components/money-amount"
 import { confirmPayment, toPay } from "@/lib/api/planned"
+import { formatDate, isOverdue } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
+import { Badge } from "@/ui"
 
 type Scope = "week" | "month"
 
@@ -115,17 +117,26 @@ export function ToPayWidget() {
             </p>
           ) : (
             <ul className="space-y-0">
-              {query.data.items.map((item) => (
+              {query.data.items.map((item) => {
+                const overdue = isOverdue(item.date)
+                return (
                 <li
                   key={item.id}
                   className="flex items-center justify-between py-2.5 border-t gap-4"
                   style={{ borderColor: "var(--border)" }}
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{item.payee}</p>
-                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                      {item.date}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{item.payee}</p>
+                      {overdue && <Badge variant="destructive">Vencido</Badge>}
+                    </div>
+                    <time
+                      dateTime={item.date}
+                      className="text-xs"
+                      style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}
+                    >
+                      {formatDate(item.date)}
+                    </time>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
                     <MoneyAmount
@@ -158,7 +169,8 @@ export function ToPayWidget() {
                     </button>
                   </div>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           )}
         </>

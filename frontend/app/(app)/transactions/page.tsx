@@ -17,6 +17,7 @@ import { listTags } from "@/lib/api/tags"
 import { deleteTransaction, listTransactions } from "@/lib/api/transactions"
 import type { Transaction, TransactionFilters, TxStatus, TxType } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
+import { formatDate } from "@/lib/date"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input, Select } from "@/ui"
 
@@ -98,7 +99,7 @@ export default function TransactionsPage() {
   })
 
   const columns: Column<Transaction>[] = [
-    { key: "date", header: "Fecha", render: (t) => t.date },
+    { key: "date", header: "Fecha", render: (t) => formatDate(t.date) },
     {
       key: "payee",
       header: "Beneficiario",
