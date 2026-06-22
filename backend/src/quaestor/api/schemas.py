@@ -153,7 +153,7 @@ class TransactionOut(BaseModel):
     status: TxStatus
     amount: int
     currency: str
-    fx_rate: Decimal
+    fx_rate: Decimal | None = None
     to_base: int
     account_id: int
     category_id: int | None
