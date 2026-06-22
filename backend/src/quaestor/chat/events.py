@@ -22,7 +22,7 @@ from .llm.provider import LLMEvent, LLMEventType
 
 def render_sse(payload: dict[str, Any]) -> bytes:
     """Render one SSE message: `data: <json>\\n\\n`."""
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n".encode("utf-8")
+    return f"data: {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}\n\n".encode("utf-8")
 
 
 def done_bytes() -> bytes:
