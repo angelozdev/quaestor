@@ -22,7 +22,8 @@ async function proxy(req: NextRequest, path: string[]) {
     cache: "no-store",
   })
 
-  const res = new NextResponse(await upstream.text(), { status: upstream.status })
+  const noBody = upstream.status === 204 || upstream.status === 205 || upstream.status === 304
+  const res = new NextResponse(noBody ? null : await upstream.text(), { status: upstream.status })
   const upstreamContentType = upstream.headers.get("content-type")
   if (upstreamContentType) res.headers.set("content-type", upstreamContentType)
   for (const c of upstream.headers.getSetCookie()) res.headers.append("set-cookie", c)
