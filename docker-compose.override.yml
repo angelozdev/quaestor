@@ -1,0 +1,96 @@
+# Auto-merged with docker-compose.yml by Compose.
+# `docker compose up` runs this dev stack by default.
+#
+# To run the production stack explicitly (skipping this override):
+#   docker compose -f docker-compose.yml up -d
+#
+# To run the dev stack PLUS the prod-only services (rare):
+#   docker compose --profile never up
+
+services:
+  api:
+    build:
+      context: ./backend
+      target: dev
+    env_file:
+      - ./backend/.env.local
+    environment:
+      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
+      COOKIE_SECURE: "false"
+    command: >-
+      uv run uvicorn quaestor.api:app
+      --host 0.0.0.0 --port 8000
+      --reload --reload-dir /app/src
+    volumes:
+      - ./backend/src:/app/src:rw
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./backend/scripts:/app/scripts:ro
+      - ./.dev-data:/.dev-data
+
+  mcp:
+    build:
+      context: ./backend
+      target: dev
+    env_file:
+      - ./backend/.env.local
+    environment:
+      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
+      MCP_RELOAD: "1"
+    command: ["uv", "run", "python", "-m", "quaestor.mcp"]
+    volumes:
+      - ./backend/src:/app/src:rw
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/uv.lock:/app/uv.lock:ro
+      - ./.dev-data:/.dev-data
+
+  frontend:
+    env_file:
+      - ./frontend/.env.local
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    command: ["pnpm", "dev"]
+    volumes:
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - ./frontend/ui:/app/ui
+      - ./frontend/public:/app/public
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./frontend/next.config.ts:/app/next.config.ts:ro
+      - ./frontend/biome.json:/app/biome.json:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - frontend_node_modules:/app/node_modules
+
+  scheduler:
+    build:
+      context: ./backend
+      target: dev
+    env_file:
+      - ./backend/.env.local
+    environment:
+      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
+    command:
+      - sh
+      - -c
+      - |
+        trap 'exit 0' TERM INT
+        echo 'scheduler ready (manual trigger only)'
+        while true; do
+          sleep 86400 &
+          wait $$!
+        done
+    volumes:
+      - ./.dev-data:/.dev-data
+
+  # Inherited from docker-compose.yml but skipped in dev:
+  caddy:
+    profiles: ["never"]
+  tailscale:
+    profiles: ["never"]
+  litestream:
+    profiles: ["never"]
+
+volumes:
+  frontend_node_modules:
