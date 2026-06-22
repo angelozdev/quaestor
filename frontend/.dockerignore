@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+.gitignore
+.env
+.env.local
+.env.production
+tests
+coverage
+*.log
+.DS_Store
+docker
