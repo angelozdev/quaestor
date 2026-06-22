@@ -57,6 +57,12 @@ On the user's machine (must be on the tailnet), `~/.claude/mcp.json`:
 Cloud MCP clients (claude.ai web) cannot reach `/mcp`; only machines on the
 tailnet can. This is by design.
 
+**Note:** `ts-serve.json` uses `${TS_HOSTNAME:-quaestor-mcp}` as the hostname key.
+If you override `TS_HOSTNAME` in `.env` (e.g. to avoid a tailnet name collision),
+you MUST also edit `ts-serve.json` to match — the JSON key is a literal string,
+not a runtime expansion. Compose keeps the two defaults in sync; custom values
+require manual edits to both files.
+
 ## Scheduler
 
 `scheduler` runs `scripts/cron.sh` in a 24h loop, calling

@@ -24,12 +24,6 @@ node_modules/
 .next/
 out/
 
-# Env
-.env
-.env.local
-.env.production
-.envrc
-
 # OS
 .DS_Store
 
