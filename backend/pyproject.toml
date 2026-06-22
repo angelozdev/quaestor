@@ -5,6 +5,7 @@ description = "Quaestor — personal finance backend (P0 core)"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.137.2",
+    "fastmcp>=3,<4",
     "httpx>=0.28.1",
     "itsdangerous>=2.2.0",
     "litellm>=1.40",
