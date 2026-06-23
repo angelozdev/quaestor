@@ -16,7 +16,7 @@ Every task must satisfy these without re-stating them. Values copied verbatim fr
 
 - **Next.js 16.2.9** has breaking changes vs prior majors — read `frontend/AGENTS.md` and consult `node_modules/next/dist/docs/01-app/` before writing any code that touches routing, layouts, or client/server boundaries.
 - **React 19.2.4** — peer dep match for `@ai-sdk/react@^3` (`^18 || ~19.0.1 || ~19.1.2 || ^19.2.1`).
-- **`@ai-sdk/react@^3` exports:** `useChat`, `type UIMessage`, `type CreateUIMessage`. **`ai@^6` exports:** `DefaultChatTransport`, `isTextUIPart`, `isToolUIPart`, `getToolName`, `type TextUIPart`, `type ToolUIPart`, `type DynamicToolUIPart`, `type UIMessagePart`. Verified against npm registry 2026-06-22.
+- **`@ai-sdk/react@^3` exports:** `useChat`, plus re-exports `UIMessage` and `CreateUIMessage` from `ai` (so importing `UIMessage` from either `@ai-sdk/react` OR `ai` works — both resolve to the same canonical type defined in `ai@^6`). **`ai@^6` exports:** `DefaultChatTransport`, `isTextUIPart`, `isToolUIPart`, `getToolName`, `type TextUIPart`, `type ToolUIPart`, `type DynamicToolUIPart`, `type UIMessagePart`, `type UIMessage`. This plan imports `UIMessage` from `ai` consistently (canonical source); do not switch sources mid-file. Verified against npm registry 2026-06-22.
 - **`useChat` API (v3):** `useChat({ transport?: ChatTransport<UI_MESSAGE>, onFinish?, onError?, id?, messages?, generateId?, ... })` returns `{ messages, sendMessage, stop, regenerate, status, error, setMessages, clearError, resumeStream, addToolResult, addToolOutput, addToolApprovalResponse, id }`. `status: 'submitted' | 'streaming' | 'ready' | 'error'`. `sendMessage({ text: string, files?: FileList | FileUIPart[] })`.
 - **`ChatTransport`:** pass `transport: new DefaultChatTransport({ api: '/api/chat' })`. `api` defaults to `'/api/chat'`, so we can omit it, but include explicitly for clarity.
 - **`onFinish` signature:** `(event: { messages, isContinuation, isAborted, responseMessage, finishReason? }) => void`. Use it to invalidate dashboard queries.
@@ -27,7 +27,11 @@ Every task must satisfy these without re-stating them. Values copied verbatim fr
 - **Color tokens (oklch):** `--primary` mint (`oklch(0.82 0.16 165)` dark / `0.7 0.15 165` light), `--income` (`0.8 0.16 158` dark / `0.52 0.13 158` light), `--expense` (`0.7 0.18 22` dark / `0.53 0.2 27` light), `--destructive`, `--border`, `--muted`, `--muted-foreground`, `--popover`, `--card`. Use these via inline `style={{ color: 'var(--primary)' }}` or via Tailwind classes that map to the token (e.g. `text-primary`, `bg-muted`). DO NOT introduce new colors.
 - **No new component primitives:** the chat uses existing `ui/components/{button,input,textarea,card,badge,skeleton}` plus inline styled wrappers. No new shadcn primitive.
 - **No new design-system tokens:** keyframes (`blink-cursor`, `chat-underline-sweep`) and the utility class `.chat-input-underline` go at the END of `frontend/app/globals.css`, outside `@layer base`, mirroring the existing `animate-fade-up` pattern. NEVER edit `frontend/ui/styles/*` (rule from ADR-0002).
-- **Spanish (es-CO) copy** for all user-facing strings: `Pregúntale a tu asistente`, `Puede leer tus cuentas, transacciones, presupuestos y metas.`, `¿Cuánto puedo gastar este mes?`, `Lista mis cuentas y sus saldos`, `Dame el resumen del mes`, `Pensando…`, `Reintentar`, `No pudimos contactar al servidor`, etc.
+- **Spanish (es-CO) copy** for all user-facing strings: `Pregúntale a tu asistente`, `Puede leer tus cuentas, transacciones, presupuestos y metas.`, `¿Cuánto puedo gastar este mes?`, `Lista mis cuentas y sus saldos`, `Dame el resumen del mes`, `Pensando…`, `Reintentar`, `No pudimos contactar al servidor`, `Tu mensaje es muy largo. Acórtalo e intenta de nuevo.`, `No pude procesar tu mensaje. Reformúlalo e intenta otra vez.`, `Demasiadas solicitudes. Espera un momento e intenta de nuevo.`, `No pude completar tu solicitud. Vuelve a intentarlo.`, `Algo salió mal. Vuelve a intentarlo en un momento.` Raw backend `error.message` is NEVER rendered to the user — always routed through `translateChatError()` in `lib/chat-errors.ts`.
+- **Error translation:** every `useChat` error reaches the DOM via `translateChatError(error: Error): string` (Task 7.5). Mapping table mirrors the spec's Errors section. Untranslated/unmatched errors fall through to the generic fallback string. The raw error is logged via `console.error` only — no telemetry beacon in v1.
+- **Input cap:** `ChatInput`'s `<textarea>` declares `maxLength={32000}` mirroring the backend 32 KB cap (Task 4.3). Pasted content beyond this is silently truncated by the browser.
+- **Send cooldown:** after a successful `onSend`, the send button is disabled for 600 ms (`cooldownMs={600}` prop; defaults inside ChatInput). UX guard against accidental double-submit, NOT a rate limit (server-side rate limiting is a backend concern).
+- **Sensitive output:** `ChatToolChip` JSON `<pre>` blocks render with `data-sensitive="true"` so future telemetry scrubbers / screen-share blockers / password managers can honor it. No active masking in v1.
 - **Reduced-motion:** `@media (prefers-reduced-motion: reduce)` MUST disable both `blink-cursor` animation AND `chat-underline-sweep` animation. Tool-chip pulsing dot falls back to static mint dot.
 - **Bundle discipline:** `@ai-sdk/react@^3` is the only runtime dep added (~35 KB gzipped with `ai@^6` transitive). No other `package.json` changes. `packageManager: pnpm@11.3.0` untouched.
 - **Test layout:** colocate test files next to components (`components/chat/chat-section.test.tsx`, matching existing `form-field.test.tsx` / `entity-form-dialog.test.tsx` pattern). Vitest config already supports `@/` alias and happy-dom env — no test config changes.
@@ -408,6 +412,25 @@ describe("ChatToolChip", () => {
     expect(screen.queryByText(/[{}]/)).not.toBeInTheDocument()
     expect(screen.getByText("ok")).toBeInTheDocument()
   })
+
+  it("marks expanded JSON <pre> blocks with data-sensitive='true'", async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <ChatToolChip
+        part={dynamicPart({
+          state: "output-available",
+          input: { secret: "hunter2" },
+          output: "7 accounts",
+        })}
+      />,
+    )
+    await user.click(screen.getByRole("button", { name: /list_accounts/i }))
+    const pres = container.querySelectorAll("pre[data-sensitive]")
+    expect(pres.length).toBeGreaterThanOrEqual(2)
+    pres.forEach((el) => {
+      expect(el.getAttribute("data-sensitive")).toBe("true")
+    })
+  })
 })
 ```
 
@@ -540,6 +563,7 @@ export function ChatToolChip({ part }: Props) {
                 Input
               </p>
               <pre
+                data-sensitive="true"
                 className="overflow-auto font-mono text-xs leading-relaxed"
                 style={{ maxHeight: "160px", color: "var(--foreground)" }}
               >
@@ -555,6 +579,7 @@ export function ChatToolChip({ part }: Props) {
               {errored ? "Error" : "Output"}
             </p>
             <pre
+              data-sensitive="true"
               className="overflow-auto whitespace-pre-wrap font-mono text-xs leading-relaxed"
               style={{ maxHeight: "160px", color: "var(--foreground)" }}
             >
@@ -574,7 +599,7 @@ Run:
 ```bash
 cd frontend && pnpm test components/chat/chat-tool-chip.test.tsx
 ```
-Expected: `6 passed`.
+Expected: `7 passed`.
 
 - [ ] **Step 3.5: Commit**
 
@@ -704,10 +729,14 @@ type Props = {
   onSend: (text: string) => void
   onStop: () => void
   autoFocus?: boolean
+  maxLength?: number
+  cooldownMs?: number
 }
 
 const MAX_LINES = 6
 const LINE_HEIGHT_PX = 22 // matches text-base leading; tweak if global typography changes.
+const DEFAULT_MAX_LENGTH = 32000 // mirrors backend 32 KB cap (ADR-0014).
+const DEFAULT_COOLDOWN_MS = 600 // UX guard against double-submit; NOT a rate limit.
 
 function autoGrow(el: HTMLTextAreaElement | null) {
   if (!el) return
@@ -721,8 +750,16 @@ function autoGrow(el: HTMLTextAreaElement | null) {
 const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect
 
-export function ChatInput({ status, onSend, onStop, autoFocus = true }: Props) {
+export function ChatInput({
+  status,
+  onSend,
+  onStop,
+  autoFocus = true,
+  maxLength = DEFAULT_MAX_LENGTH,
+  cooldownMs = DEFAULT_COOLDOWN_MS,
+}: Props) {
   const [text, setText] = useState("")
+  const [cooldown, setCooldown] = useState(false)
   const ref = useRef<HTMLTextAreaElement | null>(null)
 
   useIsoLayoutEffect(() => {
@@ -737,13 +774,22 @@ export function ChatInput({ status, onSend, onStop, autoFocus = true }: Props) {
   }, [autoFocus, status])
 
   const busy = status === "submitted" || status === "streaming"
+  const blocked = busy || cooldown
+
+  function fireSend() {
+    onSend(text)
+    setText("")
+    if (cooldownMs > 0) {
+      setCooldown(true)
+      setTimeout(() => setCooldown(false), cooldownMs)
+    }
+  }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      if (!busy && text.trim().length > 0) {
-        onSend(text)
-        setText("")
+      if (!blocked && text.trim().length > 0) {
+        fireSend()
       }
       return
     }
@@ -756,9 +802,8 @@ export function ChatInput({ status, onSend, onStop, autoFocus = true }: Props) {
   function handleClickAction() {
     if (busy) {
       onStop()
-    } else if (text.trim().length > 0) {
-      onSend(text)
-      setText("")
+    } else if (!cooldown && text.trim().length > 0) {
+      fireSend()
     }
   }
 
@@ -773,6 +818,7 @@ export function ChatInput({ status, onSend, onStop, autoFocus = true }: Props) {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
         disabled={busy}
+        maxLength={maxLength}
         rows={1}
         aria-label="Mensaje para el asistente"
         placeholder={busy ? "Pensando…" : "Pregúntale algo a tu asistente…"}
@@ -792,7 +838,7 @@ export function ChatInput({ status, onSend, onStop, autoFocus = true }: Props) {
           background: "var(--primary)",
           color: "var(--primary-foreground)",
         }}
-        disabled={!busy && text.trim().length === 0}
+        disabled={!busy && (cooldown || text.trim().length === 0)}
       >
         {busy ? <Square className="size-4" /> : <Send className="size-4" />}
       </button>
@@ -1364,19 +1410,238 @@ git commit -m "feat(chat): ChatThread scrollable list with smart auto-scroll"
 ## Task 8: ChatSection component (top-level, owns `useChat`)
 
 **Files:**
-- Create: `frontend/components/chat/chat-section.tsx`
-- Test: `frontend/components/chat/chat-section.test.tsx`
+- Create: `frontend/lib/chat-errors.ts` — `translateChatError(error: Error): string`.
+- Create: `frontend/lib/chat-errors.test.ts` — one assertion per Errors-table row + fallback.
+- Create: `frontend/components/chat/chat-error-banner.tsx` — `ChatErrorBanner` with translated copy, close `×`, optional Reintentar.
+- Modify: `frontend/lib/query.ts` — add `chatAssistantTurn` group to `INVALIDATION`.
+- Create: `frontend/components/chat/chat-section.tsx`.
+- Test:   `frontend/components/chat/chat-section.test.tsx` (8 tests, see Step 8.1).
 
 **Interfaces:**
 - Produces `<ChatSection />`. Consumers: `app/(app)/page.tsx` (Task 9).
 - Owns `useChat({ transport, onFinish })` from `@ai-sdk/react`.
-- Reads TanStack Query client via `useQueryClient()` to invalidate dashboard queries on finish.
+- Reads TanStack Query client via `useQueryClient()` and calls `invalidate(qc, 'chatAssistantTurn')` on finish.
 - Renders:
-  - `<ChatErrorBanner />` when `status === 'error'` (inline above the input).
+  - `<ChatErrorBanner />` when `status === 'error'` (inline above the input, dismissable, translates `error.message` to es-CO).
   - `<ChatEmptyState />` when `messages.length === 0 && status === 'ready'`.
   - `<ChatThread />` when `messages.length > 0`.
   - `<ChatInput />` always at the bottom.
-- Test mocks `@ai-sdk/react` via `vi.mock` so tests are deterministic without a live SSE.
+- Test mocks `@ai-sdk/react` via `vi.mock` (hoisted with `vi.hoisted` + `beforeEach` reset, see Test isolation in Global Constraints) so tests are deterministic without a live SSE.
+
+- [ ] **Step 8.0a: Add `chatAssistantTurn` invalidation group**
+
+Edit `frontend/lib/query.ts`. Inside the `INVALIDATION` const, add a new entry:
+
+```typescript
+chatAssistantTurn: [
+  [ROOTS.transactions],
+  [ROOTS.planned],
+  [ROOTS.accounts],
+  [ROOTS.budgets],
+  [ROOTS.goals],
+  [ROOTS.reports],
+  [ROOTS.recurring],
+],
+```
+
+The group is broad (every entity any of the 52 MCP tools can mutate) but scoped — `settings`, `fx`, `tags`, `categories`, `categoryGroups` are excluded because no chat tool mutates them in v1. Re-evaluate when adding tool surfaces.
+
+Verify:
+```bash
+cd frontend && pnpm typecheck
+```
+Expected: clean.
+
+- [ ] **Step 8.0b: Write the failing test for `translateChatError`**
+
+Create `frontend/lib/chat-errors.test.ts`:
+```typescript
+import { describe, expect, it } from "vitest"
+import { translateChatError } from "./chat-errors"
+
+describe("translateChatError", () => {
+  it("maps network failures to the offline copy", () => {
+    expect(translateChatError(new Error("fetch failed"))).toBe(
+      "No pudimos contactar al servidor",
+    )
+    expect(translateChatError(new TypeError("Failed to fetch"))).toBe(
+      "No pudimos contactar al servidor",
+    )
+  })
+
+  it("maps 413 / too-large messages to the length copy", () => {
+    expect(translateChatError(new Error("message content exceeds 32 KB"))).toBe(
+      "Tu mensaje es muy largo. Acórtalo e intenta de nuevo.",
+    )
+  })
+
+  it("maps 422 validation errors to the reformulate copy", () => {
+    const err = new Error("Unprocessable Entity")
+    ;(err as Error & { status?: number }).status = 422
+    expect(translateChatError(err)).toBe(
+      "No pude procesar tu mensaje. Reformúlalo e intenta otra vez.",
+    )
+  })
+
+  it("maps 429 rate-limit errors to the wait copy", () => {
+    const err = new Error("Too Many Requests")
+    ;(err as Error & { status?: number }).status = 429
+    expect(translateChatError(err)).toBe(
+      "Demasiadas solicitudes. Espera un momento e intenta de nuevo.",
+    )
+  })
+
+  it("falls back to the generic copy on unknown errors", () => {
+    expect(translateChatError(new Error("something exotic"))).toBe(
+      "Algo salió mal. Vuelve a intentarlo en un momento.",
+    )
+  })
+})
+```
+
+Run:
+```bash
+cd frontend && pnpm test lib/chat-errors.test.ts
+```
+Expected: FAIL with module-not-found.
+
+- [ ] **Step 8.0c: Create the error translator**
+
+Create `frontend/lib/chat-errors.ts`:
+```typescript
+/**
+ * Maps a raw `useChat` error to a small allowlist of es-CO user-facing
+ * strings. The raw `error.message` is NEVER rendered verbatim — Pydantic
+ * detail strings can leak schema internals (OWASP A02 information
+ * disclosure). The raw error is still logged via `console.error` for
+ * diagnostic purposes; the user only sees the translated copy.
+ *
+ * Errors carry `status` only when the transport layer attached it; many
+ * fetch failures arrive as plain `Error` / `TypeError`, so message regex
+ * is the primary discriminator.
+ */
+type WithStatus = { status?: number }
+
+const NETWORK_RX = /fetch failed|Failed to fetch|NetworkError|ERR_NETWORK/i
+const TOO_LARGE_RX = /exceeds.*KB|too large|413/i
+
+export function translateChatError(error: Error): string {
+  const status = (error as Error & WithStatus).status
+  const msg = error.message ?? ""
+
+  if (status === 413 || TOO_LARGE_RX.test(msg)) {
+    return "Tu mensaje es muy largo. Acórtalo e intenta de nuevo."
+  }
+  if (status === 422) {
+    return "No pude procesar tu mensaje. Reformúlalo e intenta otra vez."
+  }
+  if (status === 429) {
+    return "Demasiadas solicitudes. Espera un momento e intenta de nuevo."
+  }
+  if (NETWORK_RX.test(msg)) {
+    return "No pudimos contactar al servidor"
+  }
+  // Backend SSE error event surfaces as Error with errorText in message.
+  if (msg.startsWith("errorText:") || /no pude completar/i.test(msg)) {
+    return "No pude completar tu solicitud. Vuelve a intentarlo."
+  }
+  // Diagnostic log; never reaches the DOM.
+  // biome-ignore lint/suspicious/noConsole: intentional diagnostic.
+  console.error("[chat] untranslated error:", error)
+  return "Algo salió mal. Vuelve a intentarlo en un momento."
+}
+```
+
+Run:
+```bash
+cd frontend && pnpm test lib/chat-errors.test.ts
+```
+Expected: `5 passed`.
+
+Commit:
+```bash
+git add frontend/lib/chat-errors.ts frontend/lib/chat-errors.test.ts
+git commit -m "feat(chat): translateChatError es-CO error mapping"
+```
+
+- [ ] **Step 8.0d: Create the `ChatErrorBanner` component**
+
+Create `frontend/components/chat/chat-error-banner.tsx`:
+```tsx
+"use client"
+
+import { X } from "lucide-react"
+import { useEffect, useState } from "react"
+import { translateChatError } from "@/lib/chat-errors"
+
+type Props = {
+  error: Error
+  onRetry?: () => void
+}
+
+export function ChatErrorBanner({ error, onRetry }: Props) {
+  const [dismissed, setDismissed] = useState(false)
+  const message = translateChatError(error)
+
+  // Reset dismissed when a new error arrives (different message text).
+  useEffect(() => {
+    setDismissed(false)
+  }, [message])
+
+  if (dismissed) return null
+
+  return (
+    <div
+      role="alert"
+      className="mx-1 mb-1 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
+      style={{
+        borderColor: "var(--destructive)",
+        color: "var(--destructive)",
+        background: "color-mix(in oklch, var(--destructive) 6%, transparent)",
+      }}
+    >
+      <span>{message}</span>
+      <div className="flex items-center gap-2">
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded border px-2 py-1 transition-opacity hover:opacity-80"
+            style={{
+              borderColor: "var(--destructive)",
+              color: "var(--destructive)",
+              background: "transparent",
+            }}
+          >
+            Reintentar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          aria-label="Cerrar mensaje de error"
+          className="grid size-6 place-items-center rounded transition-opacity hover:opacity-80"
+          style={{ color: "var(--destructive)" }}
+        >
+          <X className="size-3" />
+        </button>
+      </div>
+    </div>
+  )
+}
+```
+
+Verify:
+```bash
+cd frontend && pnpm typecheck
+```
+Expected: clean. (No standalone test file for this component — coverage comes from `chat-section.test.tsx` tests #7 and #8.)
+
+Commit:
+```bash
+git add frontend/components/chat/chat-error-banner.tsx
+git commit -m "feat(chat): ChatErrorBanner with translated copy + dismissable ×"
+```
 
 - [ ] **Step 8.1: Write the failing test**
 
@@ -1482,6 +1747,46 @@ describe("ChatSection", () => {
     await user.click(screen.getByRole("button", { name: /Reintentar/i }))
     expect(regenerate).toHaveBeenCalledTimes(1)
   })
+
+  it("renders the es-CO translated copy, NOT the raw error.message", () => {
+    mockMessages = []
+    mockStatus = "error"
+    mockError = new Error("message content exceeds 32 KB")
+    render(withQueryClient(<ChatSection />))
+    const banner = screen.getByRole("alert")
+    // Translated copy, not the raw Pydantic / framework string.
+    expect(banner).toHaveTextContent(/Tu mensaje es muy largo\. Acórtalo e intenta de nuevo\./)
+    expect(banner).not.toHaveTextContent(/message content exceeds 32 KB/)
+  })
+
+  it("close × button dismisses the banner", async () => {
+    const user = userEvent.setup()
+    mockMessages = []
+    mockStatus = "error"
+    mockError = new Error("boom")
+    render(withQueryClient(<ChatSection />))
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", { name: /Cerrar mensaje de error/i }),
+    )
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
+  it("a new error message re-shows the banner after dismissal", async () => {
+    const user = userEvent.setup()
+    mockMessages = []
+    mockStatus = "error"
+    mockError = new Error("boom")
+    const { rerender } = render(withQueryClient(<ChatSection />))
+    await user.click(
+      screen.getByRole("button", { name: /Cerrar mensaje de error/i }),
+    )
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+    // Simulate a fresh error arriving.
+    mockError = new Error("fetch failed")
+    rerender(withQueryClient(<ChatSection />))
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+  })
 })
 ```
 
@@ -1503,8 +1808,9 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useChat } from "@ai-sdk/react"
 import { useMemo } from "react"
 import { createChatTransport } from "@/lib/chat-transport"
-import { qk } from "@/lib/query"
+import { invalidate } from "@/lib/query"
 import { ChatEmptyState } from "./chat-empty-state"
+import { ChatErrorBanner } from "./chat-error-banner"
 import { ChatInput } from "./chat-input"
 import { ChatThread } from "./chat-thread"
 
@@ -1516,9 +1822,12 @@ export function ChatSection() {
   const { messages, sendMessage, stop, status, error, regenerate } = useChat({
     transport,
     onFinish: () => {
-      // Invalidate all dashboard data sources so any cards the assistant touched
-      // (accounts, transactions, budgets, goals, to-pay) reflect fresh data.
-      qc.invalidateQueries()
+      // Scoped invalidation: only the entity roots the 52 MCP tools may have
+      // mutated. NEVER call qc.invalidateQueries() with no args — that wipes
+      // settings/preferences/categories the chat cannot touch, deviates from
+      // the codebase pattern (to-pay-widget.tsx, every mutation hook), and
+      // forces unrelated cards to refetch on every assistant turn.
+      invalidate(qc, "chatAssistantTurn")
     },
   })
 
@@ -1554,29 +1863,7 @@ export function ChatSection() {
         )}
 
         {status === "error" && error && (
-          <div
-            role="alert"
-            className="mx-1 mb-1 flex items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs"
-            style={{
-              borderColor: "var(--destructive)",
-              color: "var(--destructive)",
-              background: "color-mix(in oklch, var(--destructive) 6%, transparent)",
-            }}
-          >
-            <span>{error.message}</span>
-            <button
-              type="button"
-              onClick={() => regenerate()}
-              className="rounded border px-2 py-1 transition-opacity hover:opacity-80"
-              style={{
-                borderColor: "var(--destructive)",
-                color: "var(--destructive)",
-                background: "transparent",
-              }}
-            >
-              Reintentar
-            </button>
-          </div>
+          <ChatErrorBanner error={error} onRetry={regenerate} />
         )}
 
         <ChatInput
@@ -1596,7 +1883,7 @@ Run:
 ```bash
 cd frontend && pnpm test components/chat/chat-section.test.tsx
 ```
-Expected: `5 passed`.
+Expected: `8 passed`.
 
 - [ ] **Step 8.5: Commit**
 
@@ -1712,14 +1999,15 @@ cd frontend && pnpm test
 ```
 Expected: all tests pass. Total new tests across this plan:
 - chat-transport.test.ts: 1
+- chat-errors.test.ts: 5
 - chat-blinking-cursor.test.tsx: 3
-- chat-tool-chip.test.tsx: 6
+- chat-tool-chip.test.tsx: 7
 - chat-input.test.tsx: 8
 - chat-empty-state.test.tsx: 4
 - chat-message.test.tsx: 7
 - chat-thread.test.tsx: 5
-- chat-section.test.tsx: 5
-**Total new: 39 tests.** Pre-existing tests in the repo must remain green.
+- chat-section.test.tsx: 8
+**Total new: 48 tests.** Pre-existing tests in the repo must remain green.
 
 - [ ] **Step 9.5: Build smoke**
 
@@ -1778,8 +2066,10 @@ Running the self-review checklist against the spec.
 - ✅ Animated gradient underline on input → Task 9.1 (`@keyframes chat-underline-sweep`).
 - ✅ 3 suggested-prompt empty state with es-CO copy → Task 5.
 - ✅ React.memo on ChatMessage → Task 6.3.
-- ✅ `onFinish` invalidates dashboard queries → Task 8.3.
-- ✅ 6 unit tests on chat-section → Task 8.1 (and 33 more on sub-components, total 39).
+- ✅ `onFinish` invalidates dashboard queries → Task 8.3 (scoped to `chatAssistantTurn` group, never blanket invalidate).
+- ✅ Error translation table → Task 8.0c (`translateChatError`); `ChatErrorBanner` → Task 8.0d (dismissable `×` + Reintentar); raw `error.message` never rendered (test #6 in chat-section).
+- ✅ 8 unit tests on chat-section → Task 8.1 (and 40 more on sub-components, total 48).
+- ✅ `data-sensitive="true"` on tool input/output `<pre>` blocks → Task 3.3 + test #7 in chat-tool-chip.
 - ✅ `prefers-reduced-motion` honored → Task 9.1 (`@media` block in globals.css).
 - ✅ ARIA (aria-live, aria-expanded, aria-controls, aria-label, aria-hidden) → Task 7.3 (`<section aria-live aria-label>`), Task 3.3 (`aria-expanded`, `aria-controls`, `role=region`), Task 2.3 (`aria-hidden`), Task 5.3 (`aria-label`), Task 8.3 (`aria-label`).
 - ✅ Auto-grow textarea up to 6 lines → Task 4.3 (`MAX_LINES`, `autoGrow`).
@@ -1813,7 +2103,7 @@ Running the self-review checklist against the spec.
 
 No inconsistencies found.
 
-**Plan total:** 9 tasks, 39 new tests, 8 new components + 1 transport + 1 page mount + 1 CSS block.
+**Plan total:** 9 tasks, 48 new tests, 9 new components + 1 transport + 1 translator + 1 page mount + 1 CSS block + 1 modified `lib/query.ts` (adds `chatAssistantTurn` group).
 
 ---
 

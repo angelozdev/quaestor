@@ -16,11 +16,11 @@ This is the **frontend counterpart** to the already-shipped `POST /api/chat` SSE
 ## Scope
 
 - One new section on the existing dashboard page (`app/(app)/page.tsx`), below the 4 cards.
-- New `components/chat/*` package (8 files) holding the section, thread, message, tool chip, input, empty state, blinking cursor, and shared types.
+- New `components/chat/*` package (9 files) holding the section, thread, message, tool chip, input, empty state, blinking cursor, error banner, and shared types.
 - Install `@ai-sdk/react@^3` (peer dep `ai@^6`, installed transitively).
 - New keyframes + utility class in `app/globals.css` for two distinctive micro-interactions (blinking Bricolage cursor, animated input underline).
-- 6 unit tests colocated at `components/chat/chat-section.test.tsx` (Vitest + Testing Library).
-- Touch one existing file: `app/(app)/page.tsx` (insert `<DashboardChatSection />` at the bottom of the existing JSX).
+- 8 unit tests colocated at `components/chat/chat-section.test.tsx` (Vitest + Testing Library) + a small `lib/chat-errors.test.ts` covering the error translator.
+- Touch two existing files: `app/(app)/page.tsx` (insert `<DashboardChatSection />` at the bottom of the existing JSX) and `lib/query.ts` (add `chatAssistantTurn` invalidation group).
 
 **Out of scope:**
 - Conversation persistence (decided: in-memory only; lost on navigation/reload).
@@ -49,11 +49,13 @@ ChatSection ("use client")
        │            ├─ role=assistant → left-aligned, parts discriminated:
        │            │     ├─ isTextUIPart(part)        → <p>{part.text}</p>
        │            │     ├─ isToolUIPart(part)         → <ChatToolChip part={part} />
-       │            │     │   (covers both `tool-{name}` and `dynamic-tool` types)
+       │            │     │   (covers both `tool-{name}` and `dynamic-tool` types;
+       │            │     │    JSON <pre> blocks tagged data-sensitive="true")
        │            │     └─ if status==='streaming' && last message → <ChatBlinkingCursor />
        │            └─ role=system/tool → ignored (tool messages get collapsed into the chip's output)
        ├─ if status === 'error'      → <ChatErrorBanner error={error} onRetry={regenerate} />
-       └─ <ChatInput onSend={sendMessage} onStop={stop} status={status} />
+       │                                (translated es-CO copy via translateChatError, close × dismissable)
+       └─ <ChatInput onSend={sendMessage} onStop={stop} status={status} maxLength={32000} cooldownMs={600} />
 ```
 
 ### File map
@@ -67,8 +69,11 @@ ChatSection ("use client")
 | `frontend/components/chat/chat-empty-state.tsx` | NEW | Title + subtitle + 3 suggested-prompt chips. |
 | `frontend/components/chat/chat-input.tsx` | NEW | Auto-grow textarea + send/stop button (one button, label flips). |
 | `frontend/components/chat/chat-blinking-cursor.tsx` | NEW | Bricolage `_` glyph, `aria-hidden`. |
-| `frontend/components/chat/chat.types.ts` | NEW | Re-export `UIMessage`, `ToolUIPart` from `@ai-sdk/react` plus local helper type guards. |
+| `frontend/components/chat/chat-error-banner.tsx` | NEW | `ChatErrorBanner`: `<div role="alert">` with translated message, close `×`, and optional Reintentar. Owns the `dismissed` local state per spec contract. |
+| `frontend/components/chat/chat.types.ts` | NEW | Re-export `UIMessage`, `ToolUIPart` from `@ai-sdk/react` (which re-exports from `ai`; either source works at runtime) plus local helper type guards. |
+| `frontend/lib/chat-errors.ts` | NEW | `translateChatError(error: Error): string` — maps raw `useChat` errors to es-CO copy per the Errors table. |
 | `frontend/lib/chat-transport.ts` | NEW | Exports a factory `createChatTransport()` returning `new DefaultChatTransport({ api: '/api/chat' })`. Consumed inside `ChatSection` via `useMemo(() => createChatTransport(), [])` so the instance is stable across renders. |
+| `frontend/lib/query.ts` | MOD | Add `chatAssistantTurn` group to `INVALIDATION` (entity roots the chat may touch). |
 | `frontend/app/globals.css` | MOD | Add `@keyframes blink-cursor`, `@keyframes chat-underline-sweep`, and utility class `.chat-input-underline`. |
 | `frontend/app/(app)/page.tsx` | MOD | Append `<DashboardChatSection />` at the bottom of the existing JSX (after the grid). |
 | `frontend/package.json` | MOD | Add `@ai-sdk/react@^3` to `dependencies`. |
@@ -95,9 +100,28 @@ ChatSection ("use client")
 
 ### On-finish side effect
 
-After the final assistant message lands, call `qc.invalidateQueries()` for keys the assistant may have touched (`qk.accounts`, `qk.transactions`, `qk.budgets`, `qk.goalsProgress`, `qk.toPay`, etc.). This keeps the dashboard cards above the chat in sync without manual refresh.
+After the final assistant message lands, invalidate the entity roots the
+assistant could have mutated. **Use the existing `INVALIDATION` registry +
+`invalidate(qc, group)` helper in `lib/query.ts`** — never call
+`qc.invalidateQueries()` with no arguments (that invalidates the entire
+TanStack store, including settings/preferences the assistant cannot touch,
+and deviates from the codebase pattern enforced by `to-pay-widget.tsx` and
+every other mutation hook).
 
-Implementation: pass `onFinish` callback to `useChat` (v3 supports this) — receives `{ message }`, then `qc.invalidateQueries({ queryKey: [/* all keys */] })`. Coarse-grained invalidate is acceptable; selective invalidation is not worth the complexity for v1.
+Add a new group to `lib/query.ts`:
+
+```typescript
+chatAssistantTurn: [
+  [ROOTS.transactions], [ROOTS.planned], [ROOTS.accounts],
+  [ROOTS.budgets], [ROOTS.goals], [ROOTS.reports], [ROOTS.recurring],
+],
+```
+
+Implementation: pass `onFinish` to `useChat` and call
+`invalidate(qc, 'chatAssistantTurn')`. The group is intentionally broad
+(every entity any of the 52 MCP tools can touch) but scoped — `settings`,
+`fx`, `tags`, `categories`, `categoryGroups` are excluded because no chat
+tool mutates them in v1. Revisit the group when adding tool surfaces.
 
 ## Visual states
 
@@ -189,17 +213,77 @@ Chips disappear as soon as `messages.length > 0` (no toggle, no animation — in
 
 Surfaced via `useChat`'s `error: Error | undefined` and `regenerate()`.
 
-| Source | `error.message` shape | UX |
-|---|---|---|
-| Network failure / Caddy 502 | `"fetch failed"` or HTML | Banner: `No pudimos contactar al servidor` + Reintentar |
-| 401 (cookie expired) | axios interceptor already redirects to `/login` | Brief banner then redirect (interceptor wins) |
-| 413 (request too large) | Pydantic detail string | Banner with backend detail verbatim (e.g., `message content exceeds 32 KB`) |
-| 422 (validation) | Pydantic detail string | Banner with detail verbatim |
-| 429 (rate limit, future) | backend detail | Banner with detail + Reintentar |
-| Backend `error` SSE event (e.g., timeout) | `errorText` field | Banner: `errorText` + Reintentar |
-| Stream aborted by user (`stop()`) | — | Last assistant message shows partial text; no banner; next send resumes conversation |
+All raw `error.message` values flow through `translateChatError(error)` in
+`lib/chat-errors.ts` before reaching the DOM. The translator maps each
+shape to an allowlist of es-CO strings; unmatched errors fall back to a
+generic `Algo salió mal. Vuelve a intentarlo en un momento.` The raw
+message is logged server-side, never echoed to the user.
 
-`ChatErrorBanner`: `<div role="alert">` with error message + close `×` button + (if `regenerate` available) Reintentar. Dismissable. Does not block input — user can keep typing.
+| Source | Detection (regex / shape) | User-facing string (es-CO) |
+|---|---|---|
+| Network failure / Caddy 502 | `/fetch failed|NetworkError|Failed to fetch/i` or HTML body | `No pudimos contactar al servidor` |
+| 401 (cookie expired) | status 401 (axios interceptor handles redirect) | (no banner — redirect wins) |
+| 413 (request too large) | `/exceeds.*KB|too large/i` | `Tu mensaje es muy largo. Acórtalo e intenta de nuevo.` |
+| 422 (validation) | status 422 | `No pude procesar tu mensaje. Reformúlalo e intenta otra vez.` |
+| 429 (rate limit) | status 429 | `Demasiadas solicitudes. Espera un momento e intenta de nuevo.` |
+| Backend `error` SSE event | shape `{ errorText }` | `No pude completar tu solicitud. Vuelve a intentarlo.` |
+| Stream aborted by user (`stop()`) | — | (no banner — partial message remains) |
+| Fallback | unmatched | `Algo salió mal. Vuelve a intentarlo en un momento.` |
+
+`ChatErrorBanner`: `<div role="alert">` containing the translated message,
+a close `×` button (sets local `dismissed=true`, hides the banner until the
+next error transition), and (if `regenerate` is available) a `Reintentar`
+button. The banner does not block input — the user can keep typing while
+it is visible.
+
+## Security & authorization
+
+The chat endpoint mutates user state (LLM round-trips, MCP tool calls against
+financial data) on a cookie session. This section captures the trust posture
+the frontend inherits — these checks live in the backend / Caddy / Next rewrite
+chain, not in this PR.
+
+- **CSRF.** POST `/api/chat` rides the existing Next rewrite
+  `app/api/[...path]/route.ts` and the same session cookie used by every
+  other mutating endpoint in the app. The cookie's `SameSite` attribute (set
+  in the FastAPI session middleware) is the primary defense; the implementer
+  MUST verify `SameSite=Lax` or stricter is present before merging
+  (`grep -r SameSite backend/` and inspect the response `Set-Cookie`).
+  No CSRF token is added in this PR — chat inherits whatever posture the
+  other write endpoints rely on. If that posture is "SameSite alone",
+  document the gap in a follow-up ADR instead of inventing a chat-only
+  token scheme.
+- **Authorization.** `require_auth` on the backend accepts cookie session.
+  No frontend role-based UI gating in v1 — the chat surface is available to
+  any authenticated dashboard user, and the 52 MCP tools enforce their own
+  per-user scoping server-side (see ADR-0014). If the app introduces
+  role-based UI elsewhere, revisit this section to gate the chat entrypoint
+  the same way.
+- **Error message sanitization.** `useChat`'s `error.message` may contain
+  raw backend error text (Pydantic validation details, server stack hints).
+  Rendering it verbatim leaks internal schema. The frontend MUST route
+  errors through a `translateChatError(error: Error): string` helper that
+  maps to a small allowlist of user-facing es-CO strings (see Errors table).
+  The raw error is logged server-side, not surfaced to the user.
+- **Input cap.** Client-side `maxLength={32000}` on the textarea mirrors the
+  backend 32 KB cap. Pasted content beyond this is truncated at the input
+  level (fail fast, bound client memory).
+- **Send cooldown.** After `sendMessage`, the send button is disabled for
+  600 ms. This is not a rate limit (server-side rate limiting is the
+  backend's responsibility, tracked in ADR-0014) — it is a UX guard against
+  accidental double-submit while the request is in flight.
+- **Sensitive output.** `ChatToolChip` renders MCP tool output (which may
+  contain account balances, transaction lists, PII). The component sets
+  `data-sensitive="true"` on the JSON `<pre>` blocks so future telemetry
+  scrubbers, screen-share blockers, and password-manager extensions can
+  honor it. No active masking in v1 — masking is deferred to a follow-up
+  once the product decides which fields are sensitive.
+- **MCP tool trust.** The frontend trusts the tool name + input + output
+  emitted by the SSE stream. Content sanitization of tool output strings
+  (e.g., stripping phishing URLs, suppressing system-prompt-mimicking text)
+  is a backend concern (allowlist of tool names + output filter). The
+  frontend MUST NOT pass tool output to `dangerouslySetInnerHTML`, a
+  markdown renderer, or a linkifier in v1.
 
 ## Accessibility
 
@@ -229,7 +313,7 @@ Surfaced via `useChat`'s `error: Error | undefined` and `regenerate()`.
 
 ## Testing
 
-`frontend/components/chat/chat-section.test.tsx` — Vitest + Testing Library + happy-dom. **No live SSE.** `useChat` is mocked at the module boundary:
+`frontend/components/chat/chat-section.test.tsx` — Vitest + Testing Library + happy-dom. **No live SSE.** `useChat` is mocked at the module boundary via `vi.mock("@ai-sdk/react", ...)`. The mock MUST be hoisted (`vi.hoisted` or factory closure with `beforeEach` reset) so per-test state does not leak. **8 tests total** — the 6 originals plus 2 error-banner tests added during review (see Errors section + ChatErrorBanner contract):
 
 | # | Test | Asserts |
 |---|---|---|
@@ -239,8 +323,12 @@ Surfaced via `useChat`'s `error: Error | undefined` and `regenerate()`.
 | 4 | Assistant text message renders left-aligned, plain text (no markdown) | text content equals input verbatim; no `<a>` or `<strong>` injected |
 | 5 | Tool chip collapses by default; click expands and reveals input + output JSON | `aria-expanded` flips `false → true`; output region has expected text |
 | 6 | `ChatBlinkingCursor` present in last assistant message when `status==='streaming'`; absent when `status==='ready'` | `queryByTestId('chat-cursor')` reflects state |
+| 7 | Error banner renders translated es-CO copy (not raw `error.message`); Reintentar calls `regenerate` | `getByRole('alert')` text equals `translateChatError(err)` output; `regenerate` called once on click |
+| 8 | Error banner close `×` dismisses until next error transition | initial banner visible → click `×` → banner gone; setting a new `mockError` shows it again |
 
-Coverage target: ≥80% statements in `components/chat/`.
+In addition, `lib/chat-errors.test.ts` covers `translateChatError` mapping per row of the Errors table (one assertion per source row, plus the fallback case). The `onFinish` invalidation side effect MUST also be covered: the mocked `useChat` accepts and invokes the `onFinish` callback, and the test asserts `invalidate(qc, 'chatAssistantTurn')` (or the underlying `qc.invalidateQueries` calls) fire on completion.
+
+Coverage target: ≥80% statements in `components/chat/` and 100% on `lib/chat-errors.ts` (small translator, trivial to fully cover).
 
 ## Dependencies (additions only)
 
@@ -277,10 +365,10 @@ All scoping decisions resolved during brainstorming:
 ## What ships in this PR
 
 1. `pnpm-lock.yaml` updated for `@ai-sdk/react`.
-2. 8 new files under `frontend/components/chat/`.
+2. 9 new files under `frontend/components/chat/` (8 components + 1 error banner) and 1 new file `frontend/lib/chat-errors.ts`.
 3. 1 new file `frontend/lib/chat-transport.ts`.
-4. 1 new file `frontend/components/chat/chat-section.test.tsx`.
-5. 2 modified files: `frontend/app/(app)/page.tsx`, `frontend/app/globals.css`.
+4. 1 new file `frontend/components/chat/chat-section.test.tsx` (8 tests) and 1 new file `frontend/lib/chat-errors.test.ts`.
+5. 3 modified files: `frontend/app/(app)/page.tsx`, `frontend/app/globals.css`, `frontend/lib/query.ts` (add `chatAssistantTurn` group).
 6. 1 modified `frontend/package.json`.
 
 No backend changes. No ADR. No runbook changes.
