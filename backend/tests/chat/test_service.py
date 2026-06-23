@@ -117,7 +117,7 @@ async def test_text_only_iteration_emits_full_sse_sequence(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
                 LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1
+                    type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
                 ),
             ]
         ]
@@ -150,7 +150,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
                 LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1
+                    type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1
                 ),
             ],
             [
@@ -160,7 +160,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
                 LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1
+                    type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
                 ),
             ],
         ]
@@ -199,7 +199,7 @@ async def test_tool_error_emits_is_error_and_loop_continues(fake_mcp):
                     arguments={},
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1),
             ],
             [
                 LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
@@ -207,7 +207,7 @@ async def test_tool_error_emits_is_error_and_loop_continues(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_DELTA, delta="No pude."),
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
             ],
         ]
     )
@@ -235,7 +235,7 @@ async def test_loop_cap_emits_length_finish(fake_mcp):
                     arguments={},
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1),
             ]
         ]
     )
@@ -330,7 +330,7 @@ async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
                     arguments="",  # the exact production mistake
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1),
             ],
             [
                 LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
@@ -341,7 +341,7 @@ async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
                 ),
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=2),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=2),
             ],
         ]
     )
@@ -394,7 +394,7 @@ async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
                     arguments={},
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1),
             ],
             [
                 LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
@@ -402,7 +402,7 @@ async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_DELTA, delta="ok"),
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
             ],
         ]
     )

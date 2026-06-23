@@ -96,7 +96,11 @@ def serialize_event(event: LLMEvent, *, message_id: str) -> bytes:
         return render_sse({"type": "finish-step"})
 
     if t == LLMEventType.MESSAGE_FINISH:
-        return render_sse({"type": "finish", "finishReason": event.stop_reason or "end_turn"})
+        # Renderer is dumb by design: the LLMProvider maps provider-specific
+        # finish_reason to the Vercel spec enum (`stop | length | content-filter
+        # | tool-calls | error | other`). Defaulting to "stop" covers the rare
+        # case where a scripted test or stub provider doesn't set it.
+        return render_sse({"type": "finish", "finishReason": event.stop_reason or "stop"})
 
     if t == LLMEventType.ERROR:
         return render_sse({"type": "error", "errorText": event.message or "unknown error"})

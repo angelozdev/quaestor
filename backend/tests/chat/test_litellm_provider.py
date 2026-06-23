@@ -130,6 +130,34 @@ async def test_tool_call_stream_assembles_arguments_from_deltas():
     assert starts[0].tool_call_id == "tc_1"
     assert starts[0].tool_name == "list_transactions"
 
+    # finish_reason mapping: LiteLLM "tool_calls" → Vercel "tool-calls" (hyphen).
+    finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
+    assert len(finishes) == 1
+    assert finishes[0].stop_reason == "tool-calls"
+
+
+@pytest.mark.asyncio
+async def test_finish_reason_mapping_to_vercel_enum():
+    """The Vercel AI SDK UI Message Stream enum is strict:
+    `stop | length | content-filter | tool-calls | error | other`.
+    We must map provider-specific values here, not in the renderer.
+    """
+    from quaestor.chat.llm.litellm_provider import _to_vercel_finish_reason
+
+    # OpenAI/LiteLLM spellings
+    assert _to_vercel_finish_reason("stop") == "stop"
+    assert _to_vercel_finish_reason("length") == "length"
+    assert _to_vercel_finish_reason("tool_calls") == "tool-calls"
+    assert _to_vercel_finish_reason("content_filter") == "content-filter"
+    # Anthropic spellings
+    assert _to_vercel_finish_reason("end_turn") == "stop"
+    assert _to_vercel_finish_reason("max_tokens") == "length"
+    assert _to_vercel_finish_reason("tool_use") == "tool-calls"
+    assert _to_vercel_finish_reason("stop_sequence") == "stop"
+    # Null / unknown
+    assert _to_vercel_finish_reason(None) == "stop"
+    assert _to_vercel_finish_reason("wat") == "other"
+
 
 @pytest.mark.asyncio
 async def test_upstream_error_raises_upstream_llm_error():

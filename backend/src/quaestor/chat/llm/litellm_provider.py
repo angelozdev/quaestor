@@ -137,9 +137,42 @@ class LiteLLMProvider:
                     yield LLMEvent(type=LLMEventType.STEP_FINISH)
                     yield LLMEvent(
                         type=LLMEventType.MESSAGE_FINISH,
-                        stop_reason=str(choice.finish_reason),
+                        stop_reason=_to_vercel_finish_reason(choice.finish_reason),
                         iterations=1,
                     )
         except _LITELLM_UPSTREAM_ERRORS as exc:
             # Mid-stream upstream failure (e.g. SSE cut, 5xx mid-response).
             raise UpstreamLLMError(str(exc)) from exc
+
+
+# Vercel AI SDK UI Message Stream `finishReason` enum (the SSE wire format
+# the frontend's `useChat` validates against). See ai-sdk.dev/docs/ai-sdk-ui/
+# stream-protocol#finish-event. The renderer (events.py) is dumb on purpose
+# — all provider-specific values are normalized HERE, so the renderer can
+# trust whatever stop_reason it receives.
+_VERCEL_FINISH_REASON = "stop"
+
+
+def _to_vercel_finish_reason(raw: Any) -> str:
+    """Map a LiteLLM/OpenAI/Anthropic `finish_reason` to a Vercel-spec value.
+
+    Vercel's enum: `stop | length | content-filter | tool-calls | error | other`.
+
+    Common raw values we see in the wild:
+      LiteLLM/OpenAI: `stop`, `length`, `tool_calls`, `content_filter`, `null`.
+      Anthropic direct: `end_turn`, `max_tokens`, `tool_use`, `stop_sequence`.
+    """
+    if raw is None:
+        return _VERCEL_FINISH_REASON
+    s = str(raw)
+    if s == "stop" or s == "end_turn" or s == "stop_sequence":
+        return "stop"
+    if s == "length" or s == "max_tokens":
+        return "length"
+    if s == "tool_calls" or s == "tool_use":
+        return "tool-calls"
+    if s == "content_filter":
+        return "content-filter"
+    if s == "error":
+        return "error"
+    return "other"

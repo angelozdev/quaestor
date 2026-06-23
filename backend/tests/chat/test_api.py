@@ -12,7 +12,7 @@ def test_happy_path_streams_text_and_done(app, auth_headers):
         LLMEvent(type=LLMEventType.TEXT_DELTA, delta="Hola"),
         LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
         LLMEvent(type=LLMEventType.STEP_FINISH),
-        LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=1),
+        LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
     ]
     from fastapi.testclient import TestClient
 

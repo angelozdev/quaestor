@@ -72,11 +72,22 @@ def test_serialize_step_finish_and_message_finish():
     assert step == {"type": "finish-step"}
     msg = _data(
         serialize_event(
-            LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=2),
+            LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=2),
             message_id="m",
         )
     )
-    assert msg == {"type": "finish", "finishReason": "end_turn"}
+    assert msg == {"type": "finish", "finishReason": "stop"}
+
+
+def test_serialize_message_finish_defaults_to_stop():
+    """Renderer default fallback must be a Vercel-spec value, not `end_turn`."""
+    msg = _data(
+        serialize_event(
+            LLMEvent(type=LLMEventType.MESSAGE_FINISH, iterations=1),
+            message_id="m",
+        )
+    )
+    assert msg == {"type": "finish", "finishReason": "stop"}
 
 
 def test_serialize_error_event():
