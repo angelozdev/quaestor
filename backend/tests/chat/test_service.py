@@ -297,6 +297,73 @@ async def test_provider_timeout_emits_error_and_dones(fake_mcp):
 
 
 @pytest.mark.asyncio
+async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
+    """Regression for ADR-0016: if an MCP tool call RAISES (not just returns
+    is_error=True), the SSE stream must keep going. The LLM sees a
+    tool-output-available event with isError=True and gets a chance to
+    self-correct on the next iteration. The stream must end with [DONE],
+    not 500.
+
+    Reproduces the production case: LLM called `monthly_report("")` and
+    fastmcp raised `ToolError: Input should be a valid dictionary...`.
+    """
+    from fastmcp.exceptions import ToolError
+
+    class RaisingToolMCP(FakeMCPClient):
+        async def call_tool(self, name, arguments):
+            # Match fastmcp's production behavior: bad args → ToolError.
+            raise ToolError(
+                f"1 validation error for {name}Arguments: inp "
+                f"Input should be a valid dictionary, got {arguments!r}"
+            )
+
+    fake_mcp["client"] = RaisingToolMCP({})
+
+    provider = ScriptedProvider(
+        [
+            [
+                LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m1", model="MiniMax-M3"),
+                LLMEvent(
+                    type=LLMEventType.TOOL_INPUT_AVAILABLE,
+                    tool_call_id="tc_1",
+                    tool_name="monthly_report",
+                    arguments="",  # the exact production mistake
+                ),
+                LLMEvent(type=LLMEventType.STEP_FINISH),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool_use", iterations=1),
+            ],
+            [
+                LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
+                LLMEvent(type=LLMEventType.TEXT_START, content_index=0),
+                LLMEvent(
+                    type=LLMEventType.TEXT_DELTA,
+                    delta="No pude generar el resumen; necesito el mes en formato YYYY-MM.",
+                ),
+                LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
+                LLMEvent(type=LLMEventType.STEP_FINISH),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="end_turn", iterations=2),
+            ],
+        ]
+    )
+    service = ChatService(provider=provider, mcp=None, max_iterations=4)
+    blob = b""
+    async for chunk in service.stream(messages=[{"role": "user", "content": "?"}]):
+        blob += chunk
+
+    events = _parse_sse(blob)
+    # The bad call produced an isError tool output (not a 500).
+    outputs = [e for e in events if e["type"] == "tool-output-available"]
+    assert outputs, "tool-output-available event missing — stream died?"
+    assert outputs[0].get("isError") is True
+    assert "validation error" in outputs[0]["output"]
+    # The LLM's second iteration text reached the client — proof the loop survived.
+    deltas = [e for e in events if e["type"] == "text-delta"]
+    assert any("No pude" in d.get("delta", "") for d in deltas)
+    # Stream ended cleanly with [DONE], not a 500.
+    assert events[-1]["type"] == "__DONE__"
+
+
+@pytest.mark.asyncio
 async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
     """A timed-out MCP tool call emits tool-output-available with is_error and
     a tool message of 'timeout', then the loop keeps going (does not abort).

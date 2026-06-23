@@ -16,6 +16,7 @@ The service:
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -32,6 +33,8 @@ from .llm.provider import (
 )
 from .mcp.client import MCPClient
 from .mcp.schema import get_cached_tools
+
+_log = logging.getLogger(__name__)
 
 
 class ChatService:
@@ -177,6 +180,39 @@ class ChatService:
                                     "role": "tool",
                                     "tool_call_id": tc_id,
                                     "content": "timeout",
+                                }
+                            )
+                            continue
+                        except Exception as exc:  # noqa: BLE001 — see ADR-0016
+                            # The LLM may call a tool with malformed arguments
+                            # (Pydantic rejects, fastmcp raises ToolError), or
+                            # the tool itself may raise. Either way the turn
+                            # is recoverable: emit isError for the LLM to see
+                            # on the next iteration, keep the loop going.
+                            # Real bugs in MCPClient (asserts, context
+                            # manager errors) still escape this block because
+                            # they happen *outside* the per-tool dispatch.
+                            err_text = f"tool error: {type(exc).__name__}: {exc}".splitlines()[0]
+                            # Cap length so a Pydantic stack trace doesn't
+                            # bloat the conversation context.
+                            err_text = err_text[:500]
+                            _log.warning(
+                                "[chat] tool call failed: %s %s", tc_name, err_text
+                            )
+                            yield serialize_event(
+                                LLMEvent(
+                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    tool_call_id=tc_id,
+                                    output=err_text,
+                                    is_error=True,
+                                ),
+                                message_id=message_id,
+                            )
+                            conversation.append(
+                                {
+                                    "role": "tool",
+                                    "tool_call_id": tc_id,
+                                    "content": err_text,
                                 }
                             )
                             continue
