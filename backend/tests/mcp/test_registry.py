@@ -73,6 +73,30 @@ def test_registered_tool_runs_against_db_engine(monkeypatch, engine):
     assert "Bancolombia" in str(result)
 
 
+def test_empty_input_tools_accept_no_args(monkeypatch, engine):
+    """Regression: get_settings, list_goals, goals_progress have empty Input models.
+
+    The LLM naturally calls them with `{}` (no fields to fill). The wrapper
+    used to declare `inp: XxxInput` as required, so FastMCP raised
+    `inp Field required` and the chat endpoint 500'd. Defaulting `inp` in the
+    wrapper signature fixes it.
+    """
+    monkeypatch.setattr(db, "engine", engine)
+
+    for name, register in (
+        ("get_settings", register_settings_tools),
+        ("list_goals", register_goals_reads_tools),
+        ("goals_progress", register_goals_reads_tools),
+    ):
+        mcp = FastMCP("test")
+        register(mcp)
+        result = asyncio.run(mcp.call_tool(name, {}))
+        # Pydantic-validated call returns text; no ToolError raised.
+        text = str(result)
+        assert "ToolError" not in text, f"{name} raised: {text}"
+        assert text, f"{name} returned empty result"
+
+
 def test_register_accounts_tools_exposes_all_five():
     mcp = FastMCP("test")
     register_accounts_tools(mcp)

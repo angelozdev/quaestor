@@ -411,7 +411,7 @@ def register_transactions_writes_tools(mcp) -> None:
 
 def register_settings_tools(mcp) -> None:
     @mcp.tool(name="get_settings", description="Fetch app settings.")
-    def get_settings(inp: GetSettingsInput) -> str:
+    def get_settings(inp: GetSettingsInput = GetSettingsInput()) -> str:
         with Session(db.engine) as session:
             return settings_tools.get_settings(session, inp)
 
@@ -435,12 +435,12 @@ def register_budgets_reads_tools(mcp) -> None:
 
 def register_goals_reads_tools(mcp) -> None:
     @mcp.tool(name="list_goals", description="List all savings goals.")
-    def list_goals(inp: ListGoalsInput) -> str:
+    def list_goals(inp: ListGoalsInput = ListGoalsInput()) -> str:
         with Session(db.engine) as session:
             return goals_reads.list_goals(session, inp)
 
     @mcp.tool(name="goals_progress", description="Show progress for active goals.")
-    def goals_progress(inp: GoalsProgressInput) -> str:
+    def goals_progress(inp: GoalsProgressInput = GoalsProgressInput()) -> str:
         with Session(db.engine) as session:
             return goals_reads.goals_progress(session, inp)
 
