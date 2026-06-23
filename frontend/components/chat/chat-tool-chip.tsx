@@ -97,9 +97,8 @@ export function ChatToolChip({ part }: Props) {
       </button>
 
       {expandable && displayOpen && (
-        <div
+        <section
           id={regionId}
-          role="region"
           aria-label={`${toolName} input and output`}
           className="chat-tool-body mt-1.5 max-w-full overflow-hidden rounded-md border"
           style={{
@@ -140,7 +139,7 @@ export function ChatToolChip({ part }: Props) {
               {outputText}
             </pre>
           </div>
-        </div>
+        </section>
       )}
     </div>
   )

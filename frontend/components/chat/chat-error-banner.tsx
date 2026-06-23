@@ -13,10 +13,11 @@ export function ChatErrorBanner({ error, onRetry }: Props) {
   const [dismissed, setDismissed] = useState(false)
   const message = translateChatError(error)
 
-  // Reset dismissed when a new error arrives (different message text).
+  // Reset dismissed when a new error arrives.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally re-fire on prop change
   useEffect(() => {
     setDismissed(false)
-  }, [message])
+  }, [error])
 
   if (dismissed) return null
 

@@ -46,6 +46,7 @@ function ChatMessageImpl({ message, showCursor }: Props) {
         if (isTextPart(part)) {
           const showTailCursor = showCursor && idx === lastTextIndex && isUser === false
           return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: parts don't reorder within a message
             <p key={`${message.id}-t-${idx}`} className="whitespace-pre-wrap">
               {part.text}
               {showTailCursor && <ChatBlinkingCursor />}
@@ -53,6 +54,7 @@ function ChatMessageImpl({ message, showCursor }: Props) {
           )
         }
         if (isAnyToolPart(part)) {
+          // biome-ignore lint/suspicious/noArrayIndexKey: parts don't reorder within a message
           return <ChatToolChip key={`${message.id}-tl-${idx}`} part={part} />
         }
         // Other part kinds (source-url, reasoning, file, data) are out of scope

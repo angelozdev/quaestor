@@ -201,3 +201,55 @@
     font-feature-settings: "tnum";
   }
 }
+
+/* Chat section — distinctive micro-interactions.
+   Defined at the end of globals.css (outside @layer base) per ADR-0002: app
+   overrides live here, never in ui/styles/*. Honor prefers-reduced-motion. */
+
+@keyframes blink-cursor {
+  0%, 50% { opacity: 1; }
+  50.01%, 100% { opacity: 0; }
+}
+.chat-blinking-cursor {
+  display: inline-block;
+  animation: blink-cursor 1s steps(2) infinite;
+}
+
+@keyframes chat-underline-sweep {
+  0%   { background-position: -100% 100%; }
+  100% { background-position: 200% 100%; }
+}
+.chat-input-underline {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--primary) 50%,
+    transparent 100%
+  );
+  background-size: 50% 1px;
+  background-repeat: no-repeat;
+  background-position: -100% 100%;
+  transition: background-position 0s;
+}
+.chat-input-underline:focus-within {
+  animation: chat-underline-sweep 1.6s linear infinite;
+}
+
+@keyframes chat-tool-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.35); opacity: 0.7; }
+}
+.chat-tool-pulse {
+  animation: chat-tool-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-blinking-cursor,
+  .chat-input-underline:focus-within,
+  .chat-tool-pulse {
+    animation: none;
+  }
+  .chat-input-underline:focus-within {
+    background-image: linear-gradient(90deg, var(--primary), var(--primary));
+  }
+}

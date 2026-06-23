@@ -35,7 +35,6 @@ export function translateChatError(error: Error): string {
     return "No pude completar tu solicitud. Vuelve a intentarlo."
   }
   // Diagnostic log; never reaches the DOM.
-  // biome-ignore lint/suspicious/noConsole: intentional diagnostic.
   console.error("[chat] untranslated error:", error)
   return "Algo salió mal. Vuelve a intentarlo en un momento."
 }

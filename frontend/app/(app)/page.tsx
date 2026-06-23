@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
+import { ChatSection } from "@/components/chat/chat-section"
 import { MoneyAmount } from "@/components/money-amount"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
@@ -231,6 +232,8 @@ export default function DashboardPage() {
           </Card>
         </div>
       </div>
+
+      <ChatSection />
     </div>
   )
 }

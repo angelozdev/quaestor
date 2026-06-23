@@ -29,6 +29,7 @@ export function ChatThread({ messages, status }: Props) {
   }, [messages.length])
 
   // Also scroll when the streaming text grows the trailing message height.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger on every messages mutation during streaming
   useEffect(() => {
     if (status !== "streaming") return
     const el = scrollRef.current
