@@ -12,7 +12,7 @@ function dynamicPart(overrides: Partial<DynamicToolUIPart> = {}): DynamicToolUIP
     state: "input-available",
     input: { filter: "active" },
     ...overrides,
-  }
+  } as DynamicToolUIPart
 }
 
 function typedPart(overrides: Partial<ToolUIPart> = {}): ToolUIPart {

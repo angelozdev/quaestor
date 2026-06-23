@@ -61,6 +61,19 @@ export const INVALIDATION = {
   fxWrite: [[ROOTS.fx], [ROOTS.reports], [ROOTS.budgets], [ROOTS.accounts]],
   goalWrite: [[ROOTS.goals], [ROOTS.accounts], [ROOTS.transactions], [ROOTS.reports]],
   budgetWrite: [[ROOTS.budgets], [ROOTS.reports]],
+  // Scoped invalidation triggered by ChatSection's `useChat` onFinish. The 52
+  // MCP tools can mutate any of these entity roots; settings/categories/tags
+  // are intentionally excluded (no chat tool mutates them in v1). Never call
+  // `qc.invalidateQueries()` without args — that wipes unrelated cards.
+  chatAssistantTurn: [
+    [ROOTS.transactions],
+    [ROOTS.planned],
+    [ROOTS.accounts],
+    [ROOTS.budgets],
+    [ROOTS.goals],
+    [ROOTS.reports],
+    [ROOTS.recurring],
+  ],
 } as const
 
 export type InvalidationGroup = keyof typeof INVALIDATION
