@@ -55,6 +55,9 @@ class LiteLLMProvider:
         # accumulated[idx] = {"id": str|None, "name": str|None, "args_buf": str, "started": bool}
         accumulated: dict[int, dict[str, Any]] = {}
         text_started = False
+        # Token usage, captured from the last chunk that carries `.usage`.
+        # Normalized to Vercel wire keys. None = provider didn't report.
+        last_usage: dict[str, int] | None = None
 
         # Vercel UI Message Stream spec: `messageId` is the opaque identifier
         # of the whole message. Generate it locally with uuid4 so the value
@@ -74,6 +77,25 @@ class LiteLLMProvider:
                 model=self._model,
             )
             async for chunk in response:
+                # Capture token usage from any chunk that carries it. LiteLLM
+                # normalizes usage onto the final chunk for both OpenAI and
+                # Anthropic, but we accept it from any chunk in case other
+                # providers stream it earlier. Last write wins.
+                chunk_usage = getattr(chunk, "usage", None)
+                if chunk_usage is not None:
+                    usage_payload: dict[str, int] = {}
+                    prompt = getattr(chunk_usage, "prompt_tokens", None)
+                    completion = getattr(chunk_usage, "completion_tokens", None)
+                    total = getattr(chunk_usage, "total_tokens", None)
+                    if prompt is not None:
+                        usage_payload["promptTokens"] = prompt
+                    if completion is not None:
+                        usage_payload["completionTokens"] = completion
+                    if total is not None:
+                        usage_payload["totalTokens"] = total
+                    if usage_payload:
+                        last_usage = usage_payload
+
                 choice = chunk.choices[0]
                 delta = choice.delta
 
@@ -142,6 +164,7 @@ class LiteLLMProvider:
                         type=LLMEventType.MESSAGE_FINISH,
                         stop_reason=_to_vercel_finish_reason(choice.finish_reason),
                         iterations=1,
+                        usage=last_usage,
                     )
         except _LITELLM_UPSTREAM_ERRORS as exc:
             # Mid-stream upstream failure (e.g. SSE cut, 5xx mid-response).

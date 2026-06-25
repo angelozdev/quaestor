@@ -205,3 +205,88 @@ async def test_upstream_error_raises_upstream_llm_error():
         with pytest.raises(UpstreamLLMError):
             async for _ in provider.stream(messages=[], tools=[]):
                 pass
+
+
+@pytest.mark.asyncio
+async def test_message_finish_carries_usage_from_final_chunk():
+    """LiteLLM puts usage on the final chunk for both OpenAI and Anthropic.
+    Capture it and attach to MESSAGE_FINISH so the renderer can emit
+    messageMetadata.usage on the wire."""
+    from types import SimpleNamespace
+
+    usage = SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)
+    chunks = [
+        _chunk(content="ok"),
+        SimpleNamespace(
+            choices=[SimpleNamespace(index=0, delta=SimpleNamespace(), finish_reason="stop")],
+            usage=usage,
+        ),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        for c in chunks:
+            yield c
+
+    with patch("litellm.acompletion", side_effect=fake_acompletion):
+        provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
+        events = await _collect(
+            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
+        )
+
+    finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
+    assert len(finishes) == 1
+    assert finishes[0].usage == {
+        "promptTokens": 10,
+        "completionTokens": 5,
+        "totalTokens": 15,
+    }
+
+
+@pytest.mark.asyncio
+async def test_message_finish_usage_omits_missing_total_tokens():
+    """Some providers report only prompt_tokens and completion_tokens."""
+    from types import SimpleNamespace
+
+    usage = SimpleNamespace(prompt_tokens=10, completion_tokens=5)  # no total_tokens
+    chunks = [
+        _chunk(content="ok"),
+        SimpleNamespace(
+            choices=[SimpleNamespace(index=0, delta=SimpleNamespace(), finish_reason="stop")],
+            usage=usage,
+        ),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        for c in chunks:
+            yield c
+
+    with patch("litellm.acompletion", side_effect=fake_acompletion):
+        provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
+        events = await _collect(
+            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
+        )
+
+    finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
+    assert finishes[0].usage == {"promptTokens": 10, "completionTokens": 5}
+
+
+@pytest.mark.asyncio
+async def test_message_finish_usage_none_when_provider_omits_it():
+    """If no chunk carries usage, the MESSAGE_FINISH event has usage=None."""
+    chunks = [
+        _chunk(content="ok"),
+        _chunk(content=None, finish_reason="stop"),  # no .usage
+    ]
+
+    async def fake_acompletion(**kwargs):
+        for c in chunks:
+            yield c
+
+    with patch("litellm.acompletion", side_effect=fake_acompletion):
+        provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
+        events = await _collect(
+            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
+        )
+
+    finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
+    assert finishes[0].usage is None

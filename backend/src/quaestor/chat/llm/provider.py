@@ -58,6 +58,10 @@ class LLMEvent:
     model: str | None = None
     stop_reason: str | None = None
     iterations: int | None = None
+    # Token usage, normalized to Vercel wire keys. `None` = provider didn't
+    # report; renderer omits `messageMetadata` in that case.
+    # Shape: {"promptTokens": int, "completionTokens": int, "totalTokens": int}
+    usage: dict[str, int] | None = None
 
     # error
     code: str | None = None

@@ -108,7 +108,15 @@ def serialize_event(event: LLMEvent, *, message_id: str) -> bytes:
         # finish_reason to the Vercel spec enum (`stop | length | content-filter
         # | tool-calls | error | other`). Defaulting to "stop" covers the rare
         # case where a scripted test or stub provider doesn't set it.
-        return render_sse({"type": "finish", "finishReason": event.stop_reason or "stop"})
+        # `messageMetadata.usage` is omitted when the provider didn't report
+        # usage (additive contract; never breaks older clients).
+        payload: dict[str, Any] = {
+            "type": "finish",
+            "finishReason": event.stop_reason or "stop",
+        }
+        if event.usage:
+            payload["messageMetadata"] = {"usage": event.usage}
+        return render_sse(payload)
 
     if t == LLMEventType.ERROR:
         return render_sse({"type": "error", "errorText": event.message or "unknown error"})

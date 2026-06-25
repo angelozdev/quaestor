@@ -116,3 +116,29 @@ def test_render_sse_wraps_payload_with_data_prefix():
 
 def test_done_bytes_literal():
     assert done_bytes() == b"data: [DONE]\n\n"
+
+
+def test_serialize_message_finish_with_usage_includes_message_metadata():
+    """When usage is present, emit messageMetadata.usage on the finish event
+    so the frontend can display token counts and ops can reconcile billing."""
+    ev = LLMEvent(
+        type=LLMEventType.MESSAGE_FINISH,
+        stop_reason="stop",
+        iterations=1,
+        usage={"promptTokens": 10, "completionTokens": 5, "totalTokens": 15},
+    )
+    out = _data(serialize_event(ev, message_id="m"))
+    assert out == {
+        "type": "finish",
+        "finishReason": "stop",
+        "messageMetadata": {"usage": {"promptTokens": 10, "completionTokens": 5, "totalTokens": 15}},
+    }
+
+
+def test_serialize_message_finish_without_usage_omits_message_metadata():
+    """When usage is None (provider didn't report), the wire shape is unchanged
+    from before this fix — additive, not breaking."""
+    ev = LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1)
+    out = _data(serialize_event(ev, message_id="m"))
+    assert out == {"type": "finish", "finishReason": "stop"}
+    assert "messageMetadata" not in out
