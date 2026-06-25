@@ -420,3 +420,162 @@ async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
     # Loop survived: a text-delta event appeared in the second iteration.
     deltas = [e for e in events if e["type"] == "text-delta"]
     assert any(d.get("delta") == "ok" for d in deltas)
+
+
+# --- ADR-0017: system prompt injection -------------------------------------
+
+
+class RecordingProvider(LLMProvider):
+    """Captures the `messages` list passed to each stream() call."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[dict[str, Any]]] = []
+
+    async def stream(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> AsyncIterator[LLMEvent]:
+        self.calls.append(list(messages))
+        yield LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m")
+        yield LLMEvent(
+            type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
+        )
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_prepended_when_set(fake_mcp):
+    """ADR-0017: when `system_prompt` is passed, it lands as the first
+    message the provider sees on every iteration."""
+    provider = RecordingProvider()
+    service = ChatService(
+        provider=provider,
+        mcp=None,
+        max_iterations=2,
+        system_prompt="Eres un coach.",
+    )
+    blob = b""
+    async for chunk in service.stream(messages=[{"role": "user", "content": "hola"}]):
+        blob += chunk
+
+    assert provider.calls, "provider was never called"
+    first = provider.calls[0]
+    assert first[0] == {"role": "system", "content": "Eres un coach."}
+    assert first[1] == {"role": "user", "content": "hola"}
+
+
+@pytest.mark.asyncio
+async def test_no_system_prompt_means_no_injection(fake_mcp):
+    """Back-compat: `system_prompt=None` (or unset) preserves pre-ADR-0017
+    behavior — the messages list reaches the provider untouched."""
+    provider = RecordingProvider()
+    service = ChatService(provider=provider, mcp=None, max_iterations=2)
+    async for _ in service.stream(messages=[{"role": "user", "content": "hola"}]):
+        pass
+
+    assert provider.calls
+    first = provider.calls[0]
+    assert first == [{"role": "user", "content": "hola"}]
+    assert not any(m.get("role") == "system" for m in first)
+
+
+@pytest.mark.asyncio
+async def test_empty_system_prompt_treated_as_unset(fake_mcp):
+    """An empty string is a no-op, same as None."""
+    provider = RecordingProvider()
+    service = ChatService(
+        provider=provider, mcp=None, max_iterations=2, system_prompt=""
+    )
+    async for _ in service.stream(messages=[{"role": "user", "content": "hola"}]):
+        pass
+
+    assert provider.calls[0] == [{"role": "user", "content": "hola"}]
+
+
+@pytest.mark.asyncio
+async def test_user_supplied_system_message_kept_after_injected_one(fake_mcp):
+    """If the frontend sends its own system-role message, our injected prompt
+    comes first and the user's sits after it — both visible to the LLM."""
+    provider = RecordingProvider()
+    service = ChatService(
+        provider=provider,
+        mcp=None,
+        max_iterations=2,
+        system_prompt="server-prompt",
+    )
+    async for _ in service.stream(
+        messages=[
+            {"role": "system", "content": "client-prompt"},
+            {"role": "user", "content": "hola"},
+        ]
+    ):
+        pass
+
+    first = provider.calls[0]
+    assert first[0] == {"role": "system", "content": "server-prompt"}
+    assert first[1] == {"role": "system", "content": "client-prompt"}
+    assert first[2] == {"role": "user", "content": "hola"}
+
+
+@pytest.mark.asyncio
+async def test_system_prompt_present_on_every_iteration(fake_mcp):
+    """The system message is re-prepended into the conversation every
+    iteration so the LLM never loses sight of it across tool-call turns."""
+    script = [
+        [
+            LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m1"),
+            LLMEvent(
+                type=LLMEventType.TOOL_INPUT_AVAILABLE,
+                tool_call_id="tc_1",
+                tool_name="list_transactions",
+                arguments={},
+            ),
+            LLMEvent(type=LLMEventType.STEP_FINISH),
+            LLMEvent(
+                type=LLMEventType.MESSAGE_FINISH,
+                stop_reason="tool-calls",
+                iterations=1,
+            ),
+        ],
+        [
+            LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2"),
+            LLMEvent(type=LLMEventType.TEXT_START, content_index=0),
+            LLMEvent(type=LLMEventType.TEXT_DELTA, delta="ok"),
+            LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
+            LLMEvent(type=LLMEventType.STEP_FINISH),
+            LLMEvent(
+                type=LLMEventType.MESSAGE_FINISH,
+                stop_reason="stop",
+                iterations=2,
+            ),
+        ],
+    ]
+
+    class HybridProvider(LLMProvider):
+        def __init__(self) -> None:
+            self.calls: list[list[dict[str, Any]]] = []
+            self._idx = 0
+
+        async def stream(
+            self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+        ) -> AsyncIterator[LLMEvent]:
+            self.calls.append(list(messages))
+            i = min(self._idx, len(script) - 1)
+            self._idx += 1
+            for ev in script[i]:
+                yield ev
+
+    provider = HybridProvider()
+    service = ChatService(
+        provider=provider,
+        mcp=None,
+        max_iterations=4,
+        system_prompt="persona",
+    )
+    async for _ in service.stream(messages=[{"role": "user", "content": "?"}]):
+        pass
+
+    # Two stream() calls (one per iteration). Both must start with the
+    # system message — proving the prepend survives the loop, not just
+    # the first turn.
+    assert len(provider.calls) == 2
+    for call in provider.calls:
+        assert call[0] == {"role": "system", "content": "persona"}

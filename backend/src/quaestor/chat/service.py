@@ -44,17 +44,27 @@ class ChatService:
         mcp: FastMCP,
         max_iterations: int = 8,
         request_timeout_s: float | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self._provider = provider
         self._mcp = mcp
         self._max_iterations = max_iterations
         self._request_timeout_s = request_timeout_s
+        # Prepended as the first message when set. None / empty = no injection.
+        # See ADR-0017.
+        self._system_prompt = system_prompt or None
 
     async def stream(self, messages: list[dict[str, Any]]) -> AsyncIterator[bytes]:
         message_id = "msg_unknown"
         tools: list[dict[str, Any]] = []
         # shallow copy — caller must not mutate dicts after handing off
         conversation: list[dict[str, Any]] = list(messages)
+        # Inject the system prompt at index 0 so every provider turn sees it
+        # first. User-supplied system-role messages (already accepted by the
+        # Pydantic schema in api/chat.py) sit AFTER our injected one and
+        # remain visible to the LLM. See ADR-0017.
+        if self._system_prompt:
+            conversation.insert(0, {"role": "system", "content": self._system_prompt})
 
         try:
             async with MCPClient(self._mcp) as mcp_client:
