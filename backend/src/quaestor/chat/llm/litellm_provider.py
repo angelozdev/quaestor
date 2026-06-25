@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -53,8 +54,13 @@ class LiteLLMProvider:
         # Track per-tool-call state across chunks.
         # accumulated[idx] = {"id": str|None, "name": str|None, "args_buf": str, "started": bool}
         accumulated: dict[int, dict[str, Any]] = {}
-        message_id: str | None = None
         text_started = False
+
+        # Vercel UI Message Stream spec: `messageId` is the opaque identifier
+        # of the whole message. Generate it locally with uuid4 so the value
+        # is uniform regardless of whether the upstream provider attaches
+        # `.id` to chunks (OpenAI does, Anthropic native does not).
+        message_id = f"msg-{uuid.uuid4().hex}"
 
         try:
             response = await litellm.acompletion(**kwargs)
@@ -62,15 +68,12 @@ class LiteLLMProvider:
             raise UpstreamLLMError(str(exc)) from exc
 
         try:
+            yield LLMEvent(
+                type=LLMEventType.MESSAGE_START,
+                message_id=message_id,
+                model=self._model,
+            )
             async for chunk in response:
-                if message_id is None:
-                    message_id = getattr(chunk, "id", None) or "msg_unknown"
-                    yield LLMEvent(
-                        type=LLMEventType.MESSAGE_START,
-                        message_id=message_id,
-                        model=self._model,
-                    )
-
                 choice = chunk.choices[0]
                 delta = choice.delta
 

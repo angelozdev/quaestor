@@ -160,6 +160,38 @@ async def test_finish_reason_mapping_to_vercel_enum():
 
 
 @pytest.mark.asyncio
+async def test_message_id_is_uuid4_not_msg_unknown():
+    """Per the Vercel UI Message Stream spec, messageId is an opaque
+    identifier for the whole message. Generate it locally with uuid4 so it
+    works even when the upstream chunk lacks `.id` (Anthropic native).
+    """
+    import re
+
+    chunks = [
+        # Deliberately NO `id` field on the chunk — simulates Anthropic.
+        _chunk(content="Hola"),
+        _chunk(content=None, finish_reason="stop"),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        for c in chunks:
+            yield c
+
+    with patch("litellm.acompletion", side_effect=fake_acompletion):
+        provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
+        events = await _collect(
+            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
+        )
+
+    starts = [e for e in events if e.type == LLMEventType.MESSAGE_START]
+    assert len(starts) == 1, f"expected exactly one MESSAGE_START, got {len(starts)}"
+    assert starts[0].message_id is not None
+    assert re.fullmatch(r"msg-[0-9a-f]{32}", starts[0].message_id), (
+        f"message_id should be 'msg-<32 hex chars>', got {starts[0].message_id!r}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_upstream_error_raises_upstream_llm_error():
     def fake_api_error(message: str) -> litellm.APIError:
         return litellm.APIError(500, message, "fake", "fake-model")
