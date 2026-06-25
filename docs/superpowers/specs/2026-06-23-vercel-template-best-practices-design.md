@@ -61,9 +61,11 @@ attach it to the `MESSAGE_FINISH` event. In `events.py`, when
 `{"type": "finish", "finishReason": ..., "messageMetadata": {"usage": event.usage}}`.
 
 The usage dict shape (matches the Vercel spec):
+
 ```python
 {"promptTokens": int, "completionTokens": int, "totalTokens": int}
 ```
+
 Omit any key the provider didn't report.
 
 ### Reject (with reason)
@@ -90,15 +92,15 @@ Omit any key the provider didn't report.
 
 ## Files to change
 
-| File | Change |
-|---|---|
-| `backend/src/quaestor/chat/llm/provider.py` | `LLMEvent` gains `usage: dict \| None`. |
-| `backend/src/quaestor/chat/llm/litellm_provider.py` | `message_id` from `uuid4`; capture `usage`; ignore `chunk.id`. |
-| `backend/src/quaestor/chat/events.py` | `TEXT_PART_ID` constant; `text-*` use it; `finish` includes `messageMetadata.usage`. |
-| `backend/src/quaestor/chat/service.py` | Pass `usage` from `MESSAGE_FINISH` provider event to the renderer. |
-| `backend/tests/chat/test_litellm_provider.py` (new) | 3 tests: uuid4, text part id, usage on finish. |
-| `docs/adr/0018-adopt-vercel-template-best-practices.md` (new) | Mirror of this spec, ADR-style. |
-| `docs/adr/README.md` | Add row for 0018. |
+| File                                                          | Change                                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `backend/src/quaestor/chat/llm/provider.py`                   | `LLMEvent` gains `usage: dict \| None`.                                              |
+| `backend/src/quaestor/chat/llm/litellm_provider.py`           | `message_id` from `uuid4`; capture `usage`; ignore `chunk.id`.                       |
+| `backend/src/quaestor/chat/events.py`                         | `TEXT_PART_ID` constant; `text-*` use it; `finish` includes `messageMetadata.usage`. |
+| `backend/src/quaestor/chat/service.py`                        | Pass `usage` from `MESSAGE_FINISH` provider event to the renderer.                   |
+| `backend/tests/chat/test_litellm_provider.py` (new)           | 3 tests: uuid4, text part id, usage on finish.                                       |
+| `docs/adr/0018-adopt-vercel-template-best-practices.md` (new) | Mirror of this spec, ADR-style.                                                      |
+| `docs/adr/README.md`                                          | Add row for 0018.                                                                    |
 
 ## Tests
 
@@ -113,9 +115,9 @@ Three regression tests, one per fix, all using stubbed async iterators
    and that the `id` differs from the `start` event's `messageId`.
 3. `test_finish_event_includes_usage_metadata` — feed a final chunk
    with `usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5,
-   total_tokens=15)`; assert the rendered SSE has
+total_tokens=15)`; assert the rendered SSE has
    `messageMetadata.usage = {promptTokens: 10, completionTokens: 5,
-   totalTokens: 15}`.
+totalTokens: 15}`.
 
 Plus: existing tests in `test_service.py` should pass unchanged
 (LLMEvent additions are additive; the new `usage` field is `None` when
