@@ -30,3 +30,5 @@ New ADRs are created with the `adr` skill:
 | 0014 | Chat endpoint with LiteLLM and an in-memory MCP bridge | accepted | 2026-06-22 |
 | 0015 | Frontend chat request wire-format adapter (UIMessage → {role, content}) | accepted | 2026-06-22 |
 | 0016 | Chat tool-error recovery: degrade LLM tool-call mistakes to isError, never 500 | accepted | 2026-06-22 |
+| 0017 | Chat system prompt: server-side injection of a financial coach persona | accepted | 2026-06-22 |
+| 0018 | Adopt Vercel template best practices for chat SSE | accepted | 2026-06-24 |
