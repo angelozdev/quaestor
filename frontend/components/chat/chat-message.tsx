@@ -1,6 +1,7 @@
 "use client"
 
 import { memo } from "react"
+import { Markdown } from "../markdown"
 import type { UIMessage } from "./chat.types"
 import { isAnyToolPart, isTextPart } from "./chat.types"
 import { ChatBlinkingCursor } from "./chat-blinking-cursor"
@@ -45,12 +46,22 @@ function ChatMessageImpl({ message, showCursor }: Props) {
       {message.parts.map((part, idx) => {
         if (isTextPart(part)) {
           const showTailCursor = showCursor && idx === lastTextIndex && isUser === false
+          // User text is typed input, not markdown. Only assistant text flows through
+          // the markdown renderer (per spec 2026-06-24).
+          if (isUser) {
+            return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: parts don't reorder within a message
+              <p key={`${message.id}-t-${idx}`} className="whitespace-pre-wrap">
+                {part.text}
+              </p>
+            )
+          }
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: parts don't reorder within a message
-            <p key={`${message.id}-t-${idx}`} className="whitespace-pre-wrap">
-              {part.text}
+            <div key={`${message.id}-t-${idx}`}>
+              <Markdown>{part.text}</Markdown>
               {showTailCursor && <ChatBlinkingCursor />}
-            </p>
+            </div>
           )
         }
         if (isAnyToolPart(part)) {
