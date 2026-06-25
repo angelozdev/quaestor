@@ -91,6 +91,19 @@ describe("ChatMessage", () => {
     expect(screen.getByText("Listo.")).toBeInTheDocument()
   })
 
+  it("renders assistant text containing markdown as structured HTML", () => {
+    const md = "**importante**: saldo $1.250.000"
+    const { container } = render(
+      <ChatMessage message={assistantMessage(md)} showCursor={false} />,
+    )
+    const strong = container.querySelector("strong")
+    expect(strong).toBeInTheDocument()
+    expect(strong?.textContent).toBe("importante")
+    // The old whitespace-pre-wrap <p> wrapper must be gone for assistant messages.
+    const legacyP = container.querySelector("p.whitespace-pre-wrap")
+    expect(legacyP).toBeNull()
+  })
+
   it("returns null for system messages", () => {
     const { container } = render(
       <ChatMessage
