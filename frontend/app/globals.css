@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../node_modules/streamdown/dist/*.js";
 /* Vendored from shadcn@4.11.0 dist/tailwind.css and tw-animate-css@1.4.0
    dist/tw-animate.css. Imported as local files because the package.json
    `style` export conditional is not honored for CSS @import in this
