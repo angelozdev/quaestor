@@ -18,17 +18,28 @@ def test_serialize_message_start():
     assert out == {"type": "start", "messageId": "msg_1"}
 
 
-def test_serialize_text_delta():
+def test_serialize_text_delta_uses_text_part_id_not_message_id():
+    """The `id` of a text-* event is the per-part content id (`text-1`),
+    NOT the message id. Per the Vercel UI Message Stream spec, useChat()
+    matches deltas to a part by id."""
     ev = LLMEvent(type=LLMEventType.TEXT_DELTA, delta="hola")
-    out = _data(serialize_event(ev, message_id="m"))
-    assert out == {"type": "text-delta", "id": "m", "delta": "hola"}
+    out = _data(serialize_event(ev, message_id="msg_abc"))
+    assert out == {"type": "text-delta", "id": "text-1", "delta": "hola"}
+    assert out["id"] != out["messageId"] if "messageId" in out else True
+    # The "id" must NOT equal the message id we passed in.
+    assert out["id"] != "msg_abc"
 
 
-def test_serialize_text_start_and_end_share_content_index():
-    start = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_START, content_index=0), message_id="m"))
-    end = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_END, content_index=0), message_id="m"))
-    assert start == {"type": "text-start", "id": "m"}
-    assert end == {"type": "text-end", "id": "m"}
+def test_serialize_text_start_and_end_share_text_part_id():
+    start = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_START, content_index=0), message_id="msg_abc"))
+    delta = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_DELTA, content_index=0, delta="x"), message_id="msg_abc"))
+    end = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_END, content_index=0), message_id="msg_abc"))
+    assert start == {"type": "text-start", "id": "text-1"}
+    assert delta["id"] == "text-1"
+    assert end == {"type": "text-end", "id": "text-1"}
+    # None of them carry the message id.
+    for ev in (start, delta, end):
+        assert ev["id"] != "msg_abc"
 
 
 def test_serialize_tool_input_start():

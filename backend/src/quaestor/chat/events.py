@@ -30,6 +30,14 @@ def done_bytes() -> bytes:
     return b"data: [DONE]\n\n"
 
 
+# Per the Vercel UI Message Stream spec, the `id` of a text-* event is a
+# per-part content id (stable across text-start/text-delta/text-end of the
+# same text part). It must NOT collide with `messageId`. We currently emit
+# exactly one text part per turn, so a constant suffices; revisit when we
+# add parallel parts (e.g. reasoning + answer).
+TEXT_PART_ID = "text-1"
+
+
 def serialize_event(event: LLMEvent, *, message_id: str) -> bytes:
     """Translate one LLMEvent to SSE bytes. Field names follow the Vercel
     UI Message Stream protocol exactly (`messageId`, `toolCallId`,
@@ -40,13 +48,13 @@ def serialize_event(event: LLMEvent, *, message_id: str) -> bytes:
         return render_sse({"type": "start", "messageId": message_id})
 
     if t == LLMEventType.TEXT_START:
-        return render_sse({"type": "text-start", "id": message_id})
+        return render_sse({"type": "text-start", "id": TEXT_PART_ID})
 
     if t == LLMEventType.TEXT_DELTA:
-        return render_sse({"type": "text-delta", "id": message_id, "delta": event.delta or ""})
+        return render_sse({"type": "text-delta", "id": TEXT_PART_ID, "delta": event.delta or ""})
 
     if t == LLMEventType.TEXT_END:
-        return render_sse({"type": "text-end", "id": message_id})
+        return render_sse({"type": "text-end", "id": TEXT_PART_ID})
 
     if t == LLMEventType.TOOL_INPUT_START:
         assert event.tool_call_id is not None
