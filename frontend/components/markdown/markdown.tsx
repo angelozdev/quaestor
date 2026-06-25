@@ -2,6 +2,7 @@
 
 import { memo } from "react"
 import { Streamdown } from "streamdown"
+import { markdownComponents } from "./markdown-elements"
 
 type Props = {
   children: string
@@ -10,16 +11,7 @@ type Props = {
 
 function MarkdownImpl({ children, className }: Props) {
   return (
-    <Streamdown
-      className={className}
-      components={{
-        strong: ({ children: c, ...rest }) => (
-          <strong {...rest} className="font-semibold">
-            {c}
-          </strong>
-        ),
-      }}
-    >
+    <Streamdown className={className} components={markdownComponents}>
       {children}
     </Streamdown>
   )
