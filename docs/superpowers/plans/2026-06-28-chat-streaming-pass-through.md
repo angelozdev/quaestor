@@ -56,9 +56,10 @@
 
 - [ ] **Step 1: Write the failing test**
 
-Create `frontend/lib/proxy/forwarding/request-headers.test.ts`:
+Create `frontend/lib/proxy/forwarding/request-headers.test.ts` with `// @vitest-environment node` at the top (happy-dom's Headers polyfill drops the `cookie` header — verified; production Next runtime is fine, but tests must use node env for NextRequest to expose cookies correctly):
 
 ```ts
+// @vitest-environment node
 import { describe, expect, it } from "vitest"
 import { NextRequest } from "next/server"
 import { forwardRequestHeaders } from "./request-headers"
@@ -192,7 +193,9 @@ describe("forwardResponseHeaders", () => {
   })
 
   it("returns empty Headers when upstream has no relevant headers", () => {
-    const upstream = new Response("body")
+    // Use `null` body so Node's Response constructor doesn't auto-inject
+    // `content-type: text/plain;charset=UTF-8` for string bodies.
+    const upstream = new Response(null)
     const out = forwardResponseHeaders(upstream)
     expect(out.has("content-type")).toBe(false)
     expect(out.getSetCookie()).toEqual([])
