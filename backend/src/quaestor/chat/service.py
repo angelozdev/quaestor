@@ -164,10 +164,9 @@ class ChatService:
                         except ToolNotFoundError as exc:
                             yield serialize_event(
                                 LLMEvent(
-                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    type=LLMEventType.TOOL_OUTPUT_ERROR,
                                     tool_call_id=tc_id,
-                                    output=f"tool not found: {exc}",
-                                    is_error=True,
+                                    error_text=f"tool not found: {exc}",
                                 ),
                                 message_id=message_id,
                             )
@@ -182,10 +181,9 @@ class ChatService:
                         except asyncio.TimeoutError:
                             yield serialize_event(
                                 LLMEvent(
-                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    type=LLMEventType.TOOL_OUTPUT_ERROR,
                                     tool_call_id=tc_id,
-                                    output="timeout",
-                                    is_error=True,
+                                    error_text="timeout",
                                 ),
                                 message_id=message_id,
                             )
@@ -206,10 +204,9 @@ class ChatService:
                             )
                             yield serialize_event(
                                 LLMEvent(
-                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    type=LLMEventType.TOOL_OUTPUT_ERROR,
                                     tool_call_id=tc_id,
-                                    output=safe_err,
-                                    is_error=True,
+                                    error_text=safe_err,
                                 ),
                                 message_id=message_id,
                             )
@@ -222,15 +219,27 @@ class ChatService:
                             )
                             continue
                         safe_output = sanitize_tool_output(tc_name, result.output)
-                        yield serialize_event(
-                            LLMEvent(
-                                type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
-                                tool_call_id=tc_id,
-                                output=safe_output,
-                                is_error=result.is_error,
-                            ),
-                            message_id=message_id,
-                        )
+                        if result.is_error:
+                            # The tool ran but returned an error result.
+                            # Per ADR-0022, tool failures get a dedicated
+                            # wire shape — not a flag on the success chunk.
+                            yield serialize_event(
+                                LLMEvent(
+                                    type=LLMEventType.TOOL_OUTPUT_ERROR,
+                                    tool_call_id=tc_id,
+                                    error_text=safe_output,
+                                ),
+                                message_id=message_id,
+                            )
+                        else:
+                            yield serialize_event(
+                                LLMEvent(
+                                    type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
+                                    tool_call_id=tc_id,
+                                    output=safe_output,
+                                ),
+                                message_id=message_id,
+                            )
                         conversation.append(
                             {
                                 "role": "tool",
