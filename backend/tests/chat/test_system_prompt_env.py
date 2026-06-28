@@ -12,7 +12,36 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.chat.llm.provider import LLMEvent, LLMEventType, LLMProvider
+
+
+_STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+class _CSRFLocalClient(TestClient):
+    """Mirrors the CSRF cookie into X-CSRF-Token (test-only).
+    Patches both `request()` and `stream()` because httpx routes the
+    latter straight to `send()` and skips `request()`."""
+
+    def _prime_and_inject(self, method: str, kwargs: dict) -> dict:
+        if method.upper() in _STATE_CHANGING and not self.cookies.get(CSRF_COOKIE):
+            TestClient.get(self, "/api/auth/me")
+        if method.upper() in _STATE_CHANGING:
+            token = self.cookies.get(CSRF_COOKIE)
+            if token:
+                headers = dict(kwargs.pop("headers", None) or {})
+                headers.setdefault(CSRF_HEADER, token)
+                kwargs["headers"] = headers
+        return kwargs
+
+    def request(self, method, url, **kwargs):  # type: ignore[override]
+        kwargs = self._prime_and_inject(method, kwargs)
+        return super().request(method, url, **kwargs)
+
+    def stream(self, method, url, **kwargs):  # type: ignore[override]
+        kwargs = self._prime_and_inject(method, kwargs)
+        return super().stream(method, url, **kwargs)
 
 
 class CapturingProvider(LLMProvider):
@@ -37,6 +66,8 @@ def capturing_app(monkeypatch, engine):
     from quaestor.api.deps import require_auth
 
     cap = CapturingProvider()
+    monkeypatch.setenv("APP_TOKEN", "test-token")
+    monkeypatch.setenv("SESSION_SECRET", "x" * 64)
     monkeypatch.setattr("quaestor.chat.llm.factory.build_llm_provider", lambda: cap)
     monkeypatch.setattr("quaestor.api.chat.build_llm_provider", lambda: cap)
     from quaestor.api import create_app
@@ -53,21 +84,15 @@ def _post_chat(client: TestClient, msg: str = "hola") -> None:
         json={"messages": [{"role": "user", "content": msg}]},
     ) as r:
         assert r.status_code == 200
-        # drain
         for _ in r.iter_bytes():
             pass
 
 
 def test_default_env_value_injects_bundled_coach_prompt(monkeypatch, capturing_app):
-    """Setting `CHAT_SYSTEM_PROMPT=default` → the bundled coach prompt is
-    prepended; the user's message follows."""
     monkeypatch.setenv("CHAT_SYSTEM_PROMPT", "default")
     app, cap = capturing_app
-    client = TestClient(app)
-
+    client = _CSRFLocalClient(app)
     _post_chat(client)
-
-    assert cap.calls, "provider never called"
     msgs = cap.calls[0]
     assert msgs[0]["role"] == "system"
     assert "coach financiero" in msgs[0]["content"]
@@ -75,49 +100,37 @@ def test_default_env_value_injects_bundled_coach_prompt(monkeypatch, capturing_a
 
 
 def test_literal_env_value_injected_verbatim(monkeypatch, capturing_app):
-    """Any non-sentinel value is used verbatim (within the 4 k cap)."""
     monkeypatch.setenv("CHAT_SYSTEM_PROMPT", "Eres un loro.")
     app, cap = capturing_app
-    client = TestClient(app)
-
+    client = _CSRFLocalClient(app)
     _post_chat(client)
-
     msgs = cap.calls[0]
     assert msgs[0] == {"role": "system", "content": "Eres un loro."}
 
 
 def test_unset_env_means_no_injection(monkeypatch, capturing_app):
-    """Unset env → back-compat: messages reach the provider untouched."""
     monkeypatch.delenv("CHAT_SYSTEM_PROMPT", raising=False)
     app, cap = capturing_app
-    client = TestClient(app)
-
+    client = _CSRFLocalClient(app)
     _post_chat(client)
-
     msgs = cap.calls[0]
     assert msgs == [{"role": "user", "content": "hola"}]
     assert not any(m["role"] == "system" for m in msgs)
 
 
 def test_off_sentinel_disables_injection(monkeypatch, capturing_app):
-    """Some deploy systems can only override envs, not unset them.
-    Setting the value to `off` (case-insensitive) is the disable knob."""
     monkeypatch.setenv("CHAT_SYSTEM_PROMPT", "off")
     app, cap = capturing_app
-    client = TestClient(app)
-
+    client = _CSRFLocalClient(app)
     _post_chat(client)
-
     assert not any(m["role"] == "system" for m in cap.calls[0])
 
 
 def test_oversize_prompt_truncated_at_4k(monkeypatch, capturing_app, caplog):
-    """Defensive ceiling: an oversized prompt is truncated and a warning is
-    logged so operators notice the misconfiguration."""
     monster = "x" * 10_000
     monkeypatch.setenv("CHAT_SYSTEM_PROMPT", monster)
     app, cap = capturing_app
-    client = TestClient(app)
+    client = _CSRFLocalClient(app)
 
     with caplog.at_level("WARNING"):
         _post_chat(client)
@@ -130,11 +143,8 @@ def test_oversize_prompt_truncated_at_4k(monkeypatch, capturing_app, caplog):
 
 
 def test_blank_env_means_no_injection(monkeypatch, capturing_app):
-    """Whitespace-only is treated as unset."""
     monkeypatch.setenv("CHAT_SYSTEM_PROMPT", "   ")
     app, cap = capturing_app
-    client = TestClient(app)
-
+    client = _CSRFLocalClient(app)
     _post_chat(client)
-
     assert not any(m["role"] == "system" for m in cap.calls[0])

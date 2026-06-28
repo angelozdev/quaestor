@@ -3,8 +3,37 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from quaestor.api import create_app
+from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.db import init_db, make_engine
 from quaestor.services import accounts, categories
+
+
+_STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+class CSRFTestClient(TestClient):
+    """Mirrors the CSRF cookie into X-CSRF-Token, like the real browser.
+    Patches both `request()` and `stream()` because httpx.Client.stream
+    bypasses `request()` and goes straight to `send()`."""
+
+    def _prime_and_inject(self, method: str, kwargs: dict) -> dict:
+        if method.upper() in _STATE_CHANGING and not self.cookies.get(CSRF_COOKIE):
+            TestClient.get(self, "/api/auth/me")
+        if method.upper() in _STATE_CHANGING:
+            token = self.cookies.get(CSRF_COOKIE)
+            if token:
+                headers = dict(kwargs.pop("headers", None) or {})
+                headers.setdefault(CSRF_HEADER, token)
+                kwargs["headers"] = headers
+        return kwargs
+
+    def request(self, method, url, **kwargs):  # type: ignore[override]
+        kwargs = self._prime_and_inject(method, kwargs)
+        return super().request(method, url, **kwargs)
+
+    def stream(self, method, url, **kwargs):  # type: ignore[override]
+        kwargs = self._prime_and_inject(method, kwargs)
+        return super().stream(method, url, **kwargs)
 
 
 @pytest.fixture
@@ -49,17 +78,20 @@ def app(monkeypatch, engine):
                 yield ev
 
     stub = StubProvider()
+    monkeypatch.setenv("APP_TOKEN", "test-token")
+    monkeypatch.setenv("SESSION_SECRET", "x" * 64)
     monkeypatch.setattr("quaestor.chat.llm.factory.build_llm_provider", lambda: stub)
-    # The chat router imports `build_llm_provider` via `from ... import ...`,
-    # which captures the function object in its own namespace at import time.
-    # Patching the factory module attribute alone leaves the router holding
-    # the original LiteLLM factory; patch the symbol on the router module too.
     monkeypatch.setattr("quaestor.api.chat.build_llm_provider", lambda: stub)
     app = create_app()
-    # Default: bypass auth so validation/streaming tests can hit the route
-    # without supplying headers. `test_chat_requires_auth` clears this.
     app.dependency_overrides[require_auth] = lambda: None
     yield app, stub
+
+
+@pytest.fixture
+def client(app):
+    """A TestClient that auto-mirrors CSRF for state-changing requests."""
+    test_app, _ = app
+    return CSRFTestClient(test_app)
 
 
 @pytest.fixture
