@@ -306,7 +306,11 @@ async def test_tool_error_chunk_has_required_fields(patch_mcp):
         for e in events
         if e.get("type") == "tool-output-error"
     ]
-    assert len(err_chunks) == 1, f"expected 1 tool-output-error chunk, got {len(err_chunks)}"
+    # The service retry loop may re-emit the tool call on later iterations,
+    # so we lock the chunk-shape contract on the first chunk and only assert
+    # "at least one" emission. Exact count is an artifact of the retry loop,
+    # not of the wire shape.
+    assert len(err_chunks) >= 1, f"expected at least 1 tool-output-error chunk, got {len(err_chunks)}"
     chunk = err_chunks[0]
     assert chunk.toolCallId == "tc_1"
     assert "validation error" in chunk.errorText

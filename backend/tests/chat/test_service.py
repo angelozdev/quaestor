@@ -217,8 +217,8 @@ async def test_tool_error_emits_is_error_and_loop_continues(fake_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    outputs = [e for e in events if e["type"] == "tool-output-available"]
-    assert outputs and outputs[0].get("isError") is True
+    errs = [e for e in events if e["type"] == "tool-output-error"]
+    assert errs and "account not found" in errs[0]["errorText"]
 
 
 @pytest.mark.asyncio
@@ -351,11 +351,10 @@ async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    # The bad call produced an isError tool output (not a 500).
-    outputs = [e for e in events if e["type"] == "tool-output-available"]
-    assert outputs, "tool-output-available event missing — stream died?"
-    assert outputs[0].get("isError") is True
-    assert "validation error" in outputs[0]["output"]
+    # The bad call produced an tool-output-error chunk (not a 500).
+    errs = [e for e in events if e["type"] == "tool-output-error"]
+    assert errs, "tool-output-error event missing — stream died?"
+    assert "validation error" in errs[0]["errorText"]
     # The LLM's second iteration text reached the client — proof the loop survived.
     deltas = [e for e in events if e["type"] == "text-delta"]
     assert any("No pude" in d.get("delta", "") for d in deltas)
@@ -414,9 +413,8 @@ async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    outputs = [e for e in events if e["type"] == "tool-output-available"]
-    assert outputs and outputs[0].get("isError") is True
-    assert outputs[0]["output"] == "timeout"
+    errs = [e for e in events if e["type"] == "tool-output-error"]
+    assert errs and errs[0]["errorText"] == "timeout"
     # Loop survived: a text-delta event appeared in the second iteration.
     deltas = [e for e in events if e["type"] == "text-delta"]
     assert any(d.get("delta") == "ok" for d in deltas)

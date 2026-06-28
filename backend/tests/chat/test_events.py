@@ -64,7 +64,11 @@ def test_serialize_tool_input_available():
     }
 
 
-def test_serialize_tool_output_available_with_error():
+def test_serialize_tool_output_available_strips_is_error():
+    """`tool-output-available` is success-only (ADR-0022). The renderer must
+    never inject an `isError` field — if the upstream `LLMEvent` carries
+    `is_error=True`, the renderer ignores it and emits the strict success
+    shape `{type, toolCallId, output}`."""
     ev = LLMEvent(
         type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
         tool_call_id="tc_1",
@@ -72,10 +76,25 @@ def test_serialize_tool_output_available_with_error():
         is_error=True,
     )
     out = _data(serialize_event(ev, message_id="m"))
-    assert out["type"] == "tool-output-available"
-    assert out["toolCallId"] == "tc_1"
-    assert out["output"] == "account not found"
-    assert out["isError"] is True
+    assert out == {"type": "tool-output-available", "toolCallId": "tc_1", "output": "account not found"}
+    assert "isError" not in out
+
+
+def test_serialize_tool_output_error_emits_error_text():
+    """Tool failures use the dedicated `tool-output-error` chunk
+    (ADR-0022). The renderer carries `errorText` (camelCase) on the
+    wire — NOT `isError` on `tool-output-available`."""
+    ev = LLMEvent(
+        type=LLMEventType.TOOL_OUTPUT_ERROR,
+        tool_call_id="tc_1",
+        error_text="account not found",
+    )
+    out = _data(serialize_event(ev, message_id="m"))
+    assert out == {
+        "type": "tool-output-error",
+        "toolCallId": "tc_1",
+        "errorText": "account not found",
+    }
 
 
 def test_serialize_step_finish_and_message_finish():

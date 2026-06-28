@@ -244,5 +244,6 @@ async def test_tool_error_message_is_also_wrapped(fake_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    outputs = [e for e in events if e["type"] == "tool-output-available"]
-    assert outputs[0]["output"].startswith("<<UNTRUSTED_TOOL_OUTPUT: update_transaction>>")
+    errs = [e for e in events if e["type"] == "tool-output-error"]
+    assert errs, "tool-output-error event missing — stream died?"
+    assert errs[0]["errorText"].startswith("<<UNTRUSTED_TOOL_OUTPUT: update_transaction>>")
