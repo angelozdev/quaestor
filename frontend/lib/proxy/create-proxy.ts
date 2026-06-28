@@ -16,6 +16,12 @@ import { selectResponsePolicy } from "./policies/select-response-policy"
  *
  * See docs/superpowers/specs/2026-06-28-chat-streaming-pass-through-design.md
  * for the design rationale.
+ *
+ * IMPORTANT: `await fetch(...)` resolves on response HEADERS, not body.
+ * The body remains a `ReadableStream` and `StreamingResponsePolicy` hands
+ * it to `new Response(stream, ...)` unchanged. Do NOT add
+ * `await upstream.text()` here "for safety" — that re-introduces the
+ * buffering bug this module was written to fix.
  */
 export async function createProxy(req: NextRequest, path: string[]): Promise<Response> {
   const target = buildTargetUrl(path, req.nextUrl.search)
