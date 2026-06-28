@@ -8,6 +8,7 @@ from sqlmodel import Session
 
 from ...domain.errors import ValidationError
 from ...domain.models import TxType
+from ...domain.sort import Order, SortField
 from ...services import transactions
 from ..deps import get_session
 from ..schemas import (
@@ -30,6 +31,8 @@ def list_transactions(
     tag: str | None = None,
     type: TxType | None = None,
     status: str | None = None,
+    sort: SortField = "created_at",
+    order: Order = "desc",
     session: Session = Depends(get_session),
 ):
     return transactions.list_transactions(
@@ -41,6 +44,8 @@ def list_transactions(
         status=status,
         date_from=date_from,
         date_to=date_to,
+        sort=sort,
+        order=order,
     )
 
 

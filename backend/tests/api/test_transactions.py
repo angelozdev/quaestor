@@ -183,3 +183,43 @@ def test_delete_transfer_leg_via_api_is_422(client, auth, two_accounts):
     ).json()
     resp = client.delete(f"/api/transactions/{transfer['from_leg']['id']}", headers=auth)
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
+
+
+# --- ADR-0021 amended: sort/order query params on GET /transactions ---
+
+
+def test_list_endpoint_default_orders_by_created_at_desc(client, auth, two_accounts):
+    """Default endpoint order: newest-created first, regardless of date."""
+    cash, _ = two_accounts
+    # Insert in misleading order: oldest creation first.
+    client.post("/api/transactions", headers=auth, json={
+        "type": "expense", "account_id": cash["id"], "amount": 100,
+        "currency": "COP", "date": "2026-06-15", "payee": "mid",
+    })
+    client.post("/api/transactions", headers=auth, json={
+        "type": "expense", "account_id": cash["id"], "amount": 200,
+        "currency": "COP", "date": "2026-06-01", "payee": "old",
+    })
+    client.post("/api/transactions", headers=auth, json={
+        "type": "expense", "account_id": cash["id"], "amount": 300,
+        "currency": "COP", "date": "2026-07-01", "payee": "new",
+    })
+    body = client.get("/api/transactions", headers=auth).json()
+    assert [t["payee"] for t in body] == ["new", "old", "mid"]
+
+
+def test_list_endpoint_sort_date_asc_orders_chronologically(client, auth, two_accounts):
+    cash, _ = two_accounts
+    for payee, date in [("mid", "2026-06-15"), ("old", "2026-06-01"), ("new", "2026-07-01")]:
+        client.post("/api/transactions", headers=auth, json={
+            "type": "expense", "account_id": cash["id"], "amount": 100,
+            "currency": "COP", "date": date, "payee": payee,
+        })
+    body = client.get("/api/transactions", headers=auth, params={"sort": "date", "order": "asc"}).json()
+    assert [t["payee"] for t in body] == ["old", "mid", "new"]
+
+
+def test_list_endpoint_invalid_sort_returns_422(client, auth):
+    resp = client.get("/api/transactions", headers=auth, params={"sort": "amount"})
+    assert resp.status_code == 422
+    assert "sort" in resp.text.lower()
