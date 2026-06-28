@@ -78,6 +78,13 @@ class ListTransactionsInput(BaseModel):
     status: Literal["posted", "planned"] | None = Field(
         default=None, description="Transaction status"
     )
+    sort: Literal["date", "created_at"] = Field(
+        default="date",
+        description="Primary sort field (date = logical date; created_at = row creation).",
+    )
+    order: Literal["asc", "desc"] = Field(
+        default="desc", description="Sort direction."
+    )
 
 
 # ----- error-to-text wrapper -----
@@ -253,6 +260,8 @@ def list_transactions(session: Session, inp: ListTransactionsInput) -> str:
         status=inp.status,
         date_from=inp.date_from,
         date_to=inp.date_to,
+        sort=inp.sort,
+        order=inp.order,
     )
     return format.transactions_table(txs)
 
