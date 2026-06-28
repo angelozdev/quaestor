@@ -4,9 +4,10 @@ from __future__ import annotations
 import hmac
 import os
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Header, Request, Response
 from pydantic import BaseModel
 
+from .csrf import issue_csrf_cookie
 from .deps import _token_ok
 from .errors import Unauthorized
 
@@ -18,11 +19,12 @@ class LoginIn(BaseModel):
 
 
 @router.post("/login")
-def login(body: LoginIn, request: Request) -> dict[str, bool]:
+def login(body: LoginIn, request: Request, response: Response) -> dict[str, bool]:
     expected = os.environ.get("APP_PASSWORD")
     if not expected or not hmac.compare_digest(body.password, expected):
         raise Unauthorized("invalid password")
     request.session["authenticated"] = True
+    issue_csrf_cookie(response)
     return {"ok": True}
 
 
@@ -34,7 +36,10 @@ def logout(request: Request) -> dict[str, bool]:
 
 @router.get("/me")
 def me(
-    request: Request, authorization: str | None = Header(default=None)
+    request: Request,
+    response: Response,
+    authorization: str | None = Header(default=None),
 ) -> dict[str, bool]:
     authed = _token_ok(authorization) or request.session.get("authenticated") is True
+    issue_csrf_cookie(response)
     return {"authenticated": authed}

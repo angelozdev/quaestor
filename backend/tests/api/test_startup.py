@@ -12,7 +12,7 @@ def test_app_initializes_schema_on_startup(monkeypatch):
     fresh = make_engine(memory=True)
     monkeypatch.setattr(db, "engine", fresh)
     monkeypatch.setenv("APP_TOKEN", "test-token")
-    monkeypatch.setenv("SESSION_SECRET", "test-secret")
+    monkeypatch.setenv("SESSION_SECRET", "x" * 64)
 
     # Using TestClient as a context manager fires the lifespan, which must
     # create the schema. No dependency_overrides: the real get_session runs.

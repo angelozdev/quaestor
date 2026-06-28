@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import db
+from .csrf import CSRFMiddleware
 from .errors import register_exception_handlers
 
 
@@ -19,10 +20,33 @@ async def _lifespan(app: FastAPI):
     yield
 
 
+_MIN_SESSION_SECRET_BYTES = 32
+
+
+def _resolve_session_secret() -> str:
+    """Read SESSION_SECRET from env. Fail-fast if missing or too short.
+
+    Starlette signs the session cookie with `itsdangerous`; a short secret
+    makes cookie forgery trivial. 32 bytes is the OWASP-recommended minimum
+    for HMAC keys and matches `secrets.token_urlsafe(32)` output length.
+    Raises at app construction so misconfiguration breaks the deploy
+    instead of silently accepting attacker-forgeable cookies.
+    """
+    raw = os.environ.get("SESSION_SECRET", "").strip()
+    size = len(raw.encode("utf-8"))
+    if size < _MIN_SESSION_SECRET_BYTES:
+        raise RuntimeError(
+            "SESSION_SECRET must be set and ≥32 bytes "
+            f"(got {size} bytes). Generate one with: "
+            "`python -c \"import secrets; print(secrets.token_urlsafe(32))\"`."
+        )
+    return raw
+
+
 def _configure_middleware(app: FastAPI) -> None:
     app.add_middleware(
         SessionMiddleware,
-        secret_key=os.environ.get("SESSION_SECRET", "dev-insecure-secret"),
+        secret_key=_resolve_session_secret(),
         session_cookie="quaestor_session",
         same_site="lax",
         https_only=os.environ.get("COOKIE_SECURE", "").lower() in ("1", "true"),
@@ -32,8 +56,9 @@ def _configure_middleware(app: FastAPI) -> None:
         allow_origins=[os.environ.get("FRONTEND_ORIGIN", "http://localhost:3000")],
         allow_credentials=True,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
-        allow_headers=["*"],
+        allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Request-ID"],
     )
+    app.add_middleware(CSRFMiddleware)
 
 
 def _include_routers(app: FastAPI) -> None:
