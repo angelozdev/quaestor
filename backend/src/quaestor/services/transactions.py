@@ -20,6 +20,7 @@ from ..domain.models import (
 )
 from ..domain.money import BASE_CURRENCY, is_supported, to_base_cents
 from ..domain.rules import delta_balance, transfer_deltas
+from ..domain.sort import Order, SortField, SortSpec, SortableColumns
 from . import fx
 
 
@@ -295,6 +296,14 @@ def transfer(
     return (leg_from, leg_to)
 
 
+# Per-service sortable columns. Open for extension: adding a new sortable
+# field is one line here plus one Literal member in domain/sort.py.
+_TRANSACTION_SORTABLE: SortableColumns = {
+    "date":       Transaction.date,
+    "created_at": Transaction.created_at,
+}
+
+
 def list_transactions(
     session: Session,
     account_id: int | None = None,
@@ -304,8 +313,17 @@ def list_transactions(
     status=None,
     date_from: Date | None = None,
     date_to: Date | None = None,
+    *,
+    sort: SortField = "created_at",
+    order: Order = "desc",
 ) -> list[Transaction]:
-    """List transactions with optional filters, ordered by date ascending.
+    """List transactions with optional filters, ordered by `created_at DESC, id DESC`.
+
+    The default puts the most recently created transaction first regardless
+    of its logical `date`, matching the user's mental model on
+    `/transactions` ("what I just entered is on top"). Pass `sort="date",
+    order="asc"` to fall back to chronological-by-date (used by
+    `planned.to_pay`, where `date` is the due date).
 
     Args:
         session: Database session.
@@ -316,9 +334,12 @@ def list_transactions(
         status: Filter by TxStatus (or a value coercible to TxStatus).
         date_from: Include transactions on or after this date.
         date_to: Include transactions on or before this date.
+        sort: Primary sort field. One of `SortField`.
+        order: Sort direction. One of `Order`.
 
     Returns:
-        List of Transaction rows ordered by date ascending.
+        List of Transaction rows in deterministic order
+        (primary field, then `id` as tiebreaker in the same direction).
     """
     stmt = select(Transaction)
     if account_id is not None:
@@ -339,7 +360,9 @@ def list_transactions(
             .join(Tag, Tag.id == TransactionTag.tag_id)  # type: ignore[arg-type]
             .where(Tag.name == tag)
         )
-    return list(session.exec(stmt.order_by(Transaction.date)).all())
+    spec = SortSpec(field=sort, order=order)
+    primary, secondary = spec.resolve(_TRANSACTION_SORTABLE, Transaction.id)
+    return list(session.exec(stmt.order_by(primary, secondary)).all())
 
 
 _UNSET = object()

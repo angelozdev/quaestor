@@ -192,3 +192,36 @@ def test_delete_transfer_leg_is_rejected(session):
     leg_from, _ = transactions.transfer(session, a.id, b.id, 500, "COP", date(2026, 6, 17))
     with pytest.raises(ValidationError):
         transactions.delete_transaction(session, leg_from.id)
+
+
+# --- sort / order behaviour (ADR-0021 amended) ---
+
+
+def test_list_transactions_default_orders_by_created_at_desc(session):
+    """Default: newest-created first, regardless of logical date."""
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    # Insert in deliberately misleading order: mid (oldest created) first.
+    transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 15), "mid")
+    transactions.record_expense(session, a.id, 200, "COP", date(2026, 6, 1), "old")
+    transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
+    txs = transactions.list_transactions(session)
+    # Creation order: mid, old, new. Default = created_at DESC, id DESC.
+    assert [t.payee for t in txs] == ["new", "old", "mid"]
+
+
+def test_list_transactions_sort_date_asc_orders_chronologically(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 15), "mid")
+    transactions.record_expense(session, a.id, 200, "COP", date(2026, 6, 1), "old")
+    transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
+    txs = transactions.list_transactions(session, sort="date", order="asc")
+    assert [t.payee for t in txs] == ["old", "mid", "new"]
+
+
+def test_list_transactions_sort_date_desc_orders_reverse_chronologically(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 15), "mid")
+    transactions.record_expense(session, a.id, 200, "COP", date(2026, 6, 1), "old")
+    transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
+    txs = transactions.list_transactions(session, sort="date", order="desc")
+    assert [t.payee for t in txs] == ["new", "mid", "old"]
