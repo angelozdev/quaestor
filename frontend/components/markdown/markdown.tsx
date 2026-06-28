@@ -11,7 +11,7 @@ type Props = {
 
 function MarkdownImpl({ children, className }: Props) {
   return (
-    <Streamdown className={className} components={markdownComponents}>
+    <Streamdown mode="streaming" className={className} components={markdownComponents}>
       {children}
     </Streamdown>
   )
