@@ -22,6 +22,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from ..mcp.registry import LLM_ALLOWED_TOOLS
 from .events import done_bytes, serialize_event
 from .llm.provider import (
     LLMEvent,
@@ -32,7 +33,7 @@ from .llm.provider import (
     UpstreamLLMError,
 )
 from .mcp.client import MCPClient
-from .mcp.schema import get_cached_tools
+from .mcp.schema import filter_for_llm, get_cached_tools
 
 _log = logging.getLogger(__name__)
 
@@ -68,7 +69,9 @@ class ChatService:
 
         try:
             async with MCPClient(self._mcp) as mcp_client:
-                tools = await get_cached_tools(mcp_client)
+                tools = filter_for_llm(
+                    await get_cached_tools(mcp_client), LLM_ALLOWED_TOOLS
+                )
 
                 for iteration in range(1, self._max_iterations + 1):
                     tool_calls_this_iter: list[dict[str, Any]] = []

@@ -66,3 +66,17 @@ def _reset_cache_for_tests() -> None:
     _tools_cache = None
     _openai_tools_cache = None
     _lock = None
+
+
+def filter_for_llm(
+    tools: list[dict[str, Any]],
+    allowed: frozenset[str],
+) -> list[dict[str, Any]]:
+    """Return the subset of `tools` whose `function.name` is in `allowed`.
+
+    Pure: no side effects, easy to test in isolation. The chat service
+    passes `LLM_ALLOWED_TOOLS` from `mcp.registry` so destructive tools
+    (transfer, delete_*, archive_*, update_settings, delete_tag) never
+    appear in the tool list the LLM sees — closing QUA-LLM06-01.
+    """
+    return [t for t in tools if t.get("function", {}).get("name") in allowed]  # noqa: E501

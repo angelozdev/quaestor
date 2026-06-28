@@ -7,7 +7,15 @@ means one extra line of wiring, never a change to transport or auth.
 Each tool opens ONE Session per call, bound to ``db.engine`` resolved
 dynamically (so tests can swap the engine), and delegates to a `core` impl that
 already translates domain errors to text.
+
+Tools are also tagged with a `ToolTier` so the chat pipeline can decide
+which ones the LLM is allowed to invoke. Destructive tools stay
+registered on the MCP server (curl/MCP-direct + frontend HTTP UI can use
+them) but are dropped from the OpenAI-shaped tool list passed to the
+LLM, removing the indirect-prompt-injection blast radius.
 """
+from enum import Enum
+
 from sqlmodel import Session
 
 from .. import db
@@ -71,6 +79,100 @@ from .tools.budgets_reads import ListBudgetsInput, SafeToSpendInput
 from .tools.goals_reads import GoalsProgressInput, ListGoalsInput
 from .tools.reports import MonthlyReportInput
 from .tools.recurring_restore import RestoreRecurringInput
+
+
+class ToolTier(str, Enum):
+    """How dangerous it is to invoke a tool without explicit human intent.
+
+    The chat pipeline hides `WRITE_DESTRUCTIVE` tools from the LLM; the
+    operator still has full access via MCP-direct curl calls and via the
+    frontend HTTP UI (both of which require explicit user action).
+    """
+
+    READ = "read"
+    WRITE_SAFE = "write_safe"
+    WRITE_DESTRUCTIVE = "write_destructive"
+
+
+_READ_ONLY_TOOLS: frozenset[str] = frozenset(
+    {
+        "list_transactions",
+        "list_accounts",
+        "list_categories",
+        "list_tags",
+        "get_fx_rate",
+        "list_budgets",
+        "safe_to_spend",
+        "list_goals",
+        "goals_progress",
+        "monthly_report",
+        "get_transaction",
+        "get_account",
+        "get_category",
+        "list_recurring",
+        "to_pay",
+        "get_settings",
+    }
+)
+
+_WRITE_SAFE_TOOLS: frozenset[str] = frozenset(
+    {
+        "record_expense",
+        "record_income",
+        "create_account",
+        "create_category",
+        "create_category_group",
+        "create_tag",
+        "create_recurring",
+        "create_goal",
+        "assign_budget",
+        "contribute_goal",
+        "set_fx_rate",
+        "plan_payment",
+    }
+)
+
+_WRITE_DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
+    {
+        "transfer",
+        "update_transaction",
+        "delete_transaction",
+        "update_account",
+        "archive_account",
+        "restore_account",
+        "update_category",
+        "archive_category",
+        "restore_category",
+        "update_category_group",
+        "archive_category_group",
+        "restore_category_group",
+        "update_tag",
+        "delete_tag",
+        "update_recurring",
+        "archive_recurring",
+        "restore_recurring",
+        "skip_payment",
+        "skip_recurring",
+        "confirm_payment",
+        "update_goal",
+        "pause_goal",
+        "restore_goal",
+        "update_settings",
+    }
+)
+
+LLM_ALLOWED_TOOLS: frozenset[str] = _READ_ONLY_TOOLS | _WRITE_SAFE_TOOLS
+
+
+def tool_tier(name: str) -> ToolTier:
+    """Classify a tool. Unknown names default to `WRITE_DESTRUCTIVE`
+    (deny by default — a tool we forgot to classify must not silently
+    become reachable by the LLM)."""
+    if name in _READ_ONLY_TOOLS:
+        return ToolTier.READ
+    if name in _WRITE_SAFE_TOOLS:
+        return ToolTier.WRITE_SAFE
+    return ToolTier.WRITE_DESTRUCTIVE
 
 TEMPORAL_TOOL_NAMES = (
     "create_recurring",
