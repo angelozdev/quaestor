@@ -4,7 +4,7 @@ from __future__ import annotations
 from quaestor.chat.llm.provider import LLMEvent, LLMEventType
 
 
-def test_happy_path_streams_text_and_done(app, auth_headers):
+def test_happy_path_streams_text_and_done(app, auth_headers, client):
     test_app, stub = app
     stub.events = [
         LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m1", model="MiniMax-M3"),
@@ -14,9 +14,6 @@ def test_happy_path_streams_text_and_done(app, auth_headers):
         LLMEvent(type=LLMEventType.STEP_FINISH),
         LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
     ]
-    from fastapi.testclient import TestClient
-
-    client = TestClient(test_app)
     with client.stream(
         "POST",
         "/api/chat",

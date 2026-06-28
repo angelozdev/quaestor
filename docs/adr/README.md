@@ -33,3 +33,4 @@ New ADRs are created with the `adr` skill:
 | 0017 | Chat system prompt: server-side injection of a financial coach persona | accepted | 2026-06-22 |
 | 0018 | Adopt Vercel template best practices for chat SSE | accepted | 2026-06-24 |
 | 0019 | Markdown rendering with streamdown | accepted | 2026-06-24 |
+| 0020 | Security hardening: CSRF, tool tier policy, and tool-output sanitization | accepted | 2026-06-28 |
