@@ -236,3 +236,21 @@ def test_skip_payment_non_planned_raises(session):
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
     with pytest.raises(IllegalTransition):
         planned.skip_payment(session, tx.id)
+
+
+# --- ADR-0021 amended: to_pay must keep chronological-by-due-date order ---
+
+
+def test_to_pay_orders_by_due_date_asc(session):
+    """Lock the chronological-by-due-date contract. Creation order is set
+    OPPOSITE to due-date order, so any non-chronological sort (e.g. the
+    new created_at DESC default) returns the wrong sequence and this
+    test fails. After to_pay passes sort='date', order='asc' explicitly,
+    this test passes."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=1_000_000)
+    # Creation order: Card first, Rent second.
+    # Due-date order: Card (6-30) before Rent (7-15).
+    planned.plan_payment(session, "Card", 200_000, "COP", due_date=date(2026, 6, 30), account_id=a.id)
+    planned.plan_payment(session, "Rent", 500_000, "COP", due_date=date(2026, 7, 15), account_id=a.id)
+    result = planned.to_pay(session, date(2026, 6, 1), date(2026, 7, 31))
+    assert [t.payee for t in result["items"]] == ["Card", "Rent"]

@@ -109,7 +109,8 @@ def to_pay(session: Session, since: Date, until: Date) -> dict:
     if since > until:
         raise ValidationError("to_pay window is inverted (since > until)")
     items = _tx.list_transactions(
-        session, status="planned", date_from=since, date_to=until
+        session, status="planned", date_from=since, date_to=until,
+        sort="date", order="asc",   # chronological-by-due-date; ADR-0021 amended
     )
     total_base = sum(t.to_base for t in items)
     return {"items": items, "total_base": total_base}
