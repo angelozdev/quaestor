@@ -314,16 +314,17 @@ def list_transactions(
     date_from: Date | None = None,
     date_to: Date | None = None,
     *,
-    sort: SortField = "created_at",
+    sort: SortField = "date",
     order: Order = "desc",
 ) -> list[Transaction]:
-    """List transactions with optional filters, ordered by `created_at DESC, id DESC`.
+    """List transactions with optional filters, ordered by `date DESC, id DESC`.
 
-    The default puts the most recently created transaction first regardless
-    of its logical `date`, matching the user's mental model on
-    `/transactions` ("what I just entered is on top"). Pass `sort="date",
-    order="asc"` to fall back to chronological-by-date (used by
-    `planned.to_pay`, where `date` is the due date).
+    The default puts the most recent transaction date first, matching how the
+    user reviews activity on `/transactions` ("qué pasó más reciente"). With
+    no `status` filter, both `posted` and `planned` rows are returned —
+    planned txs surface at their due-date position so upcoming obligations
+    are visible. Pass `sort="created_at"` to fall back to creation-time
+    order (rare; mainly for audit / debugging).
 
     Args:
         session: Database session.

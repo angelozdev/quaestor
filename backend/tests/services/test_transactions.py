@@ -5,7 +5,7 @@ import pytest
 
 from quaestor.domain.errors import MissingRate, NotFound, ValidationError
 from quaestor.domain.models import AccountType, TxStatus, TxType
-from quaestor.services import accounts, categories, fx, transactions
+from quaestor.services import accounts, categories, fx, planned, transactions
 
 
 def _make_account(session, currency="COP", balance=0, type=AccountType.debit):
@@ -194,19 +194,19 @@ def test_delete_transfer_leg_is_rejected(session):
         transactions.delete_transaction(session, leg_from.id)
 
 
-# --- sort / order behaviour (ADR-0021 amended) ---
+# --- sort / order behaviour (ADR-0021) ---
 
 
-def test_list_transactions_default_orders_by_created_at_desc(session):
-    """Default: newest-created first, regardless of logical date."""
+def test_list_transactions_default_orders_by_date_desc(session):
+    """Default: newest logical-date first, regardless of creation order."""
     a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
-    # Insert in deliberately misleading order: mid (oldest created) first.
+    # Insert in misleading order: mid (oldest created) first.
     transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 15), "mid")
     transactions.record_expense(session, a.id, 200, "COP", date(2026, 6, 1), "old")
     transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
     txs = transactions.list_transactions(session)
-    # Creation order: mid, old, new. Default = created_at DESC, id DESC.
-    assert [t.payee for t in txs] == ["new", "old", "mid"]
+    # Date desc: new (1-jul) > mid (15-jun) > old (1-jun).
+    assert [t.payee for t in txs] == ["new", "mid", "old"]
 
 
 def test_list_transactions_sort_date_asc_orders_chronologically(session):
@@ -225,3 +225,18 @@ def test_list_transactions_sort_date_desc_orders_reverse_chronologically(session
     transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
     txs = transactions.list_transactions(session, sort="date", order="desc")
     assert [t.payee for t in txs] == ["new", "mid", "old"]
+
+
+def test_list_transactions_default_includes_planned_at_due_date(session):
+    """No status filter = both posted and planned, in date-DESC order.
+
+    Planned tx with due-date 15-jun surfaces between a 1-jun posted and a
+    1-jul posted — proves both (a) the default includes planned and
+    (b) the sort respects the planned tx's logical date.
+    """
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
+    transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 1), "old")
+    transactions.record_expense(session, a.id, 300, "COP", date(2026, 7, 1), "new")
+    planned.plan_payment(session, "Rent", 500_000, "COP", due_date=date(2026, 6, 15), account_id=a.id)
+    txs = transactions.list_transactions(session)
+    assert [t.payee for t in txs] == ["new", "Rent", "old"]
