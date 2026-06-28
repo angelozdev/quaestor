@@ -1,6 +1,6 @@
 # 0021. Default transaction listing order: created_at desc
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-06-28
 - **Deciders:** Angelo
 - **Supersedes:** —
