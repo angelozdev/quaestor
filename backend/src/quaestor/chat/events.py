@@ -91,14 +91,29 @@ def serialize_event(event: LLMEvent, *, message_id: str) -> bytes:
 
     if t == LLMEventType.TOOL_OUTPUT_AVAILABLE:
         assert event.tool_call_id is not None
-        payload: dict[str, Any] = {
-            "type": "tool-output-available",
-            "toolCallId": event.tool_call_id,
-            "output": event.output or "",
-        }
-        if event.is_error:
-            payload["isError"] = True
-        return render_sse(payload)
+        # Success-only emit path. Tool failures route through
+        # TOOL_OUTPUT_ERROR (ADR-0022). The `is_error` field on this
+        # variant would be rejected by the AI SDK v3 React client's
+        # strict `uiMessageChunkSchema` (see
+        # `frontend/node_modules/ai/dist/index.mjs:5463-5472`).
+        return render_sse(
+            {
+                "type": "tool-output-available",
+                "toolCallId": event.tool_call_id,
+                "output": event.output or "",
+            }
+        )
+
+    if t == LLMEventType.TOOL_OUTPUT_ERROR:
+        assert event.tool_call_id is not None
+        assert event.error_text is not None
+        return render_sse(
+            {
+                "type": "tool-output-error",
+                "toolCallId": event.tool_call_id,
+                "errorText": event.error_text,
+            }
+        )
 
     if t == LLMEventType.STEP_FINISH:
         return render_sse({"type": "finish-step"})

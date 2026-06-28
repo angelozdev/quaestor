@@ -26,6 +26,7 @@ class LLMEventType(str, Enum):
     TOOL_INPUT_DELTA = "tool-input-delta"      # → Vercel `tool-input-delta`
     TOOL_INPUT_AVAILABLE = "tool-input-available"  # → Vercel `tool-input-available`
     TOOL_OUTPUT_AVAILABLE = "tool-output-available"  # → Vercel `tool-output-available`
+    TOOL_OUTPUT_ERROR = "tool-output-error"   # → Vercel `tool-output-error` (ADR-0022)
     STEP_FINISH = "finish-step"           # → Vercel `finish-step`
     MESSAGE_FINISH = "finish"             # → Vercel `finish`
     ERROR = "error"                       # → Vercel `error`
@@ -52,6 +53,7 @@ class LLMEvent:
     arguments: dict[str, Any] | None = None
     output: str | None = None
     is_error: bool = False
+    error_text: str | None = None  # Vercel `errorText` for tool-output-error
 
     # message-level
     message_id: str | None = None
