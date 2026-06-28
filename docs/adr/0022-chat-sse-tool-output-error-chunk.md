@@ -1,6 +1,6 @@
 # 0022. Chat SSE tool-output-error chunk
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-06-28
 - **Deciders:** Angelo
 - **Supersedes:** —
