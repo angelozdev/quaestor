@@ -179,7 +179,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
 
 
 @pytest.mark.asyncio
-async def test_tool_error_emits_is_error_and_loop_continues(fake_mcp):
+async def test_tool_error_emits_error_chunk_and_loop_continues(fake_mcp):
     fake_mcp["client"] = FakeMCPClient(
         {
             "list_transactions": CallToolResult(
@@ -363,7 +363,7 @@ async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
 
 
 @pytest.mark.asyncio
-async def test_tool_call_timeout_emits_is_error_and_continues(fake_mcp):
+async def test_tool_call_timeout_emits_error_chunk_and_continues(fake_mcp):
     """A timed-out MCP tool call emits tool-output-available with is_error and
     a tool message of 'timeout', then the loop keeps going (does not abort).
     """
