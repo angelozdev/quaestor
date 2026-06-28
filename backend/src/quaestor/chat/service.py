@@ -34,6 +34,7 @@ from .llm.provider import (
 )
 from .mcp.client import MCPClient
 from .mcp.schema import filter_for_llm, get_cached_tools
+from .sanitize import sanitize_tool_output
 
 _log = logging.getLogger(__name__)
 
@@ -197,18 +198,9 @@ class ChatService:
                             )
                             continue
                         except Exception as exc:  # noqa: BLE001 — see ADR-0016
-                            # The LLM may call a tool with malformed arguments
-                            # (Pydantic rejects, fastmcp raises ToolError), or
-                            # the tool itself may raise. Either way the turn
-                            # is recoverable: emit isError for the LLM to see
-                            # on the next iteration, keep the loop going.
-                            # Real bugs in MCPClient (asserts, context
-                            # manager errors) still escape this block because
-                            # they happen *outside* the per-tool dispatch.
                             err_text = f"tool error: {type(exc).__name__}: {exc}".splitlines()[0]
-                            # Cap length so a Pydantic stack trace doesn't
-                            # bloat the conversation context.
                             err_text = err_text[:500]
+                            safe_err = sanitize_tool_output(tc_name, err_text)
                             _log.warning(
                                 "[chat] tool call failed: %s %s", tc_name, err_text
                             )
@@ -216,7 +208,7 @@ class ChatService:
                                 LLMEvent(
                                     type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
                                     tool_call_id=tc_id,
-                                    output=err_text,
+                                    output=safe_err,
                                     is_error=True,
                                 ),
                                 message_id=message_id,
@@ -225,15 +217,16 @@ class ChatService:
                                 {
                                     "role": "tool",
                                     "tool_call_id": tc_id,
-                                    "content": err_text,
+                                    "content": safe_err,
                                 }
                             )
                             continue
+                        safe_output = sanitize_tool_output(tc_name, result.output)
                         yield serialize_event(
                             LLMEvent(
                                 type=LLMEventType.TOOL_OUTPUT_AVAILABLE,
                                 tool_call_id=tc_id,
-                                output=result.output,
+                                output=safe_output,
                                 is_error=result.is_error,
                             ),
                             message_id=message_id,
@@ -242,7 +235,7 @@ class ChatService:
                             {
                                 "role": "tool",
                                 "tool_call_id": tc_id,
-                                "content": result.output,
+                                "content": safe_output,
                             }
                         )
                 else:
