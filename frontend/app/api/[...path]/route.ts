@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 
 const API_URL = process.env.API_URL ?? "http://localhost:8000"
 
+const PASSTHROUGH_REQUEST_HEADERS = ["x-csrf-token", "authorization"] as const
+
 async function proxy(req: NextRequest, path: string[]) {
   const target = `${API_URL}/api/${path.join("/")}${req.nextUrl.search}`
 
@@ -10,6 +12,10 @@ async function proxy(req: NextRequest, path: string[]) {
   if (contentType) headers["content-type"] = contentType
   const cookie = req.headers.get("cookie")
   if (cookie) headers.cookie = cookie
+  for (const name of PASSTHROUGH_REQUEST_HEADERS) {
+    const value = req.headers.get(name)
+    if (value) headers[name] = value
+  }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD"
   const body = hasBody ? await req.text() : undefined
