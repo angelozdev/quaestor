@@ -1,10 +1,16 @@
-import axios, { type AxiosError } from "axios"
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios"
+import { csrfHeaders } from "@/lib/csrf"
 import { ApiError, onUnauthorized } from "./types"
 
 export const http = axios.create({
   baseURL: "/api",
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
+})
+
+http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  Object.assign(config.headers, csrfHeaders())
+  return config
 })
 
 http.interceptors.response.use(

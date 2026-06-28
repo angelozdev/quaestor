@@ -1,4 +1,5 @@
 import { DefaultChatTransport, isTextUIPart } from "ai"
+import { csrfHeaders } from "@/lib/csrf"
 
 /**
  * Factory for the chat transport used by `useChat` in `ChatSection`.
@@ -28,8 +29,6 @@ export function createChatTransport() {
         trigger,
         messages: messages.map((m) => {
           const textParts = m.parts.filter(isTextUIPart)
-          // Surface (rather than silently drop) non-text parts so a future
-          // addition of file/image parts is observable.
           if (textParts.length !== m.parts.length) {
             console.warn(
               "[chat] dropping non-text part(s) on outgoing request:",
@@ -42,6 +41,7 @@ export function createChatTransport() {
           }
         }),
       },
+      headers: csrfHeaders(),
     }),
   })
 }
