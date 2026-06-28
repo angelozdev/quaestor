@@ -31,7 +31,7 @@ def list_transactions(
     tag: str | None = None,
     type: TxType | None = None,
     status: str | None = None,
-    sort: SortField = "created_at",
+    sort: SortField = "date",
     order: Order = "desc",
     session: Session = Depends(get_session),
 ):

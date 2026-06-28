@@ -188,10 +188,10 @@ def test_delete_transfer_leg_via_api_is_422(client, auth, two_accounts):
 # --- ADR-0021 amended: sort/order query params on GET /transactions ---
 
 
-def test_list_endpoint_default_orders_by_created_at_desc(client, auth, two_accounts):
-    """Default endpoint order: newest-created first, regardless of date."""
+def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
+    """Default endpoint order: newest date first, regardless of insertion order."""
     cash, _ = two_accounts
-    # Insert in misleading order: oldest creation first.
+    # Insert in misleading order: middle date first, then earliest, then latest.
     client.post("/api/transactions", headers=auth, json={
         "type": "expense", "account_id": cash["id"], "amount": 100,
         "currency": "COP", "date": "2026-06-15", "payee": "mid",
@@ -205,7 +205,7 @@ def test_list_endpoint_default_orders_by_created_at_desc(client, auth, two_accou
         "currency": "COP", "date": "2026-07-01", "payee": "new",
     })
     body = client.get("/api/transactions", headers=auth).json()
-    assert [t["payee"] for t in body] == ["new", "old", "mid"]
+    assert [t["payee"] for t in body] == ["new", "mid", "old"]
 
 
 def test_list_endpoint_sort_date_asc_orders_chronologically(client, auth, two_accounts):
@@ -223,3 +223,27 @@ def test_list_endpoint_invalid_sort_returns_422(client, auth):
     resp = client.get("/api/transactions", headers=auth, params={"sort": "amount"})
     assert resp.status_code == 422
     assert "sort" in resp.text.lower()
+
+
+def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_accounts):
+    """No status filter = both posted and planned, in date-DESC order.
+
+    Planned tx with due-date 15-jun surfaces between a 1-jul posted and
+    a 1-jun posted in the API response.
+    """
+    cash, _ = two_accounts
+    client.post("/api/transactions", headers=auth, json={
+        "type": "expense", "account_id": cash["id"], "amount": 100,
+        "currency": "COP", "date": "2026-06-01", "payee": "old",
+    })
+    client.post("/api/transactions", headers=auth, json={
+        "type": "expense", "account_id": cash["id"], "amount": 300,
+        "currency": "COP", "date": "2026-07-01", "payee": "new",
+    })
+    plan = client.post("/api/planned", headers=auth, json={
+        "payee": "Rent", "amount": 500_000, "due_date": "2026-06-15",
+        "account_id": cash["id"],
+    })
+    assert plan.status_code == 201, plan.text
+    body = client.get("/api/transactions", headers=auth).json()
+    assert [t["payee"] for t in body] == ["new", "Rent", "old"]
