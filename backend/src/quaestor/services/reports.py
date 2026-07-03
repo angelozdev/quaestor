@@ -223,7 +223,6 @@ def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
     return [f"{name}: {money(total)} pending" for name, total in rows]
 
 
-
 def monthly_report(
     session: Session, month: str, *, today: Date | None = None
 ) -> MonthlyReport:
