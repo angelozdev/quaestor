@@ -25,7 +25,7 @@ New ADRs are created with the `adr` skill:
 | 0009 | Closing the MCP parity gap | accepted | 2026-06-21 |
 | 0010 | Deployment posture | accepted | 2026-06-22 |
 | 0011 | MCP only over Tailscale | accepted | 2026-06-22 |
-| 0012 | Litestream for continuous backup | accepted | 2026-06-22 |
+| 0012 | Litestream for continuous backup | superseded by 0024 | 2026-06-22 |
 | 0013 | Daily scheduler as a thin sidecar | accepted | 2026-06-22 |
 | 0014 | Chat endpoint with LiteLLM and an in-memory MCP bridge | accepted | 2026-06-22 |
 | 0015 | Frontend chat request wire-format adapter (UIMessage → {role, content}) | accepted | 2026-06-22 |
@@ -37,3 +37,4 @@ New ADRs are created with the `adr` skill:
 | 0021 | Default transaction listing order: created_at desc | accepted | 2026-06-28 |
 | 0022 | Chat SSE tool-output-error chunk | accepted | 2026-06-28 |
 | 0023 | Outstanding queue: overdue + upcoming buckets | accepted | 2026-07-03 |
+| 0024 | Postgres replaces SQLite (supersedes 0012) | proposed | 2026-07-03 |
