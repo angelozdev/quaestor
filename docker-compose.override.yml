@@ -15,7 +15,6 @@ services:
     env_file:
       - ./backend/.env.local
     environment:
-      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
       COOKIE_SECURE: "false"
     # Direct uvicorn CLI flags: explicit host/port + reload + reload-dir.
     command: >-
@@ -29,7 +28,6 @@ services:
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/uv.lock:/app/uv.lock:ro
       - ./backend/scripts:/app/scripts:ro
-      - ./.dev-data:/.dev-data
 
   mcp:
     build:
@@ -38,7 +36,6 @@ services:
     env_file:
       - ./backend/.env.local
     environment:
-      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
       MCP_RELOAD: "1"
     # Helper-based reload: quaestor.mcp.__main__ -> main() reads MCP_RELOAD
     # and turns on uvicorn autoreload. Asymmetric vs `api` (direct uvicorn
@@ -51,7 +48,6 @@ services:
       - ./backend/src:/app/src:rw
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/uv.lock:/app/uv.lock:ro
-      - ./.dev-data:/.dev-data
 
   frontend:
     # Use the deps stage so pnpm + node_modules are present in the image
@@ -96,8 +92,6 @@ services:
       target: dev
     env_file:
       - ./backend/.env.local
-    environment:
-      QUAESTOR_DB: sqlite:////.dev-data/quaestor.db
     command:
       - sh
       - -c
@@ -108,15 +102,17 @@ services:
           sleep 86400 &
           wait $$!
         done
-    volumes:
-      - ./.dev-data:/.dev-data
+
+  db:
+    ports:
+      - "5432:5432"
+    env_file:
+      - ./backend/.env.local
 
   # Inherited from docker-compose.yml but skipped in dev:
   caddy:
     profiles: ["never"]
   tailscale:
-    profiles: ["never"]
-  litestream:
     profiles: ["never"]
 
 volumes:
