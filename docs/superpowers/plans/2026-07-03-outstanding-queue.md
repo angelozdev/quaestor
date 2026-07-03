@@ -4,7 +4,7 @@
 
 **Goal:** Make `services.planned.to_pay` always include overdue transactions, regardless of the `[since, until]` window the caller passes. Surface them as a separate `overdue` bucket in the response and a separate section in the UI. Migrate the monthly report to a retrospective view that explicitly excludes prior-month overdue items.
 
-**Architecture:** Introduce a frozen value object `OutstandingQueue` with two mutually-exclusive buckets (`overdue`, `upcoming`). Refactor `to_pay` to produce it via two disjoint queries gated by an `include_prior_overdue` kwarg (default `True` for the operational view, `False` for the retrospective monthly report). Update the REST/MCP wire format, the MCP markdown renderer, and two frontend components to render the two buckets as separate sections.
+**Architecture:** Introduce a frozen value object `OutstandingQueue` with two mutually-exclusive buckets (`overdue`, `upcoming`). Refactor `to_pay` to produce it via two disjoint queries gated by a `retrospective` kwarg (default `False` for the operational view, `True` for the retrospective monthly report). Update the REST/MCP wire format, the MCP markdown renderer, and two frontend components to render the two buckets as separate sections.
 
 **Tech Stack:** Python 3.12 · SQLModel · Pydantic v2 · FastAPI · FastMCP · pytest · `uv` · SQLite in-memory for tests. Next.js 15 + TanStack Query + Vitest + Testing Library on the frontend. `date-fns` for date math.
 
@@ -50,8 +50,8 @@
 
 | Path | Change |
 |---|---|
-| `backend/src/quaestor/services/planned.py` | New `to_pay(session, since, until, *, include_prior_overdue=True, today=None) -> OutstandingQueue` signature; import the VO; return it. |
-| `backend/src/quaestor/services/reports.py` | `_pending_lines` calls `to_pay(..., include_prior_overdue=False)` and iterates `queue.upcoming` instead of `result["items"]`. |
+| `backend/src/quaestor/services/planned.py` | New `to_pay(session, since, until, *, retrospective=False, today=None) -> OutstandingQueue` signature; import the VO; return it. |
+| `backend/src/quaestor/services/reports.py` | `_pending_lines` calls `to_pay(..., retrospective=True)` and iterates `queue.upcoming` instead of `result["items"]`. |
 | `backend/src/quaestor/mcp/format.py` | `to_pay_table(queue: OutstandingQueue)` renders two sections (overdue with ⚠️, upcoming) or a single-section or "Nothing outstanding." |
 | `backend/src/quaestor/mcp/tools/temporal.py` | Type hint update: `temporal.to_pay` now returns `OutstandingQueue`. Format call unchanged. |
 | `backend/src/quaestor/api/routers/planned.py` | `response_model=ToPayOut` updated to reflect `{overdue, upcoming, total_base}` shape. |
@@ -131,10 +131,10 @@ filter violates that contract for items that age out of the window.
    report calls only `/to-pay`. Zero changes to the existing `to_pay`
    contract.
 3. Make `to_pay` return `{overdue, upcoming, total_base}` (a single
-   structured response) with a kwarg `include_prior_overdue: bool = True`
+   structured response) with a kwarg `retrospective: bool = False`
    controlling whether the overdue bucket contains items overdue from
    before `since`. The widget renders both buckets as sections; the
-   monthly report calls with `include_prior_overdue=False` and reads
+   monthly report calls with `retrospective=True` and reads
    only `queue.upcoming`.
 4. Always include overdue (remove `since` from the service). Each
    caller filters post-hoc if it wants a narrower window.
@@ -145,7 +145,7 @@ Chosen option: **3 — structured `OutstandingQueue` value object with
 two mutually-exclusive buckets.** The service produces
 `OutstandingQueue(overdue=[...], upcoming=[...])`. The overdue bucket
 contains planned txs with `date < today AND date <= until` when
-`include_prior_overdue=True` (the default for the operational view);
+`retrospective=False` (the default for the operational view);
 empty otherwise. The upcoming bucket always contains planned txs with
 `date in [max(since, today), until]`. The two ranges are disjoint by
 construction, so the buckets are mutually exclusive.
@@ -167,7 +167,7 @@ in `to_pay`, zero changes to existing callers.
 
 ### Pros and cons of the options
 
-**3. OutstandingQueue value object + `include_prior_overdue` kwarg**
+**3. OutstandingQueue value object + `retrospective` kwarg**
 - Good, because "outstanding queue" is a single domain concept and
   the VO captures it.
 - Good, because the wire format and the renderer both reflect the
@@ -233,13 +233,13 @@ in `to_pay`, zero changes to existing callers.
 - Service behavior + bug reproduction:
   `backend/tests/services/test_planned.py::test_to_pay_includes_overdue_before_since`
   inserts an item dated `today - 10 days`, calls `to_pay(since=today+5,
-  until=today+10, include_prior_overdue=True)`, and asserts the item
+  until=today+10, retrospective=False)`, and asserts the item
   appears in `queue.overdue`. The pre-fix service would have returned
   an empty `items` list (date < since).
 - Monthly report retrospective:
-  `backend/tests/services/test_planned.py::test_to_pay_include_prior_overdue_false_omits_overdue_bucket`
+  `backend/tests/services/test_planned.py::test_to_pay_retrospective_true_omits_overdue_bucket`
   inserts a prior-month overdue and an in-month planned; the report's
-  call with `include_prior_overdue=False` produces an empty overdue
+  call with `retrospective=True` produces an empty overdue
   bucket.
 - REST wire format:
   `backend/tests/api/test_planned.py::test_to_pay_response_includes_overdue_before_since`
@@ -253,8 +253,8 @@ in `to_pay`, zero changes to existing callers.
   asserts the "Vencidos" header renders when the response has overdue
   items; the negative case asserts it does not.
 - Code-review checklist: any new caller of `to_pay` must either accept
-  the default `include_prior_overdue=True` (operational) or pass
-  `False` explicitly (retrospective). The candado is the kwarg name.
+  the default `retrospective=False` (operational) or pass
+  `True` explicitly (retrospective). The candado is the kwarg name.
 ```
 
 - [ ] **Step 2: Commit**
@@ -463,7 +463,7 @@ git commit -m "feat(domain): add OutstandingQueue value object"
 
 **Interfaces:**
 - Consumes (from Task 2): `OutstandingQueue` from `quaestor.domain.planned`.
-- Produces (consumed by Tasks 4, 5, 6): `planned.to_pay(session, since, until, *, include_prior_overdue=True, today=None) -> OutstandingQueue`.
+- Produces (consumed by Tasks 4, 5, 6): `planned.to_pay(session, since, until, *, retrospective=False, today=None) -> OutstandingQueue`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -475,7 +475,7 @@ Replace the existing `to_pay` tests in `backend/tests/services/test_planned.py` 
 
 def test_to_pay_includes_overdue_before_since(session):
     """Bug reproduction (2026-07-02): an overdue item with date < since
-    must appear in the overdue bucket when include_prior_overdue=True
+    must appear in the overdue bucket when retrospective=False
     (the default). Pre-fix, the service filtered with date_from=since
     and the item was silently dropped."""
     a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
@@ -529,7 +529,7 @@ def test_to_pay_upcoming_respects_since_floor(session):
     assert queue.upcoming == []
 
 
-def test_to_pay_include_prior_overdue_false_omits_overdue_bucket(session):
+def test_to_pay_retrospective_true_omits_overdue_bucket(session):
     """Retrospective view (used by the monthly report): items overdue
     from before the window are not surfaced."""
     a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
@@ -541,7 +541,7 @@ def test_to_pay_include_prior_overdue_false_omits_overdue_bucket(session):
         session,
         since=date.today(),
         until=date.today() + timedelta(days=30),
-        include_prior_overdue=False,
+        retrospective=True,
     )
     assert queue.overdue == []  # PriorOverdue is filtered out
     assert [t.payee for t in queue.upcoming] == ["InWindow"]
@@ -574,7 +574,7 @@ def test_to_pay_window_entirely_historical_with_retrospective_returns_empty(sess
         session,
         since=Date(2024, 1, 1),
         until=Date(2024, 12, 31),
-        include_prior_overdue=False,
+        retrospective=True,
         today=Date(2026, 7, 1),
     )
     assert queue.overdue == []
@@ -635,7 +635,7 @@ def to_pay(
     since: Date,
     until: Date,
     *,
-    include_prior_overdue: bool = True,
+    retrospective: bool = False,
     today: Date | None = None,
 ) -> OutstandingQueue:
     """Build the user's outstanding queue for the [since, until] window.
@@ -644,7 +644,7 @@ def to_pay(
     - `upcoming` = planned txs with `date in [max(since, today_resolved), until]`,
       ordered by date ASC.
     - `overdue`  = planned txs with `date < today_resolved AND date <= until`,
-      ordered by date ASC, iff `include_prior_overdue=True`.
+      ordered by date ASC, iff `retrospective=False`.
 
     `today_resolved` is `today` if provided, else `date.today()`. The
     `today` kwarg exists for testability (the codebase pattern in
@@ -658,9 +658,9 @@ def to_pay(
         session: DB session.
         since: Lower bound for the upcoming bucket (inclusive).
         until: Hard cap for both buckets (inclusive).
-        include_prior_overdue: When True (default), the overdue bucket
+        retrospective: When False (default), the overdue bucket
             contains all planned txs with `date < today_resolved` whose
-            `date <= until`. When False, the overdue bucket is empty
+            `date <= until`. When True, the overdue bucket is empty
             (retrospective view: monthly report).
         today: Override for `date.today()` — used by tests for
             deterministic boundary assertions.
@@ -675,7 +675,7 @@ def to_pay(
     today_resolved = today if today is not None else _Date.today()
 
     # Overdue bucket. Constrained by `until` and trimmed to `date < today_resolved`.
-    if include_prior_overdue:
+    if not retrospective:
         # list_transactions filter is `date <= date_to`; we want strictly
         # < today, so pass min(today, until) and trim day-of rows.
         overdue_rows = _tx.list_transactions(
@@ -690,7 +690,7 @@ def to_pay(
         overdue_items = []
 
     # Upcoming bucket. Skip the query if the floor is past the cap
-    # (only happens when include_prior_overdue=False and the entire
+    # (only happens when retrospective=True and the entire
     # window is historical relative to today).
     upcoming_since = max(since, today_resolved)
     if upcoming_since > until:
@@ -894,13 +894,13 @@ git commit -m "feat(mcp): to_pay_table renders two sections from OutstandingQueu
 - Modify: `backend/src/quaestor/services/reports.py:201` (`_pending_lines` function)
 
 **Interfaces:**
-- Consumes (from Task 3): `planned.to_pay(..., include_prior_overdue=False)`.
+- Consumes (from Task 3): `planned.to_pay(..., retrospective=True)`.
 - Produces: the `_pending_lines(session, start, end) -> list[str]` unchanged in return type.
 
 - [ ] **Step 1: Verify the test scenario is the right one**
 
 No new test is required for this task — the service-level test
-`test_to_pay_include_prior_overdue_false_omits_overdue_bucket` in
+`test_to_pay_retrospective_true_omits_overdue_bucket` in
 Task 3 already locks the retrospective behavior. This task only
 updates the call site.
 
@@ -942,12 +942,12 @@ Open `backend/src/quaestor/services/reports.py`. Replace the body of `_pending_l
 def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
     """Alert lines for unconfirmed (planned) entries in the month.
 
-    Retrospective view: pass `include_prior_overdue=False` so the
+    Retrospective view: pass `retrospective=True` so the
     report for 2026-07 doesn't show items overdue from June. The
     retrospective only counts what was planned IN this month.
     """
     queue = _planned.to_pay(
-        session, start, end, include_prior_overdue=False,
+        session, start, end, retrospective=True,
     )
     by_account: dict[int, int] = {}
     for tx in queue.upcoming:  # only the upcoming bucket is in-scope
@@ -975,7 +975,7 @@ Expected: many tests still fail (the REST router and the frontend have not been 
 
 ```bash
 git add backend/src/quaestor/services/reports.py backend/tests/services/test_reports.py
-git commit -m "fix(reports): monthly report uses include_prior_overdue=False (retrospective)"
+git commit -m "fix(reports): monthly report uses retrospective=True for clean retrospective view"
 ```
 
 ---
@@ -1319,7 +1319,7 @@ ADR (above) is now backed by a green test:
   `tests/services/test_planned.py::test_to_pay_includes_overdue_before_since` —
   green (pre-fix would have dropped the item).
 - Monthly report retrospective:
-  `tests/services/test_planned.py::test_to_pay_include_prior_overdue_false_omits_overdue_bucket` —
+  `tests/services/test_planned.py::test_to_pay_retrospective_true_omits_overdue_bucket` —
   green.
 - REST wire format:
   `tests/api/test_planned.py::test_to_pay_response_includes_overdue_before_since` —
@@ -1356,11 +1356,11 @@ git commit -m "feat(api): /planned/to-pay returns {overdue, upcoming, total_base
 
 **1. Spec coverage:**
 - VO with `overdue`/`upcoming`/`total_base`/`is_empty`/`all_items`/`from_lists` → Task 2.
-- Service signature with `include_prior_overdue` and `today` kwargs → Task 3.
+- Service signature with `retrospective` and `today` kwargs → Task 3.
 - Mutual-exclusion semantics → Task 3 (enforced at the call site, documented in the VO docstring).
 - Wire format `{overdue, upcoming, total_base}` at REST → Task 9.
 - MCP `to_pay_table` two-section render → Task 4.
-- Monthly report `include_prior_overdue=False` → Task 5.
+- Monthly report `retrospective=True` → Task 5.
 - Frontend widget two sections → Task 7.
 - Frontend page two sections → Task 8.
 - Frontend types update → Task 6.
@@ -1376,7 +1376,7 @@ git commit -m "feat(api): /planned/to-pay returns {overdue, upcoming, total_base
 
 **3. Type consistency:**
 - `OutstandingQueue` defined in Task 2; consumed in Tasks 3, 4, 5, 7, 8, 9 unchanged.
-- `to_pay(session, since, until, *, include_prior_overdue, today)` signature defined in Task 3; consumed in Tasks 4, 5 unchanged.
+- `to_pay(session, since, until, *, retrospective, today)` signature defined in Task 3; consumed in Tasks 4, 5 unchanged.
 - `to_pay_table(queue: OutstandingQueue) -> str` defined in Task 4; consumed in `mcp/tools/temporal.py` unchanged.
 - `_pending_lines` body in Task 5 iterates `queue.upcoming`; matches the test's assertion.
 - Frontend `ToPay` type in Task 6 matches the REST wire format in Task 9.
