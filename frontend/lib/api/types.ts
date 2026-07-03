@@ -98,7 +98,8 @@ export interface TransferOut {
 }
 
 export interface ToPay {
-  items: Transaction[]
+  overdue: Transaction[]
+  upcoming: Transaction[]
   total_base: number
 }
 
