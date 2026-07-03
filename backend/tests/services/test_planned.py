@@ -86,13 +86,11 @@ def test_to_pay_overdue_excludes_items_after_until(session):
     """An overdue item dated after `until` is out of scope for the
     caller's window. The service must not surface it."""
     a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
-    # Insert an item due 5 days from now (upcoming, not overdue).
     future = date.today() + timedelta(days=5)
     planned.plan_payment(
         session, payee="Future", amount=100_000, currency="COP",
         due_date=future, account_id=a.id,
     )
-    # Ask for a window that ends BEFORE the future item.
     queue = planned.to_pay(
         session, since=date.today(), until=date.today() + timedelta(days=2),
     )

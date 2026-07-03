@@ -140,13 +140,9 @@ def to_pay(
     if since > until:
         raise ValidationError("to_pay window is inverted (since > until)")
 
-    # Codebase date-injection pattern: caller may pin 'today' for determinism.
     today_resolved = today if today is not None else _Date.today()
 
-    # Overdue bucket. Constrained by `until` and trimmed to `date < today_resolved`.
     if not retrospective:
-        # list_transactions filter is `date <= date_to`; we want strictly
-        # < today, so pass min(today, until) and trim day-of rows.
         overdue_rows = _tx.list_transactions(
             session,
             status="planned",
@@ -158,9 +154,6 @@ def to_pay(
     else:
         overdue_items = []
 
-    # Upcoming bucket. Skip the query if the floor is past the cap
-    # (only happens when retrospective=True and the entire
-    # window is historical relative to today).
     upcoming_since = max(since, today_resolved)
     if upcoming_since > until:
         upcoming_items: list[Transaction] = []

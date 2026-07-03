@@ -69,7 +69,6 @@ def test_outstanding_queue_from_lists_eagerly_evaluates_iterables():
     q = OutstandingQueue.from_lists(overdue_iter, upcoming_iter)
     assert len(q.overdue) == 2
     assert len(q.upcoming) == 1
-    # The original iterators are exhausted:
     assert list(overdue_iter) == []
     assert list(upcoming_iter) == []
 
