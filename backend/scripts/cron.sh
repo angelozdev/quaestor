@@ -26,6 +26,42 @@ run_once() {
     rc=$?
     log "daily job failed (rc=${rc}); will retry next interval"
   fi
+  dump_postgres
+}
+
+# Daily Postgres backup (ADR-0024). Runs after the daily job so a
+# job-side failure doesn't block the dump. FIFO-pruned to 7 days.
+# pg_dump is non-blocking under MVCC, so it does NOT interfere with
+# the running api/mcp. Missing pg_dump (e.g. un-rebuilt image) is a
+# soft skip — the loop must keep ticking.
+dump_postgres() {
+  if ! command -v pg_dump > /dev/null 2>&1; then
+    log "pg_dump skipped: not on PATH"
+    return 0
+  fi
+
+  # Extract PostgreSQL password from QUAESTOR_DB if not already set.
+  # Format: postgresql://user:PASS@host:port/db  (POSTGRES_PASSWORD
+  # is interpolated by docker-compose at compose time.)
+  if [ -z "${PGPASSWORD:-}" ] && [ -n "${QUAESTOR_DB:-}" ]; then
+    PGPASSWORD=$(printf '%s' "${QUAESTOR_DB}" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+    export PGPASSWORD
+  fi
+
+  local TS DUMPFILE
+  TS=$(date -u +%F)
+  DUMPFILE="/backups/quaestor-${TS}.dump"
+
+  log "pg_dump -> ${DUMPFILE}"
+  if pg_dump -U quaestor -h db -Fc quaestor > "${DUMPFILE}"; then
+    log "pg_dump ok"
+  else
+    rc=$?
+    log "pg_dump failed (rc=${rc}); will retry next interval"
+  fi
+
+  # FIFO prune: keep last 7 daily dumps. -r = run only if non-empty.
+  ls -1tr /backups/quaestor-*.dump 2>/dev/null | head -n -7 | xargs -r rm -- 2>/dev/null || true
 }
 
 if [ "${RUN_ON_BOOT}" = "1" ]; then
