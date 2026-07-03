@@ -251,7 +251,8 @@ class ConfirmPaymentIn(BaseModel):
 
 
 class ToPayOut(BaseModel):
-    items: list[TransactionOut]
+    overdue: list[TransactionOut]
+    upcoming: list[TransactionOut]
     total_base: int
 
 

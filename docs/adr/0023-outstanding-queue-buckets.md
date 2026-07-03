@@ -1,6 +1,6 @@
 # 0023. Outstanding queue: overdue + upcoming buckets
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-03
 - **Deciders:** Angelo
 - **Supersedes:** —
@@ -174,3 +174,23 @@ in `to_pay`, zero changes to existing callers.
 - Code-review checklist: any new caller of `to_pay` must either accept
   the default `retrospective=False` (operational) or pass
   `True` explicitly (retrospective). The candado is the kwarg name.
+
+## Confirmation (landed)
+
+The plan `docs/superpowers/plans/2026-07-03-outstanding-queue.md` was
+executed task-by-task. Every "Confirmation" reference in the proposed
+ADR (above) is now backed by a green test:
+
+- VO invariants: `tests/domain/test_planned_queue.py` — 5 tests green.
+- Service behavior + bug reproduction:
+  `tests/services/test_planned.py::test_to_pay_includes_overdue_before_since` —
+  green (pre-fix would have dropped the item).
+- Monthly report retrospective:
+  `tests/services/test_planned.py::test_to_pay_retrospective_true_omits_overdue_bucket` —
+  green.
+- REST wire format:
+  `tests/api/test_planned.py::test_to_pay_response_includes_overdue_before_since` —
+  green.
+- MCP markdown: `tests/mcp/test_temporal.py::test_to_pay_table_renders_two_sections`
+  + 3 sibling tests — green.
+- Frontend sections: `frontend/components/to-pay-widget.test.tsx` — 5 tests green.
