@@ -1,11 +1,15 @@
-"""Database engine factory: Postgres in prod, SQLite in-memory for tests.
+"""Database engine factory and bootstrap: Postgres in prod, SQLite in-memory for tests.
 
-`make_engine` branches on URL scheme so the test path can keep using SQLite
-without losing the production Postgres configuration (pool_pre_ping +
-sized pool). Alembic is the source of truth for the schema; `init_db()`
-calls `alembic upgrade head` so the API lifespan and the MCP server can
-keep the historical "init_db-on-boot" ergonomics without bypassing the
-migration history.
+The factory branches on URL scheme. The test path passes `memory=True`
+or a `sqlite://` URL and gets an in-memory SQLite engine on `StaticPool`.
+Production gets a Postgres engine with `pool_pre_ping=True` and a sized
+pool. The default URL is resolved from `QUAESTOR_DB` on every call so
+test code (or operational scripts) that mutate the environment after
+import still gets the intended engine.
+
+Alembic is the source of truth for schema. `init_db()` runs
+`alembic upgrade head` to the latest revision, seeds the canonical
+`Settings(id=1)` row, then registers the goal-event hooks.
 """
 from __future__ import annotations
 
@@ -13,90 +17,145 @@ import os
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Final
 
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session
 
 from .domain.models import Settings
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_ALEMBIC_INI = _BACKEND_ROOT / "alembic.ini"
+
+_BACKEND_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
+_ALEMBIC_INI: Final[Path] = _BACKEND_ROOT / "alembic.ini"
+_DEFAULT_DB_URL: Final[str] = "sqlite:///quaestor.db"
+_IN_MEMORY_SQLITE_URL: Final[str] = "sqlite://"
+_POSTGRESQL_SCHEME: Final[str] = "postgresql://"
+_PSYCOG3_SCHEME: Final[str] = "postgresql+psycopg://"
+_POOL_SIZE: Final[int] = 5
+_MAX_OVERFLOW: Final[int] = 10
+_POOL_PRE_PING: Final[bool] = True
+_DEFAULT_SETTINGS_ID: Final[int] = 1
+_DEFAULT_BASE_CURRENCY: Final[str] = "COP"
 
 
 def _default_url() -> str:
     """Resolve `QUAESTOR_DB` at call time so env mutations are honoured."""
-    return os.environ.get("QUAESTOR_DB", "sqlite:///quaestor.db")
+    return os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
+
+
+def _resolve_driver(url: str) -> str:
+    """Promote bare `postgresql://` URLs to the explicit `postgresql+psycopg` driver.
+
+    SQLAlchemy picks a driver based on the scheme prefix. Without this
+    rewrite, a `postgresql://` URL on a host that has only
+    `psycopg[binary]` installed raises `ImportError: No driver specified`
+    at first connect. URLs that already carry a driver
+    (`postgresql+psycopg://...`, `postgresql+psycopg2://...`) pass
+    through untouched.
+    """
+    if url.startswith(_POSTGRESQL_SCHEME):
+        return _PSYCOG3_SCHEME + url[len(_POSTGRESQL_SCHEME):]
+    return url
+
+
+def _sqlite_engine(url: str) -> Engine:
+    """Build a SQLite engine — used by tests with `memory=True` or a `sqlite://` URL."""
+    return create_engine(
+        url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+
+def _postgres_engine(url: str) -> Engine:
+    """Build the production Postgres engine — sized pool + pre-ping connection check."""
+    return create_engine(
+        _resolve_driver(url),
+        pool_pre_ping=_POOL_PRE_PING,
+        pool_size=_POOL_SIZE,
+        max_overflow=_MAX_OVERFLOW,
+    )
 
 
 def make_engine(url: str | None = None, *, memory: bool = False) -> Engine:
     """Build an Engine for either Postgres (prod) or SQLite (tests).
 
-    Branch on URL scheme (or `memory=True`). SQLite keeps `StaticPool` +
-    `check_same_thread=False` so a single in-memory engine can serve a
-    multi-threaded test session. Postgres gets `pool_pre_ping=True`,
-    `pool_size=5`, `max_overflow=10` for connection drop detection and
-    bounded concurrency. The default URL is resolved from `QUAESTOR_DB`
-    on every call so test code (or operational scripts) that mutate the
-    environment after import still gets the intended engine.
+    Branches on URL scheme (or `memory=True`). SQLite keeps `StaticPool`
+    so a single in-memory engine can serve a multi-threaded test session;
+    Postgres gets the sized pool + pre-ping for connection-drop detection.
+    The default URL is resolved from `QUAESTOR_DB` on every call.
     """
     target_url = url if url is not None else _default_url()
-    if memory or (target_url or "").startswith("sqlite"):
-        return create_engine(
-            "sqlite://" if memory else target_url,
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
-        )
-    # Default the postgresql URL to the psycopg3 driver (only `psycopg[binary]`
-    # is installed; psycopg2 is not). When the URL already carries a driver
-    # (`postgresql+psycopg://...`, `postgresql+psycopg2://...`) SQLAlchemy
-    # uses it verbatim — the substitution is a no-op.
-    if target_url.startswith("postgresql://"):
-        target_url = "postgresql+psycopg://" + target_url[len("postgresql://"):]
-    return create_engine(
-        target_url,
-        pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
-    )
+    if memory:
+        return _sqlite_engine(_IN_MEMORY_SQLITE_URL)
+    if target_url.startswith("sqlite"):
+        return _sqlite_engine(target_url)
+    return _postgres_engine(target_url)
 
 
-engine = make_engine()
+engine: Final[Engine] = make_engine()
 
 
-def init_db(target_engine: Engine = engine) -> None:
-    """Apply migrations to `target_engine`, then register goal hooks.
+def _apply_migrations(target_engine: Engine) -> None:
+    """Apply Alembic migrations to `target_engine` to the latest revision.
 
-    Replaces the legacy `SQLModel.metadata.create_all` path: the project's
-    migrations are now the single source of truth. Idempotent — calling
-    this twice is a no-op when the schema is already at `head`. We hand
-    Alembic the same engine so SQLite in-memory tests share the
-    StaticPool connection (otherwise each alembic-managed engine creates
-    its own empty in-memory DB).
+    The AlembicConfig is built per call with `cfg.attributes["engine"]`
+    so the in-memory SQLite test path can pre-supply its StaticPool engine
+    and avoid creating a fresh empty in-memory DB.
     """
     cfg = AlembicConfig(str(_ALEMBIC_INI))
     cfg.set_main_option("sqlalchemy.url", str(target_engine.url))
     cfg.attributes["engine"] = target_engine
     alembic_command.upgrade(cfg, "head")
-    with Session(target_engine) as s:
-        if s.get(Settings, 1) is None:
-            s.add(Settings(id=1, base_currency="COP"))
-            s.commit()
+
+
+def _seed_default_settings(target_engine: Engine) -> None:
+    """Insert the canonical `Settings(id=1)` row if it is missing."""
+    with Session(target_engine) as session:
+        if session.get(Settings, _DEFAULT_SETTINGS_ID) is None:
+            session.add(
+                Settings(id=_DEFAULT_SETTINGS_ID, base_currency=_DEFAULT_BASE_CURRENCY)
+            )
+            session.commit()
+
+
+def init_db(target_engine: Engine = engine) -> None:
+    """Bootstrap a fresh database: migrations, defaults, then handler hooks.
+
+    Replaces the legacy `SQLModel.metadata.create_all` path — the project's
+    migrations are now the single source of truth. Idempotent: calling
+    twice is a no-op when the schema is already at `head`.
+    """
+    _apply_migrations(target_engine)
+    _seed_default_settings(target_engine)
     from .services.bootstrap import register_goal_hooks
     register_goal_hooks()
 
 
 @contextmanager
 def get_session(target_engine: Engine = engine) -> Generator[Session, None, None]:
-    with Session(target_engine) as s:
-        yield s
+    """Yield a Session for the given engine — auto-closed on context exit."""
+    with Session(target_engine) as session:
+        yield session
 
 
 @contextmanager
 def atomic(session: Session) -> Generator[Session, None, None]:
+    """Wrap a Session block in a transaction; rollback on any error.
+
+    Catches `Exception` (broader than `SQLAlchemyError`) because the
+    existing test contract in
+    `tests/test_db.py::test_atomic_rolls_back_on_error` and the
+    rollover test inject `RuntimeError` mid-block and assert the
+    transaction is rolled back. Narrowing to `SQLAlchemyError` only
+    would let dirty state leak into the caller's next query against
+    the same session.
+    """
     try:
         yield session
         session.commit()
