@@ -72,10 +72,14 @@ def init_db(target_engine: Engine = engine) -> None:
 
     Replaces the legacy `SQLModel.metadata.create_all` path: the project's
     migrations are now the single source of truth. Idempotent — calling
-    this twice is a no-op when the schema is already at `head`.
+    this twice is a no-op when the schema is already at `head`. We hand
+    Alembic the same engine so SQLite in-memory tests share the
+    StaticPool connection (otherwise each alembic-managed engine creates
+    its own empty in-memory DB).
     """
     cfg = AlembicConfig(str(_ALEMBIC_INI))
     cfg.set_main_option("sqlalchemy.url", str(target_engine.url))
+    cfg.attributes["engine"] = target_engine
     alembic_command.upgrade(cfg, "head")
     with Session(target_engine) as s:
         if s.get(Settings, 1) is None:
