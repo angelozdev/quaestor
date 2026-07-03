@@ -9,15 +9,8 @@ __pycache__/
 *.pyc
 .venv/
 backend/.venv/
-backend/quaestor.db
-backend/quaestor.db-*
 .pytest_cache/
 uv.lock
-
-# DB
-*.db
-*.db-shm
-*.db-wal
 
 # Node / Next
 node_modules/
@@ -30,8 +23,7 @@ out/
 # MCP — keep template .mcp.json committed, local overrides stay private
 .mcp.local.json
 
-# Local dev DB and WAL siblings (bind-mounted into api/mcp/scheduler in dev)
-.dev-data/
+# The `db` service runs Postgres 17; row data lives in the quaestor-db-data Docker volume.
 
 # Deploy artifacts / state
 .env
@@ -42,3 +34,15 @@ litestream.state
 backend/.docker_cache/
 frontend/.next/
 frontend/.docker_cache/
+
+# Docker named volumes on the host (quaestor-db-data, quaestor-backups, etc.)
+# when restored outside compose (rare; manual file copies).
+quaestor_backups/
+
+# AI agent workspace (oh-my-opencode orchestration state).
+# https://github.com/code-yeongyu/oh-my-openagent — `.omo/` is tool state,
+# regenerated each session. `.omo/rules/` is the project-shared rules
+# directory and IS tracked.
+.omo/*
+!.omo/rules/
+!.omo/rules/**
