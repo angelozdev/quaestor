@@ -40,27 +40,22 @@ dump_postgres() {
     return 0
   fi
 
-  # Extract PostgreSQL password from QUAESTOR_DB if not already set.
-  # Format: postgresql://user:PASS@host:port/db  (POSTGRES_PASSWORD
-  # is interpolated by docker-compose at compose time.)
   if [ -z "${PGPASSWORD:-}" ] && [ -n "${QUAESTOR_DB:-}" ]; then
     PGPASSWORD=$(printf '%s' "${QUAESTOR_DB}" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
     export PGPASSWORD
   fi
 
-  local TS DUMPFILE
+  local TS
   TS=$(date -u +%F)
-  DUMPFILE="/backups/quaestor-${TS}.dump"
 
-  log "pg_dump -> ${DUMPFILE}"
-  if pg_dump -U quaestor -h db -Fc quaestor > "${DUMPFILE}"; then
+  log "pg_dump -> /backups/quaestor-${TS}.dump"
+  if pg_dump -U quaestor -h db -Fc quaestor > "/backups/quaestor-${TS}.dump"; then
     log "pg_dump ok"
   else
     rc=$?
     log "pg_dump failed (rc=${rc}); will retry next interval"
   fi
 
-  # FIFO prune: keep last 7 daily dumps. -r = run only if non-empty.
   ls -1tr /backups/quaestor-*.dump 2>/dev/null | head -n -7 | xargs -r rm -- 2>/dev/null || true
 }
 

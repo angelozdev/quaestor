@@ -46,3 +46,6 @@ quaestor_backups/
 .omo/*
 !.omo/rules/
 !.omo/rules/**
+
+# One-off importer artifacts (work-in-progress; not source)
+backend/migrate_lunchmoney.sql
