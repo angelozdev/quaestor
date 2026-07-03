@@ -16,7 +16,7 @@ import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
-import { formatDate, isOverdue } from "@/lib/date"
+import { formatDate } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
@@ -170,59 +170,61 @@ export default function ToPayPage() {
           <p className="text-3xl font-bold tabular-nums tracking-tight">
             {formatCents(list.data.total_base, "COP")}
           </p>
-          {list.data.items.length === 0 ? (
+          {list.data.overdue.length === 0 && list.data.upcoming.length === 0 ? (
             <EmptyState message="Nada pendiente en este periodo." />
           ) : (
-            <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-              {list.data.items.map((item) => {
-                const overdue = isOverdue(item.date)
-                return (
-                <li
-                  key={item.id}
-                  className="relative flex items-center justify-between gap-4 py-3 pl-3"
-                >
-                  {overdue && (
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 w-[2px] rounded-full"
-                      style={{ background: "var(--destructive)" }}
-                    />
-                  )}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-medium">{item.payee || "—"}</p>
-                      {overdue && <Badge variant="destructive">Vencido</Badge>}
-                    </div>
-                    <time
-                      dateTime={item.date}
-                      className="text-xs"
-                      style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}
+            <div className="space-y-4">
+              {list.data.overdue.length > 0 && (
+                <section className="space-y-0">
+                  <header className="flex items-center gap-2 pb-2">
+                    <p
+                      className="text-xs font-medium uppercase tracking-wider"
+                      style={{ color: "var(--muted-foreground)" }}
                     >
-                      {formatDate(item.date)}
-                    </time>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <MoneyAmount
-                      cents={item.amount}
-                      currency={item.currency}
-                      className="text-sm font-medium"
-                    />
-                    <Button size="sm" onClick={() => openConfirm(item)}>
-                      Confirmar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={skip.isPending}
-                      onClick={() => skip.mutate(item.id)}
+                      Vencidos
+                    </p>
+                    <Badge variant="destructive">{list.data.overdue.length}</Badge>
+                  </header>
+                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                    {list.data.overdue.map((item) => (
+                      <ToPayRow
+                        key={item.id}
+                        item={item}
+                        isOverdueRow
+                        onConfirm={() => openConfirm(item)}
+                        onSkip={() => skip.mutate(item.id)}
+                        skipPending={skip.isPending}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {list.data.upcoming.length > 0 && (
+                <section className="space-y-0">
+                  <header className="pb-2">
+                    <h2
+                      className="text-xs font-medium uppercase tracking-wider"
+                      style={{ color: "var(--muted-foreground)" }}
                     >
-                      Omitir
-                    </Button>
-                  </div>
-                </li>
-                )
-              })}
-            </ul>
+                      {scope === "week" ? "Esta semana" : "Este mes"}
+                    </h2>
+                  </header>
+                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                    {list.data.upcoming.map((item) => (
+                      <ToPayRow
+                        key={item.id}
+                        item={item}
+                        isOverdueRow={false}
+                        onConfirm={() => openConfirm(item)}
+                        onSkip={() => skip.mutate(item.id)}
+                        skipPending={skip.isPending}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
           )}
         </>
       )}
@@ -378,5 +380,63 @@ export default function ToPayPage() {
         </DialogPopup>
       </Dialog>
     </div>
+  )
+}
+
+/**
+ * Row for a single planned transaction on the Por pagar page. Overdue rows
+ * render the destructive left bar, "Vencido" badge, and destructive due-date
+ * color; upcoming rows render muted styling with no badge. Both variants share
+ * the Confirmar / Omitir controls.
+ */
+function ToPayRow({
+  item,
+  isOverdueRow,
+  onConfirm,
+  onSkip,
+  skipPending,
+}: {
+  item: Transaction
+  isOverdueRow: boolean
+  onConfirm: () => void
+  onSkip: () => void
+  skipPending: boolean
+}) {
+  return (
+    <li className="relative flex items-center justify-between gap-4 py-3 pl-3">
+      {isOverdueRow && (
+        <span
+          aria-hidden
+          className="absolute inset-y-0 left-0 w-[2px] rounded-full"
+          style={{ background: "var(--destructive)" }}
+        />
+      )}
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium">{item.payee || "—"}</p>
+          {isOverdueRow && <Badge variant="destructive">Vencido</Badge>}
+        </div>
+        <time
+          dateTime={item.date}
+          className="text-xs"
+          style={{ color: isOverdueRow ? "var(--destructive)" : "var(--muted-foreground)" }}
+        >
+          {formatDate(item.date)}
+        </time>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <MoneyAmount
+          cents={item.amount}
+          currency={item.currency}
+          className="text-sm font-medium"
+        />
+        <Button size="sm" onClick={onConfirm}>
+          Confirmar
+        </Button>
+        <Button size="sm" variant="ghost" disabled={skipPending} onClick={onSkip}>
+          Omitir
+        </Button>
+      </div>
+    </li>
   )
 }
