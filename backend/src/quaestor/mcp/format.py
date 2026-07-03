@@ -28,6 +28,7 @@ from ..domain.models import (
     Tag,
     Transaction,
 )
+from ..domain.planned import OutstandingQueue
 from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
 from ..domain.money import cents_to_major
 
@@ -230,20 +231,40 @@ def goal_contribution_recorded(contribution) -> str:
     return f"Recorded {contribution.amount} contribution to goal {contribution.goal_id}."
 
 
-def to_pay_table(result: dict) -> str:
-    items = result["items"]
-    if not items:
-        return "Nothing to pay in that window. 🎉"
+def to_pay_table(queue: OutstandingQueue) -> str:
+    """Render the outstanding queue as markdown.
+
+    Layout: overdue section first (with ⚠️ marker), then upcoming. Empty
+    bucket → omitted entirely (silence is the right state). Both empty
+    → "Nothing outstanding."
+    """
+    if queue.is_empty:
+        return "Nothing outstanding."
+
+    sections: list[str] = []
+    if queue.overdue:
+        sections.append("## ⚠️ Overdue\n")
+        sections.append(_to_pay_rows(queue.overdue))
+    if queue.upcoming:
+        if sections:
+            sections.append("")
+        sections.append("## Upcoming\n")
+        sections.append(_to_pay_rows(queue.upcoming))
+    return "\n".join(sections)
+
+
+def _to_pay_rows(items: list[Transaction]) -> str:
+    """The shared row format. Stable, machine-parseable, no extra fields."""
     rows = ["| id | Due | Payee | Amount | Currency | COP |", "|---|---|---|---|---|---|"]
+    total = 0
     for t in items:
+        total += t.to_base
         rows.append(
             f"| {t.id} | {display_date(t.date)} | {t.payee} | "
             f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
         )
     rows.append("")
-    rows.append(
-        f"**To pay (COP): {cents_to_major(result['total_base'])}** · {len(items)} item(s)"
-    )
+    rows.append(f"**To pay (COP): {cents_to_major(total)}** · {len(items)} item(s)")
     return "\n".join(rows)
 
 
