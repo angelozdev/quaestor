@@ -6,7 +6,7 @@ Every aggregate is in to_base (COP cents); FX is never reconverted here.
 from __future__ import annotations
 
 import re
-from datetime import date as Date
+from datetime import date as Date, timedelta
 
 from sqlmodel import Session, select
 
@@ -197,10 +197,22 @@ def _balance_lines(session: Session) -> list[AccountBalance]:
 
 
 def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
-    """Alert lines for unconfirmed (planned) entries in the month, grouped by account."""
-    items = _planned.to_pay(session, start, end)["items"]
+    """Alert lines for unconfirmed (planned) entries in the month, grouped by account.
+
+    Retrospective view: pass `retrospective=True` so the
+    report for 2026-07 doesn't show items overdue from June. The
+    retrospective only counts what was planned IN this month.
+    `today=start - 1 day` anchors the upcoming bucket's lower bound
+    to the start of the month so the full month is in scope regardless
+    of when the report is generated.
+    """
+    queue = _planned.to_pay(
+        session, start, end,
+        retrospective=True,
+        today=start - timedelta(days=1),
+    )
     by_account: dict[int, int] = {}
-    for tx in items:
+    for tx in queue.upcoming:
         by_account[tx.account_id] = by_account.get(tx.account_id, 0) + tx.to_base
     rows: list[tuple[str, int]] = []
     for account_id, total in by_account.items():
@@ -209,6 +221,7 @@ def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
         rows.append((name, total))
     rows.sort(key=lambda r: r[0])
     return [f"{name}: {money(total)} pending" for name, total in rows]
+
 
 
 def monthly_report(
