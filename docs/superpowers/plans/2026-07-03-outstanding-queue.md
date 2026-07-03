@@ -608,6 +608,30 @@ def test_to_pay_excludes_posted_from_both_buckets(session):
     )
     assert queue.overdue == []
     assert queue.upcoming == []
+
+
+def test_to_pay_excludes_skipped_from_both_buckets(session):
+    """Lock the 'skipped' exclusion invariant at the service layer.
+
+    `to_pay` filters by `status="planned"` at the SQL boundary, so any
+    non-planned status (posted, skipped, future variants) is excluded
+    from BOTH buckets. The 'posted' case is locked by
+    `test_to_pay_excludes_posted_from_both_buckets` above; this test
+    locks the 'skipped' case so a future refactor that accidentally
+    relaxes the status filter (e.g. `status != "posted"` only) is caught
+    by CI before it ships.
+    """
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    past = date.today() - timedelta(days=10)
+    tx = planned.plan_payment(session, "WillBeSkipped", 50_000, a.id, "COP", due_date=past)
+    planned.skip_payment(session, tx.id)
+    queue = planned.to_pay(
+        session,
+        since=date.today() - timedelta(days=30),
+        until=date.today() + timedelta(days=30),
+    )
+    assert queue.overdue == []
+    assert queue.upcoming == []
 ```
 
 Add to the imports at the top of `test_planned.py` if not already present:
