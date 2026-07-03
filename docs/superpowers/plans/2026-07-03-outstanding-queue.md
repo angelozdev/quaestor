@@ -291,7 +291,10 @@ buckets, and the date ranges are disjoint by query construction).
 """
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from datetime import date
+
+import pytest
 
 from quaestor.domain.models import AccountType, Transaction
 from quaestor.domain.planned import OutstandingQueue
@@ -354,11 +357,15 @@ def test_outstanding_queue_from_lists_eagerly_evaluates_iterables():
 
 
 def test_outstanding_queue_is_frozen():
-    """The VO is immutable — attribute assignment raises."""
-    q = OutstandingQueue()
-    import pytest
+    """The VO is immutable — attribute assignment raises FrozenInstanceError.
 
-    with pytest.raises(Exception):  # FrozenInstanceError subclass of AttributeError
+    `pytest.raises(FrozenInstanceError)` is the strict form; the loose
+    `pytest.raises(Exception)` would also accept any unrelated error
+    (KeyError, TypeError from a typo, etc.) and silently pass.
+    """
+    q = OutstandingQueue()
+
+    with pytest.raises(FrozenInstanceError):
         q.overdue = []  # type: ignore[misc]
 
 
