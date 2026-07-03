@@ -6,6 +6,7 @@ post-confirm hooks (the seam P4 uses to record goal contributions).
 from __future__ import annotations
 
 from datetime import date as Date
+from datetime import date as _Date
 from typing import Callable
 
 from sqlmodel import Session, select
@@ -25,6 +26,7 @@ from ..domain.money import is_supported, to_base_cents
 import uuid
 
 from ..domain.models import Settings  # noqa: F401 (used by _materialize_planned_transfer)
+from ..domain.planned import OutstandingQueue
 from ..domain.rules import delta_balance, transfer_deltas
 from . import transactions as _tx
 
@@ -97,23 +99,75 @@ def plan_payment(
     return tx
 
 
-def to_pay(session: Session, since: Date, until: Date) -> dict:
-    """The single confirmation queue: all `planned` txs in [since, until].
+def to_pay(
+    session: Session,
+    since: Date,
+    until: Date,
+    *,
+    retrospective: bool = False,
+    today: Date | None = None,
+) -> OutstandingQueue:
+    """Build the user's outstanding queue for the [since, until] window.
 
-    Ordered by date. `total_base` is the sum of `to_base` (COP cents). Excludes
-    `posted` and `skipped`.
+    Two mutually-exclusive buckets, populated by two disjoint queries:
+    - `upcoming` = planned txs with `date in [max(since, today_resolved), until]`,
+      ordered by date ASC.
+    - `overdue`  = planned txs with `date < today_resolved AND date <= until`,
+      ordered by date ASC, iff `retrospective=False`.
+
+    `today_resolved` is `today` if provided, else `date.today()`. The
+    `today` kwarg exists for testability (the codebase pattern in
+    `services/goals.py:216` and `services/reports.py:215`).
+
+    The overdue bucket is constrained by `until` so callers that scope
+    to a window don't get items from a future retrospective they
+    didn't ask for.
+
+    Args:
+        session: DB session.
+        since: Lower bound for the upcoming bucket (inclusive).
+        until: Hard cap for both buckets (inclusive).
+        retrospective: When False (default), the overdue bucket
+            contains all planned txs with `date < today_resolved` whose
+            `date <= until`. When True, the overdue bucket is empty
+            (retrospective view: monthly report).
+        today: Override for `date.today()` — used by tests for
+            deterministic boundary assertions.
 
     Raises:
-        ValidationError: since > until (inverted window).
+        ValidationError: `since > until` (inverted window).
     """
     if since > until:
         raise ValidationError("to_pay window is inverted (since > until)")
-    items = _tx.list_transactions(
-        session, status="planned", date_from=since, date_to=until,
-        sort="date", order="asc",   # chronological-by-due-date; ADR-0021 amended
-    )
-    total_base = sum(t.to_base for t in items)
-    return {"items": items, "total_base": total_base}
+
+    today_resolved = today if today is not None else _Date.today()
+
+    if not retrospective:
+        overdue_rows = _tx.list_transactions(
+            session,
+            status="planned",
+            date_to=min(today_resolved, until),
+            sort="date",
+            order="asc",
+        )
+        overdue_items = [t for t in overdue_rows if t.date < today_resolved]
+    else:
+        overdue_items = []
+
+    upcoming_since = max(since, today_resolved)
+    if upcoming_since > until:
+        upcoming_items: list[Transaction] = []
+    else:
+        upcoming_items = _tx.list_transactions(
+            session,
+            status="planned",
+            date_from=upcoming_since,
+            date_to=until,
+            sort="date",
+            order="asc",
+        )
+
+    return OutstandingQueue.from_lists(overdue_items, upcoming_items)
 
 
 def _sync_occurrence_posted(session: Session, tx: Transaction) -> None:

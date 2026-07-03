@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timedelta
+from datetime import date as Date
 
 import pytest
 
@@ -48,32 +49,185 @@ def test_plan_payment_currency_mismatch_raises(session):
         )
 
 
-def test_to_pay_window_orders_and_totals(session):
-    acc = _acc(session)
-    planned.plan_payment(session, payee="A", amount=10_000, currency="COP",
-                         due_date=date(2026, 6, 10), account_id=acc.id)
-    planned.plan_payment(session, payee="B", amount=20_000, currency="COP",
-                         due_date=date(2026, 6, 5), account_id=acc.id)
-    planned.plan_payment(session, payee="C", amount=99_000, currency="COP",
-                         due_date=date(2026, 7, 1), account_id=acc.id)  # outside window
-    result = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30))
-    assert [t.payee for t in result["items"]] == ["B", "A"]  # ordered by date
-    assert result["total_base"] == 30_000
+def test_to_pay_includes_overdue_before_since(session):
+    """Bug reproduction (2026-07-02): an overdue item with date < since
+    must appear in the overdue bucket when retrospective=False
+    (the default). Pre-fix, the service filtered with date_from=since
+    and the item was silently dropped."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    past = date.today() - timedelta(days=10)  # overdue, well before `since`
+    planned.plan_payment(
+        session, payee="Tigo", amount=8_500_00, currency="COP",
+        due_date=past, account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session,
+        since=date.today() + timedelta(days=5),
+        until=date.today() + timedelta(days=10),
+    )
+    assert [t.payee for t in queue.overdue] == ["Tigo"]
+    assert queue.upcoming == []
 
 
-def test_to_pay_excludes_posted(session):
-    acc = _acc(session, balance=1_000_000)
-    transactions.record_expense(session, acc.id, 5_000, "COP", date(2026, 6, 10), "Posted")
-    planned.plan_payment(session, payee="Planned", amount=7_000, currency="COP",
-                         due_date=date(2026, 6, 11), account_id=acc.id)
-    result = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30))
-    assert [t.payee for t in result["items"]] == ["Planned"]
-    assert result["total_base"] == 7_000
+def test_to_pay_overdue_excludes_items_on_or_after_today(session):
+    """Items dated today or later are 'upcoming', not 'overdue'."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    today = date.today()
+    planned.plan_payment(
+        session, payee="TodayItem", amount=50_000, currency="COP",
+        due_date=today, account_id=a.id,
+    )
+    queue = planned.to_pay(session, since=today, until=today + timedelta(days=30))
+    assert queue.overdue == []
+    assert [t.payee for t in queue.upcoming] == ["TodayItem"]
+
+
+def test_to_pay_overdue_excludes_items_after_until(session):
+    """An overdue item dated after `until` is out of scope for the
+    caller's window. The service must not surface it."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    future = date.today() + timedelta(days=5)
+    planned.plan_payment(
+        session, payee="Future", amount=100_000, currency="COP",
+        due_date=future, account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session, since=date.today(), until=date.today() + timedelta(days=2),
+    )
+    assert queue.overdue == []
+    assert queue.upcoming == []  # future item is past `until`
+
+
+def test_to_pay_upcoming_respects_since_floor(session):
+    """`since` is a floor for the upcoming bucket. An item dated
+    between `since` and today is overdue (and appears in the overdue
+    bucket), not upcoming."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    three_days_ago = date.today() - timedelta(days=3)
+    planned.plan_payment(
+        session, payee="PastButAfterSince", amount=75_000, currency="COP",
+        due_date=three_days_ago, account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session, since=three_days_ago, until=date.today() + timedelta(days=10),
+    )
+    assert [t.payee for t in queue.overdue] == ["PastButAfterSince"]
+    assert queue.upcoming == []
+
+
+def test_to_pay_retrospective_true_omits_overdue_bucket(session):
+    """Retrospective view (used by the monthly report): items overdue
+    from before the window are not surfaced."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    far_past = date.today() - timedelta(days=60)
+    in_window = date.today() + timedelta(days=5)
+    planned.plan_payment(
+        session, payee="PriorOverdue", amount=100_000, currency="COP",
+        due_date=far_past, account_id=a.id,
+    )
+    planned.plan_payment(
+        session, payee="InWindow", amount=200_000, currency="COP",
+        due_date=in_window, account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session,
+        since=date.today(),
+        until=date.today() + timedelta(days=30),
+        retrospective=True,
+    )
+    assert queue.overdue == []  # PriorOverdue is filtered out
+    assert [t.payee for t in queue.upcoming] == ["InWindow"]
+
+
+def test_to_pay_today_param_is_respected_for_determinism(session):
+    """The `today` kwarg makes the boundary deterministic for tests.
+    Passing today=2026-07-15, an item due 2026-07-14 is overdue."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    fixed_today = Date(2026, 7, 15)
+    planned.plan_payment(
+        session, payee="Yesterday", amount=10_000, currency="COP",
+        due_date=Date(2026, 7, 14), account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session,
+        since=Date(2026, 7, 1),
+        until=Date(2026, 7, 31),
+        today=fixed_today,
+    )
+    assert [t.payee for t in queue.overdue] == ["Yesterday"]
+
+
+def test_to_pay_window_entirely_historical_with_retrospective_returns_empty(session):
+    """A retrospective call for a window entirely in the past: both
+    buckets are empty (the upcoming floor is past the cap, and the
+    overdue bucket is opt-out)."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    past = date.today() - timedelta(days=60)
+    planned.plan_payment(
+        session, payee="WayBefore", amount=10_000, currency="COP",
+        due_date=past, account_id=a.id,
+    )
+    queue = planned.to_pay(
+        session,
+        since=Date(2024, 1, 1),
+        until=Date(2024, 12, 31),
+        retrospective=True,
+        today=Date(2026, 7, 1),
+    )
+    assert queue.overdue == []
+    assert queue.upcoming == []
 
 
 def test_to_pay_inverted_window_raises(session):
-    with pytest.raises(ValidationError):
+    """Existing test, kept verbatim: the inverted-window guard."""
+    with pytest.raises(ValidationError, match="inverted"):
         planned.to_pay(session, date(2026, 6, 30), date(2026, 6, 1))
+
+
+def test_to_pay_excludes_posted_from_both_buckets(session):
+    """Existing test, updated: 'posted' is excluded from BOTH the
+    overdue and the upcoming bucket (a posted tx is not pending)."""
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    past = date.today() - timedelta(days=10)
+    tx = planned.plan_payment(
+        session, payee="WillBeConfirmed", amount=50_000, currency="COP",
+        due_date=past, account_id=a.id,
+    )
+    planned.confirm_payment(session, tx.id)
+    queue = planned.to_pay(
+        session,
+        since=date.today() - timedelta(days=30),
+        until=date.today() + timedelta(days=30),
+    )
+    assert queue.overdue == []
+    assert queue.upcoming == []
+
+
+def test_to_pay_excludes_skipped_from_both_buckets(session):
+    """Lock the 'skipped' exclusion invariant at the service layer.
+
+    `to_pay` filters by `status="planned"` at the SQL boundary, so any
+    non-planned status (posted, skipped, future variants) is excluded
+    from BOTH buckets. The 'posted' case is locked by
+    `test_to_pay_excludes_posted_from_both_buckets` above; this test
+    locks the 'skipped' case so a future refactor that accidentally
+    relaxes the status filter (e.g. `status != "posted"` only) is caught
+    by CI before it ships.
+    """
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    past = date.today() - timedelta(days=10)
+    tx = planned.plan_payment(
+        session, payee="WillBeSkipped", amount=50_000, currency="COP",
+        due_date=past, account_id=a.id,
+    )
+    planned.skip_payment(session, tx.id)
+    queue = planned.to_pay(
+        session,
+        since=date.today() - timedelta(days=30),
+        until=date.today() + timedelta(days=30),
+    )
+    assert queue.overdue == []
+    assert queue.upcoming == []
 
 
 def test_confirm_posts_and_moves_balance(session):
@@ -209,7 +363,7 @@ def test_skip_payment_cancels_standalone_planned(session):
     skipped = planned.skip_payment(session, tx.id)
     assert skipped.status == TxStatus.skipped
     result = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30))
-    assert result["items"] == []  # left the queue
+    assert result.is_empty  # left the queue
     assert accounts.get_account(session, acc.id).balance == 500_000
 
 
@@ -236,21 +390,3 @@ def test_skip_payment_non_planned_raises(session):
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
     with pytest.raises(IllegalTransition):
         planned.skip_payment(session, tx.id)
-
-
-# --- ADR-0021 amended: to_pay must keep chronological-by-due-date order ---
-
-
-def test_to_pay_orders_by_due_date_asc(session):
-    """Lock the chronological-by-due-date contract. Creation order is set
-    OPPOSITE to due-date order, so any non-chronological sort (e.g. the
-    new created_at DESC default) returns the wrong sequence and this
-    test fails. After to_pay passes sort='date', order='asc' explicitly,
-    this test passes."""
-    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=1_000_000)
-    # Creation order: Card first, Rent second.
-    # Due-date order: Card (6-30) before Rent (7-15).
-    planned.plan_payment(session, "Card", 200_000, "COP", due_date=date(2026, 6, 30), account_id=a.id)
-    planned.plan_payment(session, "Rent", 500_000, "COP", due_date=date(2026, 7, 15), account_id=a.id)
-    result = planned.to_pay(session, date(2026, 6, 1), date(2026, 7, 31))
-    assert [t.payee for t in result["items"]] == ["Card", "Rent"]

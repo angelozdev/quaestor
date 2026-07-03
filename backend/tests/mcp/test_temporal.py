@@ -1,5 +1,6 @@
 from datetime import date
 
+from quaestor.mcp import format
 from quaestor.mcp.tools import temporal
 from quaestor.mcp.tools.temporal import (
     ArchiveRecurringInput,
@@ -57,7 +58,7 @@ def test_plan_confirm_to_pay_skip_flow(session):
     assert "Friend" in planned_out and "id=" in planned_out
 
     to_pay_out = temporal.to_pay(session, ToPayInput(since=date(2026, 6, 1), until=date(2026, 6, 30)))
-    assert "Friend" in to_pay_out and "To pay (COP)" in to_pay_out
+    assert "Friend" in to_pay_out and "## ⚠️ Overdue" in to_pay_out
 
     # extract the planned tx id from the queue
     from quaestor.services import transactions
@@ -139,3 +140,64 @@ def test_mcp_archive_recurring(session):
     item_id = _rec_svc.list_recurring(session)[0].id
     temporal.archive_recurring(session, ArchiveRecurringInput(recurring_id=item_id))
     assert _rec_svc.list_recurring(session, active=True) == []
+
+
+def test_to_pay_table_renders_two_sections(session):
+    from datetime import date as Date
+    from quaestor.domain.planned import OutstandingQueue
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, planned
+
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    overdue = planned.plan_payment(
+        session, "Tigo", 8_500_00, "COP", Date(2026, 6, 28), a.id,
+    )
+    upcoming = planned.plan_payment(
+        session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
+    )
+    queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
+    out = format.to_pay_table(queue)
+    assert "## ⚠️ Overdue" in out
+    assert "## Upcoming" in out
+    assert "Tigo" in out
+    assert "Rent" in out
+    assert out.index("## ⚠️ Overdue") < out.index("## Upcoming")
+
+
+def test_to_pay_table_omits_empty_overdue_section(session):
+    from datetime import date as Date
+    from quaestor.domain.planned import OutstandingQueue
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, planned
+
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    upcoming = planned.plan_payment(
+        session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
+    )
+    queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
+    out = format.to_pay_table(queue)
+    assert "## ⚠️ Overdue" not in out
+    assert "## Upcoming" in out
+
+
+def test_to_pay_table_omits_empty_upcoming_section(session):
+    from datetime import date as Date
+    from quaestor.domain.planned import OutstandingQueue
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, planned
+
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    overdue = planned.plan_payment(
+        session, "Tigo", 8_500_00, "COP", Date(2026, 6, 28), a.id,
+    )
+    queue = OutstandingQueue(overdue=[overdue], upcoming=[])
+    out = format.to_pay_table(queue)
+    assert "## ⚠️ Overdue" in out
+    assert "## Upcoming" not in out
+
+
+def test_to_pay_table_empty_queue():
+    from quaestor.domain.planned import OutstandingQueue
+
+    out = format.to_pay_table(OutstandingQueue())
+    assert out == "Nothing outstanding."

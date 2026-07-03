@@ -15,7 +15,12 @@ router = APIRouter(prefix="/planned", tags=["planned"])
 
 @router.get("/to-pay", response_model=ToPayOut)
 def to_pay(since: Date, until: Date, session: Session = Depends(get_session)):
-    return planned.to_pay(session, since, until)
+    queue = planned.to_pay(session, since, until)
+    return ToPayOut(
+        overdue=queue.overdue,
+        upcoming=queue.upcoming,
+        total_base=queue.total_base,
+    )
 
 
 @router.post("", response_model=TransactionOut, status_code=201)

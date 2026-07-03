@@ -7,7 +7,8 @@ import { toast } from "sonner"
 import { ErrorState } from "@/components/error-state"
 import { MoneyAmount } from "@/components/money-amount"
 import { confirmPayment, toPay } from "@/lib/api/planned"
-import { formatDate, isOverdue } from "@/lib/date"
+import type { Transaction } from "@/lib/api/types"
+import { formatDate } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 import { Badge } from "@/ui"
@@ -111,70 +112,179 @@ export function ToPayWidget() {
             {formatCents(query.data.total_base, "COP")}
           </p>
 
-          {query.data.items.length === 0 ? (
+          {query.data.overdue.length === 0 && query.data.upcoming.length === 0 ? (
             <p className="text-sm py-1" style={{ color: "var(--muted-foreground)" }}>
-              Nada pendiente en este periodo.
+              Nada pendiente
             </p>
           ) : (
-            <ul className="space-y-0">
-              {query.data.items.map((item) => {
-                const overdue = isOverdue(item.date)
-                return (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between py-2.5 border-t gap-4"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{item.payee}</p>
-                      {overdue && <Badge variant="destructive">Vencido</Badge>}
-                    </div>
-                    <time
-                      dateTime={item.date}
-                      className="text-xs"
-                      style={{ color: overdue ? "var(--destructive)" : "var(--muted-foreground)" }}
+            <div className="space-y-4">
+              {query.data.overdue.length > 0 && (
+                <section className="space-y-0">
+                  <header className="flex items-center gap-2 pb-1">
+                    <p
+                      className="text-xs font-medium uppercase tracking-wider"
+                      style={{ color: "var(--muted-foreground)" }}
                     >
-                      {formatDate(item.date)}
-                    </time>
-                  </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <MoneyAmount
-                      cents={item.amount}
-                      currency={item.currency}
-                      className="text-sm font-medium"
-                    />
-                    <button
-                      type="button"
-                      disabled={markPaid.isPending}
-                      onClick={() => markPaid.mutate(item.id)}
-                      className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50"
-                      style={{
-                        background: "var(--muted)",
-                        color: "var(--foreground)",
-                        border: "1px solid var(--border)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--foreground)"
-                        e.currentTarget.style.color = "var(--background)"
-                        e.currentTarget.style.borderColor = "var(--foreground)"
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "var(--muted)"
-                        e.currentTarget.style.color = "var(--foreground)"
-                        e.currentTarget.style.borderColor = "var(--border)"
-                      }}
+                      Vencidos
+                    </p>
+                    <Badge variant="destructive">{query.data.overdue.length}</Badge>
+                  </header>
+                  <ul className="space-y-0">
+                    {query.data.overdue.map((item) => (
+                      <OverdueRow
+                        key={item.id}
+                        item={item}
+                        pending={markPaid.isPending}
+                        onMarkPaid={() => markPaid.mutate(item.id)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {query.data.upcoming.length > 0 && (
+                <section className="space-y-0">
+                  <header className="pb-1">
+                    <h2
+                      className="text-xs font-medium uppercase tracking-wider"
+                      style={{ color: "var(--muted-foreground)" }}
                     >
-                      Marcar pagado
-                    </button>
-                  </div>
-                </li>
-                )
-              })}
-            </ul>
+                      {scope === "week" ? "Esta semana" : "Este mes"}
+                    </h2>
+                  </header>
+                  <ul className="space-y-0">
+                    {query.data.upcoming.map((item) => (
+                      <UpcomingRow
+                        key={item.id}
+                        item={item}
+                        pending={markPaid.isPending}
+                        onMarkPaid={() => markPaid.mutate(item.id)}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
           )}
         </>
       )}
     </div>
+  )
+}
+
+/**
+ * Row for a planned transaction past its due date. Wraps `ToPayRow` with
+ * the destructive "Vencido" badge and destructive due-date color.
+ */
+function OverdueRow({
+  item,
+  pending,
+  onMarkPaid,
+}: {
+  item: Transaction
+  pending: boolean
+  onMarkPaid: () => void
+}) {
+  return (
+    <ToPayRow
+      item={item}
+      pending={pending}
+      onMarkPaid={onMarkPaid}
+      badge={<Badge variant="destructive">Vencido</Badge>}
+      dateColor="var(--destructive)"
+    />
+  )
+}
+
+/**
+ * Row for a planned transaction still due within the active scope window.
+ * No badge is rendered; the due date uses the muted foreground color.
+ */
+function UpcomingRow({
+  item,
+  pending,
+  onMarkPaid,
+}: {
+  item: Transaction
+  pending: boolean
+  onMarkPaid: () => void
+}) {
+  return (
+    <ToPayRow
+      item={item}
+      pending={pending}
+      onMarkPaid={onMarkPaid}
+      dateColor="var(--muted-foreground)"
+    />
+  )
+}
+
+/**
+ * Shared row layout for a single planned transaction. `badge` is rendered
+ * next to the payee when present (overdue rows); `dateColor` controls the
+ * due-date text color so the row can signal its state visually.
+ */
+function ToPayRow({
+  item,
+  pending,
+  onMarkPaid,
+  badge,
+  dateColor,
+}: {
+  item: Transaction
+  pending: boolean
+  onMarkPaid: () => void
+  badge?: React.ReactNode
+  dateColor: string
+}) {
+  return (
+    <li
+      className="flex items-center justify-between py-2.5 border-t gap-4"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium truncate">{item.payee}</p>
+          {badge}
+        </div>
+        <time
+          dateTime={item.date}
+          className="text-xs"
+          style={{ color: dateColor }}
+        >
+          {formatDate(item.date)}
+        </time>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        <MoneyAmount
+          cents={item.amount}
+          currency={item.currency}
+          className="text-sm font-medium"
+        />
+        <button
+          type="button"
+          disabled={pending}
+          onClick={onMarkPaid}
+          className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50"
+          style={{
+            background: "var(--muted)",
+            color: "var(--foreground)",
+            border: "1px solid var(--border)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--foreground)"
+            e.currentTarget.style.color = "var(--background)"
+            e.currentTarget.style.borderColor = "var(--foreground)"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--muted)"
+            e.currentTarget.style.color = "var(--foreground)"
+            e.currentTarget.style.borderColor = "var(--border)"
+          }}
+        >
+          Marcar pagado
+        </button>
+      </div>
+    </li>
   )
 }

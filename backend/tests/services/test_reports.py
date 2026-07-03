@@ -215,6 +215,28 @@ def test_pending_lines_empty_when_nothing_planned(session):
     assert reports._pending_lines(session, *month_bounds("2026-06")) == []
 
 
+def test_monthly_report_pending_lines_exclude_prior_overdue(session):
+    """Retrospective monthly report excludes items overdue from a prior month."""
+    from datetime import date as Date
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, planned
+    from quaestor.services.reports import monthly_report
+
+    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    planned.plan_payment(
+        session, payee="PriorOverdue", amount=100_000, currency="COP",
+        account_id=a.id, due_date=Date(2026, 5, 15),
+    )
+    planned.plan_payment(
+        session, payee="InMonth", amount=200_000, currency="COP",
+        account_id=a.id, due_date=Date(2026, 7, 5),
+    )
+    rep = monthly_report(session, "2026-07", today=Date(2026, 7, 15))
+    pending_text = "\n".join(rep.pending)
+    assert "$2,000.00" in pending_text
+    assert "$1,000.00" not in pending_text
+
+
 def test_monthly_report_end_to_end(session):
     from quaestor.services import budgets, goals
     acc = _acc(session)
