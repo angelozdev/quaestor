@@ -419,7 +419,7 @@ git commit -m "chore(mcp): remove HTTP server module + dead tests"
 - Consumes: nothing.
 - Produces: a compose stack with only `api`, `frontend`, `db`, `caddy`, `scheduler`. No Tailscale. No `/mcp` listener anywhere.
 
-- [ ] **Step 1: Edit `docker-compose.yml`**
+- [x] **Step 1: Edit `docker-compose.yml`**
 
 Remove the `mcp:` service block (currently lines 37–50, the entire `mcp:` key including its `build`, `command`, `environment`, `expose`, `healthcheck`, `restart`).
 
@@ -429,7 +429,7 @@ Remove the `tailscale-state:` line from the `volumes:` section (currently the la
 
 Verify the resulting `services:` block has exactly: `api`, `db`, `frontend`, `caddy`, `scheduler`. Verify the `volumes:` block has: `quaestor-db-data`, `quaestor-backups`, `caddy-data`, `caddy-config`. (No `tailscale-state`.)
 
-- [ ] **Step 2: Edit `docker-compose.override.yml`**
+- [x] **Step 2: Edit `docker-compose.override.yml`**
 
 Remove the dev `mcp:` service block (currently lines 33–51, the entire `mcp:` key).
 
@@ -443,13 +443,13 @@ Leave the `caddy: profiles: ["never"]` line intact.
 
 Verify the resulting override's top-level `services:` block has: `api`, `frontend`, `scheduler`, `db`, `caddy` (with `profiles: ["never"]`).
 
-- [ ] **Step 3: Delete `ts-serve.json`**
+- [x] **Step 3: Delete `ts-serve.json`**
 
 ```bash
 git rm ts-serve.json
 ```
 
-- [ ] **Step 4: Edit `.env.example`**
+- [x] **Step 4: Edit `.env.example`**
 
 Remove the Tailscale block (currently lines 21–25):
 
@@ -463,7 +463,7 @@ TS_HOSTNAME=quaestor-mcp
 
 Verify the file no longer mentions `TS_AUTHKEY`, `TS_HOSTNAME`, or Tailscale.
 
-- [ ] **Step 5: Edit `.envrc`**
+- [x] **Step 5: Edit `.envrc`**
 
 Remove the line `export TS_AUTHKEY=dev-placeholder-not-used` and its preceding comment line `# Override sets tailscale profiles:["never"] in dev, so this is unused.`
 
@@ -479,17 +479,17 @@ export DOMAIN=quaestor.local
 export FRONTEND_PASSWORD_HASH='$2b$12$dummyhashplaceholderdontuseinprod000000000000000000'
 ```
 
-- [ ] **Step 6: Validate prod compose**
+- [x] **Step 6: Validate prod compose**
 
 Run: `docker compose config`
 Expected: exit 0. The output mentions only `api`, `db`, `frontend`, `caddy`, `scheduler`. No warnings about undefined services or volumes.
 
-- [ ] **Step 7: Validate dev compose (override merges)**
+- [x] **Step 7: Validate dev compose (override merges)**
 
 Run: `docker compose -f docker-compose.yml -f docker-compose.override.yml config`
 Expected: exit 0. The `mcp` service should NOT appear (it was removed from both files). The `caddy` service should appear with `profiles: ["never"]`.
 
-- [ ] **Step 8: Verify no stragglers**
+- [x] **Step 8: Verify no stragglers**
 
 Run:
 ```bash
@@ -499,7 +499,7 @@ git grep -nE "TS_AUTHKEY|TS_HOSTNAME|ts-serve|tailscale|tailscale-state" \
 
 Expected: no matches.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add docker-compose.yml docker-compose.override.yml .env.example .envrc
