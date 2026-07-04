@@ -28,6 +28,7 @@ services:
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/uv.lock:/app/uv.lock:ro
       - ./backend/scripts:/app/scripts:ro
+      - ./backend/alembic.ini:/app/alembic.ini:ro
 
   mcp:
     build:
