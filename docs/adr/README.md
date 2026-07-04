@@ -37,4 +37,4 @@ New ADRs are created with the `adr` skill:
 | 0021 | Default transaction listing order: created_at desc | accepted | 2026-06-28 |
 | 0022 | Chat SSE tool-output-error chunk | accepted | 2026-06-28 |
 | 0023 | Outstanding queue: overdue + upcoming buckets | accepted | 2026-07-03 |
-| 0024 | Postgres replaces SQLite (supersedes 0012) | proposed | 2026-07-03 |
+| 0024 | Postgres replaces SQLite (supersedes 0012) | accepted | 2026-07-03 |

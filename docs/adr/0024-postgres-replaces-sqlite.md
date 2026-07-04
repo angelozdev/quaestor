@@ -1,6 +1,6 @@
 # 0024. Postgres replaces SQLite
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-03
 - **Deciders:** Angelo
 - **Supersedes:** [0012 — Litestream Replicates the SQLite WAL Continuously](./0012-litestream-for-continuous-backup.md)
