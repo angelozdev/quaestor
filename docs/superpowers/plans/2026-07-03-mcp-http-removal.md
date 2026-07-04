@@ -71,7 +71,7 @@ Each commit is independently revertible. After all four, `docker compose` runs t
 - Consumes: `from mcp.server.fastmcp import FastMCP`; `from .registry import register_*_tools` (all of them).
 - Produces: `build_mcp() -> FastMCP` (a `FastMCP` named `"Quaestor"` with `json_response=True` and every tool registered).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/mcp/test_builder.py`:
 
@@ -137,12 +137,12 @@ def test_build_mcp_registers_all_expected_tools():
 
 **Note:** `mcp._tool_manager._tools` is the internal registry FastMCP uses. If the SDK changes internals in a future version, this test will break — that's the regression coverage we want.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest backend/tests/mcp/test_builder.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'quaestor.mcp.builder'`.
 
-- [ ] **Step 3: Create `builder.py`**
+- [x] **Step 3: Create `builder.py`**
 
 Create `backend/src/quaestor/mcp/builder.py`:
 
@@ -201,12 +201,12 @@ def build_mcp() -> FastMCP:
     return mcp
 ```
 
-- [ ] **Step 4: Run the new test to verify it passes**
+- [x] **Step 4: Run the new test to verify it passes**
 
 Run: `uv run pytest backend/tests/mcp/test_builder.py -v`
 Expected: PASS for both tests. The `expected_names` set matches every `register_*_tools` call above.
 
-- [ ] **Step 5: Update `api/chat.py` import**
+- [x] **Step 5: Update `api/chat.py` import**
 
 Edit `backend/src/quaestor/api/chat.py` line 31:
 
@@ -220,7 +220,7 @@ Replace with:
 from ..mcp.builder import build_mcp
 ```
 
-- [ ] **Step 6: Update `tests/chat/test_mcp_client.py` imports**
+- [x] **Step 6: Update `tests/chat/test_mcp_client.py` imports**
 
 Edit `backend/tests/chat/test_mcp_client.py` line 7 and line 26 (both occurrences):
 
@@ -229,7 +229,7 @@ Replace with: `from quaestor.mcp.builder import build_mcp`
 
 (Use `replace_all=true` if there are more than 2; verify by re-reading the file after.)
 
-- [ ] **Step 7: Remove `build_mcp` from `server.py`**
+- [x] **Step 7: Remove `build_mcp` from `server.py`**
 
 Edit `backend/src/quaestor/mcp/server.py`. Delete the `build_mcp` function (the 17-line block from `def build_mcp() -> FastMCP:` through `return mcp`). Leave `build_app`, `_uvicorn_kwargs_from_env`, and `main` intact for now — they are deleted in Task 2.
 
@@ -314,12 +314,12 @@ def main() -> None:
 
 Note: this file is deleted entirely in Task 2. The point of this task is just to extract `build_mcp` without breaking anything.
 
-- [ ] **Step 8: Run the full test suite**
+- [x] **Step 8: Run the full test suite**
 
 Run: `uv run pytest`
 Expected: PASS. All existing tests still pass; new `test_builder.py` passes; chat tests pass via the new import path; server tests still pass because `server.py` still has `main`/`build_app`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/quaestor/mcp/builder.py \
