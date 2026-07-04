@@ -34,21 +34,6 @@ services:
     expose: ["5432"]
     restart: unless-stopped
 
-  mcp:
-    build: ./backend
-    image: quaestor-backend:latest
-    command: ["uv", "run", "python", "-m", "quaestor.mcp"]
-    environment:
-      QUAESTOR_DB: postgresql://quaestor:${POSTGRES_PASSWORD}@db:5432/quaestor
-      APP_TOKEN: ${APP_TOKEN}
-    expose: ["9000"]
-    healthcheck:
-      test: ["CMD-SHELL", "uv run python -c \"import httpx,sys; r=httpx.get('http://localhost:9000/mcp', headers={'Authorization': 'Bearer '+__import__('os').environ['APP_TOKEN']}, timeout=5); sys.exit(0 if r.status_code in (200,400) else 1)\""]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   frontend:
     build:
       context: ./frontend
@@ -83,23 +68,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  tailscale:
-    image: tailscale/tailscale:latest
-    hostname: ${TS_HOSTNAME:-quaestor-mcp}
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:?TS_AUTHKEY required}
-      TS_STATE_DIR: /var/lib/tailscale
-      TS_SERVE_CONFIG: /config/ts-serve.json
-      TS_HOSTNAME: ${TS_HOSTNAME:-quaestor-mcp}
-    volumes:
-      - tailscale-state:/var/lib/tailscale
-      - ./ts-serve.json:/config/ts-serve.json:ro
-    cap_add: [NET_ADMIN]
-    depends_on:
-      mcp:
-        condition: service_healthy
-    restart: unless-stopped
-
   scheduler:
     build: ./backend
     image: quaestor-backend:latest
@@ -119,4 +87,3 @@ volumes:
   quaestor-backups:
   caddy-data:
   caddy-config:
-  tailscale-state:

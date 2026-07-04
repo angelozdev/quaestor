@@ -30,26 +30,6 @@ services:
       - ./backend/scripts:/app/scripts:ro
       - ./backend/alembic.ini:/app/alembic.ini:ro
 
-  mcp:
-    build:
-      context: ./backend
-      target: dev
-    env_file:
-      - ./backend/.env.local
-    environment:
-      MCP_RELOAD: "1"
-    # Helper-based reload: quaestor.mcp.__main__ -> main() reads MCP_RELOAD
-    # and turns on uvicorn autoreload. Asymmetric vs `api` (direct uvicorn
-    # CLI flags) but intentional: MCP_RELOAD is the dev knob documented in
-    # quaestor.mcp.server.main().
-    command: ["uv", "run", "python", "-m", "quaestor.mcp"]
-    ports:
-      - "9000:9000"
-    volumes:
-      - ./backend/src:/app/src:rw
-      - ./backend/pyproject.toml:/app/pyproject.toml:ro
-      - ./backend/uv.lock:/app/uv.lock:ro
-
   frontend:
     # Use the deps stage so pnpm + node_modules are present in the image
     # (the prod runtime stage only carries .next/standalone).
@@ -112,8 +92,6 @@ services:
 
   # Inherited from docker-compose.yml but skipped in dev:
   caddy:
-    profiles: ["never"]
-  tailscale:
     profiles: ["never"]
 
 volumes:
