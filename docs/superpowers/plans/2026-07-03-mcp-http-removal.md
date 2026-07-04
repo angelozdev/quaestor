@@ -346,7 +346,7 @@ git commit -m "feat(mcp): extract build_mcp() to builder.py"
 - Consumes: nothing (pure deletion).
 - Produces: a `backend/src/quaestor/mcp/` tree with only `__init__.py`, `builder.py`, `registry.py`, `format.py`, `tools/`.
 
-- [ ] **Step 1: Verify nothing imports the soon-to-be-deleted modules**
+- [x] **Step 1: Verify nothing imports the soon-to-be-deleted modules**
 
 Run:
 ```bash
@@ -355,7 +355,7 @@ git grep -nE "from quaestor\.mcp\.(server|auth|__main__)|from \.\.mcp\.(server|a
 
 Expected: no matches. (The previous task already migrated `chat.py` and `test_mcp_client.py`.)
 
-- [ ] **Step 2: Delete the HTTP server module**
+- [x] **Step 2: Delete the HTTP server module**
 
 ```bash
 git rm backend/src/quaestor/mcp/server.py
@@ -363,7 +363,7 @@ git rm backend/src/quaestor/mcp/__main__.py
 git rm backend/src/quaestor/mcp/auth.py
 ```
 
-- [ ] **Step 3: Delete the dead tests**
+- [x] **Step 3: Delete the dead tests**
 
 ```bash
 git rm backend/tests/mcp/test_server.py
@@ -371,12 +371,12 @@ git rm backend/tests/mcp/test_auth.py
 git rm backend/tests/mcp/test_reload_env.py
 ```
 
-- [ ] **Step 4: Run the full test suite**
+- [x] **Step 4: Run the full test suite**
 
 Run: `uv run pytest`
 Expected: PASS. No test should reference the deleted files (verified in Step 1). The chat tests use the new `builder.build_mcp` import.
 
-- [ ] **Step 5: Verify the final `mcp/` tree**
+- [x] **Step 5: Verify the final `mcp/` tree**
 
 Run: `find backend/src/quaestor/mcp -type f -name '*.py' | sort`
 Expected:
@@ -398,7 +398,7 @@ backend/src/quaestor/mcp/tools/temporal.py
 backend/src/quaestor/mcp/tools/transactions.py
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git commit -m "chore(mcp): remove HTTP server module + dead tests"
