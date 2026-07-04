@@ -4,8 +4,8 @@ Quaestor is an owned personal-finance backend + agent-native MCP layer (see `doc
 
 ## Development
 
-Local dev runs four services (`api`, `mcp`, `frontend`, `scheduler`) in Docker
-with hot reload. No TLS, no Caddy, no Tailscale, no Litestream.
+Local dev runs three services (`api`, `frontend`, `scheduler`) in Docker
+with hot reload. No TLS, no Caddy, no Litestream.
 
 Prerequisites: Docker Desktop, `just` (`brew install just`), and the
 `backend/.env.local` + `frontend/.env.local` files (already in the repo, edit
@@ -25,7 +25,7 @@ just dev-test    # backend pytest (host-side, in-memory DB)
 URLs (once `just dev` is running):
 - Frontend: <http://localhost:3000>
 - REST API: <http://localhost:8000/api>
-- MCP: <http://localhost:9000/mcp>
+
 
 Edit any file under `backend/src/` and uvicorn restarts. Edit anything under
 `frontend/app/`, `frontend/components/`, etc. and Next.js hot-reloads. The

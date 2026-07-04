@@ -1,7 +1,7 @@
 # OWASP Security Review — Quaestor
 
 > **Fecha:** 2026-06-28
-> **Alcance:** repositorio completo (`backend/`, `frontend/`, `docker-compose.yml`, `Caddyfile`, `litestream.yml`, `ts-serve.json`, `.env.example`, `docs/`).
+> **Alcance:** repositorio completo (`backend/`, `frontend/`, `docker-compose.yml`, `Caddyfile`, `.env.example`, `docs/`).
 > **Listas aplicadas:** OWASP Top 10 2021, OWASP API Security Top 10 2023, OWASP LLM Top 10 2025.
 > **Exclusiones:** análisis dinámico / pentest, revisión de dependencias transitive (no hay SCA instalado), revisión del código del LLM upstream.
 > **Metodología:** lectura estática de código fuente + archivos de configuración + ADRs. No se ejecutó la aplicación.
@@ -14,8 +14,8 @@
 |---|---|
 | Proyecto | Quaestor — finanzas personales (single-user) |
 | Stack | Python 3.12+ / FastAPI / SQLModel / SQLite + Next.js 16 / React 19 + LiteLLM + FastMCP |
-| Auth | password login → cookie de sesión (Starlette `SessionMiddleware`); bearer `APP_TOKEN` para API y MCP |
-| Red pública | Caddy (80/443) sirve frontend + `/api/*`. `/mcp` solo por Tailscale (ADR-0011) |
+| Auth | password login → cookie de sesión (Starlette `SessionMiddleware`); bearer `APP_TOKEN` para API y chat endpoint (chat invoca tools MCP in-process con el mismo token) |
+| Red pública | Caddy (80/443) sirve frontend + `/api/*`. MCP tools solo via chat endpoint (in-process, requiere `APP_TOKEN`). No hay endpoint MCP externo. |
 | Datos | financieros (saldos, transacciones, presupuestos, metas, recurrente, FX). PII en `payee`, `notes`, `Goal.name` |
 | LLM upstream | `https://api.minimax.io/anthropic` vía LiteLLM, modelo `anthropic/MiniMax-M3` |
 | Tests | pytest (backend, 90 archivos), vitest (frontend). **No CI**, **no SCA**, **no linters de seguridad** |
@@ -25,7 +25,7 @@
 
 ## 1. Resumen ejecutivo
 
-Quaestor es un sistema de finanzas personales **single-user** desplegado con un proxy reverso (Caddy) sirviendo frontend + API al público, y un servidor MCP accesible solo por tailnet. La superficie de ataque es pequeña, pero el impacto de cualquier compromiso es **alto**: la base de datos contiene el historial financiero completo del usuario (incluyendo PII en `payee`, `notes`, y nombres de metas).
+Quaestor es un sistema de finanzas personales **single-user** desplegado con un proxy reverso (Caddy) sirviendo frontend + API al público. Las herramientas MCP solo son accesibles vía el chat endpoint (in-process, requiere `APP_TOKEN`); no existe endpoint MCP externo. La superficie de ataque es pequeña, pero el impacto de cualquier compromiso es **alto**: la base de datos contiene el historial financiero completo del usuario (incluyendo PII en `payee`, `notes`, y nombres de metas).
 
 **Estado agregado (hallazgos únicos, deduplicados entre listas):**
 
@@ -49,7 +49,7 @@ Nota: varios hallazgos aplican a múltiples listas (ej. secretos en `.env.local`
 
 - Pydantic + SQLModel con parámetros enlazados: prácticamente sin riesgo de inyección SQL.
 - Comparación de secretos en tiempo constante (`hmac.compare_digest`) en login y bearer.
-- Tailscale-only para `/mcp` reduce drásticamente la superficie pública.
+- MCP tools solo via chat endpoint (in-process) — sin superficie HTTP/MCP externa.
 - WAL + FK + busy_timeout en SQLite bien configurados.
 - Límites razonables en `/api/chat` (200 mensajes, 32 KB por mensaje, 100k tokens estimados, 8 iteraciones máx).
 - HTTPS-only cuando `COOKIE_SECURE=true`, certificado Let's Encrypt automático.
@@ -75,15 +75,15 @@ Nota: varios hallazgos aplican a múltiples listas (ej. secretos en `.env.local`
 
 ---
 
-#### QUA-A01-02 — `APP_TOKEN` compartido entre API, MCP y healthchecks
+#### QUA-A01-02 — `APP_TOKEN` compartido entre API y healthchecks
 
 | Campo | Valor |
 |---|---|
 | Severidad | **High** |
 | Componente | backend + infra |
-| Evidencia | `backend/src/quaestor/api/deps.py:26-34` (`_token_ok`); `backend/src/quaestor/mcp/auth.py:15-23` (`token_ok`); `docker-compose.yml:17` y `docker-compose.yml:34` (healthcheck usa `APP_TOKEN`); `docker-compose.yml:9,29` (`APP_TOKEN: ${APP_TOKEN}`) |
-| Riesgo | Un único secreto `APP_TOKEN` es leído por: (1) el bearer-auth de la API HTTP, (2) el bearer-auth del servidor MCP, (3) los healthchecks de Docker, (4) clientes externos (curl, scripts). Rotación requiere actualizar todos los healthchecks simultáneamente. Si se filtra (logs, captura de paquetes, etc.), compromete las tres superficies. No hay separación de privilegios. |
-| Fix sugerido | Tokens separados por superficie: `APP_API_TOKEN`, `APP_MCP_TOKEN`, `APP_HEALTHCHECK_TOKEN`. Healthcheck token con permisos limitados (solo `/healthz` que no requiere auth real). Implementar rotación con período de gracia donde ambos tokens sean válidos. Documentar la matriz de tokens. |
+| Evidencia | `backend/src/quaestor/api/deps.py:26-34` (`_token_ok`); `docker-compose.yml:17` y `docker-compose.yml:34` (healthcheck usa `APP_TOKEN`); `docker-compose.yml:9,29` (`APP_TOKEN: ${APP_TOKEN}`). Nota: el servidor MCP standalone fue eliminado (ADR-0025); `APP_TOKEN` ya no se comparte con un servidor MCP externo. |
+| Riesgo | `APP_TOKEN` es leído por: (1) el bearer-auth de la API HTTP, (2) los healthchecks de Docker. Si se filtra, compromete la API. No hay separación de privilegios. |
+| Fix sugerido | Tokens separados: `APP_API_TOKEN` para la API, `APP_HEALTHCHECK_TOKEN` para healthchecks (solo `/healthz`). Implementar rotación con período de gracia donde ambos tokens sean válidos. |
 
 ---
 
@@ -165,7 +165,7 @@ Nota: varios hallazgos aplican a múltiples listas (ej. secretos en `.env.local`
 |---|---|
 | Severidad | **High** |
 | Componente | backend (MCP server) |
-| Evidencia | `backend/src/quaestor/mcp/server.py:build_mcp()` registra 52 tools; no se observa logger de auditoría |
+| Evidencia | `backend/src/quaestor/mcp/builder.py:build_mcp()` registra 52 tools; no se observa logger de auditoría |
 | Riesgo | Operaciones como `transfer`, `delete_transaction`, `delete_tag`, `archive_*`, `update_settings` son ejecutadas sin dejar rastro auditable. En caso de compromiso (prompt injection, robo de `APP_TOKEN`), no hay forma de reconstruir qué se hizo. No hay registro de quién (cookie session vs bearer token vs LLM-initiated) originó la acción. |
 | Fix sugerido | Crear `audit_log` tabla SQLite (id, timestamp, actor_kind=[user|llm|service], tool_name, args_json, result_status, message_id opcional). Insertar desde un wrapper de MCP tool dispatch. Exponer endpoint de consulta al admin. Retención mínima 90 días. |
 
@@ -397,7 +397,7 @@ Nota: varios hallazgos aplican a múltiples listas (ej. secretos en `.env.local`
 |---|---|
 | Severidad | **High** |
 | Componente | backend |
-| Evidencia | Idem QUA-A01-02 — `APP_TOKEN` usado en API (`deps.py`), MCP (`mcp/auth.py`), healthchecks (`docker-compose.yml:17,34`) |
+| Evidencia | Idem QUA-A01-02 — `APP_TOKEN` compartido entre API y healthchecks. MCP standalone eliminado (ADR-0025). |
 | Riesgo | Sin separación de credenciales por superficie, el blast radius de cualquier compromiso es total. Ver análisis completo en QUA-A01-02. |
 | Fix sugerido | Idem QUA-A01-02: tokens separados por superficie. |
 
@@ -677,7 +677,7 @@ Nota: varios hallazgos aplican a múltiples listas (ej. secretos en `.env.local`
 |---|---|
 | Severidad | **Critical** |
 | Componente | backend (MCP server) |
-| Evidencia | `backend/src/quaestor/mcp/server.py:build_mcp()` registra 52 tools; no se observa allow-list ni filtrado por contexto |
+| Evidencia | `backend/src/quaestor/mcp/builder.py:build_mcp()` registra 52 tools; no se observa allow-list ni filtrado por contexto |
 | Riesgo | El LLM puede invocar cualquier tool en cualquier momento sin restricción. Un prompt injection (LLM01) que consiga ejecutar un tool destructivo (`transfer`, `delete_transaction`, `update_settings`) causa daño inmediato e irreversible. No hay sandbox, no hay human-in-the-loop, no hay cooldown. |
 | Fix sugerido | **Crítico:** implementar categorización de tools en tres niveles:<br>1. **Read-only** (sin confirmación): `list_*`, `get_*`, `monthly_report`, `goals_progress`, `safe_to_spend` — pueden invocarse libremente.<br>2. **Write-non-destructive** (con confirmación textual pero no bloqueante): `create_*` (nuevo recurso, no modifica existente), `record_expense`, `record_income` — el LLM debe pedir confirmación al usuario antes de invocar.<br>3. **Write-destructive** (con confirmación explícita + cooldown): `transfer` entre cuentas, `delete_*`, `archive_*`, `update_settings`, `delete_tag` — requieren que el usuario escriba una frase de confirmación ("sí, transfiere $50000") y un cooldown de 5 minutos entre operaciones similares.<br><br>Implementar en el system prompt + wrapper en `chat/service.py` que rechace invocaciones de nivel 3 sin el token de confirmación. |
 
