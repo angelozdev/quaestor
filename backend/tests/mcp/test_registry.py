@@ -3,7 +3,7 @@ import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from quaestor import db
-from quaestor.mcp import server
+from quaestor.mcp import builder
 from quaestor.mcp.registry import (
     ACCOUNTS_TOOL_NAMES,
     BUDGETS_READS_TOOL_NAMES,
@@ -170,7 +170,7 @@ def test_register_recurring_restore_tools_exposes_one():
 
 def test_build_mcp_registers_every_new_group():
     import asyncio
-    mcp = server.build_mcp()
+    mcp = builder.build_mcp()
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     for grp in (
         ACCOUNTS_TOOL_NAMES, CATEGORIES_TOOL_NAMES, CATEGORY_GROUPS_TOOL_NAMES,

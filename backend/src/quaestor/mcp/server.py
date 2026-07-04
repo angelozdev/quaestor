@@ -14,40 +14,6 @@ from mcp.server.fastmcp import FastMCP
 
 from .. import db
 from .auth import BearerAuthMiddleware
-from .registry import (
-    register_accounts_tools,
-    register_budgets_reads_tools,
-    register_category_groups_tools,
-    register_categories_tools,
-    register_core_tools,
-    register_goals_reads_tools,
-    register_planning_tools,
-    register_recurring_restore_tools,
-    register_reports_tools,
-    register_settings_tools,
-    register_tags_tools,
-    register_temporal_tools,
-    register_transactions_writes_tools,
-)
-
-
-def build_mcp() -> FastMCP:
-    """A FastMCP instance with every P2/P3/P4/P5/ADR-0009 tool registered."""
-    mcp = FastMCP("Quaestor", json_response=True)
-    register_core_tools(mcp)
-    register_temporal_tools(mcp)
-    register_planning_tools(mcp)
-    register_accounts_tools(mcp)
-    register_categories_tools(mcp)
-    register_category_groups_tools(mcp)
-    register_tags_tools(mcp)
-    register_transactions_writes_tools(mcp)
-    register_settings_tools(mcp)
-    register_budgets_reads_tools(mcp)
-    register_goals_reads_tools(mcp)
-    register_reports_tools(mcp)
-    register_recurring_restore_tools(mcp)
-    return mcp
 
 
 def build_app():
@@ -57,7 +23,7 @@ def build_app():
     session manager, so adding our middleware keeps that lifespan intact.
     """
     db.init_db(db.engine)
-    mcp = build_mcp()
+    mcp = FastMCP("Quaestor", json_response=True)
     app = mcp.streamable_http_app()
     app.add_middleware(BearerAuthMiddleware)
     return app

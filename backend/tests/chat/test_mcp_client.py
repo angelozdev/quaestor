@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from quaestor.chat.mcp.client import MCPClient, ToolNotFoundError
-from quaestor.mcp.server import build_mcp
+from quaestor.mcp.builder import build_mcp
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ async def test_list_tools_returns_registered_tools():
 async def test_call_tool_returns_text_output(engine, session, seeded, monkeypatch):
     # Build an isolated MCP server bound to the test engine/session.
     from quaestor import db
-    from quaestor.mcp.server import build_mcp
+    from quaestor.mcp.builder import build_mcp
 
     # Brief verbatim omitted this monkeypatch but the comment above states
     # the intent ("bound to the test engine"). Without it, build_mcp()'s

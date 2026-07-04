@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from ..chat.llm.factory import build_llm_provider
 from ..chat.prompts import COACH_SYSTEM_PROMPT
 from ..chat.service import ChatService
-from ..mcp.server import build_mcp
+from ..mcp.builder import build_mcp
 from .deps import require_auth
 
 router = APIRouter(prefix="/chat", tags=["chat"])
