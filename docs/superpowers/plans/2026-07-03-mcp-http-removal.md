@@ -521,7 +521,7 @@ git commit -m "infra(compose): drop mcp and tailscale services; drop ts-serve.js
 - Consumes: nothing.
 - Produces: an ADR in `docs/adr/`, an updated index, a deploy runbook without Tailscale/MCP sections, a README without Tailscale, and (if applicable) an updated OWASP review.
 
-- [ ] **Step 1: Author ADR-0025 using the `adr` skill**
+- [x] **Step 1: Author ADR-0025 using the `adr` skill**
 
 Run (in the project root):
 
@@ -568,14 +568,14 @@ Remove the HTTP MCP server and the `tailscale` sidecar. The in-process MCP bridg
 - ADR-0011 (superseded) — original MCP-only-over-Tailscale decision.
 ```
 
-- [ ] **Step 2: Update the ADR index**
+- [x] **Step 2: Update the ADR index**
 
 Edit `docs/adr/README.md`. In the index table:
 
 - Add a row for `0025` with title "Remove external MCP HTTP exposure" and status "accepted" date "2026-07-03".
 - Flip the row for `0011` to read: status `superseded by 0025`.
 
-- [ ] **Step 3: Update the deploy runbook**
+- [x] **Step 3: Update the deploy runbook**
 
 Edit `docs/runbooks/deploy.md`. Remove or rewrite every Tailscale/MCP reference:
 
@@ -587,7 +587,7 @@ Edit `docs/runbooks/deploy.md`. Remove or rewrite every Tailscale/MCP reference:
 
 Keep all other sections (Caddy, DB, scheduler, backup link) intact.
 
-- [ ] **Step 4: Update `README.md`**
+- [x] **Step 4: Update `README.md`**
 
 Edit `README.md` line 8. Find:
 
@@ -610,7 +610,7 @@ with hot reload. No TLS, no Caddy, no Litestream.
 
 Also remove any other MCP-specific dev URL (the README's "URLs" section references `:9000/mcp` — remove that bullet).
 
-- [ ] **Step 5: Update OWASP review if applicable**
+- [x] **Step 5: Update OWASP review if applicable**
 
 Open `docs/security/owasp-review-2026-06-28.md`. Run:
 
@@ -622,7 +622,7 @@ If there are matches: edit the file to remove `/mcp` as an attack surface and re
 
 If there are no matches: skip this step.
 
-- [ ] **Step 6: Final grep across non-historical docs**
+- [x] **Step 6: Final grep across non-historical docs**
 
 Run:
 ```bash
@@ -632,7 +632,7 @@ git grep -nE "TS_AUTHKEY|TS_HOSTNAME|ts-serve\.json|tailscale" \
 
 Expected: only matches inside ADR-0025 itself (which records the removal) and the flipped row in the ADR index. No live references in `deploy.md`, `README.md`, or OWASP.
 
-- [ ] **Step 7: Final verification across the whole tree**
+- [x] **Step 7: Final verification across the whole tree**
 
 Run:
 ```bash
@@ -642,7 +642,7 @@ git grep -nE "python -m quaestor\.mcp|quaestor\.mcp\.server|quaestor\.mcp\.auth|
 
 Expected: no matches outside historical specs/plans (which are intentionally untouched) and the ADR-0025 record.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/adr/0025-remove-external-mcp-http.md \
