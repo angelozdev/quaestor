@@ -39,3 +39,4 @@ New ADRs are created with the `adr` skill:
 | 0023 | Outstanding queue: overdue + upcoming buckets | accepted | 2026-07-03 |
 | 0024 | Postgres replaces SQLite (supersedes 0012) | accepted | 2026-07-03 |
 | 0025 | Remove external MCP HTTP exposure | accepted | 2026-07-03 |
+| 0026 | Local-only posture | proposed | 2026-07-05 |
