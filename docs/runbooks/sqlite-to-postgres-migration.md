@@ -401,6 +401,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import aiosqlite
