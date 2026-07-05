@@ -1,89 +1,58 @@
-# Quaestor production stack (ADR-0010-0013).
-# Only `caddy` publishes host ports; /mcp lives on the tailnet (ADR-0011).
+# Quaestor local-only stack (ADR-0026).
+# Pick a DB profile by passing `--env-file`:
+#   just dev-local  → backend/.env.local.sqlite
+#   just dev-real   → backend/.env.local.remote
 services:
   api:
     build: ./backend
     image: quaestor-backend:latest
-    environment:
-      QUAESTOR_DB: postgresql://quaestor:${POSTGRES_PASSWORD}@db:5432/quaestor
-      APP_TOKEN: ${APP_TOKEN}
-      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET required}
-      FRONTEND_ORIGIN: https://${DOMAIN}
-      COOKIE_SECURE: "true"
-    expose: ["8000"]
+    command: ["python", "-m", "quaestor"]
+    env_file:
+      - ${QUAESTOR_ENV_FILE:?set QUAESTOR_ENV_FILE to backend/.env.local.sqlite or backend/.env.local.remote}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/src:/app/src:rw
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      - ./backend/scripts:/app/scripts:ro
+      - ./backend/alembic.ini:/app/alembic.ini:ro
+      - quaestor-dev-data:/app/.dev-data
     healthcheck:
-      test: ["CMD", "uv", "run", "python", "-c", "import httpx,os,sys; sys.exit(0 if httpx.get('http://localhost:8000/api/auth/me', headers={'Authorization': f'Bearer {os.environ[\"APP_TOKEN\"]}'}, timeout=5).status_code in (200,401) else 1)"]
+      test: ["CMD", "uv", "run", "python", "-c",
+             "import httpx,os,sys; sys.exit(0 if httpx.get('http://localhost:8000/api/auth/me', headers={'Authorization': f'Bearer {os.environ[\"APP_TOKEN\"]}'}, timeout=5).status_code in (200,401) else 1)"]
       interval: 30s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
-
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: quaestor
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
-      POSTGRES_DB: quaestor
-    volumes:
-      - quaestor-db-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quaestor -d quaestor"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    expose: ["5432"]
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        API_INTERNAL_URL: http://api:8000
+    build: ./frontend
     image: quaestor-frontend:latest
+    command: ["pnpm", "dev"]
+    env_file:
+      - ${QUAESTOR_ENV_FILE}
     environment:
-      FRONTEND_PASSWORD_HASH: ${FRONTEND_PASSWORD_HASH}
-    expose: ["3000"]
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then(r=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2
+      API_URL: http://api:8000
+      API_INTERNAL_URL: http://api:8000
     ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      DOMAIN: ${DOMAIN}
+      - "3000:3000"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - ./frontend/app:/app/app
+      - ./frontend/components:/app/components
+      - ./frontend/lib:/app/lib
+      - ./frontend/ui:/app/ui
+      - ./frontend/public:/app/public
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./frontend/next.config.ts:/app/next.config.ts:ro
+      - ./frontend/biome.json:/app/biome.json:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/postcss.config.mjs:/app/postcss.config.mjs:ro
+      - frontend_node_modules:/app/node_modules
     depends_on:
       api:
         condition: service_healthy
-      frontend:
-        condition: service_healthy
-    restart: unless-stopped
-
-  scheduler:
-    build: ./backend
-    image: quaestor-backend:latest
-    command: ["./scripts/cron.sh"]
-    environment:
-      QUAESTOR_DB: postgresql://quaestor:${POSTGRES_PASSWORD}@db:5432/quaestor
-      FX_API_URL: ${FX_API_URL:-}
-      FX_API_KEY: ${FX_API_KEY:-}
-      RUN_ON_BOOT: "1"
-      INTERVAL_SECONDS: "86400"
-    volumes:
-      - quaestor-backups:/backups
-    restart: unless-stopped
 
 volumes:
-  quaestor-db-data:
-  quaestor-backups:
-  caddy-data:
-  caddy-config:
+  quaestor-dev-data:
+  frontend_node_modules:
