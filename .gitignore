@@ -45,7 +45,7 @@ backend/migrate_lunchmoney.sql
 # Personal financial data export (purged from history; never re-commit)
 lunchmoney-transactions.csv
 
-# Local SQLite databases (dev artifact; row data lives in quaestor-db-data Docker volume)
+# Local SQLite databases (dev artifact; row data lives in quaestor-dev-data Docker volume per ADR-0026)
 *.db
 *.sqlite
 *.sqlite3

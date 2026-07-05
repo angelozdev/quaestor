@@ -76,7 +76,7 @@ async def _run_async() -> None:
 
 
 def main() -> None:
-    url = os.environ.get("QUAESTOR_DB", "sqlite+aiosqlite:///:memory:")
+    url = os.environ.get("QUAESTOR_DB", "sqlite:///:memory:")
     wait_for_db(url)
     run_migrations()
     log("starting uvicorn")

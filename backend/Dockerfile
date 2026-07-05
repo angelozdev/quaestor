@@ -17,6 +17,7 @@ COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./alembic.ini
 
-ENV PATH="/app/.venv/bin:${PATH}"
+ENV PATH="/app/.venv/bin:${PATH}" \
+    PYTHONPATH=/app/src
 
 CMD ["python", "-m", "quaestor"]
