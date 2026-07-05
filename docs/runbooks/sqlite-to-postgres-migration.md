@@ -152,7 +152,8 @@ async def fetch_sqlite_rows() -> dict[str, list[tuple]]:
     rows: dict[str, list[tuple]] = {}
     async with aiosqlite.connect(str(SQLITE_PATH)) as db:
         for table in TABLES_IN_DEPENDENCY_ORDER:
-            async with db.execute(f"SELECT * FROM {table}") as cur:
+            # `transaction` is a reserved word in SQLite; quote the identifier.
+            async with db.execute(f'SELECT * FROM "{table}"') as cur:
                 rows[table] = await cur.fetchall()
                 log(f"sqlite {table}: {len(rows[table])} rows")
     return rows
@@ -350,8 +351,9 @@ def check_row_counts(remote_url: str) -> None:
         out = {}
         async with aiosqlite.connect(str(SQLITE_PATH)) as db:
             for table in TABLES_IN_DEPENDENCY_ORDER:
+                # `transaction` is a reserved word in SQLite; quote the identifier.
                 async with db.execute(
-                    f"SELECT COUNT(*) FROM {table}"
+                    f'SELECT COUNT(*) FROM "{table}"'
                 ) as cur:
                     row = await cur.fetchone()
                     out[table] = row[0]
@@ -362,7 +364,7 @@ def check_row_counts(remote_url: str) -> None:
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
             for table in TABLES_IN_DEPENDENCY_ORDER:
-                cur.execute(f"SELECT COUNT(*) FROM {table}")
+                cur.execute(f'SELECT COUNT(*) FROM "{table}"')
                 pg_count = cur.fetchone()[0]
                 if pg_count != sqlite_rows[table]:
                     fail(
@@ -400,8 +402,9 @@ def check_sample_rows(remote_url: str) -> None:
     async def sqlite_rows_for(table: str, ids: list) -> dict[int, tuple]:
         async with aiosqlite.connect(str(SQLITE_PATH)) as db:
             placeholders = ",".join("?" * len(ids))
+            # `transaction` is a reserved word in SQLite; quote the identifier.
             async with db.execute(
-                f"SELECT * FROM {table} WHERE id IN ({placeholders})",
+                f'SELECT * FROM "{table}" WHERE id IN ({placeholders})',
                 ids,
             ) as cur:
                 cols = [d[0] for d in cur.description]
@@ -416,7 +419,7 @@ def check_sample_rows(remote_url: str) -> None:
                 if table == "transaction_tag":
                     continue  # composite PK, no single `id`
                 cur.execute(
-                    f"SELECT id FROM {table} ORDER BY random() LIMIT 5"
+                    f'SELECT id FROM "{table}" ORDER BY random() LIMIT 5'
                 )
                 sample_ids = [r[0] for r in cur.fetchall()]
                 if not sample_ids:
@@ -427,7 +430,7 @@ def check_sample_rows(remote_url: str) -> None:
                 )
                 placeholders = ",".join("%s" * len(sample_ids))
                 cur.execute(
-                    f"SELECT * FROM {table} WHERE id IN ({placeholders})",
+                    f'SELECT * FROM "{table}" WHERE id IN ({placeholders})',
                     sample_ids,
                 )
                 cols = [d[0] for d in cur.description]
