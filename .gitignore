@@ -27,6 +27,8 @@ out/
 .env
 .env.*
 !.env.example
+!.env.local.example
+!.env.local.remote.example
 frontend/.next/
 
 # AI agent workspace (oh-my-opencode orchestration state).
