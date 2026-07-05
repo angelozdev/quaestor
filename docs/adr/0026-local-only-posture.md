@@ -1,6 +1,6 @@
 # 0026. Local-only posture
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-05
 - **Deciders:** Angelo
 - **Supersedes:** [0010 — Deployment posture](./0010-deployment-posture.md), [0013 — Daily scheduler as a thin sidecar](./0013-daily-scheduler-as-a-thin-sidecar.md)
