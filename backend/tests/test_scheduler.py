@@ -11,9 +11,17 @@ from quaestor.jobs import daily as daily_module
 
 class TestRunOnce:
     @pytest.mark.asyncio
-    async def test_run_once_success(self, caplog):
+    async def test_run_once_success(self, caplog, monkeypatch):
         """daily.main is called via asyncio.to_thread; logs success."""
         caplog.set_level(logging.INFO)
+
+        # alembic's migrations/env.py calls logging.config.fileConfig(...)
+        # which sets disable_existing_loggers=True. Prior tests that run the
+        # FastAPI lifespan (e.g. tests/api/test_startup.py) trigger alembic,
+        # leaving quaestor.scheduler.disabled=True. Re-enable so caplog can
+        # capture the "daily job ok" record.
+        scheduler_log = logging.getLogger("quaestor.scheduler")
+        monkeypatch.setattr(scheduler_log, "disabled", False)
 
         call_count = 0
 
@@ -22,37 +30,35 @@ class TestRunOnce:
             call_count += 1
             fn(*args, **kwargs)
 
-        original_to_thread = asyncio.to_thread
         import quaestor.scheduler as scheduler_module
 
-        scheduler_module.asyncio.to_thread = _fake_to_thread
+        # Patch via monkeypatch (NOT direct attribute assignment) so the
+        # asyncio stdlib module is auto-restored on test teardown —
+        # eliminates the cross-test pollution the raw approach caused.
+        monkeypatch.setattr(scheduler_module.asyncio, "to_thread", _fake_to_thread)
 
-        try:
-            await scheduler_module._run_once()
-        finally:
-            scheduler_module.asyncio.to_thread = original_to_thread
+        await scheduler_module._run_once()
 
         assert call_count == 1
         assert any("daily job ok" in r.message for r in caplog.records)
 
     @pytest.mark.asyncio
-    async def test_run_once_failure_logged_not_raised(self, caplog):
+    async def test_run_once_failure_logged_not_raised(self, caplog, monkeypatch):
         """daily.main raises; exception is logged but NOT propagated (loop survives)."""
         caplog.set_level(logging.ERROR)
+
+        scheduler_log = logging.getLogger("quaestor.scheduler")
+        monkeypatch.setattr(scheduler_log, "disabled", False)
 
         def _raise(*args, **kwargs):
             raise RuntimeError("boom")
 
         import quaestor.scheduler as scheduler_module
 
-        original_to_thread = asyncio.to_thread
-        scheduler_module.asyncio.to_thread = _raise
+        monkeypatch.setattr(scheduler_module.asyncio, "to_thread", _raise)
 
-        try:
-            # Must NOT raise — exception should be swallowed
-            await scheduler_module._run_once()
-        finally:
-            scheduler_module.asyncio.to_thread = original_to_thread
+        # Must NOT raise — exception should be swallowed
+        await scheduler_module._run_once()
 
         assert any("daily job failed" in r.message for r in caplog.records)
         # log.exception captures exc_info in the traceback; check caplog.text for the full record
