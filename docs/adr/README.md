@@ -23,10 +23,10 @@ New ADRs are created with the `adr` skill:
 | 0007 | Biome and lefthook as frontend format/lint | accepted | 2026-06-21 |
 | 0008 | TanStack Form as the sole form library, restoring zod to v4 | accepted | 2026-06-21 |
 | 0009 | Closing the MCP parity gap | accepted | 2026-06-21 |
-| 0010 | Deployment posture | accepted | 2026-06-22 |
+| 0010 | Deployment posture | superseded by 0026 | 2026-06-22 |
 | 0011 | MCP only over Tailscale | superseded by 0025 | 2026-06-22 |
 | 0012 | Litestream for continuous backup | superseded by 0024 | 2026-06-22 |
-| 0013 | Daily scheduler as a thin sidecar | accepted | 2026-06-22 |
+| 0013 | Daily scheduler as a thin sidecar | superseded by 0026 | 2026-06-22 |
 | 0014 | Chat endpoint with LiteLLM and an in-memory MCP bridge | accepted | 2026-06-22 |
 | 0015 | Frontend chat request wire-format adapter (UIMessage → {role, content}) | accepted | 2026-06-22 |
 | 0016 | Chat tool-error recovery: degrade LLM tool-call mistakes to isError, never 500 | accepted | 2026-06-22 |

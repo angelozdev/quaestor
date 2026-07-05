@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-06-22
+- **Superseded by:** [0026 — Local-only posture](./0026-local-only-posture.md)
 
 ## Context
 Three jobs must run every day without human action: FX rate fetch (ADR-011),

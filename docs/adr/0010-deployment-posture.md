@@ -2,6 +2,7 @@
 
 - **Status:** accepted
 - **Date:** 2026-06-22
+- **Superseded by:** [0026 — Local-only posture](./0026-local-only-posture.md)
 
 ## Context
 Quaestor is a personal-finance app for a single user. The spec (P7) requires a
