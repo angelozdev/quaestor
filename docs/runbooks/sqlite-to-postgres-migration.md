@@ -675,6 +675,13 @@ def check_sample_rows(remote_url: str) -> None:
                     # Postgres to assign sequential IDs). Compare by the
                     # actual unique key (recurring_id, due_date) and skip
                     # the id column in the data comparison.
+                    #
+                    # Additionally, data may diverge from SQLite because
+                    # the user has used the app post-migration: ON CONFLICT
+                    # DO NOTHING preserves UI-created rows that share the
+                    # same (recurring_id, due_date) key. When Postgres
+                    # created_at is newer than SQLite created_at, the
+                    # divergence is expected (post-migration UI activity).
                     cur.execute(
                         f'SELECT recurring_id, due_date FROM "{table}" '
                         "ORDER BY random() LIMIT 5"
@@ -706,6 +713,9 @@ def check_sample_rows(remote_url: str) -> None:
                         ): row
                         for row in cur.fetchall()
                     }
+                    created_at_idx = cols.index("created_at")
+                    matched = 0
+                    post_migration_diverged = 0
                     for key in sample_keys:
                         if key not in sqlite_data:
                             fail(
@@ -724,20 +734,39 @@ def check_sample_rows(remote_url: str) -> None:
                                 f"sqlite={len(sqlite_row)} "
                                 f"postgres={len(pg_row)}"
                             )
-                        # Skip the id column (col 0) — Postgres IDs
-                        # are renumbered for this table.
+                        # Compare all columns except id (col 0,
+                        # renumbered in Postgres).
+                        differences: list[tuple[int, object, object]] = []
                         for col_idx in range(1, len(sqlite_row)):
                             s_val = sqlite_row[col_idx]
                             p_val = pg_row[col_idx]
                             if not values_equal(s_val, p_val):
-                                fail(
-                                    f"row mismatch in {table} key={key} "
-                                    f"col={col_idx}: "
-                                    f"sqlite={s_val!r} postgres={p_val!r}"
-                                )
+                                differences.append((col_idx, s_val, p_val))
+                        if not differences:
+                            matched += 1
+                            continue
+                        # Data diverges — is it post-migration UI
+                        # activity (Postgres row is newer) or a real
+                        # migration failure (SQLite row is newer)?
+                        sqlite_created_at = sqlite_row[created_at_idx]
+                        pg_created_at = pg_row[created_at_idx]
+                        if pg_created_at > sqlite_created_at:
+                            post_migration_diverged += 1
+                        else:
+                            cols_desc = ", ".join(
+                                f"col {idx} ({cols[idx]}): "
+                                f"sqlite={s!r} postgres={p!r}"
+                                for idx, s, p in differences
+                            )
+                            fail(
+                                f"row mismatch in {table} key={key} "
+                                f"(SQLite is newer — real migration issue): "
+                                f"{cols_desc}"
+                            )
                     log(
-                        f"  {table}: {len(sample_keys)} sample rows match OK "
-                        "(compared by recurring_id, due_date)"
+                        f"  {table}: {matched} sample rows match OK, "
+                        f"{post_migration_diverged} row(s) diverged "
+                        f"post-migration (ON CONFLICT preserved UI data)"
                     )
                     continue
 
