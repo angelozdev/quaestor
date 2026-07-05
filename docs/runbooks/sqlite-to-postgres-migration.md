@@ -102,16 +102,14 @@ def check_api_not_running() -> None:
 
 
 def ensure_schema(remote_url: str) -> None:
-    """Run alembic upgrade head if the remote Postgres has no schema."""
-    log("checking remote Postgres schema...")
-    with psycopg.connect(remote_url, connect_timeout=5) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM pg_class WHERE relname = 'account'")
-            exists = cur.fetchone() is not None
-    if exists:
-        log("schema exists; skipping alembic upgrade")
-        return
-    log("schema missing; running alembic upgrade head...")
+    """Run alembic upgrade head against the remote Postgres.
+
+    Always runs: alembic is idempotent (tracks applied migrations in
+    `alembic_version`). Running against a fresh DB bootstraps the full
+    schema; running against an already-migrated DB is a no-op except for
+    any newly-added migrations.
+    """
+    log("running alembic upgrade head against remote...")
     result = subprocess.run(
         ["alembic", "upgrade", "head"],
         cwd=str(REPO_ROOT / "backend"),
@@ -119,6 +117,7 @@ def ensure_schema(remote_url: str) -> None:
     )
     if result.returncode != 0:
         fail(f"alembic upgrade head failed (rc={result.returncode})")
+    log("alembic upgrade head complete")
 
 
 def pre_migration_dump(remote_url: str) -> None:
@@ -226,19 +225,22 @@ def copy_table(
 
 
 def reset_sequence(remote_url: str, table: str) -> None:
-    """Advance the table's id sequence to MAX(id). Skip composite-PK tables."""
+    """Advance the table's id sequence to MAX(id). Skip composite-PK tables
+    and empty tables (sequence is already at its initial value)."""
     if table == "transaction_tag":
         return
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
+            cur.execute(f'SELECT MAX(id) FROM "{table}"')
+            max_id = cur.fetchone()[0]
+            if max_id is None:
+                # Empty table; sequence is at its initial value (1).
+                # Setting setval(seq, 0) would fail with "out of bounds"
+                # because sequence min_value is 1.
+                return
             cur.execute(
-                f"""
-                SELECT setval(
-                    pg_get_serial_sequence(%s, 'id'),
-                    COALESCE((SELECT MAX(id) FROM {table}), 0)
-                )
-                """,
-                (table,),
+                "SELECT setval(pg_get_serial_sequence(%s, 'id'), %s)",
+                (table, max_id),
             )
         conn.commit()
 
