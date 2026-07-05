@@ -593,7 +593,7 @@ def check_sample_rows(remote_url: str) -> None:
     log("check 3: 5 sample rows per table")
     async def sqlite_rows_for(table: str, ids: list) -> dict[int, tuple]:
         async with aiosqlite.connect(str(SQLITE_PATH)) as db:
-            placeholders = ",".join("?" * len(ids))
+            placeholders = ",".join(["?"] * len(ids))
             # `transaction` is a reserved word in SQLite; quote the identifier.
             async with db.execute(
                 f'SELECT * FROM "{table}" WHERE id IN ({placeholders})',
@@ -620,7 +620,7 @@ def check_sample_rows(remote_url: str) -> None:
                 sqlite_data = asyncio.run(
                     sqlite_rows_for(table, sample_ids)
                 )
-                placeholders = ",".join("%s" * len(sample_ids))
+                placeholders = ",".join(["%s"] * len(sample_ids))
                 cur.execute(
                     f'SELECT * FROM "{table}" WHERE id IN ({placeholders})',
                     sample_ids,
