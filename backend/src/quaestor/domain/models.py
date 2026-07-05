@@ -6,7 +6,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Annotated, Optional
 
-from sqlalchemy import Column, Index, Numeric, UniqueConstraint
+from sqlalchemy import BigInteger, Column, Index, Numeric, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -58,7 +58,7 @@ class Account(SQLModel, table=True):
     name: str
     type: AccountType
     currency: str
-    balance: int = 0  # centavos, in the account's currency
+    balance: Annotated[int, Field(default=0, sa_type=BigInteger)] = 0  # centavos, in the account's currency
     archived: bool = False
 
 
@@ -87,10 +87,10 @@ class Transaction(SQLModel, table=True):
     notes: Optional[str] = None
     type: TxType
     status: TxStatus = TxStatus.posted
-    amount: int  # centavos, original currency, always positive
+    amount: Annotated[int, Field(sa_type=BigInteger)]  # centavos, original currency, always positive
     currency: str
     fx_rate: Annotated[Decimal, Field(sa_column=Column(Numeric(18, 6)))]
-    to_base: int  # centavos COP, frozen
+    to_base: Annotated[int, Field(sa_type=BigInteger)]  # centavos COP, frozen
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
     recurring_id: Annotated[Optional[int], Field(default=None, foreign_key="recurring_item.id")] = None
