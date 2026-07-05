@@ -748,8 +748,12 @@ def check_sample_rows(remote_url: str) -> None:
                         # Data diverges — is it post-migration UI
                         # activity (Postgres row is newer) or a real
                         # migration failure (SQLite row is newer)?
-                        sqlite_created_at = sqlite_row[created_at_idx]
-                        pg_created_at = pg_row[created_at_idx]
+                        # str() both sides: Postgres returns datetime,
+                        # aiosqlite returns str (SQLite stores datetimes
+                        # as TEXT); str(datetime) uses space-separator
+                        # format which matches SQLite's storage.
+                        sqlite_created_at = str(sqlite_row[created_at_idx])
+                        pg_created_at = str(pg_row[created_at_idx])
                         if pg_created_at > sqlite_created_at:
                             post_migration_diverged += 1
                         else:
