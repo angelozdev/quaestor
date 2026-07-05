@@ -122,17 +122,29 @@ def ensure_schema(remote_url: str) -> None:
 
 
 def pre_migration_dump(remote_url: str) -> None:
-    """Capture any pre-existing remote data (safety net for re-runs)."""
+    """Capture any pre-existing remote data (safety net for re-runs).
+
+    Non-fatal: pg_dump may not be installed locally. For a first-time
+    migration the remote DB is empty, so the dump would be empty anyway.
+    For re-runs the absence of pg_dump means no rollback target — proceed
+    at your own risk.
+    """
     DUMP_PATH.parent.mkdir(parents=True, exist_ok=True)
     log(f"writing pre-migration dump to {DUMP_PATH}")
-    result = subprocess.run(
-        ["pg_dump", "-Fc", remote_url, "-f", str(DUMP_PATH)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            ["pg_dump", "-Fc", remote_url, "-f", str(DUMP_PATH)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        log("WARNING: pg_dump not installed; skipping pre-migration dump")
+        return
     if result.returncode != 0:
-        fail(f"pg_dump failed: {result.stderr}")
+        log(f"WARNING: pg_dump failed (rc={result.returncode}); continuing")
+        log(f"  stderr: {result.stderr.strip()}")
+        return
 
 
 async def fetch_sqlite_rows() -> dict[str, list[tuple]]:
