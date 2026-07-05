@@ -159,33 +159,53 @@ async def fetch_sqlite_rows() -> dict[str, list[tuple]]:
     return rows
 
 
-def get_columns(remote_url: str, table: str) -> list[str]:
-    """Get the column list for a table from Postgres (ordinal order)."""
+def get_columns(remote_url: str, table: str) -> list[tuple[str, str]]:
+    """Get the (column_name, data_type) list for a table from Postgres.
+
+    Ordered to match the SQLite SELECT * result order.
+    """
     with psycopg.connect(remote_url, connect_timeout=5) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT column_name
+                SELECT column_name, data_type
                 FROM information_schema.columns
                 WHERE table_name = %s
                 ORDER BY ordinal_position
                 """,
                 (table,),
             )
-            return [row[0] for row in cur.fetchall()]
+            return [(row[0], row[1]) for row in cur.fetchall()]
+
+
+def coerce_row(row: tuple, columns: list[tuple[str, str]]) -> tuple:
+    """Convert SQLite values to Postgres-compatible Python values.
+
+    SQLite stores booleans as INTEGER 0/1; Postgres BOOLEAN rejects ints.
+    Other types (DATE, TIMESTAMP, NUMERIC) are coerced via ISO string /
+    Decimal automatically by psycopg when given the right Python type.
+    """
+    out = []
+    for value, (col_name, col_type) in zip(row, columns):
+        if col_type == "boolean":
+            out.append(bool(value))
+        else:
+            out.append(value)
+    return tuple(out)
 
 
 def copy_table(
     remote_url: str,
     table: str,
     rows: list[tuple],
-    columns: list[str],
+    columns: list[tuple[str, str]],
 ) -> int:
     """INSERT all rows into Postgres with ON CONFLICT DO NOTHING."""
     if not rows:
         return 0
-    placeholders = ", ".join(["%s"] * len(columns))
-    cols_csv = ", ".join(columns)
+    column_names = [c[0] for c in columns]
+    placeholders = ", ".join(["%s"] * len(column_names))
+    cols_csv = ", ".join(column_names)
     if table == "transaction_tag":
         # composite PK (transaction_id, tag_id); no `id` column
         sql = (
@@ -197,9 +217,10 @@ def copy_table(
             f"INSERT INTO {table} ({cols_csv}) VALUES ({placeholders}) "
             f"ON CONFLICT (id) DO NOTHING"
         )
+    coerced_rows = [coerce_row(r, columns) for r in rows]
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
-            cur.executemany(sql, rows)
+            cur.executemany(sql, coerced_rows)
         conn.commit()
     return len(rows)
 
