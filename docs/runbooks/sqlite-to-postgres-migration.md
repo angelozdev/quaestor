@@ -471,34 +471,102 @@ def fail(msg: str) -> None:
 
 def check_row_counts(remote_url: str) -> None:
     log("check 1: row counts")
-    async def sqlite_counts() -> dict[str, int]:
-        out = {}
+    # SQLite may contain rows whose FK references don't resolve in
+    # Postgres (orphans). migrate.py filters those out, so Postgres
+    # has the "valid" subset. Compare Postgres COUNT(*) against the
+    # SQLite count of rows whose non-NULL FKs all resolve in Postgres.
+    # Postgres may have MORE rows than SQLite (post-migration usage
+    # via the UI); that's not a failure, just informational.
+    async def sqlite_effective_counts() -> dict[str, int]:
+        pg_valid: dict[tuple[str, str], set] = {}
+        with psycopg.connect(remote_url, connect_timeout=5) as conn:
+            with conn.cursor() as cur:
+                for table in TABLES_IN_DEPENDENCY_ORDER:
+                    fks = get_fk_columns_sync(remote_url, table)
+                    for _child_col, parent_table, parent_col in fks:
+                        key = (parent_table, parent_col)
+                        if key in pg_valid:
+                            continue
+                        cur.execute(
+                            f'SELECT "{parent_col}" FROM "{parent_table}"'
+                        )
+                        pg_valid[key] = {row[0] for row in cur.fetchall()}
+
+        out: dict[str, int] = {}
         async with aiosqlite.connect(str(SQLITE_PATH)) as db:
             for table in TABLES_IN_DEPENDENCY_ORDER:
                 # `transaction` is a reserved word in SQLite; quote the identifier.
-                async with db.execute(
-                    f'SELECT COUNT(*) FROM "{table}"'
-                ) as cur:
-                    row = await cur.fetchone()
-                    out[table] = row[0]
+                async with db.execute(f'SELECT * FROM "{table}"') as cur:
+                    cols = [d[0] for d in cur.description]
+                    rows = await cur.fetchall()
+                fks = get_fk_columns_sync(remote_url, table)
+                kept = 0
+                for row in rows:
+                    skip = False
+                    for child_col, parent_table, parent_col in fks:
+                        if child_col not in cols:
+                            continue
+                        value = row[cols.index(child_col)]
+                        if value is None:
+                            continue
+                        if value not in pg_valid[(parent_table, parent_col)]:
+                            skip = True
+                            break
+                    if not skip:
+                        kept += 1
+                out[table] = kept
         return out
 
-    sqlite_rows = asyncio.run(sqlite_counts())
+    sqlite_rows = asyncio.run(sqlite_effective_counts())
 
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
             for table in TABLES_IN_DEPENDENCY_ORDER:
                 cur.execute(f'SELECT COUNT(*) FROM "{table}"')
                 pg_count = cur.fetchone()[0]
-                if pg_count != sqlite_rows[table]:
+                if pg_count < sqlite_rows[table]:
                     fail(
-                        f"row count mismatch for {table}: "
-                        f"sqlite={sqlite_rows[table]} postgres={pg_count}"
+                        f"row count shortfall for {table}: "
+                        f"sqlite(valid)={sqlite_rows[table]} "
+                        f"postgres={pg_count}"
                     )
-                log(
-                    f"  {table}: sqlite={sqlite_rows[table]} "
-                    f"postgres={pg_count} OK"
-                )
+                if pg_count > sqlite_rows[table]:
+                    extra = pg_count - sqlite_rows[table]
+                    log(
+                        f"  {table}: sqlite(valid)={sqlite_rows[table]} "
+                        f"postgres={pg_count} OK ({extra} row(s) "
+                        f"created post-migration)"
+                    )
+                else:
+                    log(
+                        f"  {table}: sqlite(valid)={sqlite_rows[table]} "
+                        f"postgres={pg_count} OK"
+                    )
+
+
+def get_fk_columns_sync(
+    remote_url: str, table: str
+) -> list[tuple[str, str, str]]:
+    """Return [(child_column, parent_table, parent_column)] for FK columns."""
+    with psycopg.connect(remote_url, connect_timeout=5) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    kcu.column_name,
+                    ccu.table_name AS foreign_table,
+                    ccu.column_name AS foreign_column
+                FROM information_schema.table_constraints AS tc
+                JOIN information_schema.key_column_usage AS kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage AS ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.table_name = %s
+                """,
+                (table,),
+            )
+            return [(row[0], row[1], row[2]) for row in cur.fetchall()]
 
 
 def check_fk_integrity(remote_url: str) -> None:
@@ -684,7 +752,7 @@ git status                          # only docs/runbooks/.../migration.md should
 | `migrate.py` aborts with "alembic upgrade failed" | schema bootstrap failed | Inspect alembic logs; fix; re-run |
 | `pg_dump` fails | remote URL bad / network down | Check `backend/.env.local.remote`; re-run |
 | `migrate.py` crashes mid-table | network blip / Postgres error | Re-run; second pass is idempotent (ON CONFLICT DO NOTHING) |
-| `verify.py` reports row count mismatch | copy bug | Inspect; SQLite still in `.dev-data/` until step 6 — no data loss |
+| `verify.py` reports row count shortfall | copy bug (missing rows in Postgres) | Inspect; SQLite still in `.dev-data/` until step 6 — no data loss |
 | `verify.py` reports FK orphans | copy order issue / data corruption in SQLite | Inspect; same as above |
 | Browser smoke test reveals missing data | copy bug | SQLite still in `.dev-data/`; debug; re-run from step 3 |
 | Browser smoke test reveals broken query | app-side issue, not data | Independent of migration; debug the app |
