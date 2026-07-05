@@ -24,12 +24,29 @@ def log(msg: str) -> None:
     print(f"{LOG_PREFIX} {msg}", flush=True)
 
 
-def _probe_sqlite(url: str) -> None:
-    create_engine(url).connect().close()
+_POSTGRESQL_SCHEME = "postgresql://"
+_PSYCOPG_SCHEME = "postgresql+psycopg://"
+
+
+def _resolve_db_url(url: str) -> str:
+    """Promote bare ``postgresql://`` to ``postgresql+psycopg://`` for SQLAlchemy.
+
+    Mirrors ``_resolve_driver`` in db.py so the entrypoint's direct
+    ``create_engine`` calls use the same driver as the application proper.
+    """
+    if url.startswith(_POSTGRESQL_SCHEME):
+        return _PSYCOPG_SCHEME + url[len(_POSTGRESQL_SCHEME):]
+    return url
 
 
 def _probe_postgres(url: str) -> None:
-    psycopg.connect(url, connect_timeout=3).close()
+    # psycopg (v3) does not accept the ``+psycopg`` dialect prefix.
+    probe_url = url.replace(_PSYCOPG_SCHEME, _POSTGRESQL_SCHEME)
+    psycopg.connect(probe_url, connect_timeout=3).close()
+
+
+def _probe_sqlite(url: str) -> None:
+    create_engine(_resolve_db_url(url)).connect().close()
 
 
 def wait_for_db(url: str) -> None:
@@ -59,7 +76,7 @@ def _alembic_version_empty(url: str) -> bool:
     boot the entrypoint must ``stamp head`` rather than ``upgrade head``,
     which would error with ``table <X> already exists``.
     """
-    eng = create_engine(url)
+    eng = create_engine(_resolve_db_url(url))
     try:
         with eng.connect() as conn:
             row = conn.execute(
@@ -76,7 +93,7 @@ def _db_has_any_table(url: str) -> bool:
     Used to distinguish a fresh DB (no tables, no version → ``upgrade head``)
     from a pre-existing-schema DB (tables present, no version → ``stamp head``).
     """
-    eng = create_engine(url)
+    eng = create_engine(_resolve_db_url(url))
     try:
         with eng.connect() as conn:
             row = conn.execute(

@@ -22,6 +22,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
+from quaestor import db as _db
 from quaestor.domain import models  # noqa: F401
 
 
@@ -44,6 +45,7 @@ def run_migrations_offline() -> None:
         config.get_main_option("sqlalchemy.url")
         or os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
     )
+    url = _db._resolve_driver(url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -66,7 +68,9 @@ def run_migrations_online() -> None:
     if connectable is None:
         section = config.get_section(config.config_ini_section, {})
         if "sqlalchemy.url" not in section:
-            section["sqlalchemy.url"] = os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
+            section["sqlalchemy.url"] = _db._resolve_driver(
+                os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
+            )
         connectable = engine_from_config(
             section,
             prefix="sqlalchemy.",
