@@ -17,10 +17,21 @@ from .errors import register_exception_handlers
 
 log = logging.getLogger(__name__)
 
+# Configure handlers so scheduler and api logs reach stderr in docker.
+# Set up at module-import time (before uvicorn's Server.start() reconfigures
+# logging) rather than in the lifespan, since uvicorn's dictConfig in
+# Server.start() can clear handlers that were added in the lifespan __aenter__.
+_api_fmt = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+for _api_name in ("quaestor.scheduler", "quaestor.api"):
+    _api_l = logging.getLogger(_api_name)
+    _api_l.setLevel(logging.INFO)
+    _api_h = logging.StreamHandler()
+    _api_h.setFormatter(_api_fmt)
+    _api_l.addHandler(_api_h)
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Ensure the schema exists and spawn the daily scheduler task."""
     db.init_db(db.engine)
     log.info("api: lifespan startup")
     task = asyncio.create_task(run_forever(), name="daily-scheduler")

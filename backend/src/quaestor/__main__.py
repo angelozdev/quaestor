@@ -4,6 +4,7 @@ Runs as `python -m quaestor` from the container CMD (ADR-0026).
 """
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import sys
@@ -113,6 +114,15 @@ def run_migrations() -> None:
 
 
 def _run_uvicorn() -> None:
+    # basicConfig sets the root logger so alembic / uvicorn / library logs
+    # reach stderr. Per-logger StreamHandlers in api/__init__.py keep
+    # quaestor.scheduler + quaestor.api visible even if root handlers get
+    # cleared (alembic's fileConfig and uvicorn's dictConfig both reset
+    # the root logger).
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
     uvicorn.run(
         "quaestor.api:app",
         host="0.0.0.0",

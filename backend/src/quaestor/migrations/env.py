@@ -30,7 +30,10 @@ _DEFAULT_DB_URL: str = "sqlite:///quaestor.db"
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False keeps quaestor.scheduler / quaestor.api
+    # enabled after alembic reconfigures logging (fileConfig default is True,
+    # which would silently silence them and break `docker compose logs api`).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = SQLModel.metadata
 

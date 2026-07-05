@@ -67,7 +67,13 @@ def run_daily(
 def main() -> None:
     import json as _json
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # Standalone entrypoint (`just daily` runs this in a NEW python process, not
+    # the api container's CMD), so configure root logging here. Idempotent with
+    # the api container's setup — see api/__init__.py for why both layers exist.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     fx_url = os.environ.get("FX_API_URL", "")
     fx_key = os.environ.get("FX_API_KEY") or None
     today = Date.today()

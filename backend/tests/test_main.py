@@ -254,3 +254,24 @@ def test_run_uvicorn_calls_uvicorn_run_with_reload() -> None:
                     reload_dirs=["/app/src"],
                     log_level="info",
                 )
+
+
+def test_scheduler_and_api_loggers_have_handlers_at_import() -> None:
+    """Both quaestor.scheduler and quaestor.api loggers must have StreamHandlers
+    configured at module-import time (in api/__init__.py) so their INFO lines
+    reach stderr and appear in docker compose logs. Handlers are attached at
+    import time rather than in the lifespan because uvicorn's Server.start()
+    calls logging.config.dictConfig which can clear lifespan-added handlers.
+    """
+    import logging as logging_module
+
+    # Importing the api module triggers the module-level handler setup
+    from quaestor.api import log as api_log  # noqa: F401
+
+    sched = logging_module.getLogger("quaestor.scheduler")
+    assert len(sched.handlers) >= 1, "scheduler logger has no handler"
+    assert sched.level == logging_module.INFO
+
+    api_logger = logging_module.getLogger("quaestor.api")
+    assert len(api_logger.handlers) >= 1, "api logger has no handler"
+    assert api_logger.level == logging_module.INFO
