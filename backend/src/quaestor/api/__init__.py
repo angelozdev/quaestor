@@ -1,6 +1,8 @@
 """FastAPI application factory. The single place where routers are registered."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -9,15 +11,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import db
+from ..scheduler import run_forever
 from .csrf import CSRFMiddleware
 from .errors import register_exception_handlers
+
+log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Ensure the schema exists before serving (P0's idempotent init_db)."""
+    """Ensure the schema exists and spawn the daily scheduler task."""
     db.init_db(db.engine)
-    yield
+    log.info("api: lifespan startup")
+    task = asyncio.create_task(run_forever(), name="daily-scheduler")
+    try:
+        yield
+    finally:
+        log.info("api: lifespan shutdown; cancelling scheduler")
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 _MIN_SESSION_SECRET_BYTES = 32
