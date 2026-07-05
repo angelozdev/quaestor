@@ -101,21 +101,129 @@ def test_wait_for_db_max_attempts_exits_1(capsys: pytest.CaptureFixture[str]) ->
 # ---------------------------------------------------------------------------
 
 def test_run_migrations_success() -> None:
-    """mocked subprocess returns rc=0; function returns."""
+    """fresh DB path: alembic upgrade head returns rc=0; function returns."""
     from quaestor.__main__ import run_migrations
     mock_result = MagicMock(returncode=0)
-    with patch("subprocess.run", return_value=mock_result) as mock_run:
-        run_migrations()
-        mock_run.assert_called_once()
-        # cwd should be /app
-        assert mock_run.call_args.kwargs.get("cwd") == "/app"
+    with patch("quaestor.__main__._alembic_version_empty", return_value=True):
+        with patch("quaestor.__main__._db_has_any_table", return_value=False):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_migrations()
+                mock_run.assert_called_once()
+                args = mock_run.call_args.args[0]
+                assert "upgrade" in args and "head" in args
+                assert "stamp" not in args
+                # cwd should be /app
+                assert mock_run.call_args.kwargs.get("cwd") == "/app"
 
 
 def test_run_migrations_failure_exits() -> None:
-    """mocked subprocess returns rc=2; calls sys.exit(2)."""
+    """existing-version path: alembic upgrade head returns rc=2 → sys.exit(2)."""
     from quaestor.__main__ import run_migrations
     mock_result = MagicMock(returncode=2)
-    with patch.object(sys, "exit") as mock_exit:
-        with patch("subprocess.run", return_value=mock_result):
+    with patch("quaestor.__main__._alembic_version_empty", return_value=False):
+        with patch.object(sys, "exit") as mock_exit:
+            with patch("subprocess.run", return_value=mock_result):
+                run_migrations()
+                mock_exit.assert_called_once_with(2)
+
+
+def test_run_migrations_stamps_when_schema_exists_no_version() -> None:
+    """Pre-existing schema, no alembic_version row → calls ``alembic stamp head``
+    (NOT ``upgrade head``); this avoids the ``table <X> already exists`` error
+    that occurs when the head schema is already in place but unrecorded.
+    """
+    from quaestor.__main__ import run_migrations
+    mock_result = MagicMock(returncode=0)
+    with patch("quaestor.__main__._alembic_version_empty", return_value=True):
+        with patch("quaestor.__main__._db_has_any_table", return_value=True):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_migrations()
+                mock_run.assert_called_once()
+                args = mock_run.call_args.args[0]
+                assert "stamp" in args and "head" in args
+                assert "upgrade" not in args
+                assert mock_run.call_args.kwargs.get("cwd") == "/app"
+
+
+def test_run_migrations_upgrades_when_version_present() -> None:
+    """Alembic version table has a row → calls ``alembic upgrade head`` to apply
+    any pending migrations.
+    """
+    from quaestor.__main__ import run_migrations
+    mock_result = MagicMock(returncode=0)
+    with patch("quaestor.__main__._alembic_version_empty", return_value=False):
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
             run_migrations()
-            mock_exit.assert_called_once_with(2)
+            mock_run.assert_called_once()
+            args = mock_run.call_args.args[0]
+            assert "upgrade" in args and "head" in args
+            assert "stamp" not in args
+            assert mock_run.call_args.kwargs.get("cwd") == "/app"
+
+
+def test_run_migrations_upgrades_when_empty_db() -> None:
+    """Fresh DB: no tables, no alembic_version row → calls ``alembic upgrade head``
+    to create the schema and stamp it.
+    """
+    from quaestor.__main__ import run_migrations
+    mock_result = MagicMock(returncode=0)
+    with patch("quaestor.__main__._alembic_version_empty", return_value=True):
+        with patch("quaestor.__main__._db_has_any_table", return_value=False):
+            with patch("subprocess.run", return_value=mock_result) as mock_run:
+                run_migrations()
+                mock_run.assert_called_once()
+                args = mock_run.call_args.args[0]
+                assert "upgrade" in args and "head" in args
+                assert "stamp" not in args
+                assert mock_run.call_args.kwargs.get("cwd") == "/app"
+
+
+# ---------------------------------------------------------------------------
+# Tests: _alembic_version_empty / _db_has_any_table (probe helpers)
+# ---------------------------------------------------------------------------
+
+def test_alembic_version_empty_when_table_absent() -> None:
+    """In-memory SQLite with no alembic_version table → helper returns True."""
+    from quaestor.__main__ import _alembic_version_empty
+    # Real call against a fresh in-memory DB: no alembic_version table exists,
+    # so the helper hits its exception branch and returns True.
+    assert _alembic_version_empty("sqlite:///:memory:") is True
+
+
+def test_alembic_version_empty_when_table_present_no_rows() -> None:
+    """alembic_version table exists but has zero rows → helper returns True."""
+    from quaestor.__main__ import _alembic_version_empty
+    import sqlite3
+    import tempfile
+    # File-backed URL is required: SQLAlchemy's ``sqlite:///:memory:`` gives a
+    # per-connection in-memory DB that doesn't share schema across connections.
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        path = f.name
+    try:
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        conn.commit()
+        conn.close()
+        assert _alembic_version_empty(f"sqlite:///{path}") is True
+    finally:
+        import os as _os
+        _os.unlink(path)
+
+
+def test_alembic_version_empty_when_row_present() -> None:
+    """alembic_version table has a row → helper returns False."""
+    from quaestor.__main__ import _alembic_version_empty
+    import sqlite3
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        path = f.name
+    try:
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
+        conn.execute("INSERT INTO alembic_version VALUES ('abc123')")
+        conn.commit()
+        conn.close()
+        assert _alembic_version_empty(f"sqlite:///{path}") is False
+    finally:
+        import os as _os
+        _os.unlink(path)
