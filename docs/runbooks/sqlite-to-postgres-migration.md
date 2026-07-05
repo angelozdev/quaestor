@@ -790,15 +790,21 @@ def check_sample_rows(remote_url: str) -> None:
                     row[cols.index("id")]: row
                     for row in cur.fetchall()
                 }
+                matched = 0
+                post_migration_rows = 0
                 for sid in sample_ids:
-                    if sid not in sqlite_data:
-                        fail(
-                            f"sample id {sid} missing from sqlite {table}"
-                        )
                     if sid not in pg_data:
+                        # Sampled id not in Postgres (race or filter).
                         fail(
                             f"sample id {sid} missing from postgres {table}"
                         )
+                    if sid not in sqlite_data:
+                        # Row exists in Postgres but not in SQLite —
+                        # created via UI post-migration. Not a migration
+                        # failure; the migration never had this row to
+                        # copy because it didn't exist in SQLite yet.
+                        post_migration_rows += 1
+                        continue
                     sqlite_row = sqlite_data[sid]
                     pg_row = pg_data[sid]
                     if len(sqlite_row) != len(pg_row):
@@ -815,9 +821,17 @@ def check_sample_rows(remote_url: str) -> None:
                                 f"col={col_idx}: "
                                 f"sqlite={s_val!r} postgres={p_val!r}"
                             )
-                log(
-                    f"  {table}: {len(sample_ids)} sample rows match OK"
-                )
+                    matched += 1
+                if post_migration_rows:
+                    log(
+                        f"  {table}: {matched} sample rows match OK, "
+                        f"{post_migration_rows} row(s) created post-migration "
+                        "(not in SQLite)"
+                    )
+                else:
+                    log(
+                        f"  {table}: {matched} sample rows match OK"
+                    )
 
 
 def check_enum_validity(remote_url: str) -> None:
