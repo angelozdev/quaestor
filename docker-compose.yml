@@ -26,7 +26,9 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: deps
     image: quaestor-frontend:latest
     command: ["pnpm", "dev"]
     env_file:
