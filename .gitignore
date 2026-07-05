@@ -23,21 +23,11 @@ out/
 # MCP — keep template .mcp.json committed, local overrides stay private
 .mcp.local.json
 
-# The `db` service runs Postgres 17; row data lives in the quaestor-db-data Docker volume.
-
 # Deploy artifacts / state
 .env
 .env.*
 !.env.example
-ts-serve.local.json
-litestream.state
-backend/.docker_cache/
 frontend/.next/
-frontend/.docker_cache/
-
-# Docker named volumes on the host (quaestor-db-data, quaestor-backups, etc.)
-# when restored outside compose (rare; manual file copies).
-quaestor_backups/
 
 # AI agent workspace (oh-my-opencode orchestration state).
 # https://github.com/code-yeongyu/oh-my-openagent — `.omo/` is tool state,
