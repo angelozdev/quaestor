@@ -34,7 +34,7 @@ cp backend/.env.local.remote.example backend/.env.local.remote
 # Edit QUAESTOR_DB to your real Postgres URL, plus the secrets.
 ```
 
-`backend/.dev-data/quaestor.db` (your real financial data) lives inside the `quaestor-dev-data` Docker named volume. Named volumes persist across `docker compose down` — your data carries over automatically. **Don't use `docker compose down -v` on the sqlite profile**; it would wipe the SQLite file.
+`.dev-data/quaestor.db` (your real financial data) lives in the repo-root `.dev-data/` directory, bind-mounted into the `api` container at `/app/.dev-data/`. The host file is the source of truth — it is gitignored. `docker compose down` (no `-v`) preserves it; the only remaining named volume (`frontend_node_modules`) is a disposable node_modules cache and is safe to drop with `-v`.
 
 ## URLs (after `just dev-local`)
 
@@ -72,6 +72,6 @@ The local SQLite holds your actual financial data. When you want to move it to y
 2. `alembic upgrade head` runs automatically on first boot.
 3. `pgloader sqlite:///path/to/.dev-data/quaestor.db postgresql://user:REDACTED@host/quaestor_production_db` — copies the data.
 4. Smoke-test with `just dev-real`.
-5. Archive `backend/.dev-data/quaestor.db` for 30 days as a rollback safety net.
+5. Archive `.dev-data/quaestor.db` for 30 days as a rollback safety net.
 
 ENUM casts may need explicit handling (ADR-0024 documents the Postgres ENUM types).

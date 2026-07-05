@@ -16,7 +16,7 @@ services:
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/scripts:/app/scripts:ro
       - ./backend/alembic.ini:/app/alembic.ini:ro
-      - quaestor-dev-data:/app/.dev-data
+      - ./.dev-data:/app/.dev-data
     healthcheck:
       test: ["CMD", "uv", "run", "python", "-c",
              "import httpx,os,sys; sys.exit(0 if httpx.get('http://localhost:8000/api/auth/me', headers={'Authorization': f'Bearer {os.environ[\"APP_TOKEN\"]}'}, timeout=5).status_code in (200,401) else 1)"]
@@ -54,5 +54,4 @@ services:
         condition: service_healthy
 
 volumes:
-  quaestor-dev-data:
   frontend_node_modules:
