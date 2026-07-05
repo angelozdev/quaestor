@@ -469,6 +469,25 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
+def values_equal(sqlite_val, pg_val) -> bool:
+    """Compare SQLite and Postgres values, handling known type mismatches.
+
+    The underlying data is the same; only the Python types differ:
+    - SQLite stores DATE as 'YYYY-MM-DD' string; Postgres returns datetime.date.
+    - SQLite stores NUMERIC values with no fractional part as int;
+      Postgres returns Decimal('4200.000000').
+    """
+    if sqlite_val is None or pg_val is None:
+        return sqlite_val is None and pg_val is None
+    # Date/datetime: SQLite returns ISO string, Postgres returns date/datetime.
+    if isinstance(sqlite_val, str) and hasattr(pg_val, "isoformat"):
+        return sqlite_val == pg_val.isoformat()
+    # Numeric: SQLite returns int/float, Postgres returns Decimal.
+    if isinstance(sqlite_val, (int, float)) and isinstance(pg_val, Decimal):
+        return float(sqlite_val) == float(pg_val)
+    return sqlite_val == pg_val
+
+
 def check_row_counts(remote_url: str) -> None:
     log("check 1: row counts")
     # SQLite may contain rows whose FK references don't resolve in
@@ -639,12 +658,22 @@ def check_sample_rows(remote_url: str) -> None:
                         fail(
                             f"sample id {sid} missing from postgres {table}"
                         )
-                    if sqlite_data[sid] != pg_data[sid]:
+                    sqlite_row = sqlite_data[sid]
+                    pg_row = pg_data[sid]
+                    if len(sqlite_row) != len(pg_row):
                         fail(
-                            f"row mismatch in {table} id={sid}: "
-                            f"sqlite={sqlite_data[sid]} "
-                            f"postgres={pg_data[sid]}"
+                            f"column count mismatch in {table} id={sid}: "
+                            f"sqlite={len(sqlite_row)} postgres={len(pg_row)}"
                         )
+                    for col_idx, (s_val, p_val) in enumerate(
+                        zip(sqlite_row, pg_row)
+                    ):
+                        if not values_equal(s_val, p_val):
+                            fail(
+                                f"row mismatch in {table} id={sid} "
+                                f"col={col_idx}: "
+                                f"sqlite={s_val!r} postgres={p_val!r}"
+                            )
                 log(
                     f"  {table}: {len(sample_ids)} sample rows match OK"
                 )
