@@ -313,6 +313,14 @@ def copy_table(
             f"INSERT INTO {table} ({cols_csv}) VALUES ({placeholders}) "
             f"ON CONFLICT (transaction_id, tag_id) DO NOTHING"
         )
+    elif table == "recurring_occurrence":
+        # composite unique constraint on (recurring_id, due_date) in addition
+        # to the single-column `id` PK — target the unique constraint so
+        # re-runs after a partial success don't trip on it.
+        sql = (
+            f"INSERT INTO {table} ({cols_csv}) VALUES ({placeholders}) "
+            f"ON CONFLICT (recurring_id, due_date) DO NOTHING"
+        )
     else:
         sql = (
             f"INSERT INTO {table} ({cols_csv}) VALUES ({placeholders}) "
