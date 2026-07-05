@@ -235,25 +235,16 @@ def main() -> None:
 
     rows_by_table = asyncio.run(fetch_sqlite_rows())
 
-    log("disabling FK checks on remote session")
-    with psycopg.connect(remote_url) as conn:
-        with conn.cursor() as cur:
-            cur.execute("SET session_replication_role = 'replica'")
-        conn.commit()
+    # No need to disable FK checks: TABLES_IN_DEPENDENCY_ORDER is a strict
+    # linear order with no cycles. Each child table's referenced parents are
+    # inserted earlier in the same pass.
 
-    try:
-        for table in TABLES_IN_DEPENDENCY_ORDER:
-            rows = rows_by_table[table]
-            columns = get_columns(remote_url, table)
-            n = copy_table(remote_url, table, rows, columns)
-            log(f"postgres {table}: {n} rows inserted")
-            reset_sequence(remote_url, table)
-    finally:
-        log("re-enabling FK checks on remote session")
-        with psycopg.connect(remote_url) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SET session_replication_role = 'origin'")
-            conn.commit()
+    for table in TABLES_IN_DEPENDENCY_ORDER:
+        rows = rows_by_table[table]
+        columns = get_columns(remote_url, table)
+        n = copy_table(remote_url, table, rows, columns)
+        log(f"postgres {table}: {n} rows inserted")
+        reset_sequence(remote_url, table)
 
     log("DONE. Run verify.py next.")
 
