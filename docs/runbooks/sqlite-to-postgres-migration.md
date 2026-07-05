@@ -475,14 +475,19 @@ def values_equal(sqlite_val, pg_val) -> bool:
 
     The underlying data is the same; only the Python types differ:
     - SQLite stores DATE as 'YYYY-MM-DD' string; Postgres returns datetime.date.
+    - SQLite stores DATETIME as 'YYYY-MM-DD HH:MM:SS' (space separator);
+      Postgres returns datetime.datetime (whose str() uses a space).
     - SQLite stores NUMERIC values with no fractional part as int;
       Postgres returns Decimal('4200.000000').
     """
     if sqlite_val is None or pg_val is None:
         return sqlite_val is None and pg_val is None
     # Date/datetime: SQLite returns ISO string, Postgres returns date/datetime.
+    # Use str() rather than isoformat() — for date both match ('YYYY-MM-DD');
+    # for datetime str() uses a space ('YYYY-MM-DD HH:MM:SS') matching SQLite,
+    # while isoformat() would use 'T' and not match.
     if isinstance(sqlite_val, str) and hasattr(pg_val, "isoformat"):
-        return sqlite_val == pg_val.isoformat()
+        return sqlite_val == str(pg_val)
     # Numeric: SQLite returns int/float, Postgres returns Decimal.
     if isinstance(sqlite_val, (int, float)) and isinstance(pg_val, Decimal):
         return float(sqlite_val) == float(pg_val)
