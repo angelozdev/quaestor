@@ -630,11 +630,110 @@ def check_sample_rows(remote_url: str) -> None:
                     for row in await cur.fetchall()
                 }
 
+    async def sqlite_rows_by_composite(
+        table: str, keys: list[tuple]
+    ) -> dict[tuple, tuple]:
+        # Fetch SQLite rows whose (recurring_id, due_date) matches any
+        # of the given tuples. The query uses a row-value IN clause,
+        # supported by both SQLite and Postgres.
+        if not keys:
+            return {}
+        values_clause = ",".join(["(?, ?)"] * len(keys))
+        flat_params: list = []
+        for rid, ddate in keys:
+            flat_params.append(rid)
+            flat_params.append(ddate)
+        async with aiosqlite.connect(str(SQLITE_PATH)) as db:
+            async with db.execute(
+                f'SELECT * FROM "{table}" '
+                f'WHERE (recurring_id, due_date) IN ({values_clause})',
+                flat_params,
+            ) as cur:
+                cols = [d[0] for d in cur.description]
+                return {
+                    (
+                        row[cols.index("recurring_id")],
+                        row[cols.index("due_date")],
+                    ): row
+                    for row in await cur.fetchall()
+                }
+
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
             for table in TABLES_IN_DEPENDENCY_ORDER:
                 if table == "transaction_tag":
                     continue  # composite PK, no single `id`
+
+                if table == "recurring_occurrence":
+                    # Postgres IDs are renumbered for this table (the
+                    # ON CONFLICT (recurring_id, due_date) clause causes
+                    # Postgres to assign sequential IDs). Compare by the
+                    # actual unique key (recurring_id, due_date) and skip
+                    # the id column in the data comparison.
+                    cur.execute(
+                        f'SELECT recurring_id, due_date FROM "{table}" '
+                        "ORDER BY random() LIMIT 5"
+                    )
+                    sample_keys = [(r[0], r[1]) for r in cur.fetchall()]
+                    if not sample_keys:
+                        log(f"  {table}: empty (no samples to check)")
+                        continue
+                    sqlite_data = asyncio.run(
+                        sqlite_rows_by_composite(table, sample_keys)
+                    )
+                    values_clause = ",".join(["(%s, %s)"] * len(sample_keys))
+                    flat_params: list = []
+                    for rid, ddate in sample_keys:
+                        flat_params.append(rid)
+                        flat_params.append(ddate)
+                    cur.execute(
+                        f'SELECT * FROM "{table}" '
+                        f"WHERE (recurring_id, due_date) IN ({values_clause})",
+                        flat_params,
+                    )
+                    cols = [d[0] for d in cur.description]
+                    pg_data = {
+                        (
+                            row[cols.index("recurring_id")],
+                            row[cols.index("due_date")],
+                        ): row
+                        for row in cur.fetchall()
+                    }
+                    for key in sample_keys:
+                        if key not in sqlite_data:
+                            fail(
+                                f"sample key {key} missing from sqlite {table}"
+                            )
+                        if key not in pg_data:
+                            fail(
+                                f"sample key {key} missing from postgres {table}"
+                            )
+                        sqlite_row = sqlite_data[key]
+                        pg_row = pg_data[key]
+                        if len(sqlite_row) != len(pg_row):
+                            fail(
+                                f"column count mismatch in {table} "
+                                f"key={key}: "
+                                f"sqlite={len(sqlite_row)} "
+                                f"postgres={len(pg_row)}"
+                            )
+                        # Skip the id column (col 0) — Postgres IDs
+                        # are renumbered for this table.
+                        for col_idx in range(1, len(sqlite_row)):
+                            s_val = sqlite_row[col_idx]
+                            p_val = pg_row[col_idx]
+                            if not values_equal(s_val, p_val):
+                                fail(
+                                    f"row mismatch in {table} key={key} "
+                                    f"col={col_idx}: "
+                                    f"sqlite={s_val!r} postgres={p_val!r}"
+                                )
+                    log(
+                        f"  {table}: {len(sample_keys)} sample rows match OK "
+                        "(compared by recurring_id, due_date)"
+                    )
+                    continue
+
                 cur.execute(
                     f'SELECT id FROM "{table}" ORDER BY random() LIMIT 5'
                 )
