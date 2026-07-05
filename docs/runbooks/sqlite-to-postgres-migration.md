@@ -193,16 +193,118 @@ def coerce_row(row: tuple, columns: list[tuple[str, str]]) -> tuple:
     return tuple(out)
 
 
+def get_fk_columns(
+    remote_url: str, table: str
+) -> list[tuple[str, str, str]]:
+    """Return [(child_column, parent_table, parent_column)] for FK columns."""
+    with psycopg.connect(remote_url, connect_timeout=5) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    kcu.column_name,
+                    ccu.table_name AS foreign_table,
+                    ccu.column_name AS foreign_column
+                FROM information_schema.table_constraints AS tc
+                JOIN information_schema.key_column_usage AS kcu
+                    ON tc.constraint_name = kcu.constraint_name
+                JOIN information_schema.constraint_column_usage AS ccu
+                    ON ccu.constraint_name = tc.constraint_name
+                WHERE tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.table_name = %s
+                """,
+                (table,),
+            )
+            return [(row[0], row[1], row[2]) for row in cur.fetchall()]
+
+
+def fetch_valid_parent_ids(
+    remote_url: str, parent_table: str, parent_column: str
+) -> set:
+    """Return the set of valid IDs in the parent table (for FK validation)."""
+    with psycopg.connect(remote_url, connect_timeout=5) as conn:
+        with conn.cursor() as cur:
+            cur.execute(f'SELECT "{parent_column}" FROM "{parent_table}"')
+            return {row[0] for row in cur.fetchall()}
+
+
+def filter_orphans(
+    rows: list[tuple],
+    column_names: list[str],
+    fks: list[tuple[str, str, str]],
+    valid_ids: dict[tuple[str, str], set],
+) -> tuple[list[tuple], list[tuple[int, str]]]:
+    """Drop rows whose non-NULL FK columns reference missing parent rows.
+
+    Returns (kept_rows, [(row_id_or_index, skip_reason), ...]).
+    """
+    kept: list[tuple] = []
+    skipped: list[tuple[int, str]] = []
+    for row_idx, row in enumerate(rows):
+        skip_reason: str | None = None
+        for child_col, parent_table, parent_col in fks:
+            if child_col not in column_names:
+                continue
+            value = row[column_names.index(child_col)]
+            if value is None:
+                continue
+            if value not in valid_ids.get((parent_table, parent_col), set()):
+                skip_reason = (
+                    f"{child_col}={value} not in "
+                    f"{parent_table}.{parent_col}"
+                )
+                break
+        if skip_reason:
+            # Prefer the row's own id for the log; fall back to row index.
+            if "id" in column_names:
+                row_id = row[column_names.index("id")]
+            else:
+                row_id = row_idx
+            skipped.append((row_id, skip_reason))
+        else:
+            kept.append(row)
+    return kept, skipped
+
+
 def copy_table(
     remote_url: str,
     table: str,
     rows: list[tuple],
     columns: list[tuple[str, str]],
 ) -> int:
-    """INSERT all rows into Postgres with ON CONFLICT DO NOTHING."""
+    """INSERT all rows into Postgres with ON CONFLICT DO NOTHING.
+
+    Skips rows whose FK references are orphaned (parent rows missing in
+    Postgres). SQLite does not enforce FKs by default, so pre-existing
+    data can contain orphaned references; Postgres (correctly) rejects
+    them at INSERT time. We filter them here so the destination stays
+    clean. The script logs every skipped row.
+    """
     if not rows:
         return 0
     column_names = [c[0] for c in columns]
+
+    # Detect FKs and fetch valid parent IDs (parents are already inserted
+    # earlier in the dependency order).
+    fks = get_fk_columns(remote_url, table)
+    valid_ids: dict[tuple[str, str], set] = {}
+    for child_col, parent_table, parent_col in fks:
+        valid_ids[(parent_table, parent_col)] = fetch_valid_parent_ids(
+            remote_url, parent_table, parent_col
+        )
+
+    kept_rows, skipped_rows = filter_orphans(
+        rows, column_names, fks, valid_ids
+    )
+    if skipped_rows:
+        log(f"  {table}: SKIPPED {len(skipped_rows)} row(s) with orphaned FKs:")
+        for row_id, reason in skipped_rows[:5]:
+            log(f"    id={row_id}: {reason}")
+        if len(skipped_rows) > 5:
+            log(f"    ... and {len(skipped_rows) - 5} more")
+    if not kept_rows:
+        return 0
+
     placeholders = ", ".join(["%s"] * len(column_names))
     cols_csv = ", ".join(column_names)
     if table == "transaction_tag":
@@ -216,12 +318,12 @@ def copy_table(
             f"INSERT INTO {table} ({cols_csv}) VALUES ({placeholders}) "
             f"ON CONFLICT (id) DO NOTHING"
         )
-    coerced_rows = [coerce_row(r, columns) for r in rows]
+    coerced_rows = [coerce_row(r, columns) for r in kept_rows]
     with psycopg.connect(remote_url) as conn:
         with conn.cursor() as cur:
             cur.executemany(sql, coerced_rows)
         conn.commit()
-    return len(rows)
+    return len(coerced_rows)
 
 
 def reset_sequence(remote_url: str, table: str) -> None:
