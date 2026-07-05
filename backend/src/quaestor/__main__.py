@@ -4,7 +4,6 @@ Runs as `python -m quaestor` from the container CMD (ADR-0026).
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import subprocess
 import sys
@@ -113,8 +112,8 @@ def run_migrations() -> None:
             sys.exit(result.returncode)
 
 
-async def _run_async() -> None:
-    config = uvicorn.Config(
+def _run_uvicorn() -> None:
+    uvicorn.run(
         "quaestor.api:app",
         host="0.0.0.0",
         port=8000,
@@ -122,8 +121,6 @@ async def _run_async() -> None:
         reload_dirs=["/app/src"],
         log_level="info",
     )
-    server = uvicorn.Server(config)
-    await server.serve()
 
 
 def main() -> None:
@@ -131,7 +128,7 @@ def main() -> None:
     wait_for_db(url)
     run_migrations()
     log("starting uvicorn")
-    asyncio.run(_run_async())
+    _run_uvicorn()
 
 
 if __name__ == "__main__":

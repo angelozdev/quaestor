@@ -227,3 +227,30 @@ def test_alembic_version_empty_when_row_present() -> None:
     finally:
         import os as _os
         _os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# Tests: _run_uvicorn / main (uvicorn reloader wiring)
+# ---------------------------------------------------------------------------
+
+def test_run_uvicorn_calls_uvicorn_run_with_reload() -> None:
+    """``main()`` must call ``uvicorn.run`` with ``reload=True`` and
+    ``reload_dirs=["/app/src"]`` so uvicorn's ``ChangeReload`` reloader is
+    actually wired (uvicorn.Server(config).serve() silently no-ops reload).
+    """
+    from quaestor import __main__ as entrypoint
+
+    with patch.object(entrypoint, "wait_for_db") as mock_wait:
+        with patch.object(entrypoint, "run_migrations") as mock_migrate:
+            with patch.object(entrypoint.uvicorn, "run") as mock_run:
+                entrypoint.main()
+                mock_wait.assert_called_once()
+                mock_migrate.assert_called_once()
+                mock_run.assert_called_once_with(
+                    "quaestor.api:app",
+                    host="0.0.0.0",
+                    port=8000,
+                    reload=True,
+                    reload_dirs=["/app/src"],
+                    log_level="info",
+                )
