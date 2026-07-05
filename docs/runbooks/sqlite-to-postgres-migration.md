@@ -635,14 +635,19 @@ def check_sample_rows(remote_url: str) -> None:
     ) -> dict[tuple, tuple]:
         # Fetch SQLite rows whose (recurring_id, due_date) matches any
         # of the given tuples. The query uses a row-value IN clause,
-        # supported by both SQLite and Postgres.
+        # supported by both SQLite and Postgres. Normalize date values
+        # to ISO strings so the SQLite TEXT column comparison works
+        # regardless of whether the caller passes date objects or strings.
         if not keys:
             return {}
         values_clause = ",".join(["(?, ?)"] * len(keys))
         flat_params: list = []
         for rid, ddate in keys:
             flat_params.append(rid)
-            flat_params.append(ddate)
+            if isinstance(ddate, str):
+                flat_params.append(ddate)
+            else:
+                flat_params.append(ddate.isoformat())
         async with aiosqlite.connect(str(SQLITE_PATH)) as db:
             async with db.execute(
                 f'SELECT * FROM "{table}" '
@@ -674,7 +679,9 @@ def check_sample_rows(remote_url: str) -> None:
                         f'SELECT recurring_id, due_date FROM "{table}" '
                         "ORDER BY random() LIMIT 5"
                     )
-                    sample_keys = [(r[0], r[1]) for r in cur.fetchall()]
+                    # Normalize sample keys to (rid, isoformat_string) so
+                    # SQLite and Postgres dict keys are both strings.
+                    sample_keys = [(r[0], str(r[1])) for r in cur.fetchall()]
                     if not sample_keys:
                         log(f"  {table}: empty (no samples to check)")
                         continue
@@ -695,7 +702,7 @@ def check_sample_rows(remote_url: str) -> None:
                     pg_data = {
                         (
                             row[cols.index("recurring_id")],
-                            row[cols.index("due_date")],
+                            str(row[cols.index("due_date")]),
                         ): row
                         for row in cur.fetchall()
                     }
