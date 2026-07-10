@@ -53,7 +53,7 @@ const bool = (fallback = false): Codec<boolean> => ({
 /** Codec factories. Domain views compose these into a schema (see lib/filter-schemas.ts). */
 export const p = { str, int, enum: enumOf, bool }
 
-type FilterValues<S extends Record<string, Codec<unknown>>> = {
+type FilterValues<S extends Record<string, Codec<any>>> = {
   [K in keyof S]: S[K] extends Codec<infer T> ? T : never
 }
 
@@ -61,7 +61,7 @@ type FilterValues<S extends Record<string, Codec<unknown>>> = {
  * Reads typed filter values from the URL (source of truth) and writes changes back
  * via router.replace. `schema` MUST be a module-level constant for stable memoization.
  */
-export function useUrlFilters<S extends Record<string, Codec<unknown>>>(schema: S) {
+export function useUrlFilters<S extends Record<string, Codec<any>>>(schema: S) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()

@@ -12,9 +12,9 @@ export const TX_FILTER_SCHEMA = {
   tag: p.int(),
   type: p.enum(["expense", "income", "transfer"] as const),
   status: p.enum(["planned", "posted", "skipped"] as const),
-} satisfies Record<string, Codec<unknown>>
+} satisfies Record<string, Codec<any>>
 
 /** Shared by the archive-toggle views (accounts, categories, category-groups). */
 export const ARCHIVED_FILTER_SCHEMA = {
   archived: p.bool(false),
-} satisfies Record<string, Codec<unknown>>
+} satisfies Record<string, Codec<any>>

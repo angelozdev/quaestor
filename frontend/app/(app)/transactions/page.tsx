@@ -18,7 +18,9 @@ import { deleteTransaction, listTransactions } from "@/lib/api/transactions"
 import type { Transaction, TransactionFilters, TxStatus, TxType } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
 import { formatDate } from "@/lib/date"
+import { TX_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
+import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button, Input, Select } from "@/ui"
 
 const ALL = "__all__"
@@ -52,13 +54,7 @@ export default function TransactionsPage() {
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
-  const [accountId, setAccountId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState<number | null>(null)
-  const [tag, setTag] = useState<number | null>(null)
-  const [type, setType] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  const { values, patch, clear } = useUrlFilters(TX_FILTER_SCHEMA)
 
   const accounts = useQuery({
     queryKey: qk.accounts(true),
@@ -80,18 +76,18 @@ export default function TransactionsPage() {
 
   const filters: TransactionFilters = useMemo(() => {
     const f: TransactionFilters = {}
-    if (dateFrom) f.date_from = dateFrom
-    if (dateTo) f.date_to = dateTo
-    if (accountId !== null) f.account_id = accountId
-    if (categoryId !== null) f.category_id = categoryId
-    if (tag !== null) {
-      const tagged = tags.data?.find((t) => t.id === tag)?.name
+    if (values.date_from) f.date_from = values.date_from
+    if (values.date_to) f.date_to = values.date_to
+    if (values.account_id !== null) f.account_id = values.account_id
+    if (values.category_id !== null) f.category_id = values.category_id
+    if (values.tag !== null) {
+      const tagged = tags.data?.find((t) => t.id === values.tag)?.name
       if (tagged) f.tag = tagged
     }
-    if (type && type !== ALL) f.type = type as TxType
-    if (status && status !== ALL) f.status = status as TxStatus
+    if (values.type) f.type = values.type
+    if (values.status) f.status = values.status
     return f
-  }, [dateFrom, dateTo, accountId, categoryId, tag, type, status, tags.data])
+  }, [values, tags.data])
 
   const list = useQuery({
     queryKey: qk.transactions(filters),
@@ -147,16 +143,6 @@ export default function TransactionsPage() {
     },
   ]
 
-  const clear = () => {
-    setDateFrom("")
-    setDateTo("")
-    setAccountId(null)
-    setCategoryId(null)
-    setTag(null)
-    setType(null)
-    setStatus(null)
-  }
-
   const filterBar = (
     <div className="flex flex-wrap items-end gap-2">
       <div className="space-y-1">
@@ -170,8 +156,8 @@ export default function TransactionsPage() {
         <Input
           id="tx-from"
           type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
+          value={values.date_from ?? ""}
+          onChange={(e) => patch({ date_from: e.target.value })}
           className="w-36"
         />
       </div>
@@ -186,8 +172,8 @@ export default function TransactionsPage() {
         <Input
           id="tx-to"
           type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
+          value={values.date_to ?? ""}
+          onChange={(e) => patch({ date_to: e.target.value })}
           className="w-36"
         />
       </div>
@@ -201,8 +187,8 @@ export default function TransactionsPage() {
         </label>
         <EntitySelect
           id="tx-account"
-          value={accountId}
-          onChange={setAccountId}
+          value={values.account_id}
+          onChange={(v) => patch({ account_id: v })}
           queryKey={qk.accounts(true)}
           queryFn={() => listAccounts(true)}
           allowNullLabel="Todas"
@@ -218,8 +204,8 @@ export default function TransactionsPage() {
         </label>
         <EntitySelect
           id="tx-category"
-          value={categoryId}
-          onChange={setCategoryId}
+          value={values.category_id}
+          onChange={(v) => patch({ category_id: v })}
           queryKey={qk.categories(true)}
           queryFn={() => listCategories(true)}
           allowNullLabel="Todas"
@@ -235,8 +221,8 @@ export default function TransactionsPage() {
         </label>
         <EntitySelect
           id="tx-tag"
-          value={tag}
-          onChange={setTag}
+          value={values.tag}
+          onChange={(v) => patch({ tag: v })}
           queryKey={qk.tags()}
           queryFn={() => listTags()}
           allowNullLabel="Todas"
@@ -253,8 +239,8 @@ export default function TransactionsPage() {
         </label>
         <Select
           id="tx-type"
-          value={type ?? ALL}
-          onValueChange={(v) => setType(v === ALL ? null : v)}
+          value={values.type ?? ALL}
+          onValueChange={(v) => patch({ type: v === ALL ? null : (v as TxType) })}
           items={TYPE_ITEMS}
           placeholder="Todos"
         />
@@ -269,8 +255,8 @@ export default function TransactionsPage() {
         </label>
         <Select
           id="tx-status"
-          value={status ?? ALL}
-          onValueChange={(v) => setStatus(v === ALL ? null : v)}
+          value={values.status ?? ALL}
+          onValueChange={(v) => patch({ status: v === ALL ? null : (v as TxStatus) })}
           items={STATUS_ITEMS}
           placeholder="Todos"
         />
