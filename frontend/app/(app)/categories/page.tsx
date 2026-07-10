@@ -19,7 +19,9 @@ import {
 import { listCategoryGroups } from "@/lib/api/category-groups"
 import type { Category } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
+import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
+import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button } from "@/ui"
 
 const FIELDS: Field[] = [
@@ -39,14 +41,14 @@ const FIELDS: Field[] = [
 
 export default function CategoriesPage() {
   const qc = useQueryClient()
-  const [showArchived, setShowArchived] = useState(false)
+  const { values, patch } = useUrlFilters(ARCHIVED_FILTER_SCHEMA)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [archiving, setArchiving] = useState<Category | null>(null)
 
   const list = useQuery({
-    queryKey: qk.categories(showArchived),
-    queryFn: () => listCategories(showArchived),
+    queryKey: qk.categories(values.archived),
+    queryFn: () => listCategories(values.archived),
   })
   const groups = useQuery({
     queryKey: qk.categoryGroups(true),
@@ -117,8 +119,8 @@ export default function CategoriesPage() {
       >
         <input
           type="checkbox"
-          checked={showArchived}
-          onChange={(e) => setShowArchived(e.target.checked)}
+          checked={values.archived}
+          onChange={(e) => patch({ archived: e.target.checked })}
         />
         Mostrar archivadas
       </label>

@@ -18,8 +18,10 @@ import {
 } from "@/lib/api/accounts"
 import type { Account, AccountType } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
+import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button } from "@/ui"
 
 const TYPE_OPTIONS = [
@@ -49,14 +51,14 @@ const EDIT_FIELDS: Field[] = [
 
 export default function AccountsPage() {
   const qc = useQueryClient()
-  const [showArchived, setShowArchived] = useState(false)
+  const { values, patch } = useUrlFilters(ARCHIVED_FILTER_SCHEMA)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Account | null>(null)
   const [archiving, setArchiving] = useState<Account | null>(null)
 
   const list = useQuery({
-    queryKey: qk.accounts(showArchived),
-    queryFn: () => listAccounts(showArchived),
+    queryKey: qk.accounts(values.archived),
+    queryFn: () => listAccounts(values.archived),
   })
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
@@ -119,8 +121,8 @@ export default function AccountsPage() {
       >
         <input
           type="checkbox"
-          checked={showArchived}
-          onChange={(e) => setShowArchived(e.target.checked)}
+          checked={values.archived}
+          onChange={(e) => patch({ archived: e.target.checked })}
         />
         Mostrar archivadas
       </label>
