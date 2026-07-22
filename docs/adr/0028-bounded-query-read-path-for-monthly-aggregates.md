@@ -37,13 +37,13 @@ Load a month's data via one `MonthAggregate` unit in a fixed ~8 queries: expense
 - Good, because response schemas and pure calculators remain unchanged; only the data-loading layer changes.
 
 **SQL-native recursive-CTE rollover**
-- Bad, because it breaks the in-memory SQLite test suite and couples logic to the database engine.
+- Bad, because it breaks the in-memory SQLite test suite and couples logic to the engine.
 
 **Materialized/cached monthly snapshots**
-- Bad, because it adds cache-invalidation coupling and is premature complexity for the current scale.
+- Bad, because it adds cache-invalidation coupling; premature.
 
 **Loading all transaction rows into memory**
-- Bad, because it replaces the problem of unbounded query count with the problem of unbounded row transfer.
+- Bad, because it replaces unbounded query count with unbounded row transfer.
 
 ## Consequences
 

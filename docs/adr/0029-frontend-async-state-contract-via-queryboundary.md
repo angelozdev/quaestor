@@ -8,7 +8,7 @@
 
 ## Context and problem statement
 
-Pages hand-roll `isPending`/`isError`/`data` state selection, leading to inconsistent error handling and forgotten states. `budgets/page.tsx` forgot the loading branch and rendered blank. Report sections vanish on `length === 0`. `EmptyState` is bare text with no icon or action. The dashboard duplicates `Skeleton` components and renders "No disponible" for errors. Without a shared contract, each page risks rendering in an incorrect or incomplete state, and changes to async semantics (like handling background refetches) must be updated in multiple places.
+Pages hand-roll `isPending`/`isError`/`data`; `budgets/page.tsx` forgot the loading branch and rendered blank; reports sections vanish on `length === 0`; `EmptyState` is bare text; the dashboard duplicates `Skeleton` and renders "No disponible" for an error.
 
 ## Decision drivers
 
@@ -52,11 +52,9 @@ A single `components/query-boundary.tsx` owns state selection against TanStack Q
 
 ## Consequences
 
-- Good: Migrated pages cannot forget a state; the component enforces all four async branches (pending, error, data, empty).
-- Good: Error isolation is per-query; a failed refetch on one query does not affect other queries on the same page.
-- Good: Consistent error recovery (retry buttons) and data-first rendering prevent data loss on background failures.
-- Bad / cost: Requires incremental migration of remaining pages and `ToPayWidget` (convention-driven, not automated).
-- Bad / cost: The `month` filter stays in `useState` (moving it to the URL is follow-up work under ADR-0027).
+- Good: Migrated pages cannot forget a state.
+- Good: Error isolation is per-query.
+- Bad / cost: The `month` filter stays in `useState` (moving it to the URL is follow-up under ADR-0027).
 
 ## Confirmation
 
