@@ -43,5 +43,3 @@ New ADRs are created with the `adr` skill:
 | 0027 | URL query params as the filter source of truth | accepted | 2026-07-10 |
 | 0028 | Bounded-query read path for monthly aggregates | accepted | 2026-07-22 |
 | 0029 | Frontend async-state contract via QueryBoundary | accepted | 2026-07-22 |
-| 0028 | Bounded-query read path for monthly aggregates | proposed | 2026-07-22 |
-| 0029 | Frontend async-state contract via QueryBoundary | proposed | 2026-07-22 |
