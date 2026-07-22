@@ -3,7 +3,10 @@
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { ChatSection } from "@/components/chat/chat-section"
+import { EmptyState } from "@/components/empty-state"
 import { MoneyAmount } from "@/components/money-amount"
+import { QueryBoundary } from "@/components/query-boundary"
+import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
 import { safeToSpend } from "@/lib/api/budgets"
@@ -45,12 +48,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
-function Skeleton({ className = "" }: { className?: string }) {
-  return (
-    <div className={`animate-pulse rounded ${className}`} style={{ background: "var(--muted)" }} />
-  )
-}
-
 export default function DashboardPage() {
   const sts = useQuery({ queryKey: qk.safeToSpend(MONTH), queryFn: () => safeToSpend(MONTH) })
   const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
@@ -64,17 +61,17 @@ export default function DashboardPage() {
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Disponible para gastar · {MONTH}
         </p>
-        {sts.isLoading ? (
-          <Skeleton className="h-14 w-64" />
-        ) : sts.data ? (
-          <p className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl">
-            {formatCents(sts.data.free, "COP")}
-          </p>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--expense)" }}>
-            No disponible
-          </p>
-        )}
+        <QueryBoundary
+          query={sts}
+          skeleton={<SkeletonBlock className="h-14 w-64" />}
+          errorMessage="No se pudo cargar disponible para gastar"
+        >
+          {(data) => (
+            <p className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl">
+              {formatCents(data.free, "COP")}
+            </p>
+          )}
+        </QueryBoundary>
       </div>
 
       <hr style={{ borderColor: "var(--border)" }} />
@@ -88,123 +85,121 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="animate-fade-up" style={{ animationDelay: "90ms" }}>
           <Card label="Ingresos · Gastos · Neto">
-            {report.isLoading ? (
-              <div className="space-y-2">
-                {[0, 1, 2].map((i) => (
-                  <Skeleton key={i} className="h-4" />
-                ))}
-              </div>
-            ) : report.data ? (
-              <div className="space-y-2.5">
-                <Row label="Ingresos">
-                  <MoneyAmount
-                    cents={report.data.income}
-                    currency="COP"
-                    type="income"
-                    className="text-sm font-medium"
-                  />
-                </Row>
-                <Row label="Gastos">
-                  <MoneyAmount
-                    cents={report.data.expense}
-                    currency="COP"
-                    type="expense"
-                    className="text-sm font-medium"
-                  />
-                </Row>
-                <hr style={{ borderColor: "var(--border)" }} />
-                <Row label="Neto">
-                  <span className="text-sm font-semibold tabular-nums">
-                    {formatCents(report.data.net, "COP")}
-                  </span>
-                </Row>
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                Sin datos
-              </p>
-            )}
+            <QueryBoundary query={report} skeleton={<SkeletonText lines={3} />}>
+              {(data) => (
+                <div className="space-y-2.5">
+                  <Row label="Ingresos">
+                    <MoneyAmount
+                      cents={data.income}
+                      currency="COP"
+                      type="income"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <Row label="Gastos">
+                    <MoneyAmount
+                      cents={data.expense}
+                      currency="COP"
+                      type="expense"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <hr style={{ borderColor: "var(--border)" }} />
+                  <Row label="Neto">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.net, "COP")}
+                    </span>
+                  </Row>
+                </div>
+              )}
+            </QueryBoundary>
           </Card>
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: "110ms" }}>
           <Card label="Saldos">
-            {accounts.isLoading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4" />
-                <Skeleton className="h-4" />
-              </div>
-            ) : accounts.data && accounts.data.filter((a) => !a.archived).length > 0 ? (
-              <div className="space-y-2.5">
-                {accounts.data
-                  .filter((a) => !a.archived)
-                  .map((a) => (
-                    <Row key={a.id} label={a.name}>
-                      <span className="text-sm font-medium tabular-nums">
-                        {formatCents(a.balance, a.currency)}
-                      </span>
-                    </Row>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                Sin cuentas
-              </p>
-            )}
+            <QueryBoundary
+              query={accounts}
+              skeleton={<SkeletonText lines={2} />}
+              empty={{
+                when: (d) => d.filter((a) => !a.archived).length === 0,
+                node: (
+                  <EmptyState
+                    message="Sin cuentas"
+                    action={{ label: "Crear cuenta", href: "/accounts" }}
+                  />
+                ),
+              }}
+            >
+              {(data) => (
+                <div className="space-y-2.5">
+                  {data
+                    .filter((a) => !a.archived)
+                    .map((a) => (
+                      <Row key={a.id} label={a.name}>
+                        <span className="text-sm font-medium tabular-nums">
+                          {formatCents(a.balance, a.currency)}
+                        </span>
+                      </Row>
+                    ))}
+                </div>
+              )}
+            </QueryBoundary>
           </Card>
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: "130ms" }}>
           <Card label="Metas">
-            {goals.isLoading ? (
-              <Skeleton className="h-16" />
-            ) : goals.data && goals.data.length > 0 ? (
-              <div className="space-y-4">
-                {goals.data.map((g) => {
-                  const pct = g.target_amount
-                    ? Math.min(100, Math.round((g.saved / g.target_amount) * 100))
-                    : null
-                  return (
-                    <div key={g.goal_id} className="space-y-2">
-                      <div className="flex justify-between items-baseline gap-2">
-                        <span className="text-sm font-medium truncate">{g.name}</span>
-                        <span
-                          className="text-xs tabular-nums shrink-0"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {pct !== null ? `${pct}%` : formatCents(g.saved, "COP")}
-                        </span>
-                      </div>
-                      {pct !== null && (
-                        <div
-                          className="h-1.5 rounded-full overflow-hidden"
-                          style={{ background: "var(--muted)" }}
-                        >
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${pct}%`, background: "var(--primary)" }}
-                          />
+            <QueryBoundary
+              query={goals}
+              skeleton={<SkeletonBlock className="h-16" />}
+              empty={{
+                when: (d) => d.length === 0,
+                node: <EmptyState message="Sin metas activas" />,
+              }}
+            >
+              {(data) => (
+                <div className="space-y-4">
+                  {data.map((g) => {
+                    const pct = g.target_amount
+                      ? Math.min(100, Math.round((g.saved / g.target_amount) * 100))
+                      : null
+                    return (
+                      <div key={g.goal_id} className="space-y-2">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="text-sm font-medium truncate">{g.name}</span>
+                          <span
+                            className="text-xs tabular-nums shrink-0"
+                            style={{ color: "var(--muted-foreground)" }}
+                          >
+                            {pct !== null ? `${pct}%` : formatCents(g.saved, "COP")}
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                Sin metas activas
-              </p>
-            )}
+                        {pct !== null && (
+                          <div
+                            className="h-1.5 rounded-full overflow-hidden"
+                            style={{ background: "var(--muted)" }}
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${pct}%`, background: "var(--primary)" }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </QueryBoundary>
           </Card>
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: "150ms" }}>
           <Card label="Sobres en riesgo">
-            {report.isLoading ? (
-              <Skeleton className="h-16" />
-            ) : report.data ? (
-              (() => {
-                const over = report.data.envelopes.filter((e) => e.status === "over")
+            <QueryBoundary query={report} skeleton={<SkeletonBlock className="h-16" />}>
+              {(data) => {
+                const over = data.envelopes.filter((e) => e.status === "over")
                 return over.length > 0 ? (
                   <div className="space-y-2.5">
                     {over.map((e) => (
@@ -223,12 +218,8 @@ export default function DashboardPage() {
                     Todos los sobres al día
                   </p>
                 )
-              })()
-            ) : (
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                Sin datos
-              </p>
-            )}
+              }}
+            </QueryBoundary>
           </Card>
         </div>
       </div>
