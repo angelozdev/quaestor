@@ -81,6 +81,10 @@ class Category(SQLModel, table=True):
 
 
 class Transaction(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_transaction_type_status_date", "type", "status", "date"),
+    )
+
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     date: date
     payee: str = ""
