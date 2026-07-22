@@ -12,14 +12,13 @@ export function SkeletonText({
 }) {
   return (
     <div className={`space-y-2 ${className}`}>
-      {/* biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders are a fixed-length list that never reorders */}
-      {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton
-          key={i}
-          className="h-4"
-          style={{ ...TONE, width: i === lines - 1 ? "60%" : "100%" }}
-        />
-      ))}
+      {Array.from({ length: lines }).map((_, i) => {
+        const w = i === lines - 1 ? "60%" : "100%"
+        return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders are a fixed-length list that never reorders
+          <Skeleton key={i} className="h-4" style={{ ...TONE, width: w }} />
+        )
+      })}
     </div>
   )
 }
@@ -31,8 +30,8 @@ export function SkeletonCard({ className = "" }: { className?: string }) {
 export function SkeletonRows({ rows = 6, className = "" }: { rows?: number; className?: string }) {
   return (
     <div className={`space-y-2 ${className}`}>
-      {/* biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders are a fixed-length list that never reorders */}
       {Array.from({ length: rows }).map((_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders are a fixed-length list that never reorders
         <Skeleton key={i} className="h-9 w-full" style={TONE} />
       ))}
     </div>
