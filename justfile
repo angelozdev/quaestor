@@ -5,13 +5,29 @@ _default:
 
 # --- DB profiles (pick one) ----------------------------------------
 
-# Run against the local SQLite file in .dev-data/.
+# PRODUCTION: full stack against the local Postgres container (ADR-0030).
+dev-prod:
+	QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg up --build
+
+dev-prod-down:
+	QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg down
+
+# Run against the local SQLite file in .dev-data/ (sandbox).
 dev-local:
 	QUAESTOR_ENV_FILE=backend/.env.local.sqlite docker compose --env-file backend/.env.local.sqlite up --build
 
-# Run against your remote Postgres.
+# Run against the Render Postgres (frozen standby since ADR-0030 — avoid writes).
 dev-real:
 	QUAESTOR_ENV_FILE=backend/.env.local.remote docker compose --env-file backend/.env.local.remote up --build
+
+# --- Backups (ADR-0030) --------------------------------------------
+
+# Dump the local production Postgres to iCloud Drive (dated file).
+backup:
+	QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec db \
+		sh -c 'pg_dump -U "$${POSTGRES_USER:-quaestor}" --format=custom --no-owner "$${POSTGRES_DB:-quaestor}"' \
+		> "$$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups/quaestor-local-$$(date +%F).dump"
+	@echo "backup written to iCloud QuaestorBackups/quaestor-local-$$(date +%F).dump"
 
 # --- Common ops ----------------------------------------------------
 

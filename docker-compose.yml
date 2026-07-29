@@ -1,8 +1,30 @@
-# Quaestor local-only stack (ADR-0026).
+# Quaestor local-only stack (ADR-0026, ADR-0030).
 # Pick a DB profile by passing `--env-file`:
+#   just dev-prod   → backend/.env.local.postgres (local Postgres = production)
 #   just dev-local  → backend/.env.local.sqlite
-#   just dev-real   → backend/.env.local.remote
+#   just dev-real   → backend/.env.local.remote (Render standby)
 services:
+  db:
+    image: postgres:18
+    profiles: ["pg"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quaestor}
+      # empty default keeps other profiles interpolating; postgres refuses to
+      # boot without a password, so a missing env file still fails loudly
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-quaestor}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # postgres:18 image keeps PGDATA under /var/lib/postgresql (not .../data)
+      - quaestor_pg_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-quaestor} -d $${POSTGRES_DB:-quaestor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build: ./backend
     image: quaestor-backend:latest
@@ -57,3 +79,4 @@ services:
 
 volumes:
   frontend_node_modules:
+  quaestor_pg_data:
