@@ -20,8 +20,6 @@ __all__ = [
     "AccountBalance",
     "DriftMoM",
     "MonthlyReport",
-    "RowError",
-    "ImportResult",
 ]
 
 
@@ -101,18 +99,3 @@ class MonthlyReport:  # not frozen: markdown is filled in after the data is buil
     pending: list[str]  # alert lines: unconfirmed manual entries
     safe_to_spend: SafeToSpend  # closing line, not headline (ADR-019)
     markdown: str
-
-
-@dataclass(frozen=True)
-class RowError:
-    line: int
-    reason: str
-
-
-@dataclass(frozen=True)
-class ImportResult:
-    ok: bool
-    inserted: int  # 0 if not ok or dry_run
-    tags_created: list[str]
-    errors: list[RowError]
-    dry_run: bool

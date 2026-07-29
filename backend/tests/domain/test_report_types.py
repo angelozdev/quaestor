@@ -8,9 +8,7 @@ from quaestor.domain.report_types import (
     EnvelopesSummary,
     GoalLine,
     GroupSection,
-    ImportResult,
     MonthlyReport,
-    RowError,
     SafeToSpend,  # re-exported from dtos
 )
 
@@ -47,12 +45,6 @@ def test_value_types_hold_their_fields():
         expense_abs=-20, expense_pct=None, net_abs=30, net_pct=None,
     )
     assert drift.prev_month == "2026-05" and drift.expense_pct is None
-
-
-def test_import_result_and_row_error():
-    err = RowError(line=2, reason="invalid date '2026-13-40'")
-    res = ImportResult(ok=False, inserted=0, tags_created=[], errors=[err], dry_run=True)
-    assert res.ok is False and res.errors[0].line == 2 and res.dry_run is True
 
 
 def test_monthly_report_markdown_is_mutable():
