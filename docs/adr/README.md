@@ -39,7 +39,8 @@ New ADRs are created with the `adr` skill:
 | 0023 | Outstanding queue: overdue + upcoming buckets | accepted | 2026-07-03 |
 | 0024 | Postgres replaces SQLite (supersedes 0012) | accepted | 2026-07-03 |
 | 0025 | Remove external MCP HTTP exposure | accepted | 2026-07-03 |
-| 0026 | Local-only posture | accepted | 2026-07-05 |
+| 0026 | Local-only posture | superseded by 0030 (database clause) | 2026-07-05 |
 | 0027 | URL query params as the filter source of truth | accepted | 2026-07-10 |
 | 0028 | Bounded-query read path for monthly aggregates | accepted | 2026-07-22 |
 | 0029 | Frontend async-state contract via QueryBoundary | accepted | 2026-07-22 |
+| 0030 | Local Postgres container replaces Render as the production database | accepted | 2026-07-28 |

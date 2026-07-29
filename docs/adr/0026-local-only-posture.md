@@ -4,7 +4,7 @@
 - **Date:** 2026-07-05
 - **Deciders:** Angelo
 - **Supersedes:** [0010 — Deployment posture](./0010-deployment-posture.md), [0013 — Daily scheduler as a thin sidecar](./0013-daily-scheduler-as-a-thin-sidecar.md)
-- **Superseded by:** —
+- **Superseded by:** [0030 — Local Postgres container replaces Render as the production database](./0030-local-postgres-container-replaces-render-as-the-production-database.md) (database-location clause only; the rest of this ADR remains in force)
 
 ## Context and problem statement
 
