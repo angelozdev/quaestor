@@ -1,0 +1,73 @@
+# DAE manifest — Quaestor. Schema: Foundation Design §2 (validated by dae_resolve.py).
+methodology_version: "0.2"
+
+roadmap:
+  type: local
+  ref: .engineer/roadmap.md
+
+tracker:
+  type: local
+
+team:
+  default_roles:
+    - architect
+    - implementer
+    - acceptance-tester
+    - reviewer
+
+autonomy:
+  default_level: medium
+  allowed_levels: [low, medium]
+  stuck_loop_threshold: 3
+  path_overrides:
+    - paths: backend/src/quaestor/migrations/**
+      max_level: low          # schema migrations touch real financial data
+    - paths: .dev-data/**
+      max_level: low          # real user data — destructive ops need a human
+
+mutation:
+  default_per_feature: opt_in
+  scope: changed_files
+  cadence: on_demand
+
+agentic_summary:
+  format: markdown
+
+validation:
+  lsp:
+    servers: {}               # none reachable; suggested installs below
+    suggested:
+      python: pyright
+      typescript: typescript-language-server
+  clis:
+    available: [gh, docker, just, uv, pnpm, node]
+    suggested: [pyright, typescript-language-server]
+  prod:
+    url: http://localhost:3000
+    deploy: "just dev-prod — local stack with local Postgres 18 container (ADR-0030); Render = frozen standby via dev-real; backups: just backup → iCloud"
+    monitoring: none
+
+remote:
+  ready: false
+  channel: isolation-remote
+  stdio_mcp_blocker: false
+  notes: "Repo on github.com (clonable), no stdio MCPs. Pending one-time human setup for cloud dispatch: connect GitHub to claude.ai (/web-setup) and create a cloud environment at claude.ai/code. Until then dispatch stays local."
+
+infra:
+  dev-stack:
+    health:
+      type: tcp
+      port: 8000
+    start:
+      command: just dev-local
+      background: true
+      ready_timeout_s: 120
+    teardown: leave-running
+
+infra_quirks:
+  runtime_pins:
+    python: "3.12"
+    node: "24.x"
+  framework_constraints:
+    - "pytest runs on the host via uv with in-memory SQLite (just dev-test) — the api container is not for running tests"
+    - "pnpm is the only package manager for the frontend (ADR-0003); never npm/yarn"

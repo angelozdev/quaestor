@@ -29,6 +29,7 @@ out/
 !.env.example
 !.env.local.example
 !.env.local.remote.example
+!.env.local.postgres.example
 frontend/.next/
 
 # AI agent workspace (oh-my-opencode orchestration state).
@@ -51,3 +52,6 @@ lunchmoney-transactions.csv
 *.sqlite3
 *.db-shm
 *.db-wal
+
+# DAE build artifacts (spec IR, generated pipelines)
+.build/

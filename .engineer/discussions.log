@@ -1,0 +1,3 @@
+2026-07-28T2131 | csv-importer | dropped | built+tested but unwired (no route/MCP/UI); custom CSV format doesn't match real bank exports; user confirmed deletion — code recoverable from git history
+2026-07-28T2135 | backup-restore | dropped | no code, only Litestream/VPS-era runbooks already queued for archival as cleanup C3 (doc-drift-cleanup)
+2026-07-28T2135 | security-owasp-review | dropped | one-off review doc (docs/security/owasp-review-2026-06-28.md) kept as historical record; no ongoing work
