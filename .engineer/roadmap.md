@@ -22,6 +22,7 @@
 - [ ] **Sinking funds: envelope funding rules + smoothed monthly available** `id:sinking-funds` priority:1 status:planned area:budget → feature:sinking-funds
       Replaces due-date safe-to-spend formula (product ADR-003/004, formal supersede at build time); envelopes get funding rules (fixed | N-month average | prorated recurring); goals unify as target-date funds. Parked as features/003-sinking-funds
 - [ ] **Doc/code drift cleanup (README, ADR-0018, runbooks, dead code)** `id:doc-drift-cleanup` priority:2 status:planned area:quality → feature:—
+      C1 + C6 done 2026-07-29 (README/charter/manifest aligned with ADR-0030); C2–C5 remain
 - [ ] **Automate daily pg_dump of local production DB to iCloud** `id:backup-automation` priority:3 status:planned area:platform → feature:—
       ADR-0030 consequence: backup discipline is load-bearing; candidates: scheduler daily job or launchd + just backup
 

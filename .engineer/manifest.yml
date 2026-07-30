@@ -21,9 +21,9 @@ autonomy:
   stuck_loop_threshold: 3
   path_overrides:
     - paths: backend/src/quaestor/migrations/**
-      max_level: low          # schema migrations touch real financial data
+      max_level: low          # schema migrations touch real financial data (local Postgres prod, ADR-0030)
     - paths: .dev-data/**
-      max_level: low          # real user data — destructive ops need a human
+      max_level: low          # SQLite sandbox only since ADR-0030 (no real data); gate kept as cheap safety
 
 mutation:
   default_per_feature: opt_in
