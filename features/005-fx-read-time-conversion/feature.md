@@ -2,7 +2,7 @@
 title: "Read-time FX: single TRM value as source of truth + cross-currency transfers"
 slug: fx-read-time-conversion
 number: 005
-status: ready
+status: done
 autonomy_level: medium
 branch: fx-read-time-conversion
 area: core
