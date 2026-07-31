@@ -31,15 +31,26 @@ def set_budget(
 ) -> Budget:
     """Upsert a category's envelope for a month.
 
+    Only a category the budget can show may hold an envelope: archived and
+    budget-excluded categories are filtered out of the budget list and their
+    spending is never aggregated, so an envelope there would subtract from
+    safe-to-spend with no visible trace.
+
     Raises:
-        ValidationError: malformed year_month or amount_assigned < 0.
+        ValidationError: malformed year_month, amount_assigned < 0, or the
+            category is archived or excluded from the budget.
         NotFound: the category does not exist.
     """
     _validate_year_month(year_month)
     if amount_assigned < 0:
         raise ValidationError("amount_assigned must be >= 0")
-    if session.get(Category, category_id) is None:
+    category = session.get(Category, category_id)
+    if category is None:
         raise NotFound(f"category {category_id} not found")
+    if category.archived:
+        raise ValidationError(f"category {category_id} is archived")
+    if category.exclude_from_budget:
+        raise ValidationError(f"category {category_id} is excluded from the budget")
     budget = session.exec(
         select(Budget).where(
             Budget.category_id == category_id, Budget.year_month == year_month

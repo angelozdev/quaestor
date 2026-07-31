@@ -84,7 +84,6 @@ def test_budget_status_respects_exclude_flags(session):
     fx.set_trm(session, "4000")
     cat = _cat(session, exclude_from_budget=True)
     acc = _acc(session)
-    budgets.set_budget(session, cat.id, "2026-06", 100_000)
     transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 6, 10), "x", category_id=cat.id)
     s = budget_status_for(session, cat.id, "2026-06")
     assert s.spent == 0
@@ -263,3 +262,30 @@ def test_list_budgets_includes_unassigned_eligible_category(session):
     lines = budgets.list_budgets(session, "2026-06")
     line = next(l for l in lines if l.category_name == "Transport")
     assert line.assigned == 0
+
+
+# --- regression: 2026-07-31-phantom-budget-assignment ---
+
+
+def test_set_budget_rejects_an_archived_category(session):
+    cat = _cat(session)
+    categories.archive_category(session, cat.id)
+    with pytest.raises(ValidationError):
+        budgets.set_budget(session, cat.id, "2026-06", 300_000)
+
+
+def test_set_budget_rejects_a_budget_excluded_category(session):
+    cat = _cat(session, exclude_from_budget=True)
+    with pytest.raises(ValidationError):
+        budgets.set_budget(session, cat.id, "2026-06", 300_000)
+
+
+def test_rejected_assignment_leaves_safe_to_spend_untouched(session):
+    fx.set_trm(session, "4000")
+    acc = _acc(session)
+    _income(session, acc)
+    hidden = _cat(session, name="Hidden", exclude_from_budget=True)
+    free_before = budgets.safe_to_spend(session, "2026-06").free
+    with pytest.raises(ValidationError):
+        budgets.set_budget(session, hidden.id, "2026-06", 300_000)
+    assert budgets.safe_to_spend(session, "2026-06").free == free_before
