@@ -239,13 +239,12 @@ def test_confirm_posts_and_moves_balance(session):
     assert accounts.get_account(session, acc.id).balance == 420_000
 
 
-def test_confirm_with_adjusted_amount_recomputes_to_base_and_balance(session):
+def test_confirm_with_adjusted_amount_moves_balance(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(session, payee="Electric", amount=80_000, currency="COP",
                               due_date=date(2026, 6, 20), account_id=acc.id)
     confirmed = planned.confirm_payment(session, tx.id, amount=95_000, date=date(2026, 6, 22))
     assert confirmed.amount == 95_000 and confirmed.date == date(2026, 6, 22)
-    assert confirmed.to_base == 95_000
     assert accounts.get_account(session, acc.id).balance == 405_000
 
 

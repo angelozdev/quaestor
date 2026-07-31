@@ -5,8 +5,8 @@ post-confirm hooks (the seam P4 uses to record goal contributions).
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date as Date
-from datetime import date as _Date
 from typing import Callable
 
 from sqlmodel import Session, select
@@ -17,15 +17,13 @@ from ..domain.models import (
     Category,
     OccurrenceStatus,
     RecurringOccurrence,
+    Settings,
     Source,
     Transaction,
     TxStatus,
     TxType,
 )
-from ..domain.money import is_supported, to_base_cents
-import uuid
-
-from ..domain.models import Settings  # noqa: F401 (used by _materialize_planned_transfer)
+from ..domain.money import is_supported
 from ..domain.planned import OutstandingQueue
 from ..domain.rules import delta_balance, transfer_deltas
 from . import transactions as _tx
@@ -63,7 +61,6 @@ def plan_payment(
     Raises:
         ValidationError: amount <= 0, unsupported currency, unknown/archived category.
         NotFound: account does not exist.
-        MissingRate: non-COP with no rate for due_date.
     """
     if amount <= 0:
         raise ValidationError("amount must be > 0")
@@ -78,7 +75,6 @@ def plan_payment(
             raise ValidationError(f"category {category_id} not found")
         if cat.archived:
             raise ValidationError(f"category {category_id} is archived")
-    rate = _tx._resolve_fx(session, currency, due_date, None)
     tx = Transaction(
         date=due_date,
         payee=payee or "",
@@ -87,8 +83,6 @@ def plan_payment(
         status=TxStatus.planned,
         amount=amount,
         currency=currency,
-        fx_rate=rate,
-        to_base=to_base_cents(amount, rate),
         account_id=account_id,
         category_id=category_id,
         source=Source.manual,
@@ -140,7 +134,7 @@ def to_pay(
     if since > until:
         raise ValidationError("to_pay window is inverted (since > until)")
 
-    today_resolved = today if today is not None else _Date.today()
+    today_resolved = today if today is not None else Date.today()
 
     if not retrospective:
         overdue_rows = _tx.list_transactions(
@@ -190,16 +184,15 @@ def confirm_payment(
 ) -> Transaction:
     """planned -> posted; the only such transition. Fires post-confirm hooks.
 
-    Applies the real amount/date if provided, recomputes to_base, moves the
-    balance, and syncs a manual occurrence to posted. A `transfer` tx is
-    materialized into a real posted pair (Task 9). Everything (post + hooks)
-    runs in one transaction; any failure rolls back.
+    Applies the real amount/date if provided, moves the balance, and syncs
+    a manual occurrence to posted. A `transfer` tx is materialized into a
+    real posted pair (Task 9). Everything (post + hooks) runs in one
+    transaction; any failure rolls back.
 
     Raises:
         NotFound: the tx does not exist.
         IllegalTransition: the tx is not `planned`.
         ValidationError: a non-positive adjusted amount.
-        MissingRate: a non-COP tx with no rate for its date.
     """
     tx = _tx.get_transaction(session, tx_id)
     if tx.status != TxStatus.planned:
@@ -216,9 +209,6 @@ def confirm_payment(
                 tx.date = date
             if tx.amount <= 0:
                 raise ValidationError("amount must be > 0")
-            rate = _tx._resolve_fx(session, tx.currency, tx.date, None)
-            tx.fx_rate = rate
-            tx.to_base = to_base_cents(tx.amount, rate)
             acc = _require_account(session, tx.account_id)
             acc.balance += delta_balance(tx.type, tx.amount)
             tx.status = TxStatus.posted
@@ -262,8 +252,6 @@ def _materialize_planned_transfer(
     dst = _require_account(session, tx.account_id)
     if tx.currency != src.currency or tx.currency != dst.currency:
         raise ValidationError("transfer currency must match both accounts")
-    rate = _tx._resolve_fx(session, tx.currency, tx.date, None)
-    to_base = to_base_cents(tx.amount, rate)
     group = uuid.uuid4().hex
     d_from, d_to = transfer_deltas(tx.amount)
     from_leg = Transaction(
@@ -274,14 +262,10 @@ def _materialize_planned_transfer(
         status=TxStatus.posted,
         amount=tx.amount,
         currency=tx.currency,
-        fx_rate=rate,
-        to_base=to_base,
         account_id=src_id,
         transfer_group_id=group,
         source=Source.manual,
     )
-    tx.fx_rate = rate
-    tx.to_base = to_base
     tx.transfer_group_id = group
     tx.status = TxStatus.posted
     src.balance += d_from

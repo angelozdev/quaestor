@@ -21,9 +21,7 @@ from ..domain.models import (
     TxStatus,
     TxType,
 )
-from ..domain.money import to_base_cents
 from ..domain.rules import goal_progress_calc, month_bounds, transfer_deltas
-from . import transactions as _tx
 
 _UNSET = object()
 
@@ -177,27 +175,25 @@ def goal_contribution(
         raise ValidationError(f"source account {src_id} is missing or archived")
     if src.currency != dst.currency:
         raise ValidationError("transfer currency must match both accounts")
-    rate = _tx._resolve_fx(session, dst.currency, date, None)
-    base = to_base_cents(amount, rate)
     group = uuid.uuid4().hex
     d_from, d_to = transfer_deltas(amount)
     try:
         leg_from = Transaction(
             date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
-            status=TxStatus.posted, amount=amount, currency=dst.currency, fx_rate=rate,
-            to_base=base, account_id=src.id, transfer_group_id=group, source=Source.manual,
+            status=TxStatus.posted, amount=amount, currency=dst.currency,
+            account_id=src.id, transfer_group_id=group, source=Source.manual,
         )
         leg_to = Transaction(
             date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
-            status=TxStatus.posted, amount=amount, currency=dst.currency, fx_rate=rate,
-            to_base=base, account_id=dst.id, transfer_group_id=group, source=Source.manual,
+            status=TxStatus.posted, amount=amount, currency=dst.currency,
+            account_id=dst.id, transfer_group_id=group, source=Source.manual,
         )
         src.balance += d_from
         dst.balance += d_to
         session.add_all([leg_from, leg_to, src, dst])
-        session.flush()  # assign leg_to.id for the contribution link
+        session.flush()
         contribution = GoalContribution(
-            goal_id=goal.id, date=date, amount=base,
+            goal_id=goal.id, date=date, amount=amount,
             source=ContributionSource.manual, transaction_id=leg_to.id,
         )
         session.add(contribution)
@@ -266,11 +262,9 @@ def propose_goal_contributions(period: str, session: Session) -> list[Transactio
             raise ValidationError(f"goal {goal.id} savings account is missing")
         if dst.archived:
             raise ValidationError(f"goal {goal.id} savings account is archived")
-        rate = _tx._resolve_fx(session, dst.currency, end, None)
         tx = Transaction(
             date=end, payee=f"Goal: {goal.name}", type=TxType.transfer,
             status=TxStatus.planned, amount=goal.monthly_amount, currency=dst.currency,
-            fx_rate=rate, to_base=to_base_cents(goal.monthly_amount, rate),
             account_id=goal.savings_account_id, goal_id=goal.id, source=Source.manual,
         )
         session.add(tx)
@@ -281,8 +275,10 @@ def propose_goal_contributions(period: str, session: Session) -> list[Transactio
 def record_confirmed_contribution(tx: Transaction, session: Session) -> GoalContribution | None:
     """Post-confirm hook: record a confirmed GoalContribution for a goal transfer.
 
-    No-op (returns None) when tx carries no goal_id. Does NOT commit — runs inside
-    confirm_payment's transaction, which has already materialized the real transfer.
+    `amount` is the leg's physical cents in the savings-account currency
+    (ADR-0031). No-op (returns None) when tx carries no goal_id. Does NOT
+    commit — runs inside confirm_payment's transaction, which has already
+    materialized the real transfer.
     """
     if tx.goal_id is None:
         return None
@@ -290,7 +286,7 @@ def record_confirmed_contribution(tx: Transaction, session: Session) -> GoalCont
     if goal is None:
         return None
     contribution = GoalContribution(
-        goal_id=goal.id, date=tx.date, amount=tx.to_base,
+        goal_id=goal.id, date=tx.date, amount=tx.amount,
         source=ContributionSource.confirmed, transaction_id=tx.id,
     )
     session.add(contribution)

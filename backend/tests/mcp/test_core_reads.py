@@ -20,25 +20,34 @@ def test_list_tags(session, seeded):
     assert "trip" in core.list_tags(session)
 
 
-def test_get_fx_rate_returns_rate(session):
-    fx.set_fx_rate(session, date(2026, 6, 18), "4150")
-    out = core.get_fx_rate(session, GetFxRateInput(date=date(2026, 6, 18)))
-    assert "4150" in out and "Thu, 18 Jun 2026" in out
+def test_get_fx_rate_returns_current_trm(session):
+    fx.set_trm(session, "4150")
+    out = core.get_fx_rate(session, GetFxRateInput())
+    assert out == "Current USD→COP rate (TRM): 4150"
 
 
-def test_get_fx_rate_missing_returns_text(session):
-    out = core.get_fx_rate(session, GetFxRateInput(date=date(2026, 6, 18)))
-    assert "USD→COP" in out
+def test_get_fx_rate_without_trm_returns_missing_rate_text(session):
+    out = core.get_fx_rate(session, GetFxRateInput())
+    assert "No TRM is set" in out
+    assert "set_fx_rate" in out
 
 
 def test_list_transactions_empty(session, seeded):
+    fx.set_trm(session, "4000")
     out = core.list_transactions(session, ListTransactionsInput())
     assert out == "No transactions for those filters."
+
+
+def test_list_transactions_without_trm_returns_missing_rate_text(session, seeded):
+    out = core.list_transactions(session, ListTransactionsInput())
+    assert "No TRM is set" in out
+    assert "set_fx_rate" in out
 
 
 def test_list_transactions_lists_and_totals(session, seeded):
     from quaestor.services import transactions as tx_service
 
+    fx.set_trm(session, "4000")
     acc = seeded["account"]
     tx_service.record_expense(session, acc.id, 5_000_000, "COP", date(2026, 6, 18), "Lunch")
     tx_service.record_expense(session, acc.id, 3_000_000, "COP", date(2026, 6, 18), "Coffee")
@@ -50,6 +59,7 @@ def test_list_transactions_lists_and_totals(session, seeded):
 def test_list_transactions_filters_by_account_name(session, seeded):
     from quaestor.services import transactions as tx_service
 
+    fx.set_trm(session, "4000")
     other = accounts.create_account(session, "Savings", "savings", "COP", balance=0)
     tx_service.record_expense(
         session, seeded["account"].id, 1_000_000, "COP", date(2026, 6, 18), "Here"
@@ -83,6 +93,7 @@ def _row_of(out: str, payee: str) -> int:
 def test_mcp_list_transactions_default_orders_by_date_desc(session, seeded):
     from quaestor.services import transactions as tx_service
 
+    fx.set_trm(session, "4000")
     acc = seeded["account"]
     tx_service.record_expense(session, acc.id, 100, "COP", date(2026, 6, 15), "mid")
     tx_service.record_expense(session, acc.id, 200, "COP", date(2026, 6, 1), "old")
@@ -101,6 +112,7 @@ def test_mcp_list_transactions_default_orders_by_date_desc(session, seeded):
 def test_mcp_list_transactions_explicit_sort_date_asc(session, seeded):
     from quaestor.services import transactions as tx_service
 
+    fx.set_trm(session, "4000")
     acc = seeded["account"]
     tx_service.record_expense(session, acc.id, 100, "COP", date(2026, 6, 15), "mid")
     tx_service.record_expense(session, acc.id, 200, "COP", date(2026, 6, 1), "old")

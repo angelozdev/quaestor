@@ -3,8 +3,9 @@ from decimal import Decimal
 
 import pytest
 
-from quaestor.domain.errors import MissingRate, NotFound, ValidationError
+from quaestor.domain.errors import NotFound, TransferImbalance, ValidationError
 from quaestor.domain.models import AccountType, TxStatus, TxType
+from quaestor.domain.money import to_cop_cents
 from quaestor.services import accounts, categories, fx, planned, transactions
 
 
@@ -20,8 +21,6 @@ def test_record_expense_decrements_balance(session):
     assert tx.type == TxType.expense
     assert tx.status == TxStatus.posted
     assert tx.amount == 45_000
-    assert tx.to_base == 45_000
-    assert tx.fx_rate == Decimal("1")
     assert accounts.get_account(session, acc.id).balance == 55_000
 
 
@@ -33,33 +32,35 @@ def test_record_income_increments_balance(session):
     assert accounts.get_account(session, acc.id).balance == 3_200_000
 
 
-def test_expense_usd_freezes_to_base(session):
+def test_expense_usd_records_without_any_trm(session):
     acc = _make_account(session, currency="USD", balance=0)
-    fx.set_fx_rate(session, date(2026, 6, 1), "4150")
     tx = transactions.record_expense(
         session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
     )
-    assert tx.fx_rate == Decimal("4150")
-    assert tx.to_base == 4_980_000  # frozen
-    # changing the rate afterwards does not move the already-stored to_base
-    fx.set_fx_rate(session, date(2026, 6, 2), "5000")
-    assert transactions.get_transaction(session, tx.id).to_base == 4_980_000
-    assert accounts.get_account(session, acc.id).balance == -1200  # USD cents
+    assert tx.amount == 1200
+    assert tx.currency == "USD"
+    assert getattr(tx, "fx_rate", None) is None
+    assert getattr(tx, "to_base", None) is None
+    assert accounts.get_account(session, acc.id).balance == -1200
 
 
-def test_expense_usd_without_rate_fails(session):
-    acc = _make_account(session, currency="USD")
-    with pytest.raises(MissingRate):
-        transactions.record_expense(
-            session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
-        )
+def test_usd_cop_equivalent_follows_the_current_trm(session):
+    acc = _make_account(session, currency="USD", balance=0)
+    tx = transactions.record_expense(
+        session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
+    )
+    fx.set_trm(session, "4150")
+    stored = transactions.get_transaction(session, tx.id)
+    assert to_cop_cents(stored.amount, stored.currency, fx.get_trm(session)) == 4_980_000
+    fx.set_trm(session, "5000")
+    assert to_cop_cents(stored.amount, stored.currency, fx.get_trm(session)) == 6_000_000
 
 
 def test_currency_must_match_account(session):
     acc = _make_account(session, currency="COP")
     with pytest.raises(ValidationError):
         transactions.record_expense(
-            session, acc.id, 1200, "USD", date(2026, 6, 1), "X", fx_rate=Decimal("4150")
+            session, acc.id, 1200, "USD", date(2026, 6, 1), "X"
         )
 
 
@@ -96,8 +97,139 @@ def test_transfer_moves_both_balances_and_shares_group(session):
 
 def test_transfer_same_account_fails(session):
     acc = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100)
-    with pytest.raises(Exception):  # TransferImbalance
+    with pytest.raises(TransferImbalance):
         transactions.transfer(session, acc.id, acc.id, 50, "COP", date(2026, 6, 1))
+
+
+def _cross_currency_pair(session):
+    wise = accounts.create_account(session, "Wise", AccountType.debit, "USD", balance=50_000)
+    banco = accounts.create_account(
+        session, "Bancolombia", AccountType.debit, "COP", balance=100_000_000
+    )
+    return wise, banco
+
+
+def test_cross_currency_transfer_moves_each_physical_amount(session):
+    wise, banco = _cross_currency_pair(session)
+    leg_from, leg_to = transactions.transfer(
+        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        amount_received=40_000_000,
+    )
+    assert leg_from.amount == 10_000 and leg_from.currency == "USD"
+    assert leg_to.amount == 40_000_000 and leg_to.currency == "COP"
+    assert leg_from.transfer_group_id == leg_to.transfer_group_id
+    assert accounts.get_account(session, wise.id).balance == 40_000
+    assert accounts.get_account(session, banco.id).balance == 140_000_000
+
+
+def test_cross_currency_transfer_stores_no_rate(session):
+    wise, banco = _cross_currency_pair(session)
+    legs = transactions.transfer(
+        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        amount_received=1_000,
+    )
+    for leg in legs:
+        assert getattr(leg, "fx_rate", None) is None
+        assert getattr(leg, "to_base", None) is None
+
+
+def test_cross_currency_transfer_requires_received_amount(session):
+    wise, banco = _cross_currency_pair(session)
+    with pytest.raises(ValidationError):
+        transactions.transfer(session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1))
+    assert accounts.get_account(session, wise.id).balance == 50_000
+    assert accounts.get_account(session, banco.id).balance == 100_000_000
+    assert transactions.list_transactions(session) == []
+
+
+def test_transfer_rejects_non_positive_amounts(session):
+    wise, banco = _cross_currency_pair(session)
+    with pytest.raises(ValidationError):
+        transactions.transfer(
+            session, wise.id, banco.id, 0, "USD", date(2026, 6, 1),
+            amount_received=40_000_000,
+        )
+    with pytest.raises(ValidationError):
+        transactions.transfer(
+            session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+            amount_received=-40_000_000,
+        )
+    assert accounts.get_account(session, wise.id).balance == 50_000
+    assert accounts.get_account(session, banco.id).balance == 100_000_000
+
+
+def test_transfer_currency_defaults_to_source_account(session):
+    wise, banco = _cross_currency_pair(session)
+    leg_from, _ = transactions.transfer(
+        session, wise.id, banco.id, 10_000, None, date(2026, 6, 1),
+        amount_received=40_000_000,
+    )
+    assert leg_from.currency == "USD"
+
+
+def test_transfer_accepts_one_cent_legs(session):
+    wise, banco = _cross_currency_pair(session)
+    leg_from, leg_to = transactions.transfer(
+        session, wise.id, banco.id, 1, "USD", date(2026, 6, 1),
+        amount_received=1,
+    )
+    assert leg_from.amount == 1 and leg_to.amount == 1
+    assert accounts.get_account(session, wise.id).balance == 49_999
+    assert accounts.get_account(session, banco.id).balance == 100_000_001
+
+
+def test_list_filters_by_category(session):
+    acc = _make_account(session, balance=100_000)
+    cat = categories.create_category(session, "Food")
+    transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    tx = transactions.record_expense(
+        session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market", category_id=cat.id
+    )
+    rows = transactions.list_transactions(session, category_id=cat.id)
+    assert [r.id for r in rows] == [tx.id]
+
+
+def test_list_includes_transactions_on_the_date_to_boundary(session):
+    acc = _make_account(session, balance=100_000)
+    tx = transactions.record_expense(
+        session, acc.id, 1_000, "COP", date(2026, 6, 15), "Store"
+    )
+    rows = transactions.list_transactions(session, date_to=date(2026, 6, 15))
+    assert [r.id for r in rows] == [tx.id]
+
+
+def test_update_transaction_rejects_missing_category(session):
+    acc = _make_account(session, balance=100_000)
+    tx = transactions.record_expense(
+        session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store"
+    )
+    with pytest.raises(ValidationError):
+        transactions.update_transaction(session, tx.id, category_id=9999)
+
+
+def test_delete_transaction_keeps_other_transactions_tags(session):
+    from quaestor.services import tags
+    acc = _make_account(session, balance=100_000)
+    tx_a = transactions.record_expense(
+        session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store"
+    )
+    tx_b = transactions.record_expense(
+        session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market"
+    )
+    tags.tag_transaction(session, tx_a.id, ["trip"])
+    tags.tag_transaction(session, tx_b.id, ["work"])
+    transactions.delete_transaction(session, tx_a.id)
+    remaining = transactions.list_transactions(session, tag="work")
+    assert [r.id for r in remaining] == [tx_b.id]
+
+
+def test_transfer_currency_must_match_source_account(session):
+    wise, banco = _cross_currency_pair(session)
+    with pytest.raises(ValidationError):
+        transactions.transfer(
+            session, wise.id, banco.id, 10_000, "COP", date(2026, 6, 1),
+            amount_received=40_000_000,
+        )
 
 
 def test_transfer_nonexistent_destination_is_atomic(session):

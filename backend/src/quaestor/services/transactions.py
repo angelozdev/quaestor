@@ -1,9 +1,13 @@
-"""Transaction use cases: register expense/income, transfer, read."""
+"""Transaction use cases: register expense/income, transfer, read.
+
+ADR-0031: transactions store only their physical amount + currency. No
+rate and no converted amount are ever persisted; COP figures are computed
+at read time from the current TRM.
+"""
 from __future__ import annotations
 
 import uuid
 from datetime import date as Date
-from decimal import Decimal
 
 from sqlmodel import Session, select
 
@@ -18,10 +22,9 @@ from ..domain.models import (
     TxType,
     Source,
 )
-from ..domain.money import BASE_CURRENCY, is_supported, to_base_cents
-from ..domain.rules import delta_balance, transfer_deltas
+from ..domain.money import is_supported
+from ..domain.rules import delta_balance
 from ..domain.sort import Order, SortField, SortSpec, SortableColumns
-from . import fx
 
 
 def _require_account(session: Session, account_id: int) -> Account:
@@ -32,20 +35,6 @@ def _require_account(session: Session, account_id: int) -> Account:
     if acc.archived:
         raise ValidationError(f"account {account_id} is archived")
     return acc
-
-
-def _resolve_fx(session: Session, currency: str, date: Date, fx_rate) -> Decimal:
-    """Return the FX rate to use for this transaction.
-
-    COP transactions always get rate 1. Non-COP transactions use the explicit
-    fx_rate if provided, otherwise look up the most recent rate via fx.tasa_vigente
-    (which raises MissingRate if none is found).
-    """
-    if currency == BASE_CURRENCY:
-        return Decimal("1")
-    if fx_rate is not None:
-        return Decimal(str(fx_rate))
-    return fx.get_current_rate(session, date)  # raises MissingRate if absent
 
 
 def _record(
@@ -59,7 +48,6 @@ def _record(
     category_id: int | None,
     notes: str | None,
     source: str,
-    fx_rate,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     if amount <= 0:
@@ -77,7 +65,6 @@ def _record(
             raise ValidationError(f"category {category_id} not found")
         if cat.archived:
             raise ValidationError(f"category {category_id} is archived")
-    rate = _resolve_fx(session, currency, date, fx_rate)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -86,8 +73,6 @@ def _record(
         status=TxStatus.posted,
         amount=amount,
         currency=currency,
-        fx_rate=rate,
-        to_base=to_base_cents(amount, rate),
         account_id=account_id,
         category_id=category_id,
         source=Source(source),
@@ -110,22 +95,21 @@ def record_expense(
     category_id: int | None = None,
     notes: str | None = None,
     source: str = "manual",
-    fx_rate=None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
+
+    Works without any TRM set (AC-1): nothing about conversion is recorded.
 
     Args:
         session: Database session.
         account_id: The account to debit.
         amount: Positive integer cents in the account's currency.
         currency: Must match the account's currency.
-        date: Transaction date (used for FX lookup if needed).
+        date: Transaction date.
         payee: Name of the payee.
         category_id: Optional category.
         notes: Optional free-text notes.
         source: Origin of the transaction ("manual", "agent", or "import").
-        fx_rate: Explicit FX rate (skips lookup). Required for non-COP accounts
-                 when no rate has been set for the date.
 
     Returns:
         The persisted Transaction.
@@ -133,11 +117,10 @@ def record_expense(
     Raises:
         ValidationError: Invalid amount, currency mismatch, or unknown category.
         NotFound: Account does not exist.
-        MissingRate: Non-COP account with no rate available and no explicit fx_rate.
     """
     return _record(
         session, TxType.expense, account_id, amount, currency, date, payee,
-        category_id, notes, source, fx_rate,
+        category_id, notes, source,
     )
 
 
@@ -151,22 +134,21 @@ def record_income(
     category_id: int | None = None,
     notes: str | None = None,
     source: str = "manual",
-    fx_rate=None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
+
+    Works without any TRM set (AC-1): nothing about conversion is recorded.
 
     Args:
         session: Database session.
         account_id: The account to credit.
         amount: Positive integer cents in the account's currency.
         currency: Must match the account's currency.
-        date: Transaction date (used for FX lookup if needed).
+        date: Transaction date.
         payee: Name of the income source.
         category_id: Optional category.
         notes: Optional free-text notes.
         source: Origin of the transaction ("manual", "agent", or "import").
-        fx_rate: Explicit FX rate (skips lookup). Required for non-COP accounts
-                 when no rate has been set for the date.
 
     Returns:
         The persisted Transaction.
@@ -174,11 +156,10 @@ def record_income(
     Raises:
         ValidationError: Invalid amount, currency mismatch, or unknown category.
         NotFound: Account does not exist.
-        MissingRate: Non-COP account with no rate available and no explicit fx_rate.
     """
     return _record(
         session, TxType.income, account_id, amount, currency, date, payee,
-        category_id, notes, source, fx_rate,
+        category_id, notes, source,
     )
 
 
@@ -206,54 +187,66 @@ def transfer(
     from_account_id: int,
     to_account_id: int,
     amount: int,
-    currency: str,
-    date: Date,
+    currency: str | None = None,
+    date: Date | None = None,
     notes: str | None = None,
     source: str = "manual",
-    fx_rate=None,
+    amount_received: int | None = None,
 ) -> tuple[Transaction, Transaction]:
     """Create a transfer between two accounts as two linked Transaction rows.
 
-    Both legs share the same transfer_group_id. Balances are updated atomically;
-    on any error the session is rolled back and the exception re-raised.
+    Each leg stores its own physical amount in its account's currency
+    (ADR-0031); no rate is stored — the effective rate is implicit in the
+    ratio and any pair of positive amounts is accepted (AC-8). Both legs
+    share one transfer_group_id; balances move by each leg's own amount,
+    atomically — on any error the session is rolled back and re-raised.
 
     Args:
         session: Database session.
         from_account_id: Account debited (source).
         to_account_id: Account credited (destination).
-        amount: Positive integer cents in the given currency.
-        currency: Must match both accounts' currency.
-        date: Transaction date (used for FX lookup if needed).
+        amount: Positive integer cents SENT, in the source account's currency.
+        currency: Sent currency; None defaults to the source account's
+            currency, otherwise it must match it.
+        date: Transaction date.
         notes: Optional free-text notes.
         source: Origin of the transaction ("manual", "agent", or "import").
-        fx_rate: Explicit FX rate (skips lookup). Required for non-COP accounts
-                 when no rate has been set for the date.
+        amount_received: Positive integer cents RECEIVED, in the destination
+            account's currency. Required when the two accounts' currencies
+            differ; defaults to `amount` when they match.
 
     Returns:
         Tuple (leg_from, leg_to) — the two persisted Transaction rows.
 
     Raises:
-        ValidationError: Invalid amount, currency mismatch, or same-account transfer.
+        ValidationError: Non-positive amount, currency mismatch, or a
+            cross-currency transfer missing the received amount.
         TransferImbalance: from_account_id == to_account_id.
         NotFound: Either account does not exist.
-        MissingRate: Non-COP account with no rate available and no explicit fx_rate.
     """
     if amount <= 0:
         raise ValidationError("amount must be > 0")
+    if amount_received is not None and amount_received <= 0:
+        raise ValidationError("amount_received must be > 0")
     if from_account_id == to_account_id:
         raise TransferImbalance("source and destination cannot be the same account")
-    if not is_supported(currency):
-        raise ValidationError(f"unsupported currency: {currency}")
     src = _require_account(session, from_account_id)
     dst = _require_account(session, to_account_id)
-    if currency != src.currency or currency != dst.currency:
+    sent_currency = currency if currency is not None else src.currency
+    if not is_supported(sent_currency):
+        raise ValidationError(f"unsupported currency: {sent_currency}")
+    if sent_currency != src.currency:
         raise ValidationError(
-            "P0 transfer: both accounts must use the transfer currency"
+            f"currency {sent_currency} does not match source account "
+            f"currency ({src.currency})"
         )
-    rate = _resolve_fx(session, currency, date, fx_rate)
-    to_base = to_base_cents(amount, rate)
+    cross_currency = src.currency != dst.currency
+    if cross_currency and amount_received is None:
+        raise ValidationError(
+            "amount_received is required when the accounts use different currencies"
+        )
+    received = amount_received if amount_received is not None else amount
     group = uuid.uuid4().hex
-    d_from, d_to = transfer_deltas(amount)
     payee = notes or "transfer"
     leg_from = Transaction(
         date=date,
@@ -262,9 +255,7 @@ def transfer(
         type=TxType.transfer,
         status=TxStatus.posted,
         amount=amount,
-        currency=currency,
-        fx_rate=rate,
-        to_base=to_base,
+        currency=src.currency,
         account_id=from_account_id,
         transfer_group_id=group,
         source=Source(source),
@@ -275,17 +266,15 @@ def transfer(
         notes=notes,
         type=TxType.transfer,
         status=TxStatus.posted,
-        amount=amount,
-        currency=currency,
-        fx_rate=rate,
-        to_base=to_base,
+        amount=received,
+        currency=dst.currency,
         account_id=to_account_id,
         transfer_group_id=group,
         source=Source(source),
     )
     try:
-        src.balance += d_from
-        dst.balance += d_to
+        src.balance -= amount
+        dst.balance += received
         session.add_all([leg_from, leg_to, src, dst])
         session.commit()
     except Exception:
@@ -296,8 +285,6 @@ def transfer(
     return (leg_from, leg_to)
 
 
-# Per-service sortable columns. Open for extension: adding a new sortable
-# field is one line here plus one Literal member in domain/sort.py.
 _TRANSACTION_SORTABLE: SortableColumns = {
     "date":       Transaction.date,
     "created_at": Transaction.created_at,

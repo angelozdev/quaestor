@@ -45,12 +45,14 @@ import argparse
 import os
 import sys
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 from quaestor.db import engine
 from quaestor.domain.models import Transaction, TxStatus
+from quaestor.domain.money import to_cop_cents
 from quaestor.mcp.format import money
-from quaestor.services import planned
+from quaestor.services import fx, planned
 from sqlmodel import Session, select
 
 
@@ -94,7 +96,7 @@ def _stale_planned_query(session: Session, threshold_date: date) -> list[Transac
     )
 
 
-def _print_table(transactions: list[Transaction], today: date) -> None:
+def _print_table(transactions: list[Transaction], today: date, trm: Decimal | None) -> None:
     if not transactions:
         print("No stale planned transactions found.")
         return
@@ -102,15 +104,17 @@ def _print_table(transactions: list[Transaction], today: date) -> None:
     separator = "-" * len(header)
     print(header)
     print(separator)
-    total = 0
     for tx in transactions:
         days_overdue = (today - tx.date).days
-        total += tx.to_base
         print(
             f"{tx.id:>4} | {tx.payee[:25]:<25} | {tx.date.isoformat():>10} | "
             f"{days_overdue:>12} | {money(tx.amount, tx.currency):>15}"
         )
     print(separator)
+    if trm is None:
+        print(f"Would skip {len(transactions)} transaction(s) (no TRM set; COP total unavailable)")
+        return
+    total = sum(to_cop_cents(tx.amount, tx.currency, trm) for tx in transactions)
     print(f"Would skip {len(transactions)} transaction(s) totaling {money(total, 'COP')}")
 
 
@@ -138,9 +142,10 @@ def main() -> None:
 
     with Session(engine) as session:
         transactions = _stale_planned_query(session, threshold_date)
+        trm = fx.get_trm_or_none(session)
 
         if not args.apply:
-            _print_table(transactions, today)
+            _print_table(transactions, today, trm)
             print("\nDry-run complete. Re-run with --apply to skip these transactions.")
             return
 
@@ -148,7 +153,7 @@ def main() -> None:
             print("No stale planned transactions found. Nothing to do.")
             return
 
-        _print_table(transactions, today)
+        _print_table(transactions, today, trm)
 
         if not _confirm_apply(len(transactions)):
             print("\nAborted. No changes were made.")

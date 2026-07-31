@@ -13,7 +13,6 @@ from quaestor.domain.models import (
     Budget,
     Category,
     CategoryGroup,
-    FxRate,
     Goal,
     GoalStatus,
     IntervalUnit,
@@ -34,15 +33,13 @@ from quaestor.domain.dtos import (
 from quaestor.mcp import format
 
 
-def _expense(currency="COP", amount=4_000_000, to_base=4_000_000):
+def _expense(currency="COP", amount=4_000_000):
     return Transaction(
         date=date(2026, 6, 18),
         payee="Groceries",
         type=TxType.expense,
         amount=amount,
         currency=currency,
-        fx_rate=Decimal("1"),
-        to_base=to_base,
         account_id=1,
     )
 
@@ -84,35 +81,50 @@ def test_transfer_imbalance_is_framed():
 
 def test_expense_confirmation_cop_omits_equivalent():
     acc = Account(name="Bancolombia", type=AccountType.debit, currency="COP", balance=6_000_000)
-    text = format.expense_confirmation(_expense(), acc)
+    text = format.expense_confirmation(_expense(), acc, cop_equivalent=4_000_000)
     assert "Expense recorded" in text
     assert "Groceries" in text
     assert "Bancolombia" in text
-    assert "60000.00 COP" in text  # new balance
-    assert "Equivalent" not in text  # COP needs no to_base line
+    assert "60000.00 COP" in text
+    assert "Equivalent" not in text
 
 
-def test_expense_confirmation_usd_shows_to_base():
+def test_expense_confirmation_usd_shows_read_time_equivalent():
     acc = Account(name="Amex", type=AccountType.credit, currency="USD", balance=-1200)
-    tx = _expense(currency="USD", amount=1200, to_base=4_980_000)
-    text = format.expense_confirmation(tx, acc)
+    tx = _expense(currency="USD", amount=1200)
+    text = format.expense_confirmation(tx, acc, cop_equivalent=4_980_000)
     assert "Equivalent: 49800.00 COP" in text
+
+
+def test_expense_confirmation_usd_without_trm_omits_equivalent():
+    acc = Account(name="Amex", type=AccountType.credit, currency="USD", balance=-1200)
+    tx = _expense(currency="USD", amount=1200)
+    text = format.expense_confirmation(tx, acc, cop_equivalent=None)
+    assert "Expense recorded" in text
+    assert "Equivalent" not in text
 
 
 def test_transfer_confirmation_lists_both_balances():
     src = Account(name="Bancolombia", type=AccountType.debit, currency="COP", balance=2_000_000)
     dst = Account(name="Savings", type=AccountType.savings, currency="COP", balance=8_000_000)
-    text = format.transfer_confirmation(src, dst, 5_000_000, "COP")
+    text = format.transfer_confirmation(src, dst, 5_000_000, 5_000_000)
     assert "Bancolombia" in text and "Savings" in text
     assert "20000.00 COP" in text and "80000.00 COP" in text
+    assert "received" not in text
 
 
-def test_fx_set_and_current():
-    fr = FxRate(date=date(2026, 6, 18), usd_cop=Decimal("4150"))
-    assert "Thu, 18 Jun 2026" in format.fx_set(fr) and "4150" in format.fx_set(fr)
-    assert format.fx_current(Decimal("4150"), date(2026, 6, 18)) == (
-        "Current USD→COP rate on Thu, 18 Jun 2026: 4150"
-    )
+def test_transfer_confirmation_cross_currency_shows_both_amounts():
+    src = Account(name="Wise", type=AccountType.debit, currency="USD", balance=40_000)
+    dst = Account(name="Bancolombia", type=AccountType.debit, currency="COP", balance=140_000_000)
+    text = format.transfer_confirmation(src, dst, 10_000, 40_000_000)
+    assert "100.00 USD" in text
+    assert "400000.00 COP received" in text
+
+
+def test_fx_set_and_current_are_scalar():
+    assert format.fx_set(Decimal("4150")) == "✅ USD→COP rate (TRM) set: 4150"
+    assert format.fx_current(Decimal("4150")) == "Current USD→COP rate (TRM): 4150"
+    assert "4100.5" in format.fx_current(Decimal("4100.50"))
 
 
 def test_accounts_table_and_empty():
@@ -138,12 +150,20 @@ def test_tags_list():
 
 
 def test_transactions_table_has_total_and_empty():
-    txs = [_expense(), _expense(amount=1_000_000, to_base=1_000_000)]
-    table = format.transactions_table(txs)
+    txs = [_expense(), _expense(amount=1_000_000)]
+    table = format.transactions_table(txs, Decimal("4000"))
     assert "| Date |" in table
     assert "Total (COP): 50000.00" in table
     assert "2 transaction(s)" in table
-    assert format.transactions_table([]) == "No transactions for those filters."
+    assert format.transactions_table([], Decimal("4000")) == "No transactions for those filters."
+
+
+def test_transactions_table_converts_usd_at_the_trm():
+    table = format.transactions_table(
+        [_expense(currency="USD", amount=1_000)], Decimal("4000")
+    )
+    assert "40000.00" in table
+    assert "Total (COP): 40000.00" in table
 
 
 def test_account_card_basic():
@@ -184,11 +204,22 @@ def test_transaction_card():
     tx = Transaction(
         id=42, date=date(2026, 6, 18), payee="Lunch", type=TxType.expense,
         status=TxStatus.posted, amount=5_000_000, currency="COP",
-        fx_rate=Decimal("1"), to_base=5_000_000, account_id=1,
+        account_id=1,
     )
-    text = format.transaction_card(tx)
+    text = format.transaction_card(tx, Decimal("4000"))
     assert "Lunch" in text and "50000.00 COP" in text
     assert "Thu, 18 Jun 2026" in text and "id=42" in text
+
+
+def test_transaction_card_usd_shows_read_time_cop_equivalent():
+    tx = Transaction(
+        id=7, date=date(2026, 6, 18), payee="Spotify", type=TxType.expense,
+        status=TxStatus.posted, amount=1_000, currency="USD",
+        account_id=1,
+    )
+    text = format.transaction_card(tx, Decimal("4000"))
+    assert "10.00 USD" in text
+    assert "(40000.00 COP)" in text
 
 
 def test_settings_card():

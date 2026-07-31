@@ -1,17 +1,20 @@
 """Monthly report: posted-only aggregation + formatting (P5).
 
 Reuses P0 (reads), P3 (to_pay), P4 (budget_status, safe_to_spend, goals_progress).
-Every aggregate is in to_base (COP cents); FX is never reconverted here.
+Every COP aggregate converts at read time from the current TRM (ADR-0031),
+fetched once per report.
 """
 from __future__ import annotations
 
 import re
 from datetime import date as Date, timedelta
+from decimal import Decimal
 
 from sqlmodel import Session
 
 from ..domain.errors import ValidationError
 from ..domain.models import Account, Transaction
+from ..domain.money import to_cop_cents
 from ..domain.report_markdown import money, render_markdown
 from ..domain.report_types import (
     AccountBalance,
@@ -25,6 +28,7 @@ from ..domain.report_types import (
 )
 from ..domain.rules import prev_year_month
 from . import accounts as _accounts
+from . import fx as _fx
 from . import goals as _goals
 from . import planned as _planned
 from .budgets import _safe_to_spend, _status as _budget_status_from_agg
@@ -38,11 +42,11 @@ def _validate_month(month: str) -> None:
         raise ValidationError(f"malformed month (expected YYYY-MM): {month!r}")
 
 
-def _usd_share(expenses: list[Transaction], expense_total: int) -> float:
-    """Fraction of expense (to_base) originated in USD, [0, 1]. 0.0 if no expense."""
+def _usd_share(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> float:
+    """Fraction of expense (COP at the current TRM) originated in USD, [0, 1]."""
     if expense_total == 0:
         return 0.0
-    usd = sum(t.to_base for t in expenses if t.currency == "USD")
+    usd = sum(agg.to_cop_cents(t) for t in expenses if t.currency == "USD")
     return usd / expense_total
 
 
@@ -52,7 +56,7 @@ def _category_sections(
     """Group expenses by category (None -> 'Uncategorized'); pct over total expense."""
     buckets: dict[int | None, int] = {}
     for tx in expenses:
-        buckets[tx.category_id] = buckets.get(tx.category_id, 0) + tx.to_base
+        buckets[tx.category_id] = buckets.get(tx.category_id, 0) + agg.to_cop_cents(tx)
     sections: list[CategorySection] = []
     for cat_id, total in buckets.items():
         if cat_id is None:
@@ -74,7 +78,7 @@ def _group_sections(
     buckets: dict[str, int] = {}
     for tx in expenses:
         name = agg.group_name(tx.category_id) or "Ungrouped"
-        buckets[name] = buckets.get(name, 0) + tx.to_base
+        buckets[name] = buckets.get(name, 0) + agg.to_cop_cents(tx)
     sections = [
         GroupSection(
             group=name, total=total,
@@ -141,14 +145,16 @@ def _goal_lines(session: Session, today: Date) -> list[GoalLine]:
 
 def _balance_lines(session: Session) -> list[AccountBalance]:
     """Balance per non-archived account (account's own currency), sorted by name."""
-    accs = _accounts.list_accounts(session)  # excludes archived
+    accs = _accounts.list_accounts(session, include_archived=False)
     return [
         AccountBalance(account=a.name, currency=a.currency, balance=a.balance)
         for a in sorted(accs, key=lambda a: a.name)
     ]
 
 
-def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
+def _pending_lines(
+    session: Session, start: Date, end: Date, trm: Decimal
+) -> list[str]:
     """Alert lines for unconfirmed (planned) entries in the month, grouped by account.
 
     Retrospective view: pass `retrospective=True` so the
@@ -165,7 +171,9 @@ def _pending_lines(session: Session, start: Date, end: Date) -> list[str]:
     )
     by_account: dict[int, int] = {}
     for tx in queue.upcoming:
-        by_account[tx.account_id] = by_account.get(tx.account_id, 0) + tx.to_base
+        by_account[tx.account_id] = by_account.get(tx.account_id, 0) + to_cop_cents(
+            tx.amount, tx.currency, trm
+        )
     rows: list[tuple[str, int]] = []
     for account_id, total in by_account.items():
         acc = session.get(Account, account_id)
@@ -180,17 +188,19 @@ def monthly_report(
 ) -> MonthlyReport:
     """Build the retrospective monthly report (data + markdown) for "YYYY-MM".
 
-    Posted-only aggregates in COP cents; reuses P3/P4 for pending/envelopes/goals/
-    safe-to-spend. `today` (defaults to date.today()) drives deterministic goal ETAs.
+    Posted-only aggregates in COP cents, converted at read time from ONE
+    TRM fetch; reuses P3/P4 for pending/envelopes/goals/safe-to-spend.
+    `today` (defaults to date.today()) drives deterministic goal ETAs.
 
     Raises:
         ValidationError: malformed month.
-        MissingRate: surfaced from P4 safe-to-spend if a forecast needs an absent USD rate.
+        MissingRate: no TRM set (AC-9 — even for all-COP data).
     """
     _validate_month(month)
     if today is None:
         today = Date.today()
-    agg = load_month_aggregate(session, month)
+    trm = _fx.get_trm(session)
+    agg = load_month_aggregate(session, month, trm)
     start, end = agg.start, agg.end
 
     expenses = agg.month_expense()
@@ -206,9 +216,9 @@ def monthly_report(
         goals=_goal_lines(session, today),
         balances=_balance_lines(session),
         drift_mom=_drift(agg, income, expense, net),
-        usd_share=_usd_share(expenses, expense),
-        pending=_pending_lines(session, start, end),
-        safe_to_spend=_safe_to_spend(session, agg),
+        usd_share=_usd_share(agg, expenses, expense),
+        pending=_pending_lines(session, start, end, trm),
+        safe_to_spend=_safe_to_spend(agg),
         markdown="",
     )
     report.markdown = render_markdown(report)

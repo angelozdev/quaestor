@@ -1,9 +1,11 @@
 """Golden outputs for the monthly read-path. These must not change through the
 MonthAggregate refactor — they pin observable behavior at the API contract,
 including rollover across months (May available rolls into June)."""
+from tests.support.fx import set_trm as _set_trm
 
 
 def _seed(client, auth):
+    _set_trm(client, auth)
     acc = client.post(
         "/api/accounts",
         json={"name": "Bank", "type": "debit", "currency": "COP"},
@@ -96,3 +98,49 @@ def test_list_budgets_pins_rollover(client, auth):
     assert food["rollover_in"] == 40_000  # May: 100k assigned - 60k spent
     assert food["available"] == 60_000    # 40k rollover + 100k - 80k
     assert food["status"] == "under"
+
+
+def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(client, auth):
+    _set_trm(client, auth)
+    acc = client.post(
+        "/api/accounts",
+        json={"name": "Bank", "type": "debit", "currency": "COP"},
+        headers=auth,
+    ).json()
+    client.post(
+        "/api/transactions",
+        json={
+            "type": "expense", "account_id": acc["id"], "amount": 60_000,
+            "currency": "COP", "date": "2026-06-15", "payee": "seed",
+        },
+        headers=auth,
+    )
+    row = client.get("/api/transactions", headers=auth).json()[0]
+    assert set(row) == {
+        "id", "date", "payee", "notes", "type", "status", "amount", "currency",
+        "cop_equivalent", "account_id", "category_id", "transfer_group_id",
+        "source", "created_at",
+    }
+    assert row["cop_equivalent"] == 60_000
+
+
+def test_report_totals_convert_usd_at_the_current_trm_not_a_frozen_rate(client, auth):
+    _set_trm(client, auth, "4000")
+    acc = client.post(
+        "/api/accounts",
+        json={"name": "USD Bank", "type": "debit", "currency": "USD"},
+        headers=auth,
+    ).json()
+    client.post(
+        "/api/transactions",
+        json={
+            "type": "expense", "account_id": acc["id"], "amount": 1_000,
+            "currency": "USD", "date": "2026-06-10", "payee": "Amazon",
+        },
+        headers=auth,
+    )
+    at_4000 = client.get("/api/reports", params={"month": "2026-06"}, headers=auth).json()
+    assert at_4000["expense"] == 4_000_000
+    _set_trm(client, auth, "4500")
+    at_4500 = client.get("/api/reports", params={"month": "2026-06"}, headers=auth).json()
+    assert at_4500["expense"] == 4_500_000

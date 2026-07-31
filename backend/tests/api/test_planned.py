@@ -1,14 +1,15 @@
 from quaestor.services import accounts
 from sqlmodel import Session
+from tests.support.fx import set_trm as _set_trm
 
 
-def _seed_account(engine, balance=1_000_000):
+def _seed_account(engine, balance=1_000_000, currency="COP", name="Bank"):
     with Session(engine) as s:
-        acc = accounts.create_account(s, "Bank", "debit", "COP", balance=balance)
+        acc = accounts.create_account(s, name, "debit", currency, balance=balance)
         return acc.id
 
 
-def test_plan_to_pay_confirm_flow(client, engine, auth):
+def test_plan_without_trm_then_to_pay_confirm_flow(client, engine, auth):
     acc_id = _seed_account(engine)
     plan = client.post("/api/planned", json={
         "payee": "Friend", "amount": 80_000, "due_date": "2026-12-15", "account_id": acc_id,
@@ -16,7 +17,9 @@ def test_plan_to_pay_confirm_flow(client, engine, auth):
     assert plan.status_code == 201, plan.text
     tx_id = plan.json()["id"]
     assert plan.json()["status"] == "planned"
+    assert plan.json()["cop_equivalent"] is None
 
+    _set_trm(client, auth)
     queue = client.get("/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth)
     assert queue.status_code == 200
     assert queue.json()["total_base"] == 80_000
@@ -27,19 +30,49 @@ def test_plan_to_pay_confirm_flow(client, engine, auth):
     assert confirm.json()["status"] == "posted" and confirm.json()["amount"] == 85_000
 
 
+def test_to_pay_without_trm_is_409(client, auth):
+    resp = client.get(
+        "/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth
+    )
+    assert resp.status_code == 409 and resp.json()["error"] == "MissingRate"
+
+
+def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, auth):
+    cop_acc = _seed_account(engine, name="Bank COP")
+    usd_acc = _seed_account(engine, currency="USD", name="Bank USD")
+    client.post("/api/planned", json={
+        "payee": "Rent", "amount": 500_000, "due_date": "2026-12-10", "account_id": cop_acc,
+    }, headers=auth)
+    client.post("/api/planned", json={
+        "payee": "SaaS", "amount": 1_000, "currency": "USD",
+        "due_date": "2026-12-20", "account_id": usd_acc,
+    }, headers=auth)
+    _set_trm(client, auth, "4000")
+    first = client.get(
+        "/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth
+    ).json()
+    assert first["total_base"] == 500_000 + 4_000_000
+    usd_item = next(i for i in first["upcoming"] if i["payee"] == "SaaS")
+    assert usd_item["cop_equivalent"] == 4_000_000
+    _set_trm(client, auth, "4500")
+    second = client.get(
+        "/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth
+    ).json()
+    assert second["total_base"] == 500_000 + 4_500_000
+
+
 def test_confirm_non_planned_is_409(client, engine, auth):
     acc_id = _seed_account(engine)
-    # post a normal expense, then try to confirm it
     plan = client.post("/api/planned", json={
         "payee": "Friend", "amount": 80_000, "due_date": "2026-06-20", "account_id": acc_id,
     }, headers=auth)
     tx_id = plan.json()["id"]
-    client.post(f"/api/planned/{tx_id}/confirm", json={}, headers=auth)  # now posted
+    client.post(f"/api/planned/{tx_id}/confirm", json={}, headers=auth)
     again = client.post(f"/api/planned/{tx_id}/confirm", json={}, headers=auth)
     assert again.status_code == 409
 
 
-def test_skip_planned_payment(client, engine, auth):
+def test_skip_planned_payment_works_without_trm(client, engine, auth):
     acc_id = _seed_account(engine)
     tx_id = client.post("/api/planned", json={
         "payee": "Friend", "amount": 80_000, "due_date": "2026-06-20", "account_id": acc_id,
@@ -59,6 +92,7 @@ def test_to_pay_response_includes_overdue_before_since(client, auth):
     date < since appears in `overdue` (not silently dropped)."""
     from datetime import date as Date, timedelta
 
+    _set_trm(client, auth)
     resp = client.post(
         "/api/accounts",
         headers=auth,
@@ -89,6 +123,7 @@ def test_to_pay_response_includes_overdue_before_since(client, auth):
 
 def test_to_pay_response_has_overdue_and_upcoming_keys(client, auth):
     """Wire format: the response has both `overdue` and `upcoming` keys."""
+    _set_trm(client, auth)
     body = client.get(
         "/api/planned/to-pay?since=2026-01-01&until=2026-12-31",
         headers=auth,

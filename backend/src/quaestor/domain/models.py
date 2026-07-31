@@ -42,9 +42,11 @@ class OccurrenceStatus(str, Enum):
 
 
 class TxStatus(str, Enum):
+    """`skipped` is a terminal cancel: it affects neither balances nor to-pay."""
+
     planned = "planned"
     posted = "posted"
-    skipped = "skipped"  # terminal cancel; affects neither balance nor to_pay
+    skipped = "skipped"
 
 
 class Source(str, Enum):
@@ -54,11 +56,13 @@ class Source(str, Enum):
 
 
 class Account(SQLModel, table=True):
+    """`balance` is integer cents in the account's own currency."""
+
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     name: str
     type: AccountType
     currency: str
-    balance: Annotated[int, Field(default=0, sa_type=BigInteger)] = 0  # centavos, in the account's currency
+    balance: Annotated[int, Field(default=0, sa_type=BigInteger)] = 0
     archived: bool = False
 
 
@@ -81,6 +85,9 @@ class Category(SQLModel, table=True):
 
 
 class Transaction(SQLModel, table=True):
+    """`amount` is positive integer cents in the account's currency; no rate
+    or converted amount is stored — COP figures are read-time (ADR-0031)."""
+
     __table_args__ = (
         Index("ix_transaction_type_status_date", "type", "status", "date"),
     )
@@ -91,10 +98,8 @@ class Transaction(SQLModel, table=True):
     notes: Optional[str] = None
     type: TxType
     status: TxStatus = TxStatus.posted
-    amount: Annotated[int, Field(sa_type=BigInteger)]  # centavos, original currency, always positive
+    amount: Annotated[int, Field(sa_type=BigInteger)]
     currency: str
-    fx_rate: Annotated[Decimal, Field(sa_column=Column(Numeric(18, 6)))]
-    to_base: Annotated[int, Field(sa_type=BigInteger)]  # centavos COP, frozen
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
     recurring_id: Annotated[Optional[int], Field(default=None, foreign_key="recurring_item.id")] = None
@@ -115,27 +120,26 @@ class TransactionTag(SQLModel, table=True):
     tag_id: Annotated[int, Field(foreign_key="tag.id", primary_key=True)]
 
 
-class FxRate(SQLModel, table=True):
-    __tablename__ = "fx_rate"
-    id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
-    date: Annotated[date, Field(index=True, unique=True)]
-    usd_cop: Annotated[Decimal, Field(sa_column=Column(Numeric(18, 6)))]
-
-
 class Settings(SQLModel, table=True):
+    """Single-row app settings; `usd_cop` is the scalar TRM (ADR-0031), None until first set."""
+
     id: Annotated[Optional[int], Field(default=1, primary_key=True)] = 1
     base_currency: str = "COP"
     default_source_account_id: Annotated[Optional[int], Field(default=None, foreign_key="account.id")] = None
+    usd_cop: Annotated[Optional[Decimal], Field(default=None, sa_column=Column(Numeric(18, 6)))] = None
 
 
 class RecurringItem(SQLModel, table=True):
+    """`type` is expense or income (service-validated; never transfer);
+    `amount` is the default occurrence amount in positive cents of `currency`."""
+
     __tablename__ = "recurring_item"
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     name: str
     payee: str = ""
-    type: TxType  # expense or income (validated in the service; never transfer)
+    type: TxType
     mode: RecurringMode
-    amount: int  # centavos, original currency, positive (the default amount)
+    amount: int
     currency: str
     category_id: Annotated[Optional[int], Field(default=None, foreign_key="category.id")] = None
     account_id: Annotated[int, Field(foreign_key="account.id")]
@@ -166,31 +170,42 @@ class GoalStatus(str, Enum):
 
 
 class ContributionSource(str, Enum):
-    confirmed = "confirmed"  # proposed by rollover, confirmed in To-pay
-    manual = "manual"  # standalone contribution
+    """`confirmed`: proposed by rollover, confirmed in To-pay.
+    `manual`: standalone contribution."""
+
+    confirmed = "confirmed"
+    manual = "manual"
 
 
 class Budget(SQLModel, table=True):
+    """`year_month` is "YYYY-MM"; `amount_assigned` is COP cents, >= 0."""
+
     __table_args__ = (
         UniqueConstraint("category_id", "year_month", name="uq_budget_category_month"),
     )
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     category_id: Annotated[int, Field(foreign_key="category.id")]
-    year_month: str  # "YYYY-MM"
-    amount_assigned: int = 0  # COP cents, >= 0
+    year_month: str
+    amount_assigned: int = 0
 
 
 class Goal(SQLModel, table=True):
+    """Amounts are COP cents. A defined goal has both `target_amount` and
+    `deadline`; an open-ended goal has neither. `monthly_amount` is > 0."""
+
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     name: str
-    target_amount: Optional[int] = None  # COP cents; None => open-ended
-    deadline: Optional[date] = None  # None => open-ended
-    monthly_amount: int  # COP cents, > 0, fixed
+    target_amount: Optional[int] = None
+    deadline: Optional[date] = None
+    monthly_amount: int
     savings_account_id: Annotated[int, Field(foreign_key="account.id")]
     status: GoalStatus = GoalStatus.active
 
 
 class GoalContribution(SQLModel, table=True):
+    """`amount` is the physical cents of the contribution's transfer leg, in
+    the savings account's currency — no COP snapshot is stored (ADR-0031)."""
+
     __tablename__ = "goal_contribution"
     __table_args__ = (
         Index("ix_goal_contribution_goal_date", "goal_id", "date"),
@@ -198,6 +213,6 @@ class GoalContribution(SQLModel, table=True):
     id: Annotated[Optional[int], Field(default=None, primary_key=True)] = None
     goal_id: Annotated[int, Field(foreign_key="goal.id")]
     date: date
-    amount: int  # COP cents
+    amount: int
     source: ContributionSource
     transaction_id: Annotated[Optional[int], Field(default=None, foreign_key="transaction.id")] = None

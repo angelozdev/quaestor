@@ -284,7 +284,7 @@ def register_core_tools(mcp) -> None:
         with Session(db.engine) as session:
             return core.transfer(session, transfer)
 
-    @mcp.tool(name="set_fx_rate", description="Set the USD→COP exchange rate for a date.")
+    @mcp.tool(name="set_fx_rate", description="Set the current USD→COP exchange rate (TRM).")
     def set_fx_rate(rate: SetFxRateInput) -> str:
         with Session(db.engine) as session:
             return core.set_fx_rate(session, rate)
@@ -297,8 +297,8 @@ def register_core_tools(mcp) -> None:
         with Session(db.engine) as session:
             return core.list_transactions(session, filters)
 
-    @mcp.tool(name="get_fx_rate", description="Get the current USD→COP exchange rate for a date.")
-    def get_fx_rate(query: GetFxRateInput) -> str:
+    @mcp.tool(name="get_fx_rate", description="Get the current USD→COP exchange rate (TRM).")
+    def get_fx_rate(query: GetFxRateInput = GetFxRateInput()) -> str:
         with Session(db.engine) as session:
             return core.get_fx_rate(session, query)
 

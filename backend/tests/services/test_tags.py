@@ -15,7 +15,7 @@ def _make_transaction(session):
     session.refresh(acc)
     tx = Transaction(
         date=date(2026, 6, 1), payee="Test", type=TxType.expense,
-        amount=1000, currency="COP", fx_rate=Decimal("1"), to_base=1000,
+        amount=1000, currency="COP",
         account_id=acc.id,
     )
     session.add(tx)

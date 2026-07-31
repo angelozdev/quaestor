@@ -2,12 +2,13 @@ from datetime import date
 
 from quaestor.mcp.tools import core
 from quaestor.mcp.tools.core import (
+    GetFxRateInput,
     RecordExpenseInput,
     RecordIncomeInput,
     SetFxRateInput,
     TransferInput,
 )
-from quaestor.services import accounts
+from quaestor.services import accounts, fx
 
 
 def test_record_expense_confirms_and_moves_balance(session, seeded):
@@ -95,9 +96,15 @@ def test_transfer_same_account_returns_imbalance_text(session, seeded):
 
 
 def test_set_fx_rate_confirms(session):
-    out = core.set_fx_rate(session, SetFxRateInput(date=date(2026, 6, 18), usd_cop=4150))
-    assert "USD→COP rate for Thu, 18 Jun 2026" in out
-    assert "4150" in out
+    out = core.set_fx_rate(session, SetFxRateInput(usd_cop=4150))
+    assert out == "✅ USD→COP rate (TRM) set: 4150"
+
+
+def test_set_fx_rate_overwrites_previous_trm(session):
+    core.set_fx_rate(session, SetFxRateInput(usd_cop=4150))
+    core.set_fx_rate(session, SetFxRateInput(usd_cop=4000))
+    out = core.get_fx_rate(session, GetFxRateInput())
+    assert out == "Current USD→COP rate (TRM): 4000"
 
 
 def test_record_expense_unknown_category_returns_guidance(session, seeded):
@@ -108,7 +115,7 @@ def test_record_expense_unknown_category_returns_guidance(session, seeded):
     assert "Category 'DoesNotExist' not found" in out
 
 
-def test_usd_expense_without_rate_returns_missing_rate_text(session):
+def test_usd_expense_without_trm_records_and_omits_equivalent_line(session):
     accounts.create_account(session, "Amex", "credit", "USD", balance=0)
     out = core.record_expense(
         session,
@@ -117,5 +124,50 @@ def test_usd_expense_without_rate_returns_missing_rate_text(session):
             date=date(2026, 6, 18),
         ),
     )
-    assert "USD→COP" in out
-    assert "set_fx_rate" in out
+    assert "Expense recorded" in out
+    assert "Spotify" in out
+    assert "Equivalent" not in out
+
+
+def test_usd_expense_with_trm_shows_cop_equivalent(session):
+    accounts.create_account(session, "Amex", "credit", "USD", balance=0)
+    fx.set_trm(session, "4000")
+    out = core.record_expense(
+        session,
+        RecordExpenseInput(
+            payee="Spotify", amount=1200, account="Amex", currency="USD",
+            date=date(2026, 6, 18),
+        ),
+    )
+    assert "Expense recorded" in out
+    assert "Equivalent: 48000.00 COP" in out
+
+
+def test_cross_currency_transfer_moves_sent_and_received(session, seeded):
+    accounts.create_account(session, "Amex", "credit", "USD", balance=0)
+    out = core.transfer(
+        session,
+        TransferInput(
+            from_account="Bancolombia",
+            to_account="Amex",
+            amount=4_000_000,
+            amount_received=100_000,
+        ),
+    )
+    assert "Transfer" in out
+    assert "(1000.00 USD received)" in out
+    assert accounts.get_account(session, seeded["account"].id).balance == 6_000_000
+    amex = next(a for a in accounts.list_accounts(session) if a.name == "Amex")
+    assert amex.balance == 100_000
+
+
+def test_cross_currency_transfer_without_amount_received_returns_text(session, seeded):
+    accounts.create_account(session, "Amex", "credit", "USD", balance=0)
+    out = core.transfer(
+        session,
+        TransferInput(
+            from_account="Bancolombia", to_account="Amex", amount=4_000_000
+        ),
+    )
+    assert "Invalid input" in out
+    assert "amount_received" in out
