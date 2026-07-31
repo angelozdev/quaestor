@@ -5,7 +5,7 @@ import calendar
 from datetime import date, timedelta
 
 from .dtos import BudgetStatus, GoalProgress
-from .models import IntervalUnit, TxType
+from .models import IntervalUnit, TransferDirection, TxType
 
 
 def delta_balance(tx_type: TxType, amount: int) -> int:
@@ -22,6 +22,19 @@ def delta_balance(tx_type: TxType, amount: int) -> int:
 def transfer_deltas(amount: int) -> tuple[int, int]:
     """(delta_from, delta_to) for an internal transfer."""
     return (-amount, amount)
+
+
+def leg_delta_balance(direction: TransferDirection | None, amount: int) -> int:
+    """Centavos this transfer leg added to its account (amount always positive).
+
+    Raises:
+        ValueError: the leg carries no stored direction (ADR-0032).
+    """
+    if direction == TransferDirection.out:
+        return -amount
+    if direction == TransferDirection.in_:
+        return amount
+    raise ValueError("leg_delta_balance requires a stored transfer direction")
 
 
 def _last_day_of_month(year: int, month: int) -> int:

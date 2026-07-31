@@ -500,7 +500,7 @@ def register_transactions_writes_tools(mcp) -> None:
         with Session(db.engine) as session:
             return tx_tools.get_transaction(session, inp)
 
-    @mcp.tool(name="update_transaction", description="Edit a transaction's payee/notes/category/date.")
+    @mcp.tool(name="update_transaction", description="Edit a transaction's payee/notes/category/date; add or remove tags.")
     def update_transaction(inp: UpdateTransactionInput) -> str:
         with Session(db.engine) as session:
             return tx_tools.update_transaction(session, inp)

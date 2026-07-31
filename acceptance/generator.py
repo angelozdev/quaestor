@@ -89,7 +89,7 @@ def _emit_test_module(feature_dir: Path, ir: dict) -> str:
             steps = _resolve_steps(scenario, None)
             out += [
                 f"def {fn_name}(world):",
-                f"    \"\"\"Scenario: {scenario['name']}\"\"\"",
+                f"    {('Scenario: ' + scenario['name'])!r}",
                 f"    run_scenario(world, SPEC, {scenario['name']!r}, [",
                 _steps_literal(steps, "        "),
                 "    ])",
@@ -107,7 +107,7 @@ def _emit_test_module(feature_dir: Path, ir: dict) -> str:
             out += [
                 "])",
                 f"def {fn_name}(world, steps):",
-                f"    \"\"\"Scenario Outline: {scenario['name']}\"\"\"",
+                f"    {('Scenario Outline: ' + scenario['name'])!r}",
                 f"    run_scenario(world, SPEC, {scenario['name']!r}, steps)",
                 "",
             ]

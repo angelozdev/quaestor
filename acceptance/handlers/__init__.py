@@ -85,3 +85,4 @@ def run_scenario(
 
 # Import feature handler modules so their @step registrations run.
 from . import fx_read_time  # noqa: E402,F401
+from . import transactions_crud  # noqa: E402,F401

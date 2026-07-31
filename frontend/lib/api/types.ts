@@ -1,5 +1,6 @@
 /** Types mirror the /api JSON contract (cents are integers). */
 export type TxType = "income" | "expense" | "transfer"
+export type TransferDirection = "out" | "in"
 export type TxStatus = "planned" | "posted" | "skipped"
 export type AccountType = "debit" | "credit" | "cash" | "savings"
 export type IntervalUnit = "day" | "week" | "month" | "year"
@@ -20,8 +21,10 @@ export interface Transaction {
   account_id: number
   category_id: number | null
   transfer_group_id: string | null
+  transfer_direction: TransferDirection | null
   source: string
   created_at: string
+  tags: string[]
 }
 
 export interface Account {
@@ -274,6 +277,7 @@ export interface TransactionFilters {
   tag?: string
   type?: TxType
   status?: TxStatus
+  transfer_group_id?: string
 }
 export interface TransactionCreate {
   type: "expense" | "income"
@@ -284,6 +288,7 @@ export interface TransactionCreate {
   payee?: string
   category_id?: number | null
   notes?: string | null
+  tags?: string[]
 }
 export interface TransferCreate {
   from_account_id: number
@@ -299,6 +304,7 @@ export interface TransactionUpdate {
   notes?: string | null
   category_id?: number | null
   date?: string
+  tags?: string[]
 }
 export interface PlanPaymentCreate {
   payee: string

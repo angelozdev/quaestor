@@ -97,6 +97,17 @@ def test_goal_contribution_is_not_expense_or_income(session):
     assert len(transfers) == 2
 
 
+def test_goal_contribution_stores_both_leg_directions(session):
+    from quaestor.domain.models import TransferDirection
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.goal_contribution(session, g.id, 150_000, date(2026, 6, 15))
+    legs = transactions.list_transactions(session, type=TxType.transfer, status="posted")
+    by_account = {leg.account_id: leg.transfer_direction for leg in legs}
+    assert by_account[src.id] == TransferDirection.out
+    assert by_account[sav.id] == TransferDirection.in_
+
+
 def test_goal_contribution_without_default_source_is_atomic(session):
     sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)

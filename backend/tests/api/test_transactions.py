@@ -174,6 +174,8 @@ def test_transfer_creates_atomic_pair(client, auth, two_accounts):
     assert body["to_leg"]["account_id"] == bank["id"]
     assert body["from_leg"]["amount"] == 2000 and body["to_leg"]["amount"] == 2000
     assert body["from_leg"]["transfer_group_id"] == body["to_leg"]["transfer_group_id"]
+    assert body["from_leg"]["transfer_direction"] == "out"
+    assert body["to_leg"]["transfer_direction"] == "in"
     assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == -2000
     assert client.get(f"/api/accounts/{bank['id']}", headers=auth).json()["balance"] == 2000
 
@@ -335,8 +337,11 @@ def test_delete_expense_reverses_balance_via_api(client, auth, two_accounts):
     assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0
 
 
-def test_delete_transfer_leg_via_api_is_422(client, auth, two_accounts):
+def test_delete_transfer_leg_via_api_deletes_pair_and_restores_balances(
+    client, auth, two_accounts
+):
     cash, bank = two_accounts
+    _set_trm(client, auth)
     transfer = client.post(
         "/api/transactions/transfer",
         headers=auth,
@@ -344,7 +349,108 @@ def test_delete_transfer_leg_via_api_is_422(client, auth, two_accounts):
               "amount": 500, "currency": "COP", "date": "2026-06-17"},
     ).json()
     resp = client.delete(f"/api/transactions/{transfer['from_leg']['id']}", headers=auth)
-    assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
+    assert resp.status_code == 204
+    assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0
+    assert client.get(f"/api/accounts/{bank['id']}", headers=auth).json()["balance"] == 0
+    remaining = client.get("/api/transactions", headers=auth).json()
+    assert remaining == []
+
+
+def test_create_transaction_with_tags_round_trips(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
+              "tags": ["viaje", "comida"]},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["tags"] == ["comida", "viaje"]
+
+
+def test_create_transaction_without_tags_defaults_to_empty(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store"},
+    )
+    assert resp.status_code == 201
+    assert resp.json()["tags"] == []
+
+
+def test_patch_transaction_tags_is_a_replace_set(client, auth, two_accounts):
+    cash, _ = two_accounts
+    tx = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
+              "tags": ["viaje"]},
+    ).json()
+    patched = client.patch(
+        f"/api/transactions/{tx['id']}", headers=auth,
+        json={"tags": ["comida", "reembolso"]},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["tags"] == ["comida", "reembolso"]
+
+
+def test_patch_without_tags_leaves_them_untouched(client, auth, two_accounts):
+    cash, _ = two_accounts
+    tx = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
+              "tags": ["viaje"]},
+    ).json()
+    patched = client.patch(
+        f"/api/transactions/{tx['id']}", headers=auth, json={"payee": "Super"}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["tags"] == ["viaje"]
+
+
+def test_patch_tags_to_empty_removes_them_all(client, auth, two_accounts):
+    cash, _ = two_accounts
+    tx = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
+              "tags": ["viaje"]},
+    ).json()
+    patched = client.patch(
+        f"/api/transactions/{tx['id']}", headers=auth, json={"tags": []}
+    )
+    assert patched.status_code == 200
+    assert patched.json()["tags"] == []
+
+
+def test_list_and_get_include_tags(client, auth, two_accounts):
+    cash, _ = two_accounts
+    _set_trm(client, auth)
+    tagged = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 1000,
+              "currency": "COP", "date": "2026-06-17", "payee": "Store",
+              "tags": ["viaje"]},
+    ).json()
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={"type": "expense", "account_id": cash["id"], "amount": 2000,
+              "currency": "COP", "date": "2026-06-18", "payee": "Other"},
+    )
+    listed = client.get("/api/transactions", headers=auth).json()
+    by_payee = {row["payee"]: row["tags"] for row in listed}
+    assert by_payee == {"Store": ["viaje"], "Other": []}
+    got = client.get(f"/api/transactions/{tagged['id']}", headers=auth).json()
+    assert got["tags"] == ["viaje"]
 
 
 def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):

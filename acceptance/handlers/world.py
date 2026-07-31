@@ -13,6 +13,8 @@ from sqlmodel import Session
 
 from quaestor.db import init_db, make_engine
 
+MISSING_ID = 999_999_321
+
 
 class World:
     """Scenario-scoped state: one engine, one session, and step scratchpad."""
@@ -46,6 +48,14 @@ class World:
         self.app_cop_cents: int | None = None   # REST surface (AC-13)
         self.mcp_cop_major = None                # Decimal from MCP text (AC-13)
 
+        self.expense_ids: list[int] = []
+        self.tx_view = None
+        self.filtered_rows = None
+        self.viewed_leg = None
+        self.app_payees: list[str] | None = None
+        self.assistant_payees: list[str] | None = None
+        self.denied_status: int | None = None
+
         # Migration scenario (AC-12)
         self.alembic_cfg = None
         self.migration_expected: list[tuple[str, int, str]] = []
@@ -54,6 +64,10 @@ class World:
         # can either consume them ("is rejected") or fail loudly with them.
         self.errors: list[Exception] = []
         self.last_error: Exception | None = None
+
+    def account_id_or_missing(self, name: str) -> int:
+        """Id of a named account, or a nonexistent id when it was never created."""
+        return self.accounts.get(name, MISSING_ID)
 
     # ------------------------------------------------------------- errors
 

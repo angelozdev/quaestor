@@ -1,9 +1,10 @@
 """MCP transaction write tools (ADR-0009): get/update/delete by id.
 
 Reads (list_transactions, list_transactions-filtered) live in `core.py`.
-Writes to fields beyond payee/notes/category_id/date are not allowed — those
-are immutable in the service layer (P0 invariant: balances only move via
-record_expense / record_income / transfer).
+Updates cover payee/notes/category_id/date plus add_tags/remove_tags; other
+fields are immutable in the service layer (P0 invariant: balances only move
+via record_expense / record_income / transfer). Deleting a transfer leg
+deletes its whole pair (ADR-0032).
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from datetime import date as Date
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...services import fx, transactions
+from ...services import fx, tags, transactions
 from .. import format
 from .core import _as_text, _resolve_category
 
@@ -28,6 +29,12 @@ class UpdateTransactionInput(BaseModel):
     clear_notes: bool = Field(default=False, description="Set notes to None")
     category: str | None = Field(default=None, description="New category name (empty string clears)")
     date: Date | None = Field(default=None, description="New date")
+    add_tags: list[str] = Field(
+        default_factory=list, description="Tag names to add (auto-created by name)"
+    )
+    remove_tags: list[str] = Field(
+        default_factory=list, description="Tag names to remove (absent tags are ignored)"
+    )
 
 
 class DeleteTransactionInput(BaseModel):
@@ -56,6 +63,10 @@ def update_transaction(session: Session, inp: UpdateTransactionInput) -> str:
         category_id=category_id,
         date=inp.date,
     )
+    if inp.add_tags:
+        tags.tag_transaction(session, inp.tx_id, inp.add_tags)
+    if inp.remove_tags:
+        tags.untag_transaction(session, inp.tx_id, inp.remove_tags)
     return format.transaction_card(updated, fx.get_trm(session))
 
 

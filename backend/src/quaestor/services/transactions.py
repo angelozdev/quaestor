@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import date as Date
 
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from ..domain.errors import NotFound, TransferImbalance, ValidationError
@@ -18,12 +19,13 @@ from ..domain.models import (
     Tag,
     Transaction,
     TransactionTag,
+    TransferDirection,
     TxStatus,
     TxType,
     Source,
 )
 from ..domain.money import is_supported
-from ..domain.rules import delta_balance
+from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortField, SortSpec, SortableColumns
 
 
@@ -258,6 +260,7 @@ def transfer(
         currency=src.currency,
         account_id=from_account_id,
         transfer_group_id=group,
+        transfer_direction=TransferDirection.out,
         source=Source(source),
     )
     leg_to = Transaction(
@@ -270,6 +273,7 @@ def transfer(
         currency=dst.currency,
         account_id=to_account_id,
         transfer_group_id=group,
+        transfer_direction=TransferDirection.in_,
         source=Source(source),
     )
     try:
@@ -298,6 +302,7 @@ def list_transactions(
     tag: str | None = None,
     type=None,
     status=None,
+    transfer_group_id: str | None = None,
     date_from: Date | None = None,
     date_to: Date | None = None,
     *,
@@ -320,6 +325,7 @@ def list_transactions(
         tag: Filter by tag name (exact match).
         type: Filter by TxType (or a value coercible to TxType).
         status: Filter by TxStatus (or a value coercible to TxStatus).
+        transfer_group_id: Filter to the legs of one transfer.
         date_from: Include transactions on or after this date.
         date_to: Include transactions on or before this date.
         sort: Primary sort field. One of `SortField`.
@@ -338,6 +344,8 @@ def list_transactions(
         stmt = stmt.where(Transaction.type == TxType(type))
     if status is not None:
         stmt = stmt.where(Transaction.status == TxStatus(status))
+    if transfer_group_id is not None:
+        stmt = stmt.where(Transaction.transfer_group_id == transfer_group_id)
     if date_from is not None:
         stmt = stmt.where(Transaction.date >= date_from)
     if date_to is not None:
@@ -394,29 +402,69 @@ def update_transaction(
     return tx
 
 
+def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:
+    session.exec(
+        delete(TransactionTag).where(TransactionTag.transaction_id.in_(tx_ids))
+    )
+
+
+def _reverse_leg_balance(session: Session, leg: Transaction) -> None:
+    try:
+        delta = leg_delta_balance(leg.transfer_direction, leg.amount)
+    except ValueError as exc:
+        raise ValidationError(
+            f"transfer leg {leg.id} has no stored direction; cannot reverse safely"
+        ) from exc
+    acc = session.get(Account, leg.account_id)
+    if acc is not None:
+        acc.balance -= delta
+        session.add(acc)
+
+
+def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
+    if leg.transfer_group_id is None:
+        raise ValidationError(
+            f"transfer {leg.id} has no transfer group; cannot delete its pair"
+        )
+    legs = session.exec(
+        select(Transaction).where(
+            Transaction.transfer_group_id == leg.transfer_group_id
+        )
+    ).all()
+    try:
+        for member in legs:
+            _reverse_leg_balance(session, member)
+        _delete_tag_links(session, [member.id for member in legs])
+        for member in legs:
+            session.delete(member)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
 def delete_transaction(session: Session, tx_id: int) -> None:
     """Delete a transaction, reversing its posted balance effect.
 
-    Transfers are not deletable in P1 (no stored leg direction to reverse safely).
+    A transfer leg deletes its whole pair: both legs' balances are reversed
+    per their stored direction and both rows plus their tag links are removed
+    atomically (ADR-0032) — a half-deleted transfer can never exist.
 
     Raises:
         NotFound: If the transaction does not exist.
-        ValidationError: If the transaction is a transfer leg.
+        ValidationError: If a transfer leg carries no stored direction.
     """
     tx = get_transaction(session, tx_id)
     if tx.type == TxType.transfer:
-        raise ValidationError("deleting transfers is not supported in P1")
+        _delete_transfer_pair(session, tx)
+        return
     try:
         if tx.status == TxStatus.posted:
             acc = session.get(Account, tx.account_id)
             if acc is not None:
                 acc.balance -= delta_balance(tx.type, tx.amount)
                 session.add(acc)
-        links = session.exec(
-            select(TransactionTag).where(TransactionTag.transaction_id == tx_id)
-        ).all()
-        for link in links:
-            session.delete(link)
+        _delete_tag_links(session, [tx_id])
         session.delete(tx)
         session.commit()
     except Exception:

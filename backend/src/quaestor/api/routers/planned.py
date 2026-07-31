@@ -18,8 +18,8 @@ def to_pay(since: Date, until: Date, session: Session = Depends(get_session)):
     trm = fx.get_trm(session)
     queue = planned.to_pay(session, since, until)
     return ToPayOut(
-        overdue=[TransactionOut.from_tx(tx, trm) for tx in queue.overdue],
-        upcoming=[TransactionOut.from_tx(tx, trm) for tx in queue.upcoming],
+        overdue=TransactionOut.from_txs(session, queue.overdue, trm),
+        upcoming=TransactionOut.from_txs(session, queue.upcoming, trm),
         total_base=queue.total_cop_cents(trm),
     )
 
@@ -36,7 +36,7 @@ def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
         category_id=body.category_id,
         notes=body.notes,
     )
-    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
+    return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/confirm", response_model=TransactionOut)
@@ -44,11 +44,11 @@ def confirm_payment(
     tx_id: int, body: ConfirmPaymentIn, session: Session = Depends(get_session)
 ):
     tx = planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date)
-    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
+    return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/skip", response_model=TransactionOut)
 def skip_payment(tx_id: int, session: Session = Depends(get_session)):
-    return TransactionOut.from_tx(
-        planned.skip_payment(session, tx_id), fx.get_trm_or_none(session)
+    return TransactionOut.from_one(
+        session, planned.skip_payment(session, tx_id), fx.get_trm_or_none(session)
     )

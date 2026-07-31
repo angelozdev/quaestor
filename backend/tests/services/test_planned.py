@@ -348,6 +348,34 @@ def test_confirm_planned_transfer_materializes_posted_pair(session):
     assert posted[0].transfer_group_id == posted[1].transfer_group_id
 
 
+def test_confirm_planned_transfer_stores_both_leg_directions(session):
+    from quaestor.domain.models import TransferDirection
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+    confirmed = planned.confirm_payment(session, tx.id)
+    legs = transactions.list_transactions(session, status="posted", type=TxType.transfer)
+    by_account = {leg.account_id: leg.transfer_direction for leg in legs}
+    assert by_account[src.id] == TransferDirection.out
+    assert by_account[dst.id] == TransferDirection.in_
+    assert confirmed.transfer_direction == TransferDirection.in_
+
+
+def test_confirmed_planned_transfer_deletes_as_a_pair(session):
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+    confirmed = planned.confirm_payment(session, tx.id)
+    transactions.delete_transaction(session, confirmed.id)
+    assert transactions.list_transactions(session, type=TxType.transfer) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, dst.id).balance == 0
+
+
 def test_confirm_planned_transfer_without_default_source_raises(session):
     dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     tx = _planned_transfer(session, dst.id)

@@ -14,7 +14,7 @@ from sqlmodel import Session
 from ...domain.errors import ValidationError
 from ...domain.models import TxType
 from ...domain.sort import Order, SortField
-from ...services import fx, transactions
+from ...services import fx, tags as tags_service, transactions
 from ..deps import get_session
 from ..schemas import (
     TransactionCreate,
@@ -36,6 +36,7 @@ def list_transactions(
     tag: str | None = None,
     type: TxType | None = None,
     status: str | None = None,
+    transfer_group_id: str | None = None,
     sort: SortField = "date",
     order: Order = "desc",
     session: Session = Depends(get_session),
@@ -48,18 +49,20 @@ def list_transactions(
         tag=tag,
         type=type,
         status=status,
+        transfer_group_id=transfer_group_id,
         date_from=date_from,
         date_to=date_to,
         sort=sort,
         order=order,
     )
-    return [TransactionOut.from_tx(tx, trm) for tx in txs]
+    return TransactionOut.from_txs(session, txs, trm)
 
 
 @router.get("/{tx_id}", response_model=TransactionOut)
 def get_transaction(tx_id: int, session: Session = Depends(get_session)):
     trm = fx.get_trm(session)
-    return TransactionOut.from_tx(transactions.get_transaction(session, tx_id), trm)
+    tx = transactions.get_transaction(session, tx_id)
+    return TransactionOut.from_one(session, tx, trm)
 
 
 @router.post("", response_model=TransactionOut, status_code=201)
@@ -78,7 +81,12 @@ def create_transaction(body: TransactionCreate, session: Session = Depends(get_s
         notes=body.notes,
         source=body.source,
     )
-    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
+    names = (
+        tags_service.set_transaction_tags(session, tx.id, body.tags)
+        if body.tags is not None
+        else []
+    )
+    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
 
 
 @router.post("/transfer", response_model=TransferOut, status_code=201)
@@ -96,8 +104,8 @@ def create_transfer(body: TransferIn, session: Session = Depends(get_session)):
     )
     trm = fx.get_trm_or_none(session)
     return TransferOut(
-        from_leg=TransactionOut.from_tx(leg_from, trm),
-        to_leg=TransactionOut.from_tx(leg_to, trm),
+        from_leg=TransactionOut.from_tx(leg_from, trm, []),
+        to_leg=TransactionOut.from_tx(leg_to, trm, []),
     )
 
 
@@ -106,8 +114,12 @@ def update_transaction(
     tx_id: int, body: TransactionUpdate, session: Session = Depends(get_session)
 ):
     fields = body.model_dump(exclude_unset=True)
+    tag_names = fields.pop("tags", None)
     tx = transactions.update_transaction(session, tx_id, **fields)
-    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
+    if tag_names is not None:
+        names = tags_service.set_transaction_tags(session, tx_id, tag_names)
+        return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
+    return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 
 @router.delete("/{tx_id}", status_code=204)
