@@ -78,3 +78,24 @@ rollover, so when the annual payment arrives the fund already holds it.
   `budgets-safe-to-spend` and `goals` moved to the bottom of
   `.engineer/consolidation.md` — don't write acceptance tests for formulas
   this feature will replace.
+- **User design decisions captured 2026-07-31** (discover-acs ran on 001 by
+  mistake — the interview surfaced product answers that belong here):
+  1. **Per-envelope rollover rule.** Two envelope kinds: accumulating funds
+     ("tecnología: 100k every month — MUST accumulate") and monthly-limit
+     envelopes ("restaurantes: reset each month"). Per-category rollover
+     toggles are industry standard (Monarch, PocketGuard, Quicken). The
+     current global gap-reset is an implementation artifact — adopt neither
+     semantic globally; make it a per-envelope rule.
+  2. **Month income.** User wants full product ADR-004 semantics: expected
+     income from recurring, corrected to actual as incomes post (each income
+     counted exactly once), and atypical posted income (bonus) joins the
+     pool. Feed this into the normalized-income design.
+  3. **Underfunded envelope.** The headline must tell "la verdad desde el
+     inicio": when a known obligation exceeds its envelope's coverage
+     (assigned + accumulated), the shortfall reduces the headline from day 1,
+     never as a surprise on charge day. Prorated-recurring funding rules
+     cover this naturally.
+  4. **Independent fix (survives the redesign, do not wait for 003):**
+     assigning budget to an archived or exclude_from_budget category must be
+     rejected — today it is accepted, subtracts from the headline, and is
+     invisible in the budgets list (phantom money).

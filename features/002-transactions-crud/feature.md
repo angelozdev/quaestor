@@ -19,16 +19,20 @@ intake: onboarding
 
 ## Outcome
 
-The user records, edits, soft-deletes and filters expenses, incomes and
-transfers; each transaction carries optional category, free-form tags and an
-FX conversion to the base currency, and lists render newest-first with
-URL-driven filters.
+The user records, edits, permanently deletes (balance-reversing) and filters
+expenses, incomes and transfers; each transaction carries optional category
+and free-form tags manageable from every surface, COP figures are computed at
+read time (feature 005), and lists render newest-activity-first with
+URL-driven filters. Mistaken transfers are deletable as an atomic pair.
 
 ## Scope
 
 - CRUD endpoints (`api/routers/transactions.py`) + service layer.
-- Tags M2M, optional category, FX-to-base per transaction.
-- Default listing order `created_at desc` (ADR-0021).
+- Tags M2M (add/remove on create and edit, UI + API + agent — AC-6, target),
+  optional category, read-time COP equivalent (ADR-0031).
+- Transfer pair deletion with direction stored (AC-5, target — schema change,
+  ADR due at plan time).
+- Default listing order `date DESC, id DESC`, planned rows visible (ADR-0021).
 - URL query params as filter source of truth (ADR-0027).
 - Transactions page + create/edit dialogs.
 
@@ -54,4 +58,8 @@ materialization (feature `recurring-engine`).
 ## Notes
 
 Shipped before DAE adoption (onboarding intake 2026-07-28). Core data surface.
-Next step: `/engineer.discover-acs` in reverse-engineer mode.
+ACs discovered 2026-07-31 with four user decisions: full tagging on every
+surface (new), permanent delete confirmed (the old "soft-deletes" outcome
+wording was drift), transfers deletable as a pair (new; schema + migration),
+transfer sides independent but pair always visible. Next step:
+`/engineer.atdd` (Checkpoint 3).
