@@ -73,7 +73,7 @@ def test_transaction_has_goal_id_column(session):
     from decimal import Decimal
     tx = Transaction(
         date=date(2026, 6, 30), type=TxType.transfer, amount=200_000, currency="COP",
-        fx_rate=Decimal("1"), to_base=200_000, account_id=acc.id, goal_id=goal.id,
+        account_id=acc.id, goal_id=goal.id,
     )
     session.add(tx)
     session.commit()

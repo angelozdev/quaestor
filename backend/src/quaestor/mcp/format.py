@@ -5,7 +5,6 @@ This module is named `format` (per the P2 spec) and shadows the builtin
 """
 from __future__ import annotations
 
-from datetime import date as Date
 from decimal import Decimal
 
 from ..domain.dates import display_date
@@ -21,7 +20,6 @@ from ..domain.models import (
     Account,
     Category,
     CategoryGroup,
-    FxRate,
     RecurringItem,
     RecurringOccurrence,
     Settings,
@@ -30,7 +28,7 @@ from ..domain.models import (
 )
 from ..domain.planned import OutstandingQueue
 from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
-from ..domain.money import cents_to_major
+from ..domain.money import cents_to_major, to_cop_cents
 
 
 def money(cents: int, currency: str) -> str:
@@ -42,8 +40,8 @@ def domain_error_text(exc: QuaestorError) -> str:
     """Translate a typed domain error into clear agent text (never a stack trace)."""
     if isinstance(exc, MissingRate):
         return (
-            "I don't have the USD→COP rate for that date. "
-            "Set it with `set_fx_rate` (date, usd_cop) and retry."
+            "No TRM is set. Set the USD→COP rate with `set_fx_rate` "
+            "(usd_cop) and retry."
         )
     if isinstance(exc, TransferImbalance):
         return f"Could not record the transfer: {exc}."
@@ -56,51 +54,57 @@ def domain_error_text(exc: QuaestorError) -> str:
     return f"Error: {exc}."
 
 
-def _confirmation(verb: str, tx: Transaction, account: Account) -> str:
+def _confirmation(
+    verb: str, tx: Transaction, account: Account, cop_equivalent: int | None
+) -> str:
     lines = [
         f"✅ {verb}: **{tx.payee}** — {money(tx.amount, tx.currency)}",
         f"- Account: {account.name} "
         f"(new balance: {money(account.balance, account.currency)})",
     ]
-    if tx.currency != "COP":
-        lines.append(f"- Equivalent: {money(tx.to_base, 'COP')}")
+    if cop_equivalent is not None and tx.currency != "COP":
+        lines.append(f"- Equivalent: {money(cop_equivalent, 'COP')}")
     return "\n".join(lines)
 
 
-def expense_confirmation(tx: Transaction, account: Account) -> str:
-    return _confirmation("Expense recorded", tx, account)
+def expense_confirmation(
+    tx: Transaction, account: Account, cop_equivalent: int | None = None
+) -> str:
+    return _confirmation("Expense recorded", tx, account, cop_equivalent)
 
 
-def income_confirmation(tx: Transaction, account: Account) -> str:
-    return _confirmation("Income recorded", tx, account)
+def income_confirmation(
+    tx: Transaction, account: Account, cop_equivalent: int | None = None
+) -> str:
+    return _confirmation("Income recorded", tx, account, cop_equivalent)
 
 
 def transfer_confirmation(
-    src: Account, dst: Account, amount: int, currency: str
+    src: Account, dst: Account, amount_sent: int, amount_received: int
 ) -> str:
+    sent = money(amount_sent, src.currency)
+    header = f"✅ Transfer: {sent} from **{src.name}** to **{dst.name}**"
+    if src.currency != dst.currency:
+        header += f" ({money(amount_received, dst.currency)} received)"
     return "\n".join(
         [
-            f"✅ Transfer: {money(amount, currency)} "
-            f"from **{src.name}** to **{dst.name}**",
+            header,
             f"- {src.name}: {money(src.balance, src.currency)}",
             f"- {dst.name}: {money(dst.balance, dst.currency)}",
         ]
     )
 
 
-def fx_set(fr: FxRate) -> str:
-    # Strip trailing zeros while preserving significant digits
-    rate_str = str(fr.usd_cop) if fr.usd_cop % 1 else str(fr.usd_cop.to_integral_value())
-    return f"✅ USD→COP rate for {display_date(fr.date)}: {rate_str}"
+def _rate_str(rate: Decimal) -> str:
+    return str(rate) if rate % 1 else str(rate.to_integral_value())
 
 
-def fx_current(rate, on: Date) -> str:
-    if isinstance(rate, str):
-        rate_str = rate
-    else:
-        d = Decimal(str(rate)) if not isinstance(rate, Decimal) else rate
-        rate_str = str(d) if d % 1 else str(d.to_integral_value())
-    return f"Current USD→COP rate on {display_date(on)}: {rate_str}"
+def fx_set(rate: Decimal) -> str:
+    return f"✅ USD→COP rate (TRM) set: {_rate_str(rate)}"
+
+
+def fx_current(rate: Decimal) -> str:
+    return f"Current USD→COP rate (TRM): {_rate_str(rate)}"
 
 
 def accounts_table(accounts: list[Account]) -> str:
@@ -131,7 +135,7 @@ def tags_list(tags: list[Tag]) -> str:
     return "Tags: " + ", ".join(t.name for t in tags)
 
 
-def transactions_table(txs: list[Transaction]) -> str:
+def transactions_table(txs: list[Transaction], trm: Decimal) -> str:
     if not txs:
         return "No transactions for those filters."
     rows = [
@@ -140,10 +144,11 @@ def transactions_table(txs: list[Transaction]) -> str:
     ]
     total = 0
     for t in txs:
-        total += t.to_base
+        cop = to_cop_cents(t.amount, t.currency, trm)
+        total += cop
         rows.append(
             f"| {display_date(t.date)} | {t.type.value} | {t.payee} | "
-            f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
+            f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(cop)} |"
         )
     rows.append("")
     rows.append(f"**Total (COP): {cents_to_major(total)}** · {len(txs)} transaction(s)")
@@ -231,7 +236,7 @@ def goal_contribution_recorded(contribution) -> str:
     return f"Recorded {contribution.amount} contribution to goal {contribution.goal_id}."
 
 
-def to_pay_table(queue: OutstandingQueue) -> str:
+def to_pay_table(queue: OutstandingQueue, trm: Decimal) -> str:
     """Render the outstanding queue as markdown.
 
     Layout: overdue section first (with ⚠️ marker), then upcoming. Empty
@@ -244,31 +249,29 @@ def to_pay_table(queue: OutstandingQueue) -> str:
     sections: list[str] = []
     if queue.overdue:
         sections.append("## ⚠️ Overdue\n")
-        sections.append(_to_pay_rows(queue.overdue))
+        sections.append(_to_pay_rows(queue.overdue, trm))
     if queue.upcoming:
         if sections:
             sections.append("")
         sections.append("## Upcoming\n")
-        sections.append(_to_pay_rows(queue.upcoming))
+        sections.append(_to_pay_rows(queue.upcoming, trm))
     return "\n".join(sections)
 
 
-def _to_pay_rows(items: list[Transaction]) -> str:
+def _to_pay_rows(items: list[Transaction], trm: Decimal) -> str:
     """The shared row format. Stable, machine-parseable, no extra fields."""
     rows = ["| id | Due | Payee | Amount | Currency | COP |", "|---|---|---|---|---|---|"]
     total = 0
     for t in items:
-        total += t.to_base
+        cop = to_cop_cents(t.amount, t.currency, trm)
+        total += cop
         rows.append(
             f"| {t.id} | {display_date(t.date)} | {t.payee} | "
-            f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(t.to_base)} |"
+            f"{cents_to_major(t.amount)} | {t.currency} | {cents_to_major(cop)} |"
         )
     rows.append("")
     rows.append(f"**To pay (COP): {cents_to_major(total)}** · {len(items)} item(s)")
     return "\n".join(rows)
-
-
-# ----- new renderers (ADR-0009: MCP parity gap closure) -----
 
 
 def account_card(account: Account) -> str:
@@ -296,11 +299,12 @@ def tag_card(tag: Tag) -> str:
     return f"Tag '{tag.name}' (id {tag.id})."
 
 
-def transaction_card(tx: Transaction) -> str:
+def transaction_card(tx: Transaction, trm: Decimal) -> str:
+    cop = to_cop_cents(tx.amount, tx.currency, trm)
     return (
         f"Transaction **{tx.payee}** (id={tx.id}, {tx.type.value}, {tx.status.value}, "
         f"{display_date(tx.date)}) — {money(tx.amount, tx.currency)} "
-        f"({money(tx.to_base, 'COP')})"
+        f"({money(cop, 'COP')})"
     )
 
 

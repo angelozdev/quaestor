@@ -10,7 +10,7 @@ class ValidationError(QuaestorError):
 
 
 class MissingRate(QuaestorError):
-    """Missing usd_cop rate for a non-COP transaction without an explicit fx_rate."""
+    """No TRM set: a read needing base-currency figures must fail loud (AC-9)."""
 
 
 class TransferImbalance(QuaestorError):

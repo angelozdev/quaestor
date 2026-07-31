@@ -248,7 +248,7 @@ def test_record_confirmed_contribution_unit(session):
     src, sav = _funded(session)
     g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
-                     amount=200_000, currency="COP", fx_rate=Decimal("1"), to_base=200_000,
+                     amount=200_000, currency="COP",
                      account_id=sav.id, goal_id=g.id)
     session.add(tx)
     session.flush()
@@ -265,7 +265,7 @@ def test_record_confirmed_contribution_noop_without_goal_id(session):
     from sqlmodel import select
     src, sav = _funded(session)
     tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
-                     amount=100_000, currency="COP", fx_rate=Decimal("1"), to_base=100_000,
+                     amount=100_000, currency="COP",
                      account_id=sav.id)
     session.add(tx)
     session.flush()

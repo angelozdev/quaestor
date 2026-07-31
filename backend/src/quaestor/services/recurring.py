@@ -19,9 +19,8 @@ from ..domain.models import (
     TxStatus,
     TxType,
 )
-from ..domain.money import is_supported, to_base_cents
+from ..domain.money import is_supported
 from ..domain.rules import delta_balance, due_dates
-from . import transactions as _tx
 
 _UNSET = object()
 
@@ -196,7 +195,6 @@ def _create_occurrence_tx(
     manual-> planned tx on due_date, no balance, occurrence planned.
     Does NOT commit; the caller commits the whole batch.
     """
-    rate = _tx._resolve_fx(session, item.currency, due_date, None)
     is_auto = item.mode == RecurringMode.auto
     tx = Transaction(
         date=due_date,
@@ -206,8 +204,6 @@ def _create_occurrence_tx(
         status=TxStatus.posted if is_auto else TxStatus.planned,
         amount=item.amount,
         currency=item.currency,
-        fx_rate=rate,
-        to_base=to_base_cents(item.amount, rate),
         account_id=item.account_id,
         category_id=item.category_id,
         recurring_id=item.id,
@@ -218,7 +214,7 @@ def _create_occurrence_tx(
         acc = session.get(Account, item.account_id)
         acc.balance += delta_balance(item.type, item.amount)
         session.add(acc)
-    session.flush()  # assign tx.id for the occurrence link
+    session.flush()
     occ = RecurringOccurrence(
         recurring_id=item.id,
         due_date=due_date,
@@ -235,9 +231,6 @@ def materialize_due(session: Session, until_date: Date) -> list[RecurringOccurre
     Due-driven (ADR-020): runs daily via the scheduler with until_date=today.
     Idempotent by (recurring_id, due_date). Returns the occurrences created now.
     On any error the whole batch rolls back (self-heals on the next run).
-
-    Raises:
-        MissingRate: a non-COP auto/manual item with no FX rate for a due_date.
     """
     created: list[RecurringOccurrence] = []
     try:

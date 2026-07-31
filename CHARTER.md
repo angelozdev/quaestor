@@ -1,6 +1,7 @@
 # Quaestor — Engineering Charter
 
 Signed off by Angelo on 2026-07-28 (DAE onboarding, Checkpoint 0).
+§2 amended 2026-07-29 — ADR-0030 alignment (cleanup C6), signed off by Angelo.
 
 ## 1. Methodology
 
@@ -15,12 +16,15 @@ Signed off by Angelo on 2026-07-28 (DAE onboarding, Checkpoint 0).
 
 ## 2. Architecture
 
-- **Posture: local-only** (ADR-0026). Docker Compose with two services —
-  `api` (FastAPI + uvicorn; `python -m quaestor` waits for the DB, runs
-  `alembic upgrade head`, serves; an asyncio scheduler task in the FastAPI
-  lifespan runs the daily job) and `frontend` (Next.js dev server). The only
-  remote concern is the database (remote Postgres on Render; local SQLite
-  sandbox holds real user data at `.dev-data/quaestor.db`).
+- **Posture: local-only** (ADR-0026; DB-location clause superseded by
+  ADR-0030). Docker Compose — `api` (FastAPI + uvicorn; `python -m quaestor`
+  waits for the DB, runs `alembic upgrade head`, serves; an asyncio scheduler
+  task in the FastAPI lifespan runs the daily job), `frontend` (Next.js dev
+  server) and `db` (Postgres 18, compose profile `pg`, named volume
+  `quaestor_pg_data`, only under `just dev-prod`). Nothing remote: production
+  data lives in the local Postgres container; backups via `just backup` →
+  dated pg_dump to iCloud Drive. Render Postgres is a frozen standby (never
+  write); `.dev-data/quaestor.db` SQLite is a dev sandbox with no real data.
 - **Backend layering:** `api/` (routers, auth, CSRF) → `services/` (use-cases)
   → `domain/` (SQLModel models, value objects, pure logic) → `db.py`.
   Jobs in `jobs/`, migrations in `migrations/` (Alembic).

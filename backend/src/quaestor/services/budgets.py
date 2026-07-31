@@ -8,14 +8,14 @@ from sqlmodel import Session, select
 from ..domain.dtos import BudgetLine, BudgetStatus, CommittedItem, SafeToSpend
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Budget, Category, TxType
-from ..domain.money import to_base_cents
+from ..domain.money import to_cop_cents
 from ..domain.rules import (
     due_dates,
     envelope_status_calc,
     prev_year_month,
     safe_to_spend_calc,
 )
-from . import transactions as _tx
+from . import fx as _fx
 from .month_aggregate import MonthAggregate, load_month_aggregate
 
 _YEAR_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
@@ -57,23 +57,20 @@ def set_budget(
     return budget
 
 
-def _income_forecast(session: Session, agg: MonthAggregate) -> int:
-    # Known linearity (see spec): one _resolve_fx per non-COP due date.
-    # COP items resolve to Decimal(1) without touching the DB.
+def _income_forecast(agg: MonthAggregate) -> int:
     total = 0
     for item in agg.active_recurring:
         if item.type != TxType.income:
             continue
-        for d in due_dates(
+        occurrences = due_dates(
             item.start_date, item.end_date, item.interval_unit,
             item.interval_count, agg.start, agg.end,
-        ):
-            rate = _tx._resolve_fx(session, item.currency, d, None)
-            total += to_base_cents(item.amount, rate)
+        )
+        total += len(occurrences) * to_cop_cents(item.amount, item.currency, agg.trm)
     return total
 
 
-def _committed(session: Session, agg: MonthAggregate) -> tuple[int, list]:
+def _committed(agg: MonthAggregate) -> tuple[int, list]:
     total = 0
     breakdown: list[CommittedItem] = []
     for item in agg.active_recurring:
@@ -81,19 +78,19 @@ def _committed(session: Session, agg: MonthAggregate) -> tuple[int, list]:
             continue
         if item.category_id is not None and item.category_id in agg.budgeted_category_ids:
             continue
+        amount = to_cop_cents(item.amount, item.currency, agg.trm)
         for d in due_dates(
             item.start_date, item.end_date, item.interval_unit,
             item.interval_count, agg.start, agg.end,
         ):
-            rate = _tx._resolve_fx(session, item.currency, d, None)
-            amount = to_base_cents(item.amount, rate)
             total += amount
             breakdown.append(CommittedItem(kind="recurring", name=item.name, date=d, amount=amount))
     for tx in agg.month_planned_expense:
         if tx.category_id is not None and tx.category_id in agg.budgeted_category_ids:
             continue
-        total += tx.to_base
-        breakdown.append(CommittedItem(kind="planned", name=tx.payee, date=tx.date, amount=tx.to_base))
+        amount = agg.to_cop_cents(tx)
+        total += amount
+        breakdown.append(CommittedItem(kind="planned", name=tx.payee, date=tx.date, amount=amount))
     return total, breakdown
 
 
@@ -103,14 +100,14 @@ def _unbudgeted_spending(agg: MonthAggregate) -> int:
         if tx.recurring_id is not None:
             continue
         if tx.category_id is None:
-            total += tx.to_base
+            total += agg.to_cop_cents(tx)
             continue
         cat = agg.category(tx.category_id)
         if cat is not None and (cat.exclude_from_budget or cat.exclude_from_totals):
             continue
         if tx.category_id in agg.budgeted_category_ids:
             continue
-        total += tx.to_base
+        total += agg.to_cop_cents(tx)
     return total
 
 
@@ -129,9 +126,9 @@ def _sum_overspend(agg: MonthAggregate) -> int:
     return total
 
 
-def _safe_to_spend(session: Session, agg: MonthAggregate) -> SafeToSpend:
-    income = _income_forecast(session, agg)
-    committed, breakdown = _committed(session, agg)
+def _safe_to_spend(agg: MonthAggregate) -> SafeToSpend:
+    income = _income_forecast(agg)
+    committed, breakdown = _committed(agg)
     assigned = _sum_assigned(agg)
     unbudgeted = _unbudgeted_spending(agg)
     overspend = _sum_overspend(agg)
@@ -143,9 +140,14 @@ def _safe_to_spend(session: Session, agg: MonthAggregate) -> SafeToSpend:
 
 
 def safe_to_spend(session: Session, year_month: str) -> SafeToSpend:
-    """Global safe-to-spend headline + breakdown (ADR-003/005/014/016)."""
+    """Global safe-to-spend headline + breakdown (ADR-003/005/014/016).
+
+    Raises:
+        MissingRate: no TRM set (AC-9).
+    """
     _validate_year_month(year_month)
-    return _safe_to_spend(session, load_month_aggregate(session, year_month))
+    trm = _fx.get_trm(session)
+    return _safe_to_spend(load_month_aggregate(session, year_month, trm))
 
 
 def _status(agg: MonthAggregate, category_id: int) -> BudgetStatus:
@@ -160,11 +162,16 @@ def budget_status(session: Session, category_id: int, year_month: str) -> Budget
 
     Write-path note: callers (PUT /api/budgets, MCP planning) now pay a fixed
     ~8-query aggregate load instead of 3 + 2×(active months) recursion.
+
+    Raises:
+        MissingRate: no TRM set (AC-9).
+        NotFound: the category does not exist.
     """
     _validate_year_month(year_month)
     if session.get(Category, category_id) is None:
         raise NotFound(f"category {category_id} not found")
-    return _status(load_month_aggregate(session, year_month), category_id)
+    trm = _fx.get_trm(session)
+    return _status(load_month_aggregate(session, year_month, trm), category_id)
 
 
 def _budget_lines(agg: MonthAggregate) -> list[BudgetLine]:
@@ -186,6 +193,11 @@ def _budget_lines(agg: MonthAggregate) -> list[BudgetLine]:
 
 
 def list_budgets(session: Session, year_month: str) -> list[BudgetLine]:
-    """One envelope line per budget-eligible category for the month."""
+    """One envelope line per budget-eligible category for the month.
+
+    Raises:
+        MissingRate: no TRM set (AC-9).
+    """
     _validate_year_month(year_month)
-    return _budget_lines(load_month_aggregate(session, year_month))
+    trm = _fx.get_trm(session)
+    return _budget_lines(load_month_aggregate(session, year_month, trm))

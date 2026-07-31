@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from quaestor.mcp import format
 from quaestor.mcp.tools import temporal
@@ -13,7 +14,7 @@ from quaestor.mcp.tools.temporal import (
     ToPayInput,
     UpdateRecurringInput,
 )
-from quaestor.services import accounts
+from quaestor.services import accounts, fx
 
 
 def _bank(session):
@@ -52,6 +53,7 @@ def test_list_recurring_tool(session):
 
 def test_plan_confirm_to_pay_skip_flow(session):
     _bank(session)
+    fx.set_trm(session, "4000")
     planned_out = temporal.plan_payment(session, PlanPaymentInput(
         payee="Friend", amount=80_000, account="Bancolombia", due_date=date(2026, 6, 20),
     ))
@@ -65,6 +67,16 @@ def test_plan_confirm_to_pay_skip_flow(session):
     tx_id = transactions.list_transactions(session, status="planned")[0].id
     confirmed = temporal.confirm_payment(session, ConfirmPaymentInput(tx_id=tx_id, amount=85_000))
     assert "Confirmed" in confirmed
+
+
+def test_to_pay_without_trm_returns_missing_rate_text(session):
+    _bank(session)
+    temporal.plan_payment(session, PlanPaymentInput(
+        payee="Friend", amount=80_000, account="Bancolombia", due_date=date(2026, 6, 20),
+    ))
+    out = temporal.to_pay(session, ToPayInput(since=date(2026, 6, 1), until=date(2026, 6, 30)))
+    assert "No TRM is set" in out
+    assert "set_fx_rate" in out
 
 
 def test_confirm_non_planned_returns_text(session):
@@ -156,7 +168,7 @@ def test_to_pay_table_renders_two_sections(session):
         session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
-    out = format.to_pay_table(queue)
+    out = format.to_pay_table(queue, Decimal("4000"))
     assert "## ⚠️ Overdue" in out
     assert "## Upcoming" in out
     assert "Tigo" in out
@@ -175,7 +187,7 @@ def test_to_pay_table_omits_empty_overdue_section(session):
         session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
     )
     queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
-    out = format.to_pay_table(queue)
+    out = format.to_pay_table(queue, Decimal("4000"))
     assert "## ⚠️ Overdue" not in out
     assert "## Upcoming" in out
 
@@ -191,7 +203,7 @@ def test_to_pay_table_omits_empty_upcoming_section(session):
         session, "Tigo", 8_500_00, "COP", Date(2026, 6, 28), a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[])
-    out = format.to_pay_table(queue)
+    out = format.to_pay_table(queue, Decimal("4000"))
     assert "## ⚠️ Overdue" in out
     assert "## Upcoming" not in out
 
@@ -199,5 +211,5 @@ def test_to_pay_table_omits_empty_upcoming_section(session):
 def test_to_pay_table_empty_queue():
     from quaestor.domain.planned import OutstandingQueue
 
-    out = format.to_pay_table(OutstandingQueue())
+    out = format.to_pay_table(OutstandingQueue(), Decimal("4000"))
     assert out == "Nothing outstanding."

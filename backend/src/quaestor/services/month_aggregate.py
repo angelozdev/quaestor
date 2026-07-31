@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date as Date
+from decimal import Decimal
 
 from sqlalchemy import extract, func
 from sqlmodel import Session, select
@@ -23,6 +24,7 @@ from sqlmodel import Session, select
 from ..domain.models import (
     Budget, Category, CategoryGroup, RecurringItem, Transaction, TxStatus, TxType,
 )
+from ..domain.money import to_cop_cents
 from ..domain.rules import month_bounds, prev_year_month
 
 
@@ -39,25 +41,30 @@ def _next_year_month(year_month: str) -> str:
 
 @dataclass
 class MonthAggregate:
+    """In-memory month snapshot at one TRM; every accessor is DB-free.
+
+    The `_window_*` lists hold full rows only for [previous month, report
+    month]; all earlier history lives in `_spent_by_cat_month` /
+    `_assigned_by_cat_month` as per-(category, month) COP sums.
+    """
+
     year_month: str
     start: Date
     end: Date
+    trm: Decimal
     categories: dict[int, Category]
     groups: dict[int, CategoryGroup]
     budgets_month: list[Budget]
     budgeted_category_ids: frozenset[int]
     active_recurring: list[RecurringItem]
     month_planned_expense: list[Transaction]
-    # Full rows only for [previous month, report month]:
     _window_expense: list[Transaction]
     _window_income: list[Transaction]
-    # Full history as sums, from one GROUP BY query:
     _spent_by_cat_month: dict[tuple[int | None, str], int]
     _assigned_by_cat_month: dict[tuple[int, str], int]
     _first_active: dict[int, str]
     _available_cache: dict[int, dict[str, int]] = field(default_factory=dict)
 
-    # --- lookups (no DB) ---
     def category(self, category_id: int | None) -> Category | None:
         return self.categories.get(category_id) if category_id is not None else None
 
@@ -78,9 +85,8 @@ class MonthAggregate:
         return self._spent_by_cat_month.get((category_id, year_month), 0)
 
     def available(self, category_id: int, year_month: str) -> int:
-        """Iterative forward fold with memo. Same semantics as the old
-        `_available` recursion, including the gap-month reset (an inactive
-        month yields 0 and passes no rollover forward)."""
+        """Iterative forward fold with memo, including the gap-month reset
+        (an inactive month yields 0 and passes no rollover forward)."""
         cache = self._available_cache.setdefault(category_id, {})
         cached = cache.get(year_month)
         if cached is not None:
@@ -103,8 +109,9 @@ class MonthAggregate:
             prev_avail = avail
             ym = _next_year_month(ym)
 
-    # --- month views (no DB; valid ONLY for the report month and its previous month) ---
     def posted_in_month(self, year_month: str, tx_type: TxType) -> list[Transaction]:
+        """Posted rows of the month, minus excluded categories. Valid ONLY
+        for the report month and its previous month (the loaded window)."""
         source = (
             self._window_expense if tx_type == TxType.expense else self._window_income
         )
@@ -124,27 +131,34 @@ class MonthAggregate:
     def month_income(self) -> list[Transaction]:
         return self.posted_in_month(self.year_month, TxType.income)
 
+    def to_cop_cents(self, tx: Transaction) -> int:
+        """Read-time COP cents for one row at this aggregate's TRM."""
+        return to_cop_cents(tx.amount, tx.currency, self.trm)
+
     def totals_for(self, year_month: str) -> tuple[int, int, int]:
-        income = sum(t.to_base for t in self.posted_in_month(year_month, TxType.income))
-        expense = sum(t.to_base for t in self.posted_in_month(year_month, TxType.expense))
+        income = sum(self.to_cop_cents(t) for t in self.posted_in_month(year_month, TxType.income))
+        expense = sum(self.to_cop_cents(t) for t in self.posted_in_month(year_month, TxType.expense))
         return income, expense, income - expense
 
 
-def load_month_aggregate(session: Session, year_month: str) -> MonthAggregate:
+def load_month_aggregate(
+    session: Session, year_month: str, trm: Decimal
+) -> MonthAggregate:
+    """Bulk-load the month at one TRM, fetched once by the caller
+    (the read path entry point) and used for every read-time conversion."""
     start, end = month_bounds(year_month)
     prev_start, _ = month_bounds(prev_year_month(year_month))
 
     categories = {c.id: c for c in session.exec(select(Category)).all()}
     groups = {g.id: g for g in session.exec(select(CategoryGroup)).all()}
 
-    # Full expense history as sums — engine-agnostic month bucketing via
-    # extract() (EXTRACT on Postgres, strftime-backed on SQLite).
     spent_rows = session.exec(
         select(
             Transaction.category_id,
             extract("year", Transaction.date),
             extract("month", Transaction.date),
-            func.sum(Transaction.to_base),
+            Transaction.currency,
+            func.sum(Transaction.amount),
         )
         .where(
             Transaction.type == TxType.expense,
@@ -154,12 +168,15 @@ def load_month_aggregate(session: Session, year_month: str) -> MonthAggregate:
             Transaction.category_id,
             extract("year", Transaction.date),
             extract("month", Transaction.date),
+            Transaction.currency,
         )
     ).all()
-    spent_by_cat_month: dict[tuple[int | None, str], int] = {
-        (cat_id, f"{int(y):04d}-{int(m):02d}"): int(total)
-        for cat_id, y, m, total in spent_rows
-    }
+    spent_by_cat_month: dict[tuple[int | None, str], int] = {}
+    for cat_id, y, m, currency, total in spent_rows:
+        key = (cat_id, f"{int(y):04d}-{int(m):02d}")
+        spent_by_cat_month[key] = spent_by_cat_month.get(key, 0) + to_cop_cents(
+            int(total), currency, trm
+        )
 
     def _window(tx_type: TxType) -> list[Transaction]:
         return list(
@@ -207,7 +224,7 @@ def load_month_aggregate(session: Session, year_month: str) -> MonthAggregate:
             first_active[cat_id] = ym
 
     return MonthAggregate(
-        year_month=year_month, start=start, end=end,
+        year_month=year_month, start=start, end=end, trm=trm,
         categories=categories, groups=groups,
         budgets_month=budgets_month,
         budgeted_category_ids=frozenset(b.category_id for b in budgets_month),

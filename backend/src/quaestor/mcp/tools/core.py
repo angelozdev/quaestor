@@ -17,6 +17,7 @@ from sqlmodel import Session
 
 from ...domain.errors import NotFound, QuaestorError, ValidationError
 from ...domain.models import Account, Category, CategoryGroup, Tag
+from ...domain.money import BASE_CURRENCY, to_cop_cents
 from ...services import accounts, categories, fx, tags, transactions
 from .. import format
 
@@ -51,19 +52,32 @@ class RecordIncomeInput(BaseModel):
 class TransferInput(BaseModel):
     from_account: str = Field(description="Source account name")
     to_account: str = Field(description="Destination account name")
-    amount: int = Field(gt=0, description="Amount in cents")
-    currency: str = Field(default="COP", description="Currency; must match both accounts")
+    amount: int = Field(
+        gt=0, description="Amount SENT in cents, in the source account's currency"
+    )
+    amount_received: int | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Amount RECEIVED in cents, in the destination account's currency. "
+            "Required when the accounts use different currencies; defaults to "
+            "the sent amount when they match."
+        ),
+    )
+    currency: str | None = Field(
+        default=None,
+        description="Sent currency; defaults to the source account's currency",
+    )
     date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
 
 
 class SetFxRateInput(BaseModel):
-    date: Date = Field(description="Rate date, YYYY-MM-DD")
-    usd_cop: float = Field(gt=0, description="Pesos per dollar, e.g. 4150")
+    usd_cop: float = Field(gt=0, description="Pesos per dollar (the TRM), e.g. 4150")
 
 
 class GetFxRateInput(BaseModel):
-    date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
+    pass
 
 
 class ListTransactionsInput(BaseModel):
@@ -175,6 +189,17 @@ def _resolve_category(session: Session, name: str) -> Category:
 # ----- write tools -----
 
 
+def _confirmation_cop_equivalent(session: Session, tx) -> int | None:
+    """COP equivalent for a write confirmation: only non-COP transactions
+    show one, and only when a TRM is set (writes succeed without one, AC-1)."""
+    if tx.currency == BASE_CURRENCY:
+        return None
+    trm = fx.get_trm_or_none(session)
+    if trm is None:
+        return None
+    return to_cop_cents(tx.amount, tx.currency, trm)
+
+
 @_as_text
 def record_expense(session: Session, inp: RecordExpenseInput) -> str:
     account = _resolve_account(session, inp.account)
@@ -193,7 +218,7 @@ def record_expense(session: Session, inp: RecordExpenseInput) -> str:
     if inp.tags:
         tags.tag_transaction(session, tx.id, inp.tags)
     account = accounts.get_account(session, account.id)
-    return format.expense_confirmation(tx, account)
+    return format.expense_confirmation(tx, account, _confirmation_cop_equivalent(session, tx))
 
 
 @_as_text
@@ -214,14 +239,14 @@ def record_income(session: Session, inp: RecordIncomeInput) -> str:
     if inp.tags:
         tags.tag_transaction(session, tx.id, inp.tags)
     account = accounts.get_account(session, account.id)
-    return format.income_confirmation(tx, account)
+    return format.income_confirmation(tx, account, _confirmation_cop_equivalent(session, tx))
 
 
 @_as_text
 def transfer(session: Session, inp: TransferInput) -> str:
     src = _resolve_account(session, inp.from_account)
     dst = _resolve_account(session, inp.to_account)
-    transactions.transfer(
+    _, leg_to = transactions.transfer(
         session,
         from_account_id=src.id,
         to_account_id=dst.id,
@@ -230,16 +255,17 @@ def transfer(session: Session, inp: TransferInput) -> str:
         date=inp.date or Date.today(),
         notes=inp.notes,
         source="agent",
+        amount_received=inp.amount_received,
     )
     src = accounts.get_account(session, src.id)
     dst = accounts.get_account(session, dst.id)
-    return format.transfer_confirmation(src, dst, inp.amount, inp.currency)
+    return format.transfer_confirmation(src, dst, inp.amount, leg_to.amount)
 
 
 @_as_text
 def set_fx_rate(session: Session, inp: SetFxRateInput) -> str:
-    fr = fx.set_fx_rate(session, inp.date, inp.usd_cop)
-    return format.fx_set(fr)
+    rate = fx.set_trm(session, inp.usd_cop)
+    return format.fx_set(rate)
 
 
 # ----- read tools -----
@@ -263,14 +289,12 @@ def list_transactions(session: Session, inp: ListTransactionsInput) -> str:
         sort=inp.sort,
         order=inp.order,
     )
-    return format.transactions_table(txs)
+    return format.transactions_table(txs, fx.get_trm(session))
 
 
 @_as_text
 def get_fx_rate(session: Session, inp: GetFxRateInput) -> str:
-    on = inp.date or Date.today()
-    rate = fx.get_current_rate(session, on)  # raises MissingRate if absent
-    return format.fx_current(rate, on)
+    return format.fx_current(fx.get_trm(session))
 
 
 @_as_text

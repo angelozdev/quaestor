@@ -15,6 +15,7 @@ from tests.support.query_counter import count_queries
 
 
 def test_report_query_count_is_bounded(client, auth, engine):
+    assert client.post("/api/fx", json={"usd_cop": "4000"}, headers=auth).status_code == 201
     acc = client.post(
         "/api/accounts", json={"name": "Bank", "type": "debit", "currency": "COP"},
         headers=auth,

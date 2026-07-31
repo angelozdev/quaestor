@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -30,17 +31,25 @@ def test_outstanding_queue_is_empty_when_both_buckets_empty():
     assert q.is_empty is True
     assert q.overdue == []
     assert q.upcoming == []
-    assert q.total_base == 0
+    assert q.total_cop_cents(Decimal("4000")) == 0
     assert q.all_items() == []
 
 
-def test_outstanding_queue_total_is_sum_of_both_buckets(session):
+def test_outstanding_queue_total_is_read_time_sum_of_both_buckets(session):
     a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=10_000_000)
     overdue = _tx(session, a.id, "Rent past", 100_000, date(2026, 6, 1))
     upcoming = _tx(session, a.id, "Rent next", 200_000, date(2026, 7, 10))
     q = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
-    assert q.total_base == overdue.to_base + upcoming.to_base
+    assert q.total_cop_cents(Decimal("4000")) == 300_000
     assert q.is_empty is False
+
+
+def test_outstanding_queue_total_converts_usd_at_the_given_trm(session):
+    a = accounts.create_account(session, "Wise", AccountType.debit, "USD", balance=10_000_000)
+    usd = transactions.record_expense(session, a.id, 1_000, "USD", date(2026, 7, 1), "Sub")
+    q = OutstandingQueue(upcoming=[usd])
+    assert q.total_cop_cents(Decimal("4000")) == 4_000_000
+    assert q.total_cop_cents(Decimal("4100")) == 4_100_000
 
 
 def test_outstanding_queue_all_items_overdue_first(session):
@@ -92,4 +101,5 @@ class _FakeTx:
     def __init__(self, id: int) -> None:
         self.id = id
         self.payee = f"fake-{id}"
-        self.to_base = id * 100
+        self.amount = id * 100
+        self.currency = "COP"

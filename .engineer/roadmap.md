@@ -7,6 +7,8 @@
 - [x] **Hybrid budget: envelopes + rollover + safe-to-spend** `id:hybrid-budget` priority:1 status:shipped area:budget → feature:budgets-safe-to-spend
       Product differentiator (ADR-002/003)
 - [x] **Transactions CRUD with tags, categories, FX** `id:transactions-core` priority:2 status:shipped area:core → feature:transactions-crud
+- [ ] **Read-time FX: TRM table as single source of truth (drop frozen to_base) + cross-currency transfers** `id:fx-read-time-conversion` priority:3 status:in-progress area:core → feature:fx-read-time-conversion
+      Replaces undocumented frozen-snapshot FX design; ADR pending
 - [x] **Planned payments / to-pay confirmation queue** `id:planned-to-pay` priority:3 status:shipped area:planning → feature:—
 - [x] **Recurring engine with materialize-due** `id:recurring` priority:4 status:shipped area:planning → feature:—
 - [x] **Savings goals with contributions** `id:goals` priority:5 status:shipped area:planning → feature:—
@@ -22,6 +24,7 @@
 - [ ] **Sinking funds: envelope funding rules + smoothed monthly available** `id:sinking-funds` priority:1 status:planned area:budget → feature:sinking-funds
       Replaces due-date safe-to-spend formula (product ADR-003/004, formal supersede at build time); envelopes get funding rules (fixed | N-month average | prorated recurring); goals unify as target-date funds. Parked as features/003-sinking-funds
 - [ ] **Doc/code drift cleanup (README, ADR-0018, runbooks, dead code)** `id:doc-drift-cleanup` priority:2 status:planned area:quality → feature:—
+      C1 + C6 done 2026-07-29 (README/charter/manifest aligned with ADR-0030); C2–C5 remain
 - [ ] **Automate daily pg_dump of local production DB to iCloud** `id:backup-automation` priority:3 status:planned area:platform → feature:—
       ADR-0030 consequence: backup discipline is load-bearing; candidates: scheduler daily job or launchd + just backup
 

@@ -2,11 +2,12 @@ from sqlmodel import Session
 
 from quaestor.mcp.tools import planning
 from quaestor.mcp.tools.planning import AssignBudgetInput
-from quaestor.services import budgets, categories
+from quaestor.services import budgets, categories, fx
 
 
 def test_mcp_assign_budget(engine):
     with Session(engine) as s:
+        fx.set_trm(s, "4000")
         cat = categories.create_category(s, name="Food")
         out = planning.assign_budget(
             s, AssignBudgetInput(category="Food", year_month="2026-06", amount=500_000)

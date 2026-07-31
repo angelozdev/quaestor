@@ -117,11 +117,19 @@ pipeline generation → tests green. Bounded, one feature per task.
 
 ## Cleanup tasks (doc/code drift — approved at triage)
 
-- C1. README: stop describing SQLite as default / Postgres as "future" — align with ADR-0024/0026.
+- ~~C1. README: stop describing SQLite as default / Postgres as "future" — align with ADR-0024/0026.~~
+  **Done 2026-07-29** — covered by the C6 README rewrite: SQLite now described
+  as dev sandbox, Postgres is production (not "future"), obsolete
+  SQLite→Postgres migration section removed.
 - C2. Flip ADR-0018 status `proposed` → `accepted` (code shipped).
 - C3. Re-scope or archive stale runbooks `restore-from-backup.md` and `deploy.md` (Litestream/VPS era).
 - C4. Delete dead `frontend/components/phase2-banner.tsx`.
 - C5. Remove stale `.pyc` files in `backend/tests/mcp/__pycache__` (deleted test modules).
-- C6. Align CHARTER.md §2, README and `.engineer/manifest.yml` prose with
+- ~~C6. Align CHARTER.md §2, README and `.engineer/manifest.yml` prose with
   ADR-0030 (production DB is now the local Postgres container; Render = frozen
-  standby; `.dev-data` SQLite is sandbox only). Charter edit needs human sign-off.
+  standby; `.dev-data` SQLite is sandbox only). Charter edit needs human sign-off.~~
+  **Done 2026-07-29** — charter §2 amendment signed off by Angelo; README
+  rewritten (profiles, env files, backups section, obsolete SQLite→Postgres
+  migration section removed); manifest path-override comments fixed. Note:
+  README changes cover most of C1's surface too — re-check C1 scope
+  (SQLite-as-default prose per ADR-0024) before working it.

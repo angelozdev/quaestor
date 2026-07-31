@@ -19,6 +19,7 @@ import type { Transaction, TransactionFilters, TxStatus, TxType } from "@/lib/ap
 import { ApiError } from "@/lib/api/types"
 import { formatDate } from "@/lib/date"
 import { TX_FILTER_SCHEMA } from "@/lib/filter-schemas"
+import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button, Input, Select } from "@/ui"
@@ -125,6 +126,16 @@ export default function TransactionsPage() {
       header: "Monto",
       align: "right",
       render: (t) => <MoneyAmount cents={t.amount} currency={t.currency} type={t.type} />,
+    },
+    {
+      key: "cop_equivalent",
+      header: "Equivalente (COP)",
+      align: "right",
+      render: (t) => (
+        <span style={{ color: "var(--muted-foreground)" }}>
+          {t.cop_equivalent === null ? "—" : formatCents(t.cop_equivalent, "COP")}
+        </span>
+      ),
     },
   ]
 

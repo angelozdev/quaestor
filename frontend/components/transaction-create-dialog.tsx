@@ -12,10 +12,12 @@ import {
   txNormalSchema,
   txTransferSchema,
 } from "@/components/transaction-create-dialog.schema"
+import { TransferReceivedField } from "@/components/transfer-received-field"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
 import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { finiteOrNull } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import {
   Button,
@@ -42,7 +44,6 @@ const NORMAL_DEFAULTS: TxNormalValues = {
   categoryId: null,
   date: new Date().toISOString().slice(0, 10),
   payee: "",
-  fxRate: Number.NaN,
   notes: "",
 }
 
@@ -50,14 +51,27 @@ const TRANSFER_DEFAULTS: TxTransferValues = {
   fromId: null,
   toId: null,
   amount: Number.NaN,
+  amountReceived: Number.NaN,
   date: new Date().toISOString().slice(0, 10),
-  fxRate: Number.NaN,
   notes: "",
 }
 
 function currencyOf(accounts: Account[] | undefined, id: number | null): string {
   if (id === null) return "COP"
   return accounts?.find((a) => a.id === id)?.currency ?? "COP"
+}
+
+type FieldWithErrors = { state: { meta: { errors: unknown[] } } }
+
+function fieldError(field: FieldWithErrors): string | undefined {
+  const error = field.state.meta.errors[0] as { message?: string } | undefined
+  return error?.message
+}
+
+function FieldError({ field }: { field: FieldWithErrors }) {
+  const message = fieldError(field)
+  if (!message) return null
+  return <p className="text-xs text-destructive">{message}</p>
 }
 
 export function TransactionCreateDialog({
@@ -90,7 +104,12 @@ export function TransactionCreateDialog({
   })
 
   const normalCurrency = currencyOf(accounts.data, normalForm.getFieldValue("accountId"))
-  const transferCurrency = currencyOf(accounts.data, transferForm.getFieldValue("fromId"))
+  const sentCurrency = currencyOf(accounts.data, transferForm.getFieldValue("fromId"))
+  const receivedCurrency = currencyOf(accounts.data, transferForm.getFieldValue("toId"))
+  const isCrossCurrency =
+    transferForm.getFieldValue("fromId") !== null &&
+    transferForm.getFieldValue("toId") !== null &&
+    sentCurrency !== receivedCurrency
 
   function resetForms() {
     normalForm.reset(NORMAL_DEFAULTS)
@@ -117,10 +136,6 @@ export function TransactionCreateDialog({
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         category_id: values.categoryId,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
-        fx_rate:
-          normalCurrency !== "COP" && Number.isFinite(values.fxRate)
-            ? String(values.fxRate)
-            : undefined,
       })
     },
     onSuccess: () => done("Transacción creada"),
@@ -136,13 +151,12 @@ export function TransactionCreateDialog({
         from_account_id: values.fromId as number,
         to_account_id: values.toId as number,
         amount: values.amount,
-        currency: transferCurrency,
+        amount_received: isCrossCurrency
+          ? (finiteOrNull(values.amountReceived) ?? undefined)
+          : undefined,
+        currency: sentCurrency,
         date: values.date,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
-        fx_rate:
-          transferCurrency !== "COP" && Number.isFinite(values.fxRate)
-            ? String(values.fxRate)
-            : undefined,
       })
     },
     onSuccess: () => done("Transferencia creada"),
@@ -199,11 +213,7 @@ export function TransactionCreateDialog({
                       queryKey={qk.accounts(false)}
                       queryFn={() => listAccounts(false)}
                     />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
+                    <FieldError field={field} />
                   </div>
                 )}
               </normalForm.Field>
@@ -213,18 +223,10 @@ export function TransactionCreateDialog({
                     <Label>Monto * ({normalCurrency})</Label>
                     <MoneyInput
                       currency={normalCurrency}
-                      value={
-                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                          ? (field.state.value as number)
-                          : null
-                      }
+                      value={finiteOrNull(field.state.value)}
                       onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
                     />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
+                    <FieldError field={field} />
                   </div>
                 )}
               </normalForm.Field>
@@ -248,19 +250,6 @@ export function TransactionCreateDialog({
                   </div>
                 )}
               </normalForm.Field>
-              {normalCurrency !== "COP" && (
-                <normalForm.Field name="fxRate">
-                  {(field) => (
-                    <FormField
-                      field={field}
-                      label="Tasa USD→COP (opcional)"
-                      type="number"
-                      placeholder="Se resuelve sola si la dejas vacía"
-                      valueAsNumber
-                    />
-                  )}
-                </normalForm.Field>
-              )}
               <normalForm.Field name="notes">
                 {(field) => <FormField field={field} label="Notas" />}
               </normalForm.Field>
@@ -297,11 +286,7 @@ export function TransactionCreateDialog({
                       queryKey={qk.accounts(false)}
                       queryFn={() => listAccounts(false)}
                     />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
+                    <FieldError field={field} />
                   </div>
                 )}
               </transferForm.Field>
@@ -315,56 +300,44 @@ export function TransactionCreateDialog({
                       queryKey={qk.accounts(false)}
                       queryFn={() => listAccounts(false)}
                     />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
+                    <FieldError field={field} />
                   </div>
                 )}
               </transferForm.Field>
               <transferForm.Field name="amount">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Monto * ({transferCurrency})</Label>
+                    <Label>
+                      {isCrossCurrency ? "Monto enviado" : "Monto"} * ({sentCurrency})
+                    </Label>
                     <MoneyInput
-                      currency={transferCurrency}
-                      value={
-                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                          ? (field.state.value as number)
-                          : null
-                      }
+                      currency={sentCurrency}
+                      value={finiteOrNull(field.state.value)}
                       onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
                     />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
+                    <FieldError field={field} />
                   </div>
+                )}
+              </transferForm.Field>
+              <transferForm.Field name="amountReceived">
+                {(field) => (
+                  <TransferReceivedField
+                    active={isCrossCurrency}
+                    sentCurrency={sentCurrency}
+                    receivedCurrency={receivedCurrency}
+                    sentCents={finiteOrNull(transferForm.getFieldValue("amount"))}
+                    receivedCents={finiteOrNull(field.state.value)}
+                    onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                    errorMessage={fieldError(field)}
+                  />
                 )}
               </transferForm.Field>
               <transferForm.Field name="date">
                 {(field) => <FormField field={field} label="Fecha" type="date" />}
               </transferForm.Field>
-              {transferCurrency !== "COP" && (
-                <transferForm.Field name="fxRate">
-                  {(field) => (
-                    <FormField
-                      field={field}
-                      label="Tasa USD→COP (opcional)"
-                      type="number"
-                      valueAsNumber
-                    />
-                  )}
-                </transferForm.Field>
-              )}
               <transferForm.Field name="notes">
                 {(field) => <FormField field={field} label="Notas" />}
               </transferForm.Field>
-              <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                Ambas cuentas deben tener la misma moneda.
-              </p>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                   Cancelar

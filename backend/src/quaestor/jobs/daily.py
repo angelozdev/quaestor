@@ -18,7 +18,7 @@ from decimal import Decimal
 from sqlmodel import Session
 
 from .. import db
-from ..services.fx import set_fx_rate
+from ..services.fx import set_trm
 from ..services.recurring import materialize_due
 from ..services.rollover import ensure_month_closed
 from .fx_fetch import fetch_usd_cop
@@ -51,9 +51,9 @@ def run_daily(
     if fx_url:
         try:
             rate = fetch_usd_cop(fx_url, fx_key)
-            set_fx_rate(session, today, rate)
+            set_trm(session, rate)
             report["fx_rate"] = rate
-        except Exception as exc:  # FX failures are non-fatal (ADR-011)
+        except Exception as exc:
             log.exception("FX fetch failed; continuing")
             report["fx_error"] = repr(exc)
 
@@ -65,11 +65,12 @@ def run_daily(
 
 
 def main() -> None:
+    """Standalone entrypoint (`just daily` runs this in a new python process,
+    not the api container's CMD): configures root logging — idempotent with
+    the api container's setup (see api/__init__.py) — runs the daily jobs,
+    and prints the report as JSON with the Decimal rate stringified."""
     import json as _json
 
-    # Standalone entrypoint (`just daily` runs this in a NEW python process, not
-    # the api container's CMD), so configure root logging here. Idempotent with
-    # the api container's setup — see api/__init__.py for why both layers exist.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -79,7 +80,6 @@ def main() -> None:
     today = Date.today()
     with db.get_session() as session:
         report = run_daily(session, today, fx_url, fx_key)
-    # Decimal is not JSON-native; stringify for the printed line.
     printable = {**report, "fx_rate": str(report["fx_rate"]) if report["fx_rate"] is not None else None}
     print(_json.dumps(printable, sort_keys=True))
 

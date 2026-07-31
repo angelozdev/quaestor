@@ -44,3 +44,4 @@ New ADRs are created with the `adr` skill:
 | 0028 | Bounded-query read path for monthly aggregates | accepted | 2026-07-22 |
 | 0029 | Frontend async-state contract via QueryBoundary | accepted | 2026-07-22 |
 | 0030 | Local Postgres container replaces Render as the production database | accepted | 2026-07-28 |
+| 0031 | Read-time FX conversion from the single TRM value replaces frozen per-transaction snapshots | accepted | 2026-07-30 |

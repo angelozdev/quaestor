@@ -1,4 +1,8 @@
+from tests.support.fx import set_trm as _set_trm
+
+
 def test_reports_endpoint(client, auth):
+    _set_trm(client, auth)
     acc = client.post(
         "/api/accounts",
         json={"name": "Bank", "type": "debit", "currency": "COP"},
@@ -19,7 +23,12 @@ def test_reports_endpoint(client, auth):
     assert body["expense"] == 50_000
     assert "safe_to_spend" in body and "markdown" in body
     assert body["safe_to_spend"]["year_month"] == "2026-06"
-    assert body["drift_mom"] is None  # cold start: no previous month
+    assert body["drift_mom"] is None
+
+
+def test_reports_without_trm_is_409(client, auth):
+    r = client.get("/api/reports", params={"month": "2026-06"}, headers=auth)
+    assert r.status_code == 409 and r.json()["error"] == "MissingRate"
 
 
 def test_reports_malformed_month_is_422(client, auth):

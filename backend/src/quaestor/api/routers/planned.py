@@ -6,7 +6,7 @@ from datetime import date as Date
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from ...services import planned
+from ...services import fx, planned
 from ..deps import get_session
 from ..schemas import ConfirmPaymentIn, PlanPaymentIn, ToPayOut, TransactionOut
 
@@ -15,17 +15,18 @@ router = APIRouter(prefix="/planned", tags=["planned"])
 
 @router.get("/to-pay", response_model=ToPayOut)
 def to_pay(since: Date, until: Date, session: Session = Depends(get_session)):
+    trm = fx.get_trm(session)
     queue = planned.to_pay(session, since, until)
     return ToPayOut(
-        overdue=queue.overdue,
-        upcoming=queue.upcoming,
-        total_base=queue.total_base,
+        overdue=[TransactionOut.from_tx(tx, trm) for tx in queue.overdue],
+        upcoming=[TransactionOut.from_tx(tx, trm) for tx in queue.upcoming],
+        total_base=queue.total_cop_cents(trm),
     )
 
 
 @router.post("", response_model=TransactionOut, status_code=201)
 def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
-    return planned.plan_payment(
+    tx = planned.plan_payment(
         session,
         payee=body.payee,
         amount=body.amount,
@@ -35,15 +36,19 @@ def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
         category_id=body.category_id,
         notes=body.notes,
     )
+    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/confirm", response_model=TransactionOut)
 def confirm_payment(
     tx_id: int, body: ConfirmPaymentIn, session: Session = Depends(get_session)
 ):
-    return planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date)
+    tx = planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date)
+    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/skip", response_model=TransactionOut)
 def skip_payment(tx_id: int, session: Session = Depends(get_session)):
-    return planned.skip_payment(session, tx_id)
+    return TransactionOut.from_tx(
+        planned.skip_payment(session, tx_id), fx.get_trm_or_none(session)
+    )

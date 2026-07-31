@@ -4,7 +4,7 @@ import pytest
 
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import AccountType
-from quaestor.services import accounts, budgets, categories, transactions
+from quaestor.services import accounts, budgets, categories, fx, transactions
 from quaestor.services.budgets import budget_status as budget_status_for
 
 
@@ -52,6 +52,7 @@ def _acc(session, balance=10_000_000):
 
 
 def test_budget_status_sums_only_expense_posted_in_month_category(session):
+    fx.set_trm(session, "4000")
     cat = _cat(session)
     other = _cat(session, name="Other")
     acc = _acc(session)
@@ -69,6 +70,7 @@ def test_budget_status_sums_only_expense_posted_in_month_category(session):
 
 def test_budget_status_ignores_planned(session):
     from quaestor.services import planned
+    fx.set_trm(session, "4000")
     cat = _cat(session)
     acc = _acc(session)
     budgets.set_budget(session, cat.id, "2026-06", 100_000)
@@ -79,6 +81,7 @@ def test_budget_status_ignores_planned(session):
 
 
 def test_budget_status_respects_exclude_flags(session):
+    fx.set_trm(session, "4000")
     cat = _cat(session, exclude_from_budget=True)
     acc = _acc(session)
     budgets.set_budget(session, cat.id, "2026-06", 100_000)
@@ -88,6 +91,7 @@ def test_budget_status_respects_exclude_flags(session):
 
 
 def test_budget_status_positive_rollover_carries_over(session):
+    fx.set_trm(session, "4000")
     cat = _cat(session)
     acc = _acc(session)
     budgets.set_budget(session, cat.id, "2026-05", 100_000)
@@ -100,6 +104,7 @@ def test_budget_status_positive_rollover_carries_over(session):
 
 
 def test_budget_status_negative_rollover_resets_to_zero(session):
+    fx.set_trm(session, "4000")
     cat = _cat(session)
     acc = _acc(session)
     budgets.set_budget(session, cat.id, "2026-05", 100_000)
@@ -122,6 +127,7 @@ def _income(session, acc, amount=1_000_000, start=date(2026, 6, 1)):
 
 
 def test_safe_to_spend_basic_cascade(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     cat = _cat(session)
     _income(session, acc)  # 1,000,000 forecast
@@ -137,6 +143,7 @@ def test_safe_to_spend_basic_cascade(session):
 
 
 def test_safe_to_spend_optional_envelopes_do_not_subtract_twice(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     env = _cat(session, name="Groceries")
     unb = _cat(session, name="Fun")
@@ -150,6 +157,7 @@ def test_safe_to_spend_optional_envelopes_do_not_subtract_twice(session):
 
 
 def test_safe_to_spend_double_count_guard_auto_recurring(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
     recurring.create_recurring(
@@ -164,6 +172,7 @@ def test_safe_to_spend_double_count_guard_auto_recurring(session):
 
 
 def test_safe_to_spend_due_driven_stability_manual(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
     recurring.create_recurring(
@@ -179,6 +188,7 @@ def test_safe_to_spend_due_driven_stability_manual(session):
 
 
 def test_safe_to_spend_confirm_planned_does_not_move_it(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
     tx = planned.plan_payment(session, payee="Vet", amount=120_000, currency="COP",
@@ -190,6 +200,7 @@ def test_safe_to_spend_confirm_planned_does_not_move_it(session):
 
 
 def test_safe_to_spend_overspend_reduces_pool_and_rollover_protects(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     cat = _cat(session, name="Dining")
     _income(session, acc)
@@ -204,6 +215,7 @@ def test_safe_to_spend_overspend_reduces_pool_and_rollover_protects(session):
 
 
 def test_safe_to_spend_rollover_protects_against_false_overspend(session):
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     cat = _cat(session, name="Dining")
     _income(session, acc)
@@ -219,6 +231,7 @@ def test_safe_to_spend_rollover_protects_against_false_overspend(session):
 def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
     from quaestor.services import accounts as accs, goals as goals_svc
     from quaestor.domain.models import AccountType, GoalStatus
+    fx.set_trm(session, "4000")
     acc = _acc(session)
     sav = accs.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     _income(session, acc)  # 1,000,000 forecast
@@ -232,6 +245,7 @@ def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
 
 
 def test_list_budgets_one_line_per_eligible_category(session):
+    fx.set_trm(session, "4000")
     food = categories.create_category(session, name="Food")
     categories.create_category(session, name="Hidden", exclude_from_budget=True)
     budgets.set_budget(session, food.id, "2026-06", 500_000)
@@ -244,6 +258,7 @@ def test_list_budgets_one_line_per_eligible_category(session):
 
 
 def test_list_budgets_includes_unassigned_eligible_category(session):
+    fx.set_trm(session, "4000")
     categories.create_category(session, name="Transport")
     lines = budgets.list_budgets(session, "2026-06")
     line = next(l for l in lines if l.category_name == "Transport")

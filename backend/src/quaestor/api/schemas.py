@@ -7,7 +7,17 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, Source, TxStatus, TxType
+from ..domain.models import (
+    AccountType,
+    IntervalUnit,
+    OccurrenceStatus,
+    RecurringMode,
+    Source,
+    Transaction,
+    TxStatus,
+    TxType,
+)
+from ..domain.money import to_cop_cents
 
 
 class AccountCreate(BaseModel):
@@ -96,12 +106,10 @@ class TagOut(BaseModel):
 
 
 class FxIn(BaseModel):
-    date: Date
     usd_cop: Decimal = Field(gt=0, le=100000)
 
 
 class FxOut(BaseModel):
-    date: Date
     usd_cop: Decimal
 
 
@@ -128,18 +136,17 @@ class TransactionCreate(BaseModel):
     category_id: int | None = None
     notes: str | None = None
     source: str = "manual"
-    fx_rate: Decimal | None = None
 
 
 class TransferIn(BaseModel):
     from_account_id: int
     to_account_id: int
     amount: int
-    currency: str
+    amount_received: int | None = None
+    currency: str | None = None
     date: Date
     notes: str | None = None
     source: str = "manual"
-    fx_rate: Decimal | None = None
 
 
 class TransactionOut(BaseModel):
@@ -153,13 +160,21 @@ class TransactionOut(BaseModel):
     status: TxStatus
     amount: int
     currency: str
-    fx_rate: Decimal | None = None
-    to_base: int
+    cop_equivalent: int | None = None
     account_id: int
     category_id: int | None
     transfer_group_id: str | None
     source: Source
     created_at: datetime
+
+    @classmethod
+    def from_tx(cls, tx: Transaction, trm: Decimal | None) -> "TransactionOut":
+        """Serialize a Transaction, computing `cop_equivalent` at read time
+        when a TRM is available (ADR-0031)."""
+        out = cls.model_validate(tx)
+        if trm is not None:
+            out.cop_equivalent = to_cop_cents(tx.amount, tx.currency, trm)
+        return out
 
 
 class TransferOut(BaseModel):
@@ -257,7 +272,7 @@ class ToPayOut(BaseModel):
 
 
 class CloseMonthIn(BaseModel):
-    period: str  # "YYYY-MM"
+    period: str
 
 
 class EnvelopesSummaryOut(BaseModel):

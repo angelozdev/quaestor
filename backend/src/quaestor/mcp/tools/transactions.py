@@ -12,7 +12,7 @@ from datetime import date as Date
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ...services import transactions
+from ...services import fx, transactions
 from .. import format
 from .core import _as_text, _resolve_category
 
@@ -37,7 +37,7 @@ class DeleteTransactionInput(BaseModel):
 @_as_text
 def get_transaction(session: Session, inp: GetTransactionInput) -> str:
     tx = transactions.get_transaction(session, inp.tx_id)
-    return format.transaction_card(tx)
+    return format.transaction_card(tx, fx.get_trm(session))
 
 
 @_as_text
@@ -56,7 +56,7 @@ def update_transaction(session: Session, inp: UpdateTransactionInput) -> str:
         category_id=category_id,
         date=inp.date,
     )
-    return format.transaction_card(updated)
+    return format.transaction_card(updated, fx.get_trm(session))
 
 
 @_as_text

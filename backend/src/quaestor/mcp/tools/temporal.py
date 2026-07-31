@@ -13,7 +13,7 @@ from sqlmodel import Session
 
 from ...domain.models import RecurringMode, TxType
 from ...domain.planned import OutstandingQueue
-from ...services import planned, recurring
+from ...services import fx, planned, recurring
 from .. import format
 from .core import _as_text, _resolve_account, _resolve_category
 
@@ -160,7 +160,7 @@ def skip_recurring(session: Session, inp: SkipRecurringInput) -> str:
 @_as_text
 def to_pay(session: Session, inp: ToPayInput) -> str:
     queue: OutstandingQueue = planned.to_pay(session, inp.since, inp.until)
-    return format.to_pay_table(queue)
+    return format.to_pay_table(queue, fx.get_trm(session))
 
 
 @_as_text

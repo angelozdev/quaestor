@@ -1,4 +1,4 @@
-// Types mirror the P1 /api JSON contract (cents are integers).
+/** Types mirror the /api JSON contract (cents are integers). */
 export type TxType = "income" | "expense" | "transfer"
 export type TxStatus = "planned" | "posted" | "skipped"
 export type AccountType = "debit" | "credit" | "cash" | "savings"
@@ -16,8 +16,7 @@ export interface Transaction {
   status: TxStatus
   amount: number
   currency: string
-  fx_rate: string
-  to_base: number
+  cop_equivalent: number | null
   account_id: number
   category_id: number | null
   transfer_group_id: string | null
@@ -88,7 +87,6 @@ export interface Settings {
 }
 
 export interface Fx {
-  date: string
   usd_cop: string
 }
 
@@ -268,7 +266,6 @@ export interface MonthlyReport {
   markdown: string
 }
 
-// ---- Request payloads (only fields the API accepts) ----
 export interface TransactionFilters {
   date_from?: string
   date_to?: string
@@ -287,16 +284,15 @@ export interface TransactionCreate {
   payee?: string
   category_id?: number | null
   notes?: string | null
-  fx_rate?: string
 }
 export interface TransferCreate {
   from_account_id: number
   to_account_id: number
   amount: number
-  currency: string
+  amount_received?: number
+  currency?: string
   date: string
   notes?: string | null
-  fx_rate?: string
 }
 export interface TransactionUpdate {
   payee?: string
@@ -374,7 +370,6 @@ export interface SettingsUpdate {
   base_currency?: string
 }
 export interface FxCreate {
-  date: string
   usd_cop: string
 }
 
@@ -416,8 +411,10 @@ export function applyApiErrorsToForm(form: any, err: unknown): void {
   }
 }
 
-// 401 interceptor: the app registers a handler (clear cache + redirect) in
-// app/providers.tsx. lib/ stays free of React/router imports.
+/**
+ * 401 interceptor: the app registers a handler (clear cache + redirect) in
+ * app/providers.tsx. lib/ stays free of React/router imports.
+ */
 export let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn

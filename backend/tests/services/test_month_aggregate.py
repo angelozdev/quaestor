@@ -20,11 +20,13 @@ def session():
         yield s
 
 
+TRM = Decimal("4000")
+
+
 def _expense(acc_id, cat_id, d, amount):
     return Transaction(
         date=d, type=TxType.expense, status=TxStatus.posted, amount=amount,
-        currency="COP", fx_rate=Decimal("1"), to_base=amount, account_id=acc_id,
-        category_id=cat_id, payee="seed",
+        currency="COP", account_id=acc_id, category_id=cat_id, payee="seed",
     )
 
 
@@ -46,7 +48,7 @@ def test_rollover_folds_forward_without_recursion_queries(session):
     session.add(_expense(acc.id, cat.id, date(2026, 6, 10), 30_000))
     session.commit()
 
-    agg = load_month_aggregate(session, "2026-06")
+    agg = load_month_aggregate(session, "2026-06", TRM)
     assert agg.assigned(cat.id, "2026-06") == 100_000
     assert agg.spent_for_budget(cat.id, "2026-06") == 30_000
     assert agg.available(cat.id, "2026-05") == 40_000
@@ -64,7 +66,7 @@ def test_gap_month_resets_rollover(session):
     session.add(_expense(acc.id, cat.id, date(2026, 6, 10), 10_000))
     session.commit()
 
-    agg = load_month_aggregate(session, "2026-06")
+    agg = load_month_aggregate(session, "2026-06", TRM)
     assert agg.available(cat.id, "2026-04") == 40_000
     assert agg.available(cat.id, "2026-05") == 0
     assert agg.available(cat.id, "2026-06") == 40_000  # gap reset: 0 + 50k - 10k
@@ -76,7 +78,7 @@ def test_load_issues_bounded_query_count(session):
         session.add(_expense(acc.id, cat.id, date(2026, 6, 1 + (i % 27)), 1_000))
     session.commit()
     with count_queries(session) as c:
-        agg = load_month_aggregate(session, "2026-06")
+        agg = load_month_aggregate(session, "2026-06", TRM)
         # Force full in-memory computation:
         agg.totals_for("2026-06")
         agg.available(cat.id, "2026-06")
@@ -90,5 +92,5 @@ def test_excluded_category_has_zero_budget_spend(session):
     session.refresh(acc); session.refresh(cat)
     session.add(_expense(acc.id, cat.id, date(2026, 6, 3), 500_000))
     session.commit()
-    agg = load_month_aggregate(session, "2026-06")
+    agg = load_month_aggregate(session, "2026-06", TRM)
     assert agg.spent_for_budget(cat.id, "2026-06") == 0
