@@ -7,6 +7,8 @@
 - [x] **Hybrid budget: envelopes + rollover + safe-to-spend** `id:hybrid-budget` priority:1 status:shipped area:budget → feature:budgets-safe-to-spend
       Product differentiator (ADR-002/003)
 - [x] **Transactions CRUD with tags, categories, FX** `id:transactions-core` priority:2 status:shipped area:core → feature:transactions-crud
+- [ ] **Read-time FX: TRM table as single source of truth (drop frozen to_base) + cross-currency transfers** `id:fx-read-time-conversion` priority:3 status:in-progress area:core → feature:fx-read-time-conversion
+      Replaces undocumented frozen-snapshot FX design; ADR pending
 - [x] **Planned payments / to-pay confirmation queue** `id:planned-to-pay` priority:3 status:shipped area:planning → feature:—
 - [x] **Recurring engine with materialize-due** `id:recurring` priority:4 status:shipped area:planning → feature:—
 - [x] **Savings goals with contributions** `id:goals` priority:5 status:shipped area:planning → feature:—
