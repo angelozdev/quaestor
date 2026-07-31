@@ -114,6 +114,12 @@ pipeline generation → tests green. Bounded, one feature per task.
 14. goals ← **paused pending sinking-funds redesign (features/003-sinking-funds)**
 15. budgets-envelopes + safe-to-spend ← **formalized at onboarding; paused pending
     sinking-funds redesign (features/003-sinking-funds)**
+    - Open followup from fix `2026-07-31-phantom-budget-assignment`
+      (gap: `missing_ac`): when this unpauses, land "archived and
+      budget-excluded categories cannot hold an envelope" as an AC in
+      `acs.md` and propagate it to `spec.md`. The rule is already enforced
+      in `services/budgets.set_budget` and pinned by service-layer
+      regression tests — only the AC/spec paper trail is missing.
 
 ## Cleanup tasks (doc/code drift — approved at triage)
 
