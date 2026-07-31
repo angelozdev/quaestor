@@ -1,9 +1,8 @@
 import { z } from "zod"
-import { fxRate, isoDate } from "@/lib/schemas/primitives"
+import { fxRate } from "@/lib/schemas/primitives"
 
-export const setFxRateSchema = z.object({
-  date: isoDate,
+export const setTrmSchema = z.object({
   usdCop: fxRate,
 })
 
-export type SetFxRateValues = z.infer<typeof setFxRateSchema>
+export type SetTrmValues = z.infer<typeof setTrmSchema>
