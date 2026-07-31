@@ -24,10 +24,11 @@ dev-real:
 
 # Dump the local production Postgres to iCloud Drive (dated file).
 backup:
-	QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec db \
-		sh -c 'pg_dump -U "$${POSTGRES_USER:-quaestor}" --format=custom --no-owner "$${POSTGRES_DB:-quaestor}"' \
-		> "$$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups/quaestor-local-$$(date +%F).dump"
-	@echo "backup written to iCloud QuaestorBackups/quaestor-local-$$(date +%F).dump"
+	QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db \
+		sh -c 'pg_dump -U "${POSTGRES_USER:-quaestor}" --format=custom --no-owner "${POSTGRES_DB:-quaestor}"' \
+		> "$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups/quaestor-local-$(date +%F).dump"
+	@test -s "$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups/quaestor-local-$(date +%F).dump" || { echo "backup dump is empty — removing"; rm "$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups/quaestor-local-$(date +%F).dump"; exit 1; }
+	@echo "backup written to iCloud QuaestorBackups/quaestor-local-$(date +%F).dump"
 
 # --- Common ops ----------------------------------------------------
 
@@ -57,4 +58,4 @@ daily:
 # Show which env file is currently active.
 db-which:
 	@echo "default recipes target backend/.env.local.sqlite"
-	@echo "QUAESTOR_DB=" $$(grep '^QUAESTOR_DB=' backend/.env.local.sqlite 2>/dev/null || echo "(no .env.local.sqlite yet)")
+	@echo "QUAESTOR_DB=" $(grep '^QUAESTOR_DB=' backend/.env.local.sqlite 2>/dev/null || echo "(no .env.local.sqlite yet)")
