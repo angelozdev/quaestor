@@ -1,11 +1,13 @@
-> ▶ CP8 Harden — complete (4/4 criteria met) | NEXT: runbook real-data migration (just backup → just dev-prod → verify TRM → smoke) | BLOCKED: none
+> ▶ Feature complete — runbook closed 2026-07-31, AC-12 green | NEXT: /engineer.next | BLOCKED: none
 
 # Progress — 005 fx-read-time-conversion
 
 Shipped: PR #1 merged to main 2026-07-31T03:37Z
 (https://github.com/angelozdev/quaestor/pull/1, merge commit 4511a0b).
-Runbook steps remain open — AC-12 stays partial until the migration runs
-on real data.
+Runbook closed 2026-07-31: migration 0005 verified on real data, TRM
+corrected to 3133, post-migration backup taken — AC-12 green. Note: the
+migration self-applied at container boot before the planned backup; see
+runbook.md outcome section for the full account and lesson.
 
 ## Checkpoints
 
@@ -28,6 +30,13 @@ on real data.
 - CP8 harden (architect-1): mutation on money/fx/transactions — 65
   mutants, final score 100% after 7 targeted tests; no real bugs among
   survivors. Final runs: acceptance 26/26, backend 705, frontend 197.
+- Runbook close (main, 2026-07-31): migration 0005 confirmed applied to
+  real Postgres (alembic_version 0005, 634 transactions intact); TRM
+  pre-load worked (3000) then corrected to real value 3133 via API;
+  smoke green (transactions with cop_equivalent, monthly report, auth);
+  post-migration backup quaestor-local-2026-07-31.dump verified with
+  pg_restore --list. `just backup` recipe was broken (make-style `$$`
+  escaping) — fixed same day. AC-12 green.
 
 ## Handoff log
 
@@ -42,6 +51,7 @@ on real data.
 | 2026-07-30T1717 | refine | refiner-1 | reuse/quality/efficiency applied; streams green |
 | 2026-07-30T1729 | verify | architect-1 | consistency clean; coverage 95%; AC-12 partial |
 | 2026-07-30T1737 | harden | architect-1 | mutation 100%; backend 705 |
+| 2026-07-31 | runbook-close | main | migration verified on real data; TRM 3133; backup fixed+taken; AC-12 green |
 
 ## Tracker sync
 
