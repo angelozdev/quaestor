@@ -9,6 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import date as Date
 
+from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from ..domain.errors import NotFound, TransferImbalance, ValidationError
@@ -18,12 +19,13 @@ from ..domain.models import (
     Tag,
     Transaction,
     TransactionTag,
+    TransferDirection,
     TxStatus,
     TxType,
     Source,
 )
 from ..domain.money import is_supported
-from ..domain.rules import delta_balance
+from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortField, SortSpec, SortableColumns
 
 
@@ -258,6 +260,7 @@ def transfer(
         currency=src.currency,
         account_id=from_account_id,
         transfer_group_id=group,
+        transfer_direction=TransferDirection.out,
         source=Source(source),
     )
     leg_to = Transaction(
@@ -270,6 +273,7 @@ def transfer(
         currency=dst.currency,
         account_id=to_account_id,
         transfer_group_id=group,
+        transfer_direction=TransferDirection.in_,
         source=Source(source),
     )
     try:
@@ -298,6 +302,7 @@ def list_transactions(
     tag: str | None = None,
     type=None,
     status=None,
+    transfer_group_id: str | None = None,
     date_from: Date | None = None,
     date_to: Date | None = None,
     *,
@@ -320,6 +325,7 @@ def list_transactions(
         tag: Filter by tag name (exact match).
         type: Filter by TxType (or a value coercible to TxType).
         status: Filter by TxStatus (or a value coercible to TxStatus).
+        transfer_group_id: Filter to the legs of one transfer.
         date_from: Include transactions on or after this date.
         date_to: Include transactions on or before this date.
         sort: Primary sort field. One of `SortField`.
@@ -338,6 +344,8 @@ def list_transactions(
         stmt = stmt.where(Transaction.type == TxType(type))
     if status is not None:
         stmt = stmt.where(Transaction.status == TxStatus(status))
+    if transfer_group_id is not None:
+        stmt = stmt.where(Transaction.transfer_group_id == transfer_group_id)
     if date_from is not None:
         stmt = stmt.where(Transaction.date >= date_from)
     if date_to is not None:
@@ -394,31 +402,81 @@ def update_transaction(
     return tx
 
 
-def delete_transaction(session: Session, tx_id: int) -> None:
-    """Delete a transaction, reversing its posted balance effect.
+def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:
+    session.exec(
+        delete(TransactionTag).where(TransactionTag.transaction_id.in_(tx_ids))
+    )
 
-    Transfers are not deletable in P1 (no stored leg direction to reverse safely).
 
-    Raises:
-        NotFound: If the transaction does not exist.
-        ValidationError: If the transaction is a transfer leg.
-    """
-    tx = get_transaction(session, tx_id)
-    if tx.type == TxType.transfer:
-        raise ValidationError("deleting transfers is not supported in P1")
+def _delta_balance_of(tx: Transaction) -> int:
+    if tx.type != TxType.transfer:
+        return delta_balance(tx.type, tx.amount)
+    try:
+        return leg_delta_balance(tx.transfer_direction, tx.amount)
+    except ValueError as exc:
+        raise ValidationError(
+            f"transfer leg {tx.id} has no stored direction; cannot reverse safely"
+        ) from exc
+
+
+def _reverse_balance(session: Session, tx: Transaction) -> None:
+    delta = _delta_balance_of(tx)
+    acc = session.get(Account, tx.account_id)
+    if acc is not None:
+        acc.balance -= delta
+        session.add(acc)
+
+
+def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
+    if leg.transfer_group_id is None:
+        raise ValidationError(
+            f"transfer {leg.id} has no transfer group; cannot delete its pair"
+        )
+    legs = session.exec(
+        select(Transaction).where(
+            Transaction.transfer_group_id == leg.transfer_group_id
+        )
+    ).all()
+    try:
+        for member in legs:
+            _reverse_balance(session, member)
+        _delete_tag_links(session, [member.id for member in legs])
+        for member in legs:
+            session.delete(member)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
+def _delete_single(session: Session, tx: Transaction) -> None:
     try:
         if tx.status == TxStatus.posted:
-            acc = session.get(Account, tx.account_id)
-            if acc is not None:
-                acc.balance -= delta_balance(tx.type, tx.amount)
-                session.add(acc)
-        links = session.exec(
-            select(TransactionTag).where(TransactionTag.transaction_id == tx_id)
-        ).all()
-        for link in links:
-            session.delete(link)
+            _reverse_balance(session, tx)
+        _delete_tag_links(session, [tx.id])
         session.delete(tx)
         session.commit()
     except Exception:
         session.rollback()
         raise
+
+
+def delete_transaction(session: Session, tx_id: int) -> None:
+    """Delete a transaction, reversing its posted balance effect.
+
+    A transfer leg that belongs to a group deletes its whole pair: both legs'
+    balances are reversed per their stored direction and both rows plus their
+    tag links are removed atomically (ADR-0032) — a half-deleted transfer can
+    never exist. A group-less transfer is a proposed goal contribution whose
+    second leg is only born at confirm time; it deletes as a single row, and
+    moves no balance unless it was already posted.
+
+    Raises:
+        NotFound: If the transaction does not exist.
+        ValidationError: If a posted transfer leg carries no stored direction.
+    """
+    tx = get_transaction(session, tx_id)
+    if tx.type == TxType.transfer and tx.transfer_group_id is not None:
+        _delete_transfer_pair(session, tx)
+        return
+    _delete_single(session, tx)

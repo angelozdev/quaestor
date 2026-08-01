@@ -4,7 +4,7 @@ from quaestor.mcp.tools import transactions as tx_tools
 from quaestor.mcp.tools.transactions import (
     GetTransactionInput, UpdateTransactionInput, DeleteTransactionInput,
 )
-from quaestor.services import accounts, fx, transactions as tx_service
+from quaestor.services import accounts, fx, tags as tags_service, transactions as tx_service
 
 
 def _seed(session):
@@ -68,6 +68,51 @@ def test_update_transaction_can_clear_notes_with_empty_string(session):
     assert tx_service.get_transaction(session, tx.id).notes is None
 
 
+def test_update_transaction_add_tags_links_them(session):
+    _seed(session)
+    tx = tx_service.record_expense(
+        session, account_id=1, amount=5_000_000, currency="COP",
+        date=date(2026, 6, 18), payee="Lunch",
+    )
+    tx_tools.update_transaction(
+        session, UpdateTransactionInput(tx_id=tx.id, add_tags=["viaje", "comida"])
+    )
+    assert tags_service.tag_names_by_transaction(session, [tx.id]) == {
+        tx.id: ["comida", "viaje"]
+    }
+
+
+def test_update_transaction_remove_tags_unlinks_them(session):
+    _seed(session)
+    tx = tx_service.record_expense(
+        session, account_id=1, amount=5_000_000, currency="COP",
+        date=date(2026, 6, 18), payee="Lunch",
+    )
+    tags_service.tag_transaction(session, tx.id, ["viaje", "comida"])
+    tx_tools.update_transaction(
+        session, UpdateTransactionInput(tx_id=tx.id, remove_tags=["viaje"])
+    )
+    assert tags_service.tag_names_by_transaction(session, [tx.id]) == {
+        tx.id: ["comida"]
+    }
+
+
+def test_update_transaction_remove_absent_tag_is_a_noop(session):
+    _seed(session)
+    tx = tx_service.record_expense(
+        session, account_id=1, amount=5_000_000, currency="COP",
+        date=date(2026, 6, 18), payee="Lunch",
+    )
+    tags_service.tag_transaction(session, tx.id, ["viaje"])
+    out = tx_tools.update_transaction(
+        session, UpdateTransactionInput(tx_id=tx.id, remove_tags=["ghost"])
+    )
+    assert "Lunch" in out
+    assert tags_service.tag_names_by_transaction(session, [tx.id]) == {
+        tx.id: ["viaje"]
+    }
+
+
 def test_delete_transaction_reverses_balance(session):
     _seed(session)
     tx = tx_service.record_expense(
@@ -78,3 +123,18 @@ def test_delete_transaction_reverses_balance(session):
     assert "Deleted" in out
     # account balance back to original
     assert accounts.get_account(session, 1).balance == 10_000_000
+
+
+def test_delete_transfer_leg_deletes_pair_and_restores_both_balances(session):
+    _seed(session)
+    accounts.create_account(session, "Nequi", "debit", "COP", balance=200_000)
+    leg_from, leg_to = tx_service.transfer(
+        session, 1, 2, 100_000, "COP", date(2026, 6, 18)
+    )
+    out = tx_tools.delete_transaction(session, DeleteTransactionInput(tx_id=leg_to.id))
+    assert "Deleted" in out
+    assert accounts.get_account(session, 1).balance == 10_000_000
+    assert accounts.get_account(session, 2).balance == 200_000
+    assert "not found" in tx_tools.get_transaction(
+        session, GetTransactionInput(tx_id=leg_from.id)
+    )

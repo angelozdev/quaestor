@@ -45,3 +45,5 @@ New ADRs are created with the `adr` skill:
 | 0029 | Frontend async-state contract via QueryBoundary | accepted | 2026-07-22 |
 | 0030 | Local Postgres container replaces Render as the production database | accepted | 2026-07-28 |
 | 0031 | Read-time FX conversion from the single TRM value replaces frozen per-transaction snapshots | accepted | 2026-07-30 |
+| 0032 | Stored transfer-leg direction enables atomic pair deletion | accepted | 2026-07-31 |
+| 0033 | Migrations apply only at container start, never on autoreload | proposed | 2026-07-31 |

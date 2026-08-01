@@ -20,6 +20,7 @@ from ..domain.models import (
     Settings,
     Source,
     Transaction,
+    TransferDirection,
     TxStatus,
     TxType,
 )
@@ -264,9 +265,11 @@ def _materialize_planned_transfer(
         currency=tx.currency,
         account_id=src_id,
         transfer_group_id=group,
+        transfer_direction=TransferDirection.out,
         source=Source.manual,
     )
     tx.transfer_group_id = group
+    tx.transfer_direction = TransferDirection.in_
     tx.status = TxStatus.posted
     src.balance += d_from
     dst.balance += d_to

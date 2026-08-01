@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 
 from quaestor.domain.errors import NotFound, TransferImbalance, ValidationError
-from quaestor.domain.models import AccountType, TxStatus, TxType
+from quaestor.domain.models import AccountType, TransferDirection, TxStatus, TxType
 from quaestor.domain.money import to_cop_cents
 from quaestor.services import accounts, categories, fx, planned, transactions
 
@@ -223,6 +223,60 @@ def test_delete_transaction_keeps_other_transactions_tags(session):
     assert [r.id for r in remaining] == [tx_b.id]
 
 
+def test_record_without_a_payee_stores_an_empty_string(session):
+    acc = _make_account(session, balance=100_000)
+    tx = transactions.record_expense(
+        session, acc.id, 1_000, "COP", date(2026, 6, 1), None
+    )
+    assert tx.payee == ""
+
+
+def test_transfer_without_notes_is_labelled_transfer(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100_000)
+    b = accounts.create_account(session, "B", AccountType.debit, "COP", balance=0)
+    leg_from, leg_to = transactions.transfer(session, a.id, b.id, 1_000, "COP", date(2026, 6, 1))
+    assert leg_from.payee == "transfer"
+    assert leg_to.payee == "transfer"
+
+
+def test_transfer_notes_become_the_leg_payee(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100_000)
+    b = accounts.create_account(session, "B", AccountType.debit, "COP", balance=0)
+    leg_from, leg_to = transactions.transfer(
+        session, a.id, b.id, 1_000, "COP", date(2026, 6, 1), notes="ahorro mensual"
+    )
+    assert leg_from.payee == "ahorro mensual"
+    assert leg_to.payee == "ahorro mensual"
+
+
+def test_list_filters_to_the_legs_of_one_transfer(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    _, _, (other_from, _) = _same_currency_transfer(session)
+    rows = transactions.list_transactions(
+        session, transfer_group_id=leg_from.transfer_group_id
+    )
+    assert sorted(r.id for r in rows) == sorted([leg_from.id, leg_to.id])
+    assert other_from.id not in [r.id for r in rows]
+
+
+def test_deleting_an_expense_that_shares_a_transfer_group_spares_the_pair(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    intruder = transactions.record_expense(
+        session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
+    )
+    intruder.transfer_group_id = leg_from.transfer_group_id
+    session.add(intruder)
+    session.commit()
+    transactions.delete_transaction(session, intruder.id)
+    assert transactions.get_transaction(session, leg_from.id).id == leg_from.id
+    assert transactions.get_transaction(session, leg_to.id).id == leg_to.id
+    assert accounts.get_account(session, a.id).balance == 900_000
+    assert accounts.get_account(session, b.id).balance == 300_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, intruder.id)
+
+
 def test_transfer_currency_must_match_source_account(session):
     wise, banco = _cross_currency_pair(session)
     with pytest.raises(ValidationError):
@@ -311,19 +365,155 @@ def test_delete_expense_reverses_balance(session):
         transactions.get_transaction(session, tx.id)
 
 
-def test_delete_transfer_leg_is_rejected(session):
-    from datetime import date
-
-    from quaestor.domain.errors import ValidationError
-    from quaestor.domain.models import AccountType
-    from quaestor.services import accounts, transactions
-    import pytest
-
-    a = accounts.create_account(session, "Cash", AccountType.cash, "COP")
+def test_transfer_sets_direction_on_each_leg(session):
+    a = accounts.create_account(session, "Cash", AccountType.cash, "COP", balance=1_000)
     b = accounts.create_account(session, "Bank", AccountType.debit, "COP")
-    leg_from, _ = transactions.transfer(session, a.id, b.id, 500, "COP", date(2026, 6, 17))
+    leg_from, leg_to = transactions.transfer(session, a.id, b.id, 500, "COP", date(2026, 6, 17))
+    assert leg_from.transfer_direction == TransferDirection.out
+    assert leg_to.transfer_direction == TransferDirection.in_
+
+
+def test_expense_and_income_carry_no_transfer_direction(session):
+    acc = _make_account(session, balance=10_000)
+    expense = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "X")
+    income = transactions.record_income(session, acc.id, 2_000, "COP", date(2026, 6, 1), "Y")
+    assert expense.transfer_direction is None
+    assert income.transfer_direction is None
+
+
+def _same_currency_transfer(session):
+    a = accounts.create_account(session, "Cash", AccountType.cash, "COP", balance=1_000_000)
+    b = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=200_000)
+    legs = transactions.transfer(session, a.id, b.id, 100_000, "COP", date(2026, 6, 17))
+    return a, b, legs
+
+
+def test_delete_outgoing_leg_deletes_pair_and_restores_balances(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    transactions.delete_transaction(session, leg_from.id)
+    assert accounts.get_account(session, a.id).balance == 1_000_000
+    assert accounts.get_account(session, b.id).balance == 200_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, leg_from.id)
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, leg_to.id)
+
+
+def test_delete_receiving_leg_deletes_pair_and_restores_balances(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    transactions.delete_transaction(session, leg_to.id)
+    assert accounts.get_account(session, a.id).balance == 1_000_000
+    assert accounts.get_account(session, b.id).balance == 200_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, leg_from.id)
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, leg_to.id)
+
+
+def test_delete_cross_currency_pair_restores_each_physical_amount(session):
+    wise, banco = _cross_currency_pair(session)
+    leg_from, _ = transactions.transfer(
+        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        amount_received=40_000_000,
+    )
+    transactions.delete_transaction(session, leg_from.id)
+    assert accounts.get_account(session, wise.id).balance == 50_000
+    assert accounts.get_account(session, banco.id).balance == 100_000_000
+
+
+def test_delete_transfer_pair_removes_only_its_tag_links(session):
+    from quaestor.services import tags
+
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    other = transactions.record_expense(
+        session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
+    )
+    tags.tag_transaction(session, leg_from.id, ["viaje"])
+    tags.tag_transaction(session, leg_to.id, ["viaje"])
+    tags.tag_transaction(session, other.id, ["viaje"])
+    transactions.delete_transaction(session, leg_from.id)
+    from quaestor.domain.models import TransactionTag
+    from sqlmodel import select
+
+    remaining = session.exec(select(TransactionTag)).all()
+    assert [link.transaction_id for link in remaining] == [other.id]
+
+
+def _group_less_transfer(session, status):
+    from quaestor.domain.models import Transaction
+
+    acc = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=500_000)
+    tx = Transaction(
+        date=date(2026, 6, 30), payee="Goal: Korea", type=TxType.transfer,
+        status=status, amount=300_000, currency="COP", account_id=acc.id,
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return acc, tx
+
+
+@pytest.mark.parametrize("status", [TxStatus.planned, TxStatus.skipped])
+def test_delete_group_less_transfer_removes_the_row_and_keeps_the_balance(session, status):
+    acc, tx = _group_less_transfer(session, status)
+    transactions.delete_transaction(session, tx.id)
+    assert accounts.get_account(session, acc.id).balance == 500_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, tx.id)
+
+
+def test_delete_group_less_transfer_removes_its_tag_links(session):
+    from quaestor.domain.models import TransactionTag
+    from quaestor.services import tags
+    from sqlmodel import select
+
+    acc, tx = _group_less_transfer(session, TxStatus.planned)
+    other = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    tags.tag_transaction(session, tx.id, ["ahorro"])
+    tags.tag_transaction(session, other.id, ["ahorro"])
+    transactions.delete_transaction(session, tx.id)
+    remaining = session.exec(select(TransactionTag)).all()
+    assert [link.transaction_id for link in remaining] == [other.id]
+
+
+def test_delete_grouped_transfer_without_direction_still_fails_loud(session):
+    from quaestor.domain.models import Transaction
+
+    a = accounts.create_account(session, "Cash", AccountType.cash, "COP", balance=1_000_000)
+    b = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=200_000)
+    legs = [
+        Transaction(
+            date=date(2026, 6, 17), payee="transfer", type=TxType.transfer,
+            status=TxStatus.posted, amount=100_000, currency="COP",
+            account_id=account.id, transfer_group_id="orphaned",
+        )
+        for account in (a, b)
+    ]
+    session.add_all(legs)
+    session.commit()
     with pytest.raises(ValidationError):
+        transactions.delete_transaction(session, legs[0].id)
+    assert accounts.get_account(session, a.id).balance == 1_000_000
+    assert accounts.get_account(session, b.id).balance == 200_000
+
+
+def test_delete_transfer_pair_is_atomic_on_failure(session, monkeypatch):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+
+    def boom():
+        raise RuntimeError("commit failed")
+
+    monkeypatch.setattr(session, "commit", boom)
+    with pytest.raises(RuntimeError):
         transactions.delete_transaction(session, leg_from.id)
+    monkeypatch.undo()
+    assert accounts.get_account(session, a.id).balance == 900_000
+    assert accounts.get_account(session, b.id).balance == 300_000
+    survivors = [
+        transactions.get_transaction(session, leg_from.id),
+        transactions.get_transaction(session, leg_to.id),
+    ]
+    assert {tx.transfer_group_id for tx in survivors} == {leg_from.transfer_group_id}
 
 
 # --- sort / order behaviour (ADR-0021) ---

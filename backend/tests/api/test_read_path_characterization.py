@@ -119,7 +119,7 @@ def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(
     assert set(row) == {
         "id", "date", "payee", "notes", "type", "status", "amount", "currency",
         "cop_equivalent", "account_id", "category_id", "transfer_group_id",
-        "source", "created_at",
+        "transfer_direction", "source", "created_at", "tags",
     }
     assert row["cop_equivalent"] == 60_000
 

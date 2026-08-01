@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
 import { MoneyInput } from "@/components/money-input"
+import { TagChipsInput } from "@/components/tag-chips-input"
 import {
   type TxNormalValues,
   type TxTransferValues,
@@ -19,6 +20,7 @@ import { createTransaction, createTransfer as createTransferApi } from "@/lib/ap
 import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { finiteOrNull } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useTagNames } from "@/lib/use-tag-names"
 import {
   Button,
   Dialog,
@@ -45,6 +47,7 @@ const NORMAL_DEFAULTS: TxNormalValues = {
   date: new Date().toISOString().slice(0, 10),
   payee: "",
   notes: "",
+  tags: [],
 }
 
 const TRANSFER_DEFAULTS: TxTransferValues = {
@@ -86,6 +89,7 @@ export function TransactionCreateDialog({
     queryKey: qk.accounts(false),
     queryFn: () => listAccounts(false),
   })
+  const tagSuggestions = useTagNames()
 
   const normalForm = useTanStackForm({
     defaultValues: NORMAL_DEFAULTS,
@@ -136,6 +140,7 @@ export function TransactionCreateDialog({
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         category_id: values.categoryId,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
+        tags: values.tags.length > 0 ? values.tags : undefined,
       })
     },
     onSuccess: () => done("Transacción creada"),
@@ -248,6 +253,15 @@ export function TransactionCreateDialog({
                       allowNullLabel="Sin categoría"
                     />
                   </div>
+                )}
+              </normalForm.Field>
+              <normalForm.Field name="tags">
+                {(field) => (
+                  <TagChipsInput
+                    value={field.state.value as string[]}
+                    onChange={(tags) => field.handleChange(tags as never)}
+                    suggestions={tagSuggestions}
+                  />
                 )}
               </normalForm.Field>
               <normalForm.Field name="notes">

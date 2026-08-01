@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
+from sqlmodel import Session
 
 from ..domain.models import (
     AccountType,
@@ -14,10 +15,12 @@ from ..domain.models import (
     RecurringMode,
     Source,
     Transaction,
+    TransferDirection,
     TxStatus,
     TxType,
 )
 from ..domain.money import to_cop_cents
+from ..services import tags
 
 
 class AccountCreate(BaseModel):
@@ -136,6 +139,7 @@ class TransactionCreate(BaseModel):
     category_id: int | None = None
     notes: str | None = None
     source: str = "manual"
+    tags: list[str] | None = None
 
 
 class TransferIn(BaseModel):
@@ -164,17 +168,46 @@ class TransactionOut(BaseModel):
     account_id: int
     category_id: int | None
     transfer_group_id: str | None
+    transfer_direction: TransferDirection | None = None
     source: Source
     created_at: datetime
+    tags: list[str] = []
 
     @classmethod
-    def from_tx(cls, tx: Transaction, trm: Decimal | None) -> "TransactionOut":
+    def from_tx(
+        cls,
+        tx: Transaction,
+        trm: Decimal | None,
+        tag_names: list[str],
+    ) -> "TransactionOut":
         """Serialize a Transaction, computing `cop_equivalent` at read time
-        when a TRM is available (ADR-0031)."""
+        when a TRM is available (ADR-0031) and attaching its tag names."""
         out = cls.model_validate(tx)
         if trm is not None:
             out.cop_equivalent = to_cop_cents(tx.amount, tx.currency, trm)
+        out.tags = tag_names
         return out
+
+    @classmethod
+    def from_txs(
+        cls,
+        session: Session,
+        txs: list[Transaction],
+        trm: Decimal | None,
+    ) -> list["TransactionOut"]:
+        """Serialize transactions, loading every tag name in one query."""
+        names = tags.tag_names_by_transaction(session, [tx.id for tx in txs])
+        return [cls.from_tx(tx, trm, names[tx.id]) for tx in txs]
+
+    @classmethod
+    def from_one(
+        cls,
+        session: Session,
+        tx: Transaction,
+        trm: Decimal | None,
+    ) -> "TransactionOut":
+        """Serialize a single transaction with its tag names loaded."""
+        return cls.from_txs(session, [tx], trm)[0]
 
 
 class TransferOut(BaseModel):
@@ -187,6 +220,7 @@ class TransactionUpdate(BaseModel):
     notes: str | None = None
     category_id: int | None = None
     date: Date | None = None
+    tags: list[str] | None = None
 
 
 class RecurringCreate(BaseModel):

@@ -344,8 +344,8 @@ def when_same_currency_transfer(
     def action():
         world.transfer_legs = transactions.transfer(
             world.session,
-            world.accounts[src],
-            world.accounts[dst],
+            world.account_id_or_missing(src),
+            world.account_id_or_missing(dst),
             major_to_cents(amount),
             currency,
             world.today,
@@ -392,17 +392,18 @@ def when_upgrade_completes(world: World) -> None:
 def _rest_client(world: World):
     """A REST TestClient wired to this scenario's engine (same pattern as
     backend/tests/api/conftest.py)."""
+    os.environ["APP_TOKEN"] = "acceptance-token"
+    os.environ["APP_PASSWORD"] = "acceptance-password"
+    os.environ["SESSION_SECRET"] = "a" * 64
+    os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000"
+    os.environ.pop("COOKIE_SECURE", None)
+
     from fastapi.testclient import TestClient
     from sqlmodel import Session
 
     from quaestor.api import create_app
     from quaestor.api.deps import get_session
 
-    os.environ["APP_TOKEN"] = "acceptance-token"
-    os.environ["APP_PASSWORD"] = "acceptance-password"
-    os.environ["SESSION_SECRET"] = "a" * 64
-    os.environ["FRONTEND_ORIGIN"] = "http://localhost:3000"
-    os.environ.pop("COOKIE_SECURE", None)
     app = create_app()
 
     def override_get_session():

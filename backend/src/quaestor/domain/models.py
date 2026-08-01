@@ -55,6 +55,13 @@ class Source(str, Enum):
     import_ = "import"
 
 
+class TransferDirection(str, Enum):
+    """Which way a transfer leg moved its account balance (ADR-0032)."""
+
+    out = "out"
+    in_ = "in"
+
+
 class Account(SQLModel, table=True):
     """`balance` is integer cents in the account's own currency."""
 
@@ -105,6 +112,7 @@ class Transaction(SQLModel, table=True):
     recurring_id: Annotated[Optional[int], Field(default=None, foreign_key="recurring_item.id")] = None
     goal_id: Annotated[Optional[int], Field(default=None, foreign_key="goal.id")] = None
     transfer_group_id: Annotated[Optional[str], Field(default=None, index=True)] = None
+    transfer_direction: Annotated[Optional[TransferDirection], Field(default=None)] = None
     source: Source = Source.manual
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

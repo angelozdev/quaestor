@@ -348,6 +348,70 @@ def test_confirm_planned_transfer_materializes_posted_pair(session):
     assert posted[0].transfer_group_id == posted[1].transfer_group_id
 
 
+def test_confirm_planned_transfer_stores_both_leg_directions(session):
+    from quaestor.domain.models import TransferDirection
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+    confirmed = planned.confirm_payment(session, tx.id)
+    legs = transactions.list_transactions(session, status="posted", type=TxType.transfer)
+    by_account = {leg.account_id: leg.transfer_direction for leg in legs}
+    assert by_account[src.id] == TransferDirection.out
+    assert by_account[dst.id] == TransferDirection.in_
+    assert confirmed.transfer_direction == TransferDirection.in_
+
+
+def test_confirmed_planned_transfer_deletes_as_a_pair(session):
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+    confirmed = planned.confirm_payment(session, tx.id)
+    transactions.delete_transaction(session, confirmed.id)
+    assert transactions.list_transactions(session, type=TxType.transfer) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, dst.id).balance == 0
+
+
+def _confirmable_transfer(session, dst_currency="COP", src_currency="COP", amount=100_000):
+    from quaestor.services import settings as settings_svc
+    src = accounts.create_account(session, "Checking", AccountType.debit, src_currency, balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, dst_currency, balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    return src, dst, _planned_transfer(session, dst.id, amount=amount)
+
+
+def test_confirm_planned_transfer_accepts_a_one_cent_amount(session):
+    src, dst, tx = _confirmable_transfer(session, amount=1)
+    confirmed = planned.confirm_payment(session, tx.id)
+    assert confirmed.status == TxStatus.posted
+    assert accounts.get_account(session, src.id).balance == 999_999
+    assert accounts.get_account(session, dst.id).balance == 1
+
+
+def test_confirm_planned_transfer_rejects_a_zero_amount(session):
+    src, dst, tx = _confirmable_transfer(session)
+    with pytest.raises(ValidationError):
+        planned.confirm_payment(session, tx.id, amount=0)
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, dst.id).balance == 0
+
+
+def test_confirm_planned_transfer_rejects_a_source_currency_mismatch(session):
+    src, dst, tx = _confirmable_transfer(session, src_currency="USD")
+    with pytest.raises(ValidationError):
+        planned.confirm_payment(session, tx.id)
+
+
+def test_confirm_planned_transfer_rejects_a_destination_currency_mismatch(session):
+    src, dst, tx = _confirmable_transfer(session, dst_currency="USD")
+    with pytest.raises(ValidationError):
+        planned.confirm_payment(session, tx.id)
+
+
 def test_confirm_planned_transfer_without_default_source_raises(session):
     dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     tx = _planned_transfer(session, dst.id)

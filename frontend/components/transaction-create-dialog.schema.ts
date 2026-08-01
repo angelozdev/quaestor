@@ -11,6 +11,7 @@ export const txNormalSchema = z
     date: isoDate,
     payee: z.string().trim().max(500, messages.max500).optional().or(z.literal("")),
     notes: optionalString,
+    tags: z.array(z.string()),
   })
   .refine((d) => d.accountId !== null, {
     message: messages.required,

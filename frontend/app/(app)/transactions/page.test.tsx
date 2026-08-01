@@ -1,9 +1,12 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import type { Transaction } from "@/lib/api/types"
+import { makeTransaction, queryWrapper } from "@/tests/factories"
 import TransactionsPage from "./page"
 
 const listTransactions = vi.fn()
+const deleteTransaction = vi.fn()
 let currentParams = new URLSearchParams("")
 
 vi.mock("next/navigation", () => ({
@@ -13,16 +16,22 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("@/lib/api/transactions", () => ({
   listTransactions: (...a: unknown[]) => listTransactions(...a),
-  deleteTransaction: vi.fn(),
+  deleteTransaction: (...a: unknown[]) => deleteTransaction(...a),
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/tags", () => ({ listTags: vi.fn().mockResolvedValue([]) }))
 
-function wrapper({ children }: { children: React.ReactNode }) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-}
+const makeTransferLeg = (): Transaction =>
+  makeTransaction({
+    id: 7,
+    payee: "transfer",
+    type: "transfer",
+    amount: 10_000_000,
+    cop_equivalent: 10_000_000,
+    transfer_group_id: "g1",
+    transfer_direction: "out",
+  })
 
 describe("TransactionsPage URL filters", () => {
   beforeEach(() => {
@@ -32,9 +41,93 @@ describe("TransactionsPage URL filters", () => {
 
   it("passes URL filters to listTransactions", async () => {
     currentParams = new URLSearchParams("type=expense&account_id=3")
-    render(<TransactionsPage />, { wrapper })
+    render(<TransactionsPage />, { wrapper: queryWrapper })
     await waitFor(() =>
       expect(listTransactions).toHaveBeenCalledWith({ type: "expense", account_id: 3 }),
     )
+  })
+})
+
+describe("TransactionsPage transfer rows", () => {
+  beforeEach(async () => {
+    const { listAccounts } = await import("@/lib/api/accounts")
+    vi.mocked(listAccounts).mockResolvedValue([
+      { id: 1, name: "Bancolombia", type: "debit", currency: "COP", balance: 0, archived: false },
+      { id: 2, name: "Nequi", type: "debit", currency: "COP", balance: 0, archived: false },
+    ])
+    listTransactions.mockReset().mockResolvedValue([
+      makeTransferLeg(),
+      {
+        ...makeTransferLeg(),
+        id: 8,
+        account_id: 2,
+        transfer_direction: "in",
+      },
+      {
+        ...makeTransferLeg(),
+        id: 9,
+        type: "expense",
+        payee: "Éxito",
+        transfer_group_id: null,
+        transfer_direction: null,
+      },
+    ])
+    currentParams = new URLSearchParams("")
+  })
+
+  it("labels each transfer leg with its direction and counterpart account", async () => {
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    expect(await screen.findByText("Transferencia a Nequi")).toBeInTheDocument()
+    expect(await screen.findByText("Transferencia desde Bancolombia")).toBeInTheDocument()
+    expect(await screen.findByText("Éxito")).toBeInTheDocument()
+  })
+})
+
+describe("TransactionsPage transfer deletion", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([makeTransferLeg()])
+    deleteTransaction.mockReset().mockResolvedValue(undefined)
+    currentParams = new URLSearchParams("")
+  })
+
+  it("deletes a transfer row after warning it removes both sides", async () => {
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Acciones" }))
+    await user.click(await screen.findByText("Eliminar"))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText(/ambos lados de la transferencia/i)).toBeInTheDocument()
+    expect(within(dialog).getByText(/Es permanente/)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }))
+    await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(7))
+  })
+})
+
+describe("TransactionsPage single-leg transfer deletion", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([
+      {
+        ...makeTransferLeg(),
+        id: 11,
+        payee: "Goal: Korea",
+        status: "planned",
+        transfer_group_id: null,
+        transfer_direction: null,
+      },
+    ])
+    deleteTransaction.mockReset().mockResolvedValue(undefined)
+    currentParams = new URLSearchParams("")
+  })
+
+  it("warns that only this movement is removed when there is no counterpart", async () => {
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Acciones" }))
+    await user.click(await screen.findByText("Eliminar"))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).queryByText(/ambos lados de la transferencia/i)).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/solo este movimiento/i)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }))
+    await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(11))
   })
 })

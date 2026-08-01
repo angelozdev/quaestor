@@ -97,6 +97,17 @@ def test_goal_contribution_is_not_expense_or_income(session):
     assert len(transfers) == 2
 
 
+def test_goal_contribution_stores_both_leg_directions(session):
+    from quaestor.domain.models import TransferDirection
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.goal_contribution(session, g.id, 150_000, date(2026, 6, 15))
+    legs = transactions.list_transactions(session, type=TxType.transfer, status="posted")
+    by_account = {leg.account_id: leg.transfer_direction for leg in legs}
+    assert by_account[src.id] == TransferDirection.out
+    assert by_account[sav.id] == TransferDirection.in_
+
+
 def test_goal_contribution_without_default_source_is_atomic(session):
     sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
@@ -123,6 +134,66 @@ def test_goal_contribution_rejects_bad_amount_and_unknown_goal(session):
         goals.goal_contribution(session, g.id, 0, date(2026, 6, 15))
     with pytest.raises(NotFound):
         goals.goal_contribution(session, 999, 100_000, date(2026, 6, 15))
+
+
+def test_goal_contribution_accepts_a_one_cent_amount(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    contribution = goals.goal_contribution(session, g.id, 1, date(2026, 6, 15))
+    assert contribution.amount == 1
+    assert accounts.get_account(session, src.id).balance == 999_999
+    assert accounts.get_account(session, sav.id).balance == 1
+
+
+def test_goal_contribution_rejects_an_archived_savings_account(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    accounts.archive_account(session, sav.id)
+    with pytest.raises(ValidationError):
+        goals.goal_contribution(session, g.id, 100_000, date(2026, 6, 15))
+
+
+def test_goal_contribution_rejects_a_missing_savings_account(session):
+    from quaestor.domain.models import Goal
+
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    session.get(Goal, g.id).savings_account_id = 9999
+    session.commit()
+    with pytest.raises(ValidationError):
+        goals.goal_contribution(session, g.id, 100_000, date(2026, 6, 15))
+
+
+def test_goal_contribution_rejects_an_archived_source_account(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    accounts.archive_account(session, src.id)
+    with pytest.raises(ValidationError):
+        goals.goal_contribution(session, g.id, 100_000, date(2026, 6, 15))
+
+
+def test_goal_contribution_rejects_a_dangling_default_source_account(session):
+    from quaestor.domain.models import Settings
+
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    session.get(Settings, 1).default_source_account_id = 9999
+    session.commit()
+    with pytest.raises(ValidationError):
+        goals.goal_contribution(session, g.id, 100_000, date(2026, 6, 15))
+
+
+def test_propose_skips_a_goal_whose_only_tx_falls_on_the_first_day(session):
+    src, sav = _funded(session)
+    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    proposal = _planned_transfers(session)[0]
+    proposal.date = date(2026, 6, 1)
+    session.commit()
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    assert len(_planned_transfers(session)) == 1
 
 
 def test_goals_progress_open_ended_reports_saved(session):
@@ -212,6 +283,31 @@ def test_propose_is_idempotent_per_goal_period(session):
     goals.propose_goal_contributions("2026-06", session)  # re-run
     session.commit()
     assert len(_planned_transfers(session)) == 1
+
+
+def test_proposed_contribution_can_be_deleted_without_moving_balances(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Korea", monthly_amount=300_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    proposal = _planned_transfers(session)[0]
+    transactions.delete_transaction(session, proposal.id)
+    assert _planned_transfers(session) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, sav.id).balance == 0
+
+
+def test_skipped_contribution_can_be_deleted_without_moving_balances(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Korea", monthly_amount=300_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    proposal = _planned_transfers(session)[0]
+    planned.skip_payment(session, proposal.id)
+    transactions.delete_transaction(session, proposal.id)
+    assert transactions.list_transactions(session, type=TxType.transfer) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, sav.id).balance == 0
 
 
 def test_propose_archived_savings_raises(session):

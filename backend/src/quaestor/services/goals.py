@@ -18,6 +18,7 @@ from ..domain.models import (
     Settings,
     Source,
     Transaction,
+    TransferDirection,
     TxStatus,
     TxType,
 )
@@ -182,11 +183,13 @@ def goal_contribution(
             date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
             status=TxStatus.posted, amount=amount, currency=dst.currency,
             account_id=src.id, transfer_group_id=group, source=Source.manual,
+            transfer_direction=TransferDirection.out,
         )
         leg_to = Transaction(
             date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
             status=TxStatus.posted, amount=amount, currency=dst.currency,
             account_id=dst.id, transfer_group_id=group, source=Source.manual,
+            transfer_direction=TransferDirection.in_,
         )
         src.balance += d_from
         dst.balance += d_to
