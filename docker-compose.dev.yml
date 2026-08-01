@@ -1,0 +1,8 @@
+# Hot-reload override for the sqlite sandbox only (ADR-0033).
+# Layered in by `just dev-local`. Never layer it over the postgres or remote
+# env files: the bind mount re-arms uvicorn autoreload, which re-runs
+# `alembic upgrade head` against real data on every file write.
+services:
+  api:
+    volumes:
+      - ./backend/src:/app/src:rw

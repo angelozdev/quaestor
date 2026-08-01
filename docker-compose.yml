@@ -3,6 +3,11 @@
 #   just dev-prod   → backend/.env.local.postgres (local Postgres = production)
 #   just dev-local  → backend/.env.local.sqlite
 #   just dev-real   → backend/.env.local.remote (Render standby)
+#
+# ADR-0033: this file never bind-mounts backend/src, so a file write can never
+# trigger uvicorn autoreload and with it an unattended `alembic upgrade head`
+# against real data. docker-compose.dev.yml restores the mount, and only
+# `just dev-local` (sqlite sandbox) layers it in.
 services:
   db:
     image: postgres:18
@@ -34,7 +39,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/src:/app/src:rw
       - ./backend/pyproject.toml:/app/pyproject.toml:ro
       - ./backend/scripts:/app/scripts:ro
       - ./backend/alembic.ini:/app/alembic.ini:ro
