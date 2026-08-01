@@ -10,7 +10,7 @@ owner: angelo
 assignee: local
 tracker_ref: local
 roadmap_ref: transactions-core
-relevant_adrs: [0021, 0027]
+relevant_adrs: [0021, 0027, 0031, 0032]
 created: 2026-07-28
 intake: onboarding
 ---

@@ -21,7 +21,7 @@ all-❌ for every feature (no DAE artifacts existed before onboarding).
 | # | Feature | Status | feature.md | acs.md | spec.md | IR | acc. tests |
 |---|---------|--------|-----------|--------|---------|----|-----------|
 | 1 | budgets-envelopes + safe-to-spend | done | 🔜 | ❌ | ❌ | ❌ | ❌ |
-| 2 | transactions-crud | done | 🔜 | ❌ | ❌ | ❌ | ❌ |
+| 2 | transactions-crud | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 3 | planned-payments-to-pay | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 4 | outstanding-queue-buckets | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 5 | recurring-engine | done | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -96,7 +96,12 @@ pipeline generation → tests green. Bounded, one feature per task.
 > them now would be wasted work. Core-in-use features lead: transactions →
 > planned → recurring.
 
-1. transactions-crud ← **formalized at onboarding (in pipeline)**
+1. ~~transactions-crud~~ ← **DONE 2026-07-31.** Full pipeline CP1.5→CP8, merged
+   to `main` (merge commit `6ed8211`). 16 ACs, 64 acceptance scenarios,
+   mutation 99.5%. Two defects found by the pipeline, not by users: three of
+   four transfer creation paths never stored a leg direction (CP6), and
+   single-leg goal-contribution proposals were undeletable (CP7). ADR-0032
+   accepted, ADR-0033 proposed.
 2. planned-payments-to-pay (+ outstanding-queue-buckets as one folder — same surface)
 3. recurring-engine
 4. month-close-rollover (+ goal-contribution-hooks — the rollover seam; note:

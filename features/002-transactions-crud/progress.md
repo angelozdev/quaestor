@@ -1,4 +1,4 @@
-> ▶ Pipeline complete through CP8, all committed | NEXT: push + PR | BLOCKED: none
+> ▶ Feature complete — merged to main locally 2026-07-31 (`6ed8211`), not pushed | NEXT: /engineer.next | BLOCKED: none
 
 # Progress — 002 transactions-crud
 
@@ -7,7 +7,13 @@ pipeline 2026-07-31 to formalize ACs and close two behavior gaps: full tagging
 on every surface (AC-6/AC-15) and atomic transfer-pair deletion (AC-5, schema
 change — ADR-0032).
 
-Branch `transactions-crud`, 7 commits ahead of `main`, not pushed.
+Merged into `main` with `--no-ff` on 2026-07-31 (merge commit `6ed8211`), by
+local merge rather than a PR — Angelo's call. `main` now sits 14 commits ahead
+of `origin/main`; nothing has been pushed. The `transactions-crud` branch still
+exists and is fully contained in `main`.
+
+Post-merge suites on `main`: acceptance 64, backend 766, frontend 214, `tsc`
+clean.
 
 ## Decisions taken 2026-07-31 (Angelo)
 
