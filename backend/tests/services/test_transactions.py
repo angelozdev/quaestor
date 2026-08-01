@@ -385,6 +385,64 @@ def test_delete_transfer_pair_removes_only_its_tag_links(session):
     assert [link.transaction_id for link in remaining] == [other.id]
 
 
+def _group_less_transfer(session, status):
+    from quaestor.domain.models import Transaction
+
+    acc = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=500_000)
+    tx = Transaction(
+        date=date(2026, 6, 30), payee="Goal: Korea", type=TxType.transfer,
+        status=status, amount=300_000, currency="COP", account_id=acc.id,
+    )
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return acc, tx
+
+
+@pytest.mark.parametrize("status", [TxStatus.planned, TxStatus.skipped])
+def test_delete_group_less_transfer_removes_the_row_and_keeps_the_balance(session, status):
+    acc, tx = _group_less_transfer(session, status)
+    transactions.delete_transaction(session, tx.id)
+    assert accounts.get_account(session, acc.id).balance == 500_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, tx.id)
+
+
+def test_delete_group_less_transfer_removes_its_tag_links(session):
+    from quaestor.domain.models import TransactionTag
+    from quaestor.services import tags
+    from sqlmodel import select
+
+    acc, tx = _group_less_transfer(session, TxStatus.planned)
+    other = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    tags.tag_transaction(session, tx.id, ["ahorro"])
+    tags.tag_transaction(session, other.id, ["ahorro"])
+    transactions.delete_transaction(session, tx.id)
+    remaining = session.exec(select(TransactionTag)).all()
+    assert [link.transaction_id for link in remaining] == [other.id]
+
+
+def test_delete_grouped_transfer_without_direction_still_fails_loud(session):
+    from quaestor.domain.models import Transaction
+
+    a = accounts.create_account(session, "Cash", AccountType.cash, "COP", balance=1_000_000)
+    b = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=200_000)
+    legs = [
+        Transaction(
+            date=date(2026, 6, 17), payee="transfer", type=TxType.transfer,
+            status=TxStatus.posted, amount=100_000, currency="COP",
+            account_id=account.id, transfer_group_id="orphaned",
+        )
+        for account in (a, b)
+    ]
+    session.add_all(legs)
+    session.commit()
+    with pytest.raises(ValidationError):
+        transactions.delete_transaction(session, legs[0].id)
+    assert accounts.get_account(session, a.id).balance == 1_000_000
+    assert accounts.get_account(session, b.id).balance == 200_000
+
+
 def test_delete_transfer_pair_is_atomic_on_failure(session, monkeypatch):
     a, b, (leg_from, leg_to) = _same_currency_transfer(session)
 

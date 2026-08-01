@@ -102,3 +102,32 @@ describe("TransactionsPage transfer deletion", () => {
     await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(7))
   })
 })
+
+describe("TransactionsPage single-leg transfer deletion", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([
+      {
+        ...makeTransferLeg(),
+        id: 11,
+        payee: "Goal: Korea",
+        status: "planned",
+        transfer_group_id: null,
+        transfer_direction: null,
+      },
+    ])
+    deleteTransaction.mockReset().mockResolvedValue(undefined)
+    currentParams = new URLSearchParams("")
+  })
+
+  it("warns that only this movement is removed when there is no counterpart", async () => {
+    const user = userEvent.setup()
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Acciones" }))
+    await user.click(await screen.findByText("Eliminar"))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).queryByText(/ambos lados de la transferencia/i)).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/solo este movimiento/i)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole("button", { name: "Eliminar" }))
+    await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(11))
+  })
+})

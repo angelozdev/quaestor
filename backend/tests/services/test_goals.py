@@ -225,6 +225,31 @@ def test_propose_is_idempotent_per_goal_period(session):
     assert len(_planned_transfers(session)) == 1
 
 
+def test_proposed_contribution_can_be_deleted_without_moving_balances(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Korea", monthly_amount=300_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    proposal = _planned_transfers(session)[0]
+    transactions.delete_transaction(session, proposal.id)
+    assert _planned_transfers(session) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, sav.id).balance == 0
+
+
+def test_skipped_contribution_can_be_deleted_without_moving_balances(session):
+    src, sav = _funded(session)
+    goals.create_goal(session, name="Korea", monthly_amount=300_000, savings_account_id=sav.id)
+    goals.propose_goal_contributions("2026-06", session)
+    session.commit()
+    proposal = _planned_transfers(session)[0]
+    planned.skip_payment(session, proposal.id)
+    transactions.delete_transaction(session, proposal.id)
+    assert transactions.list_transactions(session, type=TxType.transfer) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, sav.id).balance == 0
+
+
 def test_propose_archived_savings_raises(session):
     src, sav = _funded(session)
     goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)

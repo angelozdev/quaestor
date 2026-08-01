@@ -408,14 +408,20 @@ def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:
     )
 
 
-def _reverse_leg_balance(session: Session, leg: Transaction) -> None:
+def _delta_balance_of(tx: Transaction) -> int:
+    if tx.type != TxType.transfer:
+        return delta_balance(tx.type, tx.amount)
     try:
-        delta = leg_delta_balance(leg.transfer_direction, leg.amount)
+        return leg_delta_balance(tx.transfer_direction, tx.amount)
     except ValueError as exc:
         raise ValidationError(
-            f"transfer leg {leg.id} has no stored direction; cannot reverse safely"
+            f"transfer leg {tx.id} has no stored direction; cannot reverse safely"
         ) from exc
-    acc = session.get(Account, leg.account_id)
+
+
+def _reverse_balance(session: Session, tx: Transaction) -> None:
+    delta = _delta_balance_of(tx)
+    acc = session.get(Account, tx.account_id)
     if acc is not None:
         acc.balance -= delta
         session.add(acc)
@@ -433,7 +439,7 @@ def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
     ).all()
     try:
         for member in legs:
-            _reverse_leg_balance(session, member)
+            _reverse_balance(session, member)
         _delete_tag_links(session, [member.id for member in legs])
         for member in legs:
             session.delete(member)
@@ -443,30 +449,34 @@ def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
         raise
 
 
-def delete_transaction(session: Session, tx_id: int) -> None:
-    """Delete a transaction, reversing its posted balance effect.
-
-    A transfer leg deletes its whole pair: both legs' balances are reversed
-    per their stored direction and both rows plus their tag links are removed
-    atomically (ADR-0032) — a half-deleted transfer can never exist.
-
-    Raises:
-        NotFound: If the transaction does not exist.
-        ValidationError: If a transfer leg carries no stored direction.
-    """
-    tx = get_transaction(session, tx_id)
-    if tx.type == TxType.transfer:
-        _delete_transfer_pair(session, tx)
-        return
+def _delete_single(session: Session, tx: Transaction) -> None:
     try:
         if tx.status == TxStatus.posted:
-            acc = session.get(Account, tx.account_id)
-            if acc is not None:
-                acc.balance -= delta_balance(tx.type, tx.amount)
-                session.add(acc)
-        _delete_tag_links(session, [tx_id])
+            _reverse_balance(session, tx)
+        _delete_tag_links(session, [tx.id])
         session.delete(tx)
         session.commit()
     except Exception:
         session.rollback()
         raise
+
+
+def delete_transaction(session: Session, tx_id: int) -> None:
+    """Delete a transaction, reversing its posted balance effect.
+
+    A transfer leg that belongs to a group deletes its whole pair: both legs'
+    balances are reversed per their stored direction and both rows plus their
+    tag links are removed atomically (ADR-0032) — a half-deleted transfer can
+    never exist. A group-less transfer is a proposed goal contribution whose
+    second leg is only born at confirm time; it deletes as a single row, and
+    moves no balance unless it was already posted.
+
+    Raises:
+        NotFound: If the transaction does not exist.
+        ValidationError: If a posted transfer leg carries no stored direction.
+    """
+    tx = get_transaction(session, tx_id)
+    if tx.type == TxType.transfer and tx.transfer_group_id is not None:
+        _delete_transfer_pair(session, tx)
+        return
+    _delete_single(session, tx)

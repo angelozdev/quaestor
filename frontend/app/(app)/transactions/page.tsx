@@ -22,7 +22,7 @@ import { formatDate } from "@/lib/date"
 import { TX_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
-import { counterpartsByTxId } from "@/lib/transfers"
+import { counterpartsByTxId, hasCounterpartLeg } from "@/lib/transfers"
 import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button, Input, Select } from "@/ui"
 
@@ -40,6 +40,14 @@ const STATUS_ITEMS = [
   { value: "posted", label: "Registrado" },
   { value: "skipped", label: "Omitido" },
 ]
+
+function deleteDescription(tx: Transaction | null): string {
+  if (tx?.type !== "transfer")
+    return `Se eliminará "${tx?.payee || "(sin beneficiario)"}". Es permanente.`
+  if (hasCounterpartLeg(tx))
+    return "Se eliminarán ambos lados de la transferencia y se restaurarán los saldos de las dos cuentas. Es permanente."
+  return "Esta transferencia todavía no tiene contraparte: se eliminará solo este movimiento y ningún saldo cambiará. Es permanente."
+}
 
 export default function TransactionsPage() {
   const [creating, setCreating] = useState(false)
@@ -324,11 +332,7 @@ export default function TransactionsPage() {
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
         title={deleting?.type === "transfer" ? "Eliminar transferencia" : "Eliminar transacción"}
-        description={
-          deleting?.type === "transfer"
-            ? "Se eliminarán ambos lados de la transferencia y se restaurarán los saldos de las dos cuentas. Es permanente."
-            : `Se eliminará "${deleting?.payee || "(sin beneficiario)"}". Es permanente.`
-        }
+        description={deleteDescription(deleting)}
         confirmLabel="Eliminar"
         destructive
         pending={del.isPending}

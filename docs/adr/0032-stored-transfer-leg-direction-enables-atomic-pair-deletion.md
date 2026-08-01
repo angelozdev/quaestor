@@ -79,6 +79,26 @@ one `in_`, zero NULL") passes just as well on an inverted pair, which is why
 it did not surface this. Revision 0007 must be verified against real data with
 a stated expected row count, not a shape check.
 
+## Amendment — 2026-07-31 (Checkpoint 7 verify)
+
+"Deletion of either leg loads the pair by group" was written as if every
+`type=transfer` row belonged to a group. A fourth creation path exists:
+`goals.propose_goal_contributions()` writes one `planned` transfer row with
+no `transfer_group_id` and no direction — the source leg is only born at
+confirm time (`planned._materialize_planned_transfer`). Routing on `type`
+alone sent those rows into the pair branch, which rejected them, so a
+proposed or skipped goal contribution could never be deleted (real rows
+1462 and 1545).
+
+`delete_transaction` now routes on `type == transfer AND
+transfer_group_id IS NOT NULL`. A group-less transfer deletes as a single
+row and reverses one balance only when it is `posted` — a `planned` or
+`skipped` proposal never moved money, so nothing is reversed. The fail-loud
+guard stays: a grouped leg missing its direction still raises rather than
+guessing a sign, and `_delete_transfer_pair` keeps its NULL-group guard so a
+direct call can never render `transfer_group_id IS NULL` and select every
+non-transfer row.
+
 ### Pros and cons of the options
 
 **1. Stored direction column**

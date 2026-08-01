@@ -1,5 +1,9 @@
 import type { Transaction } from "@/lib/api/types"
 
+export function hasCounterpartLeg(tx: Transaction | null | undefined): boolean {
+  return tx?.type === "transfer" && Boolean(tx.transfer_group_id)
+}
+
 export function findCounterpart(
   rows: Transaction[] | undefined,
   tx: Transaction,

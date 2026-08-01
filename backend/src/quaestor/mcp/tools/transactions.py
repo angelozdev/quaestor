@@ -3,8 +3,8 @@
 Reads (list_transactions, list_transactions-filtered) live in `core.py`.
 Updates cover payee/notes/category_id/date plus add_tags/remove_tags; other
 fields are immutable in the service layer (P0 invariant: balances only move
-via record_expense / record_income / transfer). Deleting a transfer leg
-deletes its whole pair (ADR-0032).
+via record_expense / record_income / transfer). Deleting a grouped transfer
+leg deletes its whole pair (ADR-0032).
 """
 from __future__ import annotations
 
