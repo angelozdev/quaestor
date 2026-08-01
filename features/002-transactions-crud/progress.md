@@ -1,4 +1,4 @@
-> ▶ CP7 verify done 2026-07-31 (uncommitted) | NEXT: Angelo reviews the diff, then CP8 harden | BLOCKED: none
+> ▶ CP8 harden done 2026-07-31 (uncommitted) | NEXT: Angelo reviews the kill-tests + decides ADR-0033, then merge | BLOCKED: none
 
 # Progress — 002 transactions-crud
 
@@ -22,7 +22,7 @@ instead of its own branch — see that fix's handoff for the open split decision
 | 5 | Implement | done | 2026-07-31T1045-implement.md |
 | 6 | Refine | done | 2026-07-31T1314-refine.md |
 | 7 | Verify | done | 2026-07-31T1903-verify.md |
-| 8 | Harden | pending | — |
+| 8 | Harden | done | 2026-07-31T1938-harden.md |
 
 CP6 baseline: acceptance 64/64, backend 741, frontend 213, `tsc --noEmit`
 clean, Biome clean on touched files.
@@ -130,6 +130,7 @@ Cierre: CP7 corrió como `cp7-verifier`.
 | 2026-07-31T1314 | refine | main | 3 review lenses; AC-5 defect found + fixed at all 3 creation sites; revision 0007 written; 13 proposals applied |
 | 2026-07-31 | runbook-close | main | 0007 verified no-op on real data; backup taken; planned single-leg delete defect found |
 | 2026-07-31T1903 | verify | cp7-verifier | 16/16 ACs mapped; a 4th transfer creation path found; group-less delete fixed test-first; 64/750/214 green; 3 process findings |
+| 2026-07-31T1938 | harden | cp7-verifier | mutation 89.7% → 99.5% (195 mutants, 16 kill-tests, 1 equivalent); CP7 fix pinned; ADR-0033 proposed for the migration auto-apply; 64/766/214 green |
 
 ## Tracker sync
 
