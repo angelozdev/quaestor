@@ -223,6 +223,60 @@ def test_delete_transaction_keeps_other_transactions_tags(session):
     assert [r.id for r in remaining] == [tx_b.id]
 
 
+def test_record_without_a_payee_stores_an_empty_string(session):
+    acc = _make_account(session, balance=100_000)
+    tx = transactions.record_expense(
+        session, acc.id, 1_000, "COP", date(2026, 6, 1), None
+    )
+    assert tx.payee == ""
+
+
+def test_transfer_without_notes_is_labelled_transfer(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100_000)
+    b = accounts.create_account(session, "B", AccountType.debit, "COP", balance=0)
+    leg_from, leg_to = transactions.transfer(session, a.id, b.id, 1_000, "COP", date(2026, 6, 1))
+    assert leg_from.payee == "transfer"
+    assert leg_to.payee == "transfer"
+
+
+def test_transfer_notes_become_the_leg_payee(session):
+    a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100_000)
+    b = accounts.create_account(session, "B", AccountType.debit, "COP", balance=0)
+    leg_from, leg_to = transactions.transfer(
+        session, a.id, b.id, 1_000, "COP", date(2026, 6, 1), notes="ahorro mensual"
+    )
+    assert leg_from.payee == "ahorro mensual"
+    assert leg_to.payee == "ahorro mensual"
+
+
+def test_list_filters_to_the_legs_of_one_transfer(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    _, _, (other_from, _) = _same_currency_transfer(session)
+    rows = transactions.list_transactions(
+        session, transfer_group_id=leg_from.transfer_group_id
+    )
+    assert sorted(r.id for r in rows) == sorted([leg_from.id, leg_to.id])
+    assert other_from.id not in [r.id for r in rows]
+
+
+def test_deleting_an_expense_that_shares_a_transfer_group_spares_the_pair(session):
+    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    intruder = transactions.record_expense(
+        session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
+    )
+    intruder.transfer_group_id = leg_from.transfer_group_id
+    session.add(intruder)
+    session.commit()
+    transactions.delete_transaction(session, intruder.id)
+    assert transactions.get_transaction(session, leg_from.id).id == leg_from.id
+    assert transactions.get_transaction(session, leg_to.id).id == leg_to.id
+    assert accounts.get_account(session, a.id).balance == 900_000
+    assert accounts.get_account(session, b.id).balance == 300_000
+    with pytest.raises(NotFound):
+        transactions.get_transaction(session, intruder.id)
+
+
 def test_transfer_currency_must_match_source_account(session):
     wise, banco = _cross_currency_pair(session)
     with pytest.raises(ValidationError):

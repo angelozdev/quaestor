@@ -61,6 +61,12 @@ def test_update_tag_to_existing_name_rejected(session):
         tags.update_tag(session, other.id, "trip")
 
 
+def test_update_tag_to_its_own_current_name_is_allowed(session):
+    t = tags.create_tag(session, "trip")
+    updated = tags.update_tag(session, t.id, "trip")
+    assert updated.id == t.id and updated.name == "trip"
+
+
 def test_delete_tag_removes_links(session):
     from quaestor.domain.models import TransactionTag
     from quaestor.services import accounts, transactions
