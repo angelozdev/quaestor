@@ -1,4 +1,4 @@
-> ▶ CP6 refine done, runbook closed 2026-07-31 | NEXT: CP7 verify (fresh agent) | BLOCKED: none
+> ▶ CP7 verify done 2026-07-31 (uncommitted) | NEXT: Angelo reviews the diff, then CP8 harden | BLOCKED: none
 
 # Progress — 002 transactions-crud
 
@@ -21,11 +21,17 @@ instead of its own branch — see that fix's handoff for the open split decision
 | 4 | Plan | done | 2026-07-31T1018-plan.md |
 | 5 | Implement | done | 2026-07-31T1045-implement.md |
 | 6 | Refine | done | 2026-07-31T1314-refine.md |
-| 7 | Verify | pending | — |
+| 7 | Verify | done | 2026-07-31T1903-verify.md |
 | 8 | Harden | pending | — |
 
 CP6 baseline: acceptance 64/64, backend 741, frontend 213, `tsc --noEmit`
 clean, Biome clean on touched files.
+
+CP7 result: acceptance 64/64, backend 750, frontend 214, `tsc --noEmit`
+clean, Biome clean on touched files, coverage 95% total
+(`services/transactions.py` 90% → 92%). The backend number rose from CP6's
+741 to 744 on the two budgets-fix commits, then to 750 with CP7's five new
+delete tests. Changes are in the working tree, uncommitted.
 
 ## Runbook
 
@@ -47,9 +53,12 @@ prevent the recurrence because it relied on a human remembering. The fix is
 structural — disarm auto-migration in the pg profile, or stop bind-mounting
 `src` there.
 
-## Pendientes para CP7
+## Pendientes para CP7 — CERRADOS en 2026-07-31T1903-verify.md
 
-### 1. Planned single-leg transfers cannot be deleted (defect, found 2026-07-31)
+Los tres puntos de abajo quedaron resueltos en CP7. Se conservan como
+registro de lo que se verificó.
+
+### 1. Planned single-leg transfers cannot be deleted (defect, found 2026-07-31) — RESUELTO
 
 `delete_transaction` routes on `type == TxType.transfer` **without checking
 `status`**, so a planned or skipped goal contribution — one leg, no
@@ -85,16 +94,28 @@ Scope for CP7: delete a group-less transfer through the normal single-row path
 single-leg rows, and pin both with tests — `grep "no transfer group"` over
 `backend/tests/` currently returns nothing.
 
-### 2. AC-5 must be re-verified across all three creation paths
+Cierre: `delete_transaction` ahora enruta al borrado de par solo cuando el
+leg tiene `transfer_group_id`; sin grupo borra una sola fila y revierte
+saldo únicamente si estaba `posted`. Copy del diálogo condicional. Cinco
+tests nuevos escritos en rojo primero. ADR-0032 amendado.
+
+### 2. AC-5 must be re-verified across all three creation paths — RESUELTO
 
 CP6 found `transfer_direction` was set only in `transactions.transfer()`;
 `planned._confirm_transfer()` and `goals.contribute_to_goal()` were fixed in
 that checkpoint. Verify all three, not just `transfer()`.
 
-### 3. Independence
+Cierre: son **cuatro** rutas de creación, no tres. La cuarta,
+`goals.propose_goal_contributions()`, escribe un solo leg `planned` sin
+grupo y sin dirección — correcto por diseño, y es exactamente el origen del
+defecto #1.
+
+### 3. Independence — RESUELTO
 
 CP7 must run on an `agent_id` distinct from CP5's `cp5-implementer-subagent`
 (plan.md Charter Check, Principio 7).
+
+Cierre: CP7 corrió como `cp7-verifier`.
 
 ## Handoff log
 
@@ -108,6 +129,7 @@ CP7 must run on an `agent_id` distinct from CP5's `cp5-implementer-subagent`
 | 2026-07-31T1045 | implement | cp5-implementer-subagent | implementation green |
 | 2026-07-31T1314 | refine | main | 3 review lenses; AC-5 defect found + fixed at all 3 creation sites; revision 0007 written; 13 proposals applied |
 | 2026-07-31 | runbook-close | main | 0007 verified no-op on real data; backup taken; planned single-leg delete defect found |
+| 2026-07-31T1903 | verify | cp7-verifier | 16/16 ACs mapped; a 4th transfer creation path found; group-less delete fixed test-first; 64/750/214 green; 3 process findings |
 
 ## Tracker sync
 
