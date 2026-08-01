@@ -1,4 +1,4 @@
-> ▶ CP8 harden done 2026-07-31 (uncommitted) | NEXT: Angelo reviews the kill-tests + decides ADR-0033, then merge | BLOCKED: none
+> ▶ Pipeline complete through CP8, all committed | NEXT: push + PR | BLOCKED: none
 
 # Progress — 002 transactions-crud
 
@@ -7,9 +7,19 @@ pipeline 2026-07-31 to formalize ACs and close two behavior gaps: full tagging
 on every surface (AC-6/AC-15) and atomic transfer-pair deletion (AC-5, schema
 change — ADR-0032).
 
-Branch `transactions-crud`, 4 commits ahead of `main`, not pushed. It also
-carries the `2026-07-31-phantom-budget-assignment` fix, which landed here
-instead of its own branch — see that fix's handoff for the open split decision.
+Branch `transactions-crud`, 7 commits ahead of `main`, not pushed.
+
+## Decisions taken 2026-07-31 (Angelo)
+
+- **The `2026-07-31-phantom-budget-assignment` fix ships inside this PR.**
+  It landed on this branch instead of its own. Splitting was cheaper than the
+  CP6 handoff implied — the branch was never pushed, so rewriting it carried
+  none of the usual risk — but the fix is small, already verified, and merges
+  with 002 anyway. Trade accepted: it cannot merge independently.
+- **ADR-0033 stays `proposed`.** The auto-migration hole is documented, not
+  closed. Until it is, the operational rule stands and is now known to be
+  broader than migrations: writing any file into `backend/src` while the stack
+  is up executes that code inside the running app.
 
 ## Checkpoints
 
@@ -31,7 +41,15 @@ CP7 result: acceptance 64/64, backend 750, frontend 214, `tsc --noEmit`
 clean, Biome clean on touched files, coverage 95% total
 (`services/transactions.py` 90% → 92%). The backend number rose from CP6's
 741 to 744 on the two budgets-fix commits, then to 750 with CP7's five new
-delete tests. Changes are in the working tree, uncommitted.
+delete tests.
+
+CP8 result: mutation 89.7% → 99.5% (195 mutants, 16 kill-tests, 1
+proven-equivalent survivor). Final streams: acceptance 64/64, backend 766,
+frontend 214, `tsc --noEmit` clean. No production code changed during harden
+— every kill came from a test.
+
+All of the above is committed: `b469132` (fix), `0334272` (CP7 artifacts),
+`a225929` (kill-tests), `37690e5` (ADR-0033), `0861507` (CP8 artifacts).
 
 ## Runbook
 

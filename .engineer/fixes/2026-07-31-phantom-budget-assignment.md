@@ -41,7 +41,9 @@ pin_confirmation:
       note: "Feature 001 has no acceptance pipeline (paused at consolidation #15 pending the sinking-funds redesign), so the GWT spec is pinned as service-layer tests instead of generated scenarios."
 
 fix_commits:
-  - "pending — fix branch is transactions-crud (see handoff: separating it needs history rewriting on the 002 branch)"
+  - "e2f1fba fix(budgets): reject envelope assignment to hidden categories"
+  - "e186792 chore(dae): feature 002 artifacts through CP6 (carried the fix artifact)"
+  - "Ships inside feature 002's PR. Decision (Angelo, 2026-07-31): leave it on the transactions-crud branch rather than split it. Splitting was cheaper than the CP6 handoff implied — the branch was never pushed, so rewriting it carried none of the usual risk — but the fix is small, already verified, and merges with 002 anyway. Trade accepted: this fix cannot merge independently of 002."
 
 harden_results:
   mutation_score: 1.0
