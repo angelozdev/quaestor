@@ -9,7 +9,7 @@ pg_env := "backend/.env.local.postgres"
 pg := "QUAESTOR_ENV_FILE=" + pg_env + " docker compose --env-file " + pg_env + " --profile pg"
 
 sqlite_env := "backend/.env.local.sqlite"
-sqlite := "docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file " + sqlite_env
+sqlite := "QUAESTOR_ENV_FILE=" + sqlite_env + " docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file " + sqlite_env
 
 backup_dir := "$HOME/Library/Mobile Documents/com~apple~CloudDocs/QuaestorBackups"
 
@@ -41,7 +41,7 @@ migrate:
 
 # Run against the local SQLite file in .dev-data/ (sandbox). Hot-reload lives here.
 dev-local:
-	QUAESTOR_ENV_FILE={{sqlite_env}} {{sqlite}} up --build
+	{{sqlite}} up --build
 
 # Run against the Render Postgres (frozen standby since ADR-0030 — avoid writes).
 dev-real:
