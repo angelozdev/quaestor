@@ -45,6 +45,7 @@ from .tools.temporal import (
     CreateRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
+    RestorePaymentInput,
     SkipPaymentInput,
     SkipRecurringInput,
     ToPayInput,
@@ -152,6 +153,7 @@ _WRITE_DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
         "archive_recurring",
         "restore_recurring",
         "skip_payment",
+        "restore_payment",
         "skip_recurring",
         "confirm_payment",
         "update_goal",
@@ -180,6 +182,7 @@ TEMPORAL_TOOL_NAMES = (
     "plan_payment",
     "confirm_payment",
     "skip_payment",
+    "restore_payment",
     "skip_recurring",
     "to_pay",
     "update_recurring",
@@ -319,7 +322,7 @@ def register_core_tools(mcp) -> None:
 
 
 def register_temporal_tools(mcp) -> None:
-    """Register the 7 P3 temporal tools on the given FastMCP instance."""
+    """Register the P3 temporal tools on the given FastMCP instance."""
 
     @mcp.tool(name="create_recurring", description="Create a recurring expense/income (every-N interval).")
     def create_recurring(item: CreateRecurringInput) -> str:
@@ -345,6 +348,11 @@ def register_temporal_tools(mcp) -> None:
     def skip_payment(skip: SkipPaymentInput) -> str:
         with Session(db.engine) as session:
             return temporal.skip_payment(session, skip)
+
+    @mcp.tool(name="restore_payment", description="Restore a skipped planned payment back to the to-pay queue.")
+    def restore_payment(restore: RestorePaymentInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.restore_payment(session, restore)
 
     @mcp.tool(name="skip_recurring", description="Skip a single occurrence of a recurring item.")
     def skip_recurring(skip: SkipRecurringInput) -> str:

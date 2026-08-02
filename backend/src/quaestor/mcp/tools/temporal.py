@@ -64,6 +64,10 @@ class SkipPaymentInput(BaseModel):
     tx_id: int = Field(description="The planned transaction id to cancel")
 
 
+class RestorePaymentInput(BaseModel):
+    tx_id: int = Field(description="The skipped transaction id to return to the queue")
+
+
 class SkipRecurringInput(BaseModel):
     recurring_id: int = Field(description="The recurring item id")
     due_date: Date = Field(description="The single occurrence date to skip, YYYY-MM-DD")
@@ -149,6 +153,12 @@ def confirm_payment(session: Session, inp: ConfirmPaymentInput) -> str:
 def skip_payment(session: Session, inp: SkipPaymentInput) -> str:
     tx = planned.skip_payment(session, inp.tx_id)
     return format.payment_skipped(tx)
+
+
+@_as_text
+def restore_payment(session: Session, inp: RestorePaymentInput) -> str:
+    tx = planned.restore_payment(session, inp.tx_id)
+    return format.payment_restored(tx)
 
 
 @_as_text

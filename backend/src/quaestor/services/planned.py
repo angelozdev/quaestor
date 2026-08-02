@@ -94,6 +94,14 @@ def plan_payment(
     return tx
 
 
+_OBLIGATION_TYPES: frozenset[TxType] = frozenset({TxType.expense, TxType.transfer})
+
+
+def _obligations(items: list[Transaction]) -> list[Transaction]:
+    """Only what the user owes: expenses and transfers. Planned income is not debt."""
+    return [t for t in items if t.type in _OBLIGATION_TYPES]
+
+
 def to_pay(
     session: Session,
     since: Date,
@@ -110,9 +118,13 @@ def to_pay(
     - `overdue`  = planned txs with `date < today_resolved AND date <= until`,
       ordered by date ASC, iff `retrospective=False`.
 
+    Both buckets carry obligations only — expenses and transfers. Planned
+    income is expected money in, not debt, so it never reaches the queue
+    or its total.
+
     `today_resolved` is `today` if provided, else `date.today()`. The
-    `today` kwarg exists for testability (the codebase pattern in
-    `services/goals.py:216` and `services/reports.py:215`).
+    `today` kwarg exists for testability (the same pattern as
+    `goals.goals_progress` and `reports.monthly_report`).
 
     The overdue bucket is constrained by `until` so callers that scope
     to a window don't get items from a future retrospective they
@@ -145,7 +157,9 @@ def to_pay(
             sort="date",
             order="asc",
         )
-        overdue_items = [t for t in overdue_rows if t.date < today_resolved]
+        overdue_items = _obligations(
+            [t for t in overdue_rows if t.date < today_resolved]
+        )
     else:
         overdue_items = []
 
@@ -153,25 +167,32 @@ def to_pay(
     if upcoming_since > until:
         upcoming_items: list[Transaction] = []
     else:
-        upcoming_items = _tx.list_transactions(
-            session,
-            status="planned",
-            date_from=upcoming_since,
-            date_to=until,
-            sort="date",
-            order="asc",
+        upcoming_items = _obligations(
+            _tx.list_transactions(
+                session,
+                status="planned",
+                date_from=upcoming_since,
+                date_to=until,
+                sort="date",
+                order="asc",
+            )
         )
 
     return OutstandingQueue.from_lists(overdue_items, upcoming_items)
 
 
-def _sync_occurrence_posted(session: Session, tx: Transaction) -> None:
-    """If tx came from a manual occurrence, mark that occurrence posted."""
-    occ = session.exec(
+def _occurrence_of(session: Session, tx: Transaction) -> RecurringOccurrence | None:
+    """The recurring occurrence this tx materialized, if it came from one."""
+    return session.exec(
         select(RecurringOccurrence).where(
             RecurringOccurrence.transaction_id == tx.id
         )
     ).first()
+
+
+def _sync_occurrence_posted(session: Session, tx: Transaction) -> None:
+    """If tx came from a manual occurrence, mark that occurrence posted."""
+    occ = _occurrence_of(session, tx)
     if occ is not None and occ.status != OccurrenceStatus.posted:
         occ.status = OccurrenceStatus.posted
         session.add(occ)
@@ -278,6 +299,35 @@ def _materialize_planned_transfer(
     return tx
 
 
+def _move_status(
+    session: Session,
+    tx_id: int,
+    *,
+    from_status: TxStatus,
+    to_status: TxStatus,
+    occurrence_status: OccurrenceStatus,
+) -> Transaction:
+    """Flip a tx from `from_status` to `to_status`, keeping its occurrence in step.
+
+    Moves no balance and fires no hooks — `confirm_payment` owns the only
+    path to `posted`.
+    """
+    tx = _tx.get_transaction(session, tx_id)
+    if tx.status != from_status:
+        raise IllegalTransition(
+            f"transaction {tx_id} is {tx.status.value}, not {from_status.value}"
+        )
+    tx.status = to_status
+    occ = _occurrence_of(session, tx)
+    if occ is not None:
+        occ.status = occurrence_status
+        session.add(occ)
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return tx
+
+
 def skip_payment(session: Session, tx_id: int) -> Transaction:
     """Cancel a `planned` tx (planned -> skipped). Syncs its occurrence if any.
 
@@ -285,21 +335,31 @@ def skip_payment(session: Session, tx_id: int) -> Transaction:
         NotFound: the tx does not exist.
         IllegalTransition: the tx is not `planned`.
     """
-    tx = _tx.get_transaction(session, tx_id)
-    if tx.status != TxStatus.planned:
-        raise IllegalTransition(
-            f"transaction {tx_id} is {tx.status.value}, not planned"
-        )
-    tx.status = TxStatus.skipped
-    occ = session.exec(
-        select(RecurringOccurrence).where(
-            RecurringOccurrence.transaction_id == tx.id
-        )
-    ).first()
-    if occ is not None:
-        occ.status = OccurrenceStatus.skipped
-        session.add(occ)
-    session.add(tx)
-    session.commit()
-    session.refresh(tx)
-    return tx
+    return _move_status(
+        session,
+        tx_id,
+        from_status=TxStatus.planned,
+        to_status=TxStatus.skipped,
+        occurrence_status=OccurrenceStatus.skipped,
+    )
+
+
+def restore_payment(session: Session, tx_id: int) -> Transaction:
+    """Undo a skip (skipped -> planned). The exact inverse of skip_payment (ADR-0034).
+
+    Returns the payment to the outstanding queue and its recurring
+    occurrence to `planned`, so the recurring machinery still recognises
+    the date as taken. Moves no balance; `confirm_payment` stays the only
+    door to `posted`.
+
+    Raises:
+        NotFound: the tx does not exist.
+        IllegalTransition: the tx is not `skipped`.
+    """
+    return _move_status(
+        session,
+        tx_id,
+        from_status=TxStatus.skipped,
+        to_status=TxStatus.planned,
+        occurrence_status=OccurrenceStatus.planned,
+    )

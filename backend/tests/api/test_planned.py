@@ -81,6 +81,26 @@ def test_skip_planned_payment_works_without_trm(client, engine, auth):
     assert r.status_code == 200 and r.json()["status"] == "skipped"
 
 
+def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth):
+    acc_id = _seed_account(engine)
+    tx_id = client.post("/api/planned", json={
+        "payee": "Claro", "amount": 85_000, "due_date": "2026-06-20", "account_id": acc_id,
+    }, headers=auth).json()["id"]
+    client.post(f"/api/planned/{tx_id}/skip", json={}, headers=auth)
+    r = client.post(f"/api/planned/{tx_id}/restore", json={}, headers=auth)
+    assert r.status_code == 200 and r.json()["status"] == "planned"
+    assert r.json()["amount"] == 85_000
+
+
+def test_restore_non_skipped_payment_is_409(client, engine, auth):
+    acc_id = _seed_account(engine)
+    tx_id = client.post("/api/planned", json={
+        "payee": "Claro", "amount": 85_000, "due_date": "2026-06-20", "account_id": acc_id,
+    }, headers=auth).json()["id"]
+    r = client.post(f"/api/planned/{tx_id}/restore", json={}, headers=auth)
+    assert r.status_code == 409
+
+
 def test_rollover_admin_endpoint_runs(client, auth):
     r = client.post("/api/rollover", json={"period": "2026-06"}, headers=auth)
     assert r.status_code == 200

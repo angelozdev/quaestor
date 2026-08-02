@@ -7,6 +7,7 @@ import TransactionsPage from "./page"
 
 const listTransactions = vi.fn()
 const deleteTransaction = vi.fn()
+const restorePlanned = vi.fn()
 let currentParams = new URLSearchParams("")
 
 vi.mock("next/navigation", () => ({
@@ -17,6 +18,9 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api/transactions", () => ({
   listTransactions: (...a: unknown[]) => listTransactions(...a),
   deleteTransaction: (...a: unknown[]) => deleteTransaction(...a),
+}))
+vi.mock("@/lib/api/planned", () => ({
+  restorePlanned: (...a: unknown[]) => restorePlanned(...a),
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
@@ -100,6 +104,39 @@ describe("TransactionsPage transfer deletion", () => {
     expect(within(dialog).getByText(/Es permanente/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole("button", { name: "Eliminar" }))
     await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(7))
+  })
+})
+
+describe("TransactionsPage restore action", () => {
+  const openRowActions = async (status: Transaction["status"]) => {
+    const user = userEvent.setup()
+    listTransactions.mockReset().mockResolvedValue([makeTransaction({ id: 42, status })])
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Acciones" }))
+    return user
+  }
+
+  beforeEach(() => {
+    restorePlanned.mockReset().mockResolvedValue(undefined)
+    currentParams = new URLSearchParams("")
+  })
+
+  it("offers Restaurar on a skipped row and restores it", async () => {
+    const user = await openRowActions("skipped")
+    await user.click(await screen.findByText("Restaurar"))
+    await waitFor(() => expect(restorePlanned).toHaveBeenCalledWith(42))
+  })
+
+  it("does not offer Restaurar on a planned row", async () => {
+    await openRowActions("planned")
+    expect(await screen.findByText("Editar")).toBeInTheDocument()
+    expect(screen.queryByText("Restaurar")).not.toBeInTheDocument()
+  })
+
+  it("does not offer Restaurar on a posted row", async () => {
+    await openRowActions("posted")
+    expect(await screen.findByText("Editar")).toBeInTheDocument()
+    expect(screen.queryByText("Restaurar")).not.toBeInTheDocument()
   })
 })
 

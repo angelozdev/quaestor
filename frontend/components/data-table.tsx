@@ -23,6 +23,7 @@ export interface RowAction<T> {
   label: string
   onClick: (row: T) => void
   variant?: "default" | "destructive"
+  show?: (row: T) => boolean
 }
 
 export function DataTable<T>({
@@ -119,15 +120,17 @@ export function DataTable<T>({
                             <MoreHorizontal className="size-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent>
-                            {actions.map((a) => (
-                              <DropdownMenuItem
-                                key={a.label}
-                                variant={a.variant}
-                                onClick={() => a.onClick(row)}
-                              >
-                                {a.label}
-                              </DropdownMenuItem>
-                            ))}
+                            {actions
+                              .filter((a) => a.show === undefined || a.show(row))
+                              .map((a) => (
+                                <DropdownMenuItem
+                                  key={a.label}
+                                  variant={a.variant}
+                                  onClick={() => a.onClick(row)}
+                                >
+                                  {a.label}
+                                </DropdownMenuItem>
+                              ))}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>

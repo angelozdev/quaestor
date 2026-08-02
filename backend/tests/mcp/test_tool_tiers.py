@@ -74,6 +74,7 @@ _KNOWN_TOOL_NAMES: list[str] = (
         "goals_progress",
         "monthly_report",
         "restore_recurring",
+        "restore_payment",
     ]
 )
 
@@ -99,6 +100,7 @@ def test_destructive_tools_are_not_in_llm_allowed():
         "update_transaction",
         "pause_goal",
         "skip_payment",
+        "restore_payment",
         "confirm_payment",
     ]:
         assert name not in LLM_ALLOWED_TOOLS, f"{name} must be hidden from LLM"

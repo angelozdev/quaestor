@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+from quaestor.domain.dates import display_date
+from quaestor.domain.planned import OutstandingQueue
 from quaestor.mcp import format
 from quaestor.mcp.tools import temporal
 from quaestor.mcp.tools.temporal import (
@@ -9,12 +11,13 @@ from quaestor.mcp.tools.temporal import (
     CreateRecurringInput,
     ListRecurringInput,
     PlanPaymentInput,
+    RestorePaymentInput,
     SkipPaymentInput,
     SkipRecurringInput,
     ToPayInput,
     UpdateRecurringInput,
 )
-from quaestor.services import accounts, fx
+from quaestor.services import accounts, fx, planned
 
 
 def _bank(session):
@@ -113,7 +116,52 @@ def test_skip_recurring_tool(session):
     assert "Skipped" in out
 
 
-def test_register_temporal_tools_exposes_all_nine():
+def test_restore_payment_tool(session):
+    _bank(session)
+    temporal.plan_payment(session, PlanPaymentInput(
+        payee="Claro", amount=85_000, account="Bancolombia", due_date=date(2026, 6, 20),
+    ))
+    from quaestor.services import transactions
+    tx_id = transactions.list_transactions(session, status="planned")[0].id
+    temporal.skip_payment(session, SkipPaymentInput(tx_id=tx_id))
+    out = temporal.restore_payment(session, RestorePaymentInput(tx_id=tx_id))
+    assert "Restored" in out
+    assert transactions.get_transaction(session, tx_id).status.value == "planned"
+
+
+def test_restore_payment_confirmation_names_payee_amount_and_due_date(session):
+    """AC-8 promises the payment comes back with its payee, amount and
+    due date intact — the chat confirmation is where the user reads that,
+    so the whole line is asserted, not just the verb."""
+    a = _bank(session)
+    tx = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 7, 15), a.id)
+    planned.skip_payment(session, tx.id)
+    restored = planned.restore_payment(session, tx.id)
+    assert format.payment_restored(restored) == (
+        f"✅ Restored **Claro** — 85000.00 COP "
+        f"due {display_date(date(2026, 7, 15))}. id={tx.id} (back in the queue)"
+    )
+
+
+def test_restore_payment_tool_rejects_non_skipped(session):
+    _bank(session)
+    temporal.plan_payment(session, PlanPaymentInput(
+        payee="Claro", amount=85_000, account="Bancolombia", due_date=date(2026, 6, 20),
+    ))
+    from quaestor.services import transactions
+    tx_id = transactions.list_transactions(session, status="planned")[0].id
+    out = temporal.restore_payment(session, RestorePaymentInput(tx_id=tx_id))
+    assert "Can't do that" in out
+
+
+def test_restore_payment_is_write_destructive_and_hidden_from_llm():
+    from quaestor.mcp.registry import LLM_ALLOWED_TOOLS, ToolTier, tool_tier
+
+    assert tool_tier("restore_payment") == ToolTier.WRITE_DESTRUCTIVE
+    assert "restore_payment" not in LLM_ALLOWED_TOOLS
+
+
+def test_register_temporal_tools_matches_the_registry_list():
     import asyncio
     from mcp.server.fastmcp import FastMCP
     from quaestor.mcp.registry import TEMPORAL_TOOL_NAMES, register_temporal_tools
@@ -122,7 +170,7 @@ def test_register_temporal_tools_exposes_all_nine():
     register_temporal_tools(mcp)
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert names == set(TEMPORAL_TOOL_NAMES)
-    assert len(TEMPORAL_TOOL_NAMES) == 9
+    assert len(TEMPORAL_TOOL_NAMES) == 10
 
 
 def test_mcp_update_recurring(session):
@@ -155,17 +203,12 @@ def test_mcp_archive_recurring(session):
 
 
 def test_to_pay_table_renders_two_sections(session):
-    from datetime import date as Date
-    from quaestor.domain.planned import OutstandingQueue
-    from quaestor.domain.models import AccountType
-    from quaestor.services import accounts, planned
-
-    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    a = _bank(session)
     overdue = planned.plan_payment(
-        session, "Tigo", 8_500_00, "COP", Date(2026, 6, 28), a.id,
+        session, "Tigo", 8_500_00, "COP", date(2026, 6, 28), a.id,
     )
     upcoming = planned.plan_payment(
-        session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
+        session, "Rent", 5_000_00, "COP", date(2026, 7, 15), a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -177,14 +220,9 @@ def test_to_pay_table_renders_two_sections(session):
 
 
 def test_to_pay_table_omits_empty_overdue_section(session):
-    from datetime import date as Date
-    from quaestor.domain.planned import OutstandingQueue
-    from quaestor.domain.models import AccountType
-    from quaestor.services import accounts, planned
-
-    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    a = _bank(session)
     upcoming = planned.plan_payment(
-        session, "Rent", 5_000_00, "COP", Date(2026, 7, 15), a.id,
+        session, "Rent", 5_000_00, "COP", date(2026, 7, 15), a.id,
     )
     queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -193,14 +231,9 @@ def test_to_pay_table_omits_empty_overdue_section(session):
 
 
 def test_to_pay_table_omits_empty_upcoming_section(session):
-    from datetime import date as Date
-    from quaestor.domain.planned import OutstandingQueue
-    from quaestor.domain.models import AccountType
-    from quaestor.services import accounts, planned
-
-    a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
+    a = _bank(session)
     overdue = planned.plan_payment(
-        session, "Tigo", 8_500_00, "COP", Date(2026, 6, 28), a.id,
+        session, "Tigo", 8_500_00, "COP", date(2026, 6, 28), a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -209,7 +242,70 @@ def test_to_pay_table_omits_empty_upcoming_section(session):
 
 
 def test_to_pay_table_empty_queue():
-    from quaestor.domain.planned import OutstandingQueue
-
     out = format.to_pay_table(OutstandingQueue(), Decimal("4000"))
     assert out == "Nothing outstanding."
+
+
+def test_to_pay_table_closes_with_the_combined_total(session):
+    a = _bank(session)
+    overdue = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id)
+    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
+    out = format.to_pay_table(queue, Decimal("4000"))
+    assert out.splitlines()[-1] == "**Total to pay (COP): 130000.00** · 2 item(s)"
+    assert "**To pay (COP): 85000.00**" in out
+    assert "**To pay (COP): 45000.00**" in out
+
+
+def test_to_pay_table_single_section_has_no_combined_total(session):
+    a = _bank(session)
+    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    out = format.to_pay_table(OutstandingQueue(overdue=[], upcoming=[upcoming]), Decimal("4000"))
+    assert "Total to pay" not in out
+    assert out.splitlines()[-1] == "**To pay (COP): 45000.00** · 1 item(s)"
+
+
+def test_to_pay_table_two_section_layout_is_exact(session):
+    """The whole rendered block is the contract, blank-line separators
+    included — the chat answer must not drift line by line."""
+    a = _bank(session)
+    overdue = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id)
+    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
+    assert format.to_pay_table(queue, Decimal("4000")).splitlines() == [
+        "## ⚠️ Overdue",
+        "",
+        "| id | Due | Payee | Amount | Currency | COP |",
+        "|---|---|---|---|---|---|",
+        f"| {overdue.id} | {display_date(overdue.date)} | Claro | 85000.00 | COP | 85000.00 |",
+        "",
+        "**To pay (COP): 85000.00** · 1 item(s)",
+        "",
+        "## Upcoming",
+        "",
+        "| id | Due | Payee | Amount | Currency | COP |",
+        "|---|---|---|---|---|---|",
+        f"| {upcoming.id} | {display_date(upcoming.date)} | Netflix | 45000.00 | COP | 45000.00 |",
+        "",
+        "**To pay (COP): 45000.00** · 1 item(s)",
+        "",
+        "**Total to pay (COP): 130000.00** · 2 item(s)",
+    ]
+
+
+def test_to_pay_table_single_section_layout_is_exact(session):
+    """A one-section answer opens straight on its heading — no leading
+    blank line — and closes on its own subtotal, exactly as before the
+    combined-total line existed."""
+    a = _bank(session)
+    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
+    assert format.to_pay_table(queue, Decimal("4000")).splitlines() == [
+        "## Upcoming",
+        "",
+        "| id | Due | Payee | Amount | Currency | COP |",
+        "|---|---|---|---|---|---|",
+        f"| {upcoming.id} | {display_date(upcoming.date)} | Netflix | 45000.00 | COP | 45000.00 |",
+        "",
+        "**To pay (COP): 45000.00** · 1 item(s)",
+    ]

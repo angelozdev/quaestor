@@ -205,6 +205,13 @@ def payment_skipped(tx: Transaction) -> str:
     return f"✅ Skipped **{tx.payee}** — {money(tx.amount, tx.currency)}. id={tx.id}"
 
 
+def payment_restored(tx: Transaction) -> str:
+    return (
+        f"✅ Restored **{tx.payee}** — {money(tx.amount, tx.currency)} "
+        f"due {display_date(tx.date)}. id={tx.id} (back in the queue)"
+    )
+
+
 def recurring_skipped(occ: RecurringOccurrence) -> str:
     return (
         f"✅ Skipped the occurrence for recurring item {occ.recurring_id} "
@@ -242,6 +249,10 @@ def to_pay_table(queue: OutstandingQueue, trm: Decimal) -> str:
     Layout: overdue section first (with ⚠️ marker), then upcoming. Empty
     bucket → omitted entirely (silence is the right state). Both empty
     → "Nothing outstanding."
+
+    With both sections present, a closing line carries the combined total —
+    the same figure the app's headline shows. A single-section answer already
+    ends in its own subtotal, so it closes there unchanged.
     """
     if queue.is_empty:
         return "Nothing outstanding."
@@ -255,6 +266,12 @@ def to_pay_table(queue: OutstandingQueue, trm: Decimal) -> str:
             sections.append("")
         sections.append("## Upcoming\n")
         sections.append(_to_pay_rows(queue.upcoming, trm))
+    if queue.overdue and queue.upcoming:
+        sections.append("")
+        sections.append(
+            f"**Total to pay (COP): {cents_to_major(queue.total_cop_cents(trm))}** "
+            f"· {len(queue.overdue) + len(queue.upcoming)} item(s)"
+        )
     return "\n".join(sections)
 
 

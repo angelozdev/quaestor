@@ -30,6 +30,7 @@ def test_build_mcp_registers_all_expected_tools():
         "plan_payment",
         "confirm_payment",
         "skip_payment",
+        "restore_payment",
         "skip_recurring",
         "to_pay",
         "update_recurring",
