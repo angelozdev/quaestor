@@ -1,4 +1,8 @@
-"""Recurring items: create/list, and the due-driven materialization (ADR-020)."""
+"""Recurring items: the catalogue — declare, list, edit, switch off and on.
+
+Materializing a due date and skipping one belong to `occurrences.py`, which is
+the only module that writes a `RecurringOccurrence`.
+"""
 from __future__ import annotations
 
 from datetime import date as Date
@@ -10,19 +14,39 @@ from ..domain.models import (
     Account,
     Category,
     IntervalUnit,
-    OccurrenceStatus,
     RecurringItem,
     RecurringMode,
     RecurringOccurrence,
-    Source,
-    Transaction,
-    TxStatus,
     TxType,
 )
 from ..domain.money import is_supported
-from ..domain.rules import delta_balance, due_dates
+from ..domain.recurrence import due_dates, has_ended
+from . import occurrences
 
 _UNSET = object()
+
+
+def is_live(item: RecurringItem, today: Date) -> bool:
+    """Whether the obligation is still going to produce charges.
+
+    Two different facts, deliberately kept apart (ADR-0037): `active` is the
+    user switching it off, and the end date having passed is the obligation
+    finishing on its own. Only the first is stored.
+    """
+    return item.active and not has_ended(item.end_date, today)
+
+
+def _reject_manual_income(type: TxType, mode: RecurringMode) -> None:
+    """An income that waits for approval can never be resolved (AC-6).
+
+    Raises:
+        ValidationError: the pair is income + manual.
+    """
+    if type == TxType.income and mode == RecurringMode.manual:
+        raise ValidationError(
+            "a repeating income must pay itself; expected money never enters "
+            "the to-pay queue, so a manual one could never be confirmed"
+        )
 
 
 def _require_account(session: Session, account_id: int) -> Account:
@@ -48,8 +72,16 @@ def create_recurring(
     interval_count: int,
     start_date: Date,
     end_date: Date | None = None,
+    declared_on: Date | None = None,
 ) -> RecurringItem:
     """Create a recurring item. Validates frequency, money, and references.
+
+    `declared_on` is the day the user set this up (today by default, and not
+    stored). Due dates before it already fell due when the obligation entered
+    the system, so they are offered for the user to accept or decline rather
+    than charged unattended (ADR-0035). An obligation declared on or before its
+    start date has nothing pending and the engine charges it normally, which is
+    what keeps the catch-up after downtime working.
 
     Raises:
         ValidationError: amount <= 0, unsupported currency, transfer type,
@@ -61,6 +93,7 @@ def create_recurring(
     interval_unit = IntervalUnit(interval_unit)
     if type == TxType.transfer:
         raise ValidationError("recurring type must be expense or income, not transfer")
+    _reject_manual_income(type, mode)
     if amount <= 0:
         raise ValidationError("amount must be > 0")
     if not is_supported(currency):
@@ -72,6 +105,15 @@ def create_recurring(
     acc = _require_account(session, account_id)
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
+    as_of = declared_on or Date.today()
+    if start_date < as_of:
+        occurrences.guard_offer_size(
+            name,
+            due_dates(
+                start_date, end_date, interval_unit, interval_count,
+                start_date, as_of,
+            ),
+        )
     if category_id is not None:
         cat = session.get(Category, category_id)
         if cat is None:
@@ -95,15 +137,41 @@ def create_recurring(
     session.add(item)
     session.commit()
     session.refresh(item)
+    if start_date < as_of:
+        occurrences.offer_passed_dates(session, item, as_of)
     return item
 
 
-def list_recurring(session: Session, active: bool | None = None) -> list[RecurringItem]:
-    """List recurring items, optionally filtered by `active`, ordered by id."""
-    stmt = select(RecurringItem)
-    if active is not None:
-        stmt = stmt.where(RecurringItem.active == active)
-    return list(session.exec(stmt.order_by(RecurringItem.id)).all())
+def get_recurring(session: Session, recurring_id: int) -> RecurringItem:
+    """Fetch a recurring item by id.
+
+    Raises:
+        NotFound: the item does not exist.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    return item
+
+
+def list_recurring(
+    session: Session, active: bool | None = None, today: Date | None = None
+) -> list[RecurringItem]:
+    """List recurring items, optionally filtered by `active`, ordered by id.
+
+    `active=True` is the live list: what is still going to be charged. An
+    obligation past its end date is not in it, and appears among the
+    switched-off ones instead (ADR-0037) — the flag itself is untouched.
+
+    This is NOT the set the engine charges: an obligation that has ended can
+    still hold a due date the engine never got to. `occurrences.py` runs its
+    own query for that.
+    """
+    items = list(session.exec(select(RecurringItem).order_by(RecurringItem.id)).all())
+    if active is None:
+        return items
+    as_of = today or Date.today()
+    return [item for item in items if is_live(item, as_of) == active]
 
 
 def update_recurring(
@@ -120,6 +188,7 @@ def update_recurring(
     interval_count: int | None = None,
     start_date: Date | None = None,
     end_date=_UNSET,
+    today: Date | None = None,
 ) -> RecurringItem:
     """Edit a recurring item. type and currency are immutable. Changes affect only
     future un-materialized occurrences (materialize_due reads current fields).
@@ -139,6 +208,7 @@ def update_recurring(
     if payee is not None:
         item.payee = payee
     if mode is not None:
+        _reject_manual_income(item.type, RecurringMode(mode))
         item.mode = RecurringMode(mode)
     if amount is not None:
         if amount <= 0:
@@ -150,12 +220,27 @@ def update_recurring(
         if interval_count < 1:
             raise ValidationError("interval_count must be >= 1")
         item.interval_count = interval_count
+    as_of = today or Date.today()
+    moved_start_back = start_date is not None and start_date < item.start_date
     if start_date is not None:
         item.start_date = start_date
     if end_date is not _UNSET:
         item.end_date = end_date
     if item.end_date is not None and item.end_date < item.start_date:
         raise ValidationError("end_date must be on or after start_date")
+    if moved_start_back:
+        claimed = occurrences.existing_due_dates(session, item.id)
+        occurrences.guard_offer_size(
+            item.name,
+            [
+                d
+                for d in due_dates(
+                    item.start_date, item.end_date, item.interval_unit,
+                    item.interval_count, item.start_date, as_of,
+                )
+                if d not in claimed
+            ],
+        )
     if account_id is not None:
         acc = _require_account(session, account_id)
         if item.currency != acc.currency:
@@ -174,82 +259,9 @@ def update_recurring(
     session.add(item)
     session.commit()
     session.refresh(item)
+    if moved_start_back:
+        occurrences.offer_passed_dates(session, item, as_of)
     return item
-
-
-def _existing_due_dates(session: Session, recurring_id: int) -> set[Date]:
-    rows = session.exec(
-        select(RecurringOccurrence.due_date).where(
-            RecurringOccurrence.recurring_id == recurring_id
-        )
-    ).all()
-    return set(rows)
-
-
-def _create_occurrence_tx(
-    session: Session, item: RecurringItem, due_date: Date
-) -> RecurringOccurrence:
-    """Create the tx + occurrence for one (item, due_date).
-
-    auto  -> posted tx on due_date, balance moved, occurrence posted.
-    manual-> planned tx on due_date, no balance, occurrence planned.
-    Does NOT commit; the caller commits the whole batch.
-    """
-    is_auto = item.mode == RecurringMode.auto
-    tx = Transaction(
-        date=due_date,
-        payee=item.payee,
-        notes=None,
-        type=item.type,
-        status=TxStatus.posted if is_auto else TxStatus.planned,
-        amount=item.amount,
-        currency=item.currency,
-        account_id=item.account_id,
-        category_id=item.category_id,
-        recurring_id=item.id,
-        source=Source.manual,
-    )
-    session.add(tx)
-    if is_auto:
-        acc = session.get(Account, item.account_id)
-        acc.balance += delta_balance(item.type, item.amount)
-        session.add(acc)
-    session.flush()
-    occ = RecurringOccurrence(
-        recurring_id=item.id,
-        due_date=due_date,
-        status=OccurrenceStatus.posted if is_auto else OccurrenceStatus.planned,
-        transaction_id=tx.id,
-    )
-    session.add(occ)
-    return occ
-
-
-def materialize_due(session: Session, until_date: Date) -> list[RecurringOccurrence]:
-    """Create every not-yet-materialized occurrence with due_date <= until_date.
-
-    Due-driven (ADR-020): runs daily via the scheduler with until_date=today.
-    Idempotent by (recurring_id, due_date). Returns the occurrences created now.
-    On any error the whole batch rolls back (self-heals on the next run).
-    """
-    created: list[RecurringOccurrence] = []
-    try:
-        for item in list_recurring(session, active=True):
-            existing = _existing_due_dates(session, item.id)
-            for d in due_dates(
-                item.start_date, item.end_date, item.interval_unit,
-                item.interval_count, item.start_date, until_date,
-            ):
-                if d in existing:
-                    continue
-                created.append(_create_occurrence_tx(session, item, d))
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    for occ in created:
-        session.refresh(occ)
-    return created
 
 
 def _set_active(session: Session, recurring_id: int, active: bool) -> RecurringItem:
@@ -277,13 +289,29 @@ def deactivate_recurring(session: Session, recurring_id: int) -> RecurringItem:
     return _set_active(session, recurring_id, False)
 
 
-def restore_recurring(session: Session, recurring_id: int) -> RecurringItem:
-    """Re-activate a deactivated recurring item. Idempotent no-op if already active.
+def restore_recurring(
+    session: Session, recurring_id: int, today: Date | None = None
+) -> RecurringItem:
+    """Switch a paused obligation back on, picking up from today.
+
+    The due dates left behind are offered for the user to accept or decline,
+    rather than charged in one lump or written off: the engine may have been
+    down before the pause, and only the user knows which dates were which
+    (ADR-0037). Idempotent no-op if it was already live, so nothing is offered
+    by mistake.
 
     Raises:
         NotFound: the item does not exist.
     """
-    return _set_active(session, recurring_id, True)
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    if item.active:
+        return item
+    item = _set_active(session, recurring_id, True)
+    occurrences.offer_paused_stretch(session, item, today or Date.today())
+    session.refresh(item)
+    return item
 
 
 def skip_recurring(
@@ -291,35 +319,7 @@ def skip_recurring(
 ) -> RecurringOccurrence:
     """Mark (or create) the occurrence for (recurring_id, due_date) as skipped.
 
-    A planned tx already materialized for that occurrence is skipped too, so it
-    leaves to_pay. materialize_due will not recreate the date afterwards.
-
     Raises:
         NotFound: the recurring item does not exist.
     """
-    item = session.get(RecurringItem, recurring_id)
-    if item is None:
-        raise NotFound(f"recurring item {recurring_id} not found")
-    occ = session.exec(
-        select(RecurringOccurrence).where(
-            RecurringOccurrence.recurring_id == recurring_id,
-            RecurringOccurrence.due_date == due_date,
-        )
-    ).first()
-    if occ is None:
-        occ = RecurringOccurrence(
-            recurring_id=recurring_id,
-            due_date=due_date,
-            status=OccurrenceStatus.skipped,
-        )
-    else:
-        occ.status = OccurrenceStatus.skipped
-        if occ.transaction_id is not None:
-            tx = session.get(Transaction, occ.transaction_id)
-            if tx is not None and tx.status == TxStatus.planned:
-                tx.status = TxStatus.skipped
-                session.add(tx)
-    session.add(occ)
-    session.commit()
-    session.refresh(occ)
-    return occ
+    return occurrences.skip(session, recurring_id, due_date)

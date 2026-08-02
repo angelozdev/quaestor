@@ -25,7 +25,7 @@ import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { counterpartsByTxId, hasCounterpartLeg } from "@/lib/transfers"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button, Input, Select } from "@/ui"
+import { Badge, Button, Input, Select } from "@/ui"
 
 const ALL = "__all__"
 
@@ -143,7 +143,10 @@ export default function TransactionsPage() {
             {transferLabel(t)}
           </span>
         ) : (
-          <span className="font-medium">{t.payee || "—"}</span>
+          <span className="inline-flex items-center gap-2">
+            <span className="font-medium">{t.payee || "—"}</span>
+            {t.source === "recurring" && <Badge variant="outline">Recurrente</Badge>}
+          </span>
         ),
     },
     {

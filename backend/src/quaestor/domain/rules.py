@@ -1,11 +1,15 @@
-"""Balance sign rules and the recurrence date engine (ADR-020)."""
+"""Balance sign rules, envelope math and goal progress.
+
+The recurrence date engine lives in `recurrence.py`; the calendar helpers it
+owns are imported from there.
+"""
 from __future__ import annotations
 
-import calendar
-from datetime import date, timedelta
+from datetime import date
 
 from .dtos import BudgetStatus, GoalProgress
-from .models import IntervalUnit, TransferDirection, TxType
+from .models import TransferDirection, TxType
+from .recurrence import add_months, last_day_of_month
 
 
 def delta_balance(tx_type: TxType, amount: int) -> int:
@@ -37,69 +41,10 @@ def leg_delta_balance(direction: TransferDirection | None, amount: int) -> int:
     raise ValueError("leg_delta_balance requires a stored transfer direction")
 
 
-def _last_day_of_month(year: int, month: int) -> int:
-    return calendar.monthrange(year, month)[1]
-
-
-def _add_months(anchor: date, months: int) -> date:
-    """anchor shifted by `months`, clamping the day to the target month's last day.
-
-    Anchored to anchor.day every time (never chained), so Jan 31 -> Feb 28 -> Mar 31.
-    """
-    total = (anchor.year * 12 + (anchor.month - 1)) + months
-    year, month_index = divmod(total, 12)
-    month = month_index + 1
-    day = min(anchor.day, _last_day_of_month(year, month))
-    return date(year, month, day)
-
-
-def _add_interval(anchor: date, unit: IntervalUnit, count: int, k: int) -> date:
-    """The k-th occurrence after `anchor` for interval (count x unit)."""
-    n = count * k
-    if unit == IntervalUnit.day:
-        return anchor + timedelta(days=n)
-    if unit == IntervalUnit.week:
-        return anchor + timedelta(weeks=n)
-    if unit == IntervalUnit.month:
-        return _add_months(anchor, n)
-    if unit == IntervalUnit.year:
-        return _add_months(anchor, n * 12)
-    raise ValueError(f"invalid interval_unit: {unit}")
-
-
-def due_dates(
-    start_date: date,
-    end_date: date | None,
-    interval_unit: IntervalUnit,
-    interval_count: int,
-    since: date,
-    until: date,
-) -> list[date]:
-    """Due dates in [since, until] for interval (interval_count x interval_unit).
-
-    Each due date is start_date + k x interval, with end-of-month clamping for
-    month/year units. Respects end_date (inclusive). Returns dates ascending.
-    """
-    if interval_count < 1:
-        raise ValueError("interval_count must be >= 1")
-    results: list[date] = []
-    k = 0
-    while True:
-        d = _add_interval(start_date, interval_unit, interval_count, k)
-        if d > until:
-            break
-        if end_date is not None and d > end_date:
-            break
-        if d >= since:
-            results.append(d)
-        k += 1
-    return results
-
-
 def month_bounds(year_month: str) -> tuple[date, date]:
     """First and last calendar day of a "YYYY-MM" string."""
     year, month = int(year_month[:4]), int(year_month[5:7])
-    return date(year, month, 1), date(year, month, _last_day_of_month(year, month))
+    return date(year, month, 1), date(year, month, last_day_of_month(year, month))
 
 
 def prev_year_month(year_month: str) -> str:
@@ -174,7 +119,7 @@ def goal_progress_calc(
     if remaining == 0:
         eta = today
     else:
-        eta = _add_months(today, -(-remaining // monthly_amount))
+        eta = add_months(today, -(-remaining // monthly_amount))
     return GoalProgress(
         goal_id=goal_id, name=name, type="defined", monthly_amount=monthly_amount,
         saved=saved, target_amount=target_amount, deadline=deadline,

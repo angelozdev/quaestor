@@ -333,10 +333,10 @@ Scenario: Expected incoming money stays out of the outstanding list
   And the outstanding list has exactly 1 item
   And the outstanding total is 85000.00 COP
 
-Scenario: A monthly income approved by hand also stays out
+Scenario: Money that was expected to come in and has not stays out too
   Given the TRM is 4100.00
   And an account "Bancolombia" in COP with balance 500000.00 COP
-  And a monthly income of 5000000.00 COP from "Empleador" into "Bancolombia" that the user approves by hand, already due
+  And a planned income of 5000000.00 COP into "Bancolombia" that fell due 3 days ago
   When the user views what is outstanding for the next 7 days
   Then the outstanding list is empty
   And the outstanding total is 0.00 COP

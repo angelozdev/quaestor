@@ -4,7 +4,7 @@ import pytest
 
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import AccountType
-from quaestor.services import accounts, budgets, categories, fx, transactions
+from quaestor.services import accounts, budgets, categories, fx, occurrences, transactions
 from quaestor.services.budgets import budget_status as budget_status_for
 
 
@@ -115,11 +115,12 @@ def test_budget_status_negative_rollover_resets_to_zero(session):
 
 from quaestor.services import planned, recurring
 from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from tests.support.recurring import declare_existing
 
 
 def _income(session, acc, amount=1_000_000, start=date(2026, 6, 1)):
-    return recurring.create_recurring(
-        session, name="Salary", payee="Job", type=TxType.income, mode=RecurringMode.manual,
+    return declare_existing(
+        session, name="Salary", payee="Job", type=TxType.income, mode=RecurringMode.auto,
         amount=amount, currency="COP", category_id=None, account_id=acc.id,
         interval_unit=IntervalUnit.month, interval_count=1, start_date=start,
     )
@@ -159,13 +160,13 @@ def test_safe_to_spend_double_count_guard_auto_recurring(session):
     fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
-    recurring.create_recurring(
+    declare_existing(
         session, name="Netflix", payee="Netflix", type=TxType.expense, mode=RecurringMode.auto,
         amount=250_000, currency="COP", category_id=None, account_id=acc.id,
         interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 5),
     )
     free_before = budgets.safe_to_spend(session, "2026-06").free
-    recurring.materialize_due(session, date(2026, 6, 30))  # posts the recurring tx
+    occurrences.materialize_due(session, date(2026, 6, 30))  # posts the recurring tx
     free_after = budgets.safe_to_spend(session, "2026-06").free
     assert free_before == 750_000 == free_after  # posting doesn't move it
 
@@ -174,14 +175,14 @@ def test_safe_to_spend_due_driven_stability_manual(session):
     fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
-    recurring.create_recurring(
+    declare_existing(
         session, name="Gym", payee="Gym", type=TxType.expense, mode=RecurringMode.manual,
         amount=80_000, currency="COP", category_id=None, account_id=acc.id,
         interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 20),
     )
-    recurring.materialize_due(session, date(2026, 6, 5))  # nothing due yet
+    occurrences.materialize_due(session, date(2026, 6, 5))  # nothing due yet
     free_day5 = budgets.safe_to_spend(session, "2026-06").free
-    recurring.materialize_due(session, date(2026, 6, 25))  # now a planned occurrence exists
+    occurrences.materialize_due(session, date(2026, 6, 25))  # now a planned occurrence exists
     free_day25 = budgets.safe_to_spend(session, "2026-06").free
     assert free_day5 == 920_000 == free_day25  # committed projects the month regardless
 

@@ -284,6 +284,12 @@ class SkipRecurringIn(BaseModel):
     due_date: Date
 
 
+class PendingDatesIn(BaseModel):
+    """The passed due dates the user answered, accepted or declined together."""
+
+    due_dates: list[Date]
+
+
 class PlanPaymentIn(BaseModel):
     payee: str
     amount: int = Field(gt=0)

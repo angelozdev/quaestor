@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRetained } from "@/lib/use-retained"
 import { Button, Dialog, DialogDescription, DialogPopup, DialogTitle, Input } from "@/ui"
 
 export function ConfirmDialog({
@@ -25,6 +26,8 @@ export function ConfirmDialog({
   requireTextMatch?: string
 }) {
   const [typed, setTyped] = useState("")
+  const shownTitle = useRetained(open, title)
+  const shownDescription = useRetained(open, description)
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -36,8 +39,8 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup className="max-w-sm">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
+        <DialogTitle>{shownTitle}</DialogTitle>
+        <DialogDescription>{shownDescription}</DialogDescription>
 
         {requireTextMatch !== undefined && (
           <Input

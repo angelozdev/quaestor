@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from quaestor.domain.dates import display_date
@@ -170,7 +170,7 @@ def test_register_temporal_tools_matches_the_registry_list():
     register_temporal_tools(mcp)
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     assert names == set(TEMPORAL_TOOL_NAMES)
-    assert len(TEMPORAL_TOOL_NAMES) == 10
+    assert len(TEMPORAL_TOOL_NAMES) == 13
 
 
 def test_mcp_update_recurring(session):
@@ -309,3 +309,64 @@ def test_to_pay_table_single_section_layout_is_exact(session):
         "",
         "**To pay (COP): 45000.00** · 1 item(s)",
     ]
+
+
+def _declared_late(session):
+    """Weekly Netflix declared today with a start three weeks behind."""
+    _bank(session)
+    temporal.create_recurring(session, CreateRecurringInput(
+        name="Netflix", payee="Netflix", type="expense", mode="auto",
+        amount=25_900, account="Bancolombia", interval_unit="week",
+        interval_count=1, start_date=date.today() - timedelta(days=21),
+    ))
+    from quaestor.services import recurring
+    return recurring.list_recurring(session)[0].id
+
+
+def test_pending_recurring_dates_tool_lists_what_awaits_a_decision(session):
+    item_id = _declared_late(session)
+    out = temporal.pending_recurring_dates(
+        session, temporal.PendingDatesInput(recurring_id=item_id)
+    )
+    assert "Netflix" in out and "4 passed due date" in out
+
+
+def test_accept_recurring_dates_tool_records_only_what_was_ticked(session):
+    from quaestor.services import occurrences
+
+    item_id = _declared_late(session)
+    offered = occurrences.pending_dates(session, item_id)
+    out = temporal.accept_recurring_dates(
+        session,
+        temporal.AnswerPendingDatesInput(recurring_id=item_id, due_dates=offered[:2]),
+    )
+    assert "Recorded 2" in out
+    assert len(occurrences.pending_dates(session, item_id)) == 2
+
+
+def test_decline_recurring_dates_tool_closes_them_for_good(session):
+    from quaestor.services import occurrences
+
+    item_id = _declared_late(session)
+    offered = occurrences.pending_dates(session, item_id)
+    out = temporal.decline_recurring_dates(
+        session,
+        temporal.AnswerPendingDatesInput(recurring_id=item_id, due_dates=offered),
+    )
+    assert "Declined 4" in out
+    assert occurrences.pending_dates(session, item_id) == []
+
+
+def test_answering_passed_dates_is_write_destructive_and_hidden_from_llm():
+    from quaestor.mcp.registry import LLM_ALLOWED_TOOLS, ToolTier, tool_tier
+
+    for name in ("accept_recurring_dates", "decline_recurring_dates"):
+        assert tool_tier(name) == ToolTier.WRITE_DESTRUCTIVE
+        assert name not in LLM_ALLOWED_TOOLS
+
+
+def test_asking_which_dates_are_pending_is_read_only():
+    from quaestor.mcp.registry import LLM_ALLOWED_TOOLS, ToolTier, tool_tier
+
+    assert tool_tier("pending_recurring_dates") == ToolTier.READ
+    assert "pending_recurring_dates" in LLM_ALLOWED_TOOLS

@@ -14,3 +14,11 @@ export const updateRecurring = (id: number, body: RecurringUpdate) =>
 export const deleteRecurring = (id: number) => del<void>(`/recurring/${id}`)
 
 export const restoreRecurring = (id: number) => post<Recurring>(`/recurring/${id}/restore`, {})
+
+export const pendingDates = (id: number) => get<string[]>(`/recurring/${id}/pending-dates`)
+
+export const acceptPendingDates = (id: number, due_dates: string[]) =>
+  post<Occurrence[]>(`/recurring/${id}/pending-dates/accept`, { due_dates })
+
+export const declinePendingDates = (id: number, due_dates: string[]) =>
+  post<Occurrence[]>(`/recurring/${id}/pending-dates/decline`, { due_dates })

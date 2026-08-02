@@ -9,8 +9,8 @@ from ..domain.dtos import BudgetLine, BudgetStatus, CommittedItem, SafeToSpend
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Budget, Category, TxType
 from ..domain.money import to_cop_cents
+from ..domain.recurrence import due_dates
 from ..domain.rules import (
-    due_dates,
     envelope_status_calc,
     prev_year_month,
     safe_to_spend_calc,

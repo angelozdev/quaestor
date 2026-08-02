@@ -219,6 +219,33 @@ def recurring_skipped(occ: RecurringOccurrence) -> str:
     )
 
 
+def recurring_pending_dates(name: str, dates: list) -> str:
+    if not dates:
+        return f"No passed due dates are waiting for a decision on {name}."
+    listed = "\n".join(f"- {display_date(d)}" for d in dates)
+    return (
+        f"{name} has {len(dates)} passed due date(s) waiting for your decision:\n"
+        f"{listed}"
+    )
+
+
+def recurring_dates_accepted(name: str, occs: list) -> str:
+    if not occs:
+        return f"Nothing to accept on {name}."
+    listed = ", ".join(display_date(o.due_date) for o in occs)
+    return f"✅ Recorded {len(occs)} passed date(s) for {name}: {listed}."
+
+
+def recurring_dates_declined(name: str, occs: list) -> str:
+    if not occs:
+        return f"Nothing to decline on {name}."
+    listed = ", ".join(display_date(o.due_date) for o in occs)
+    return (
+        f"✅ Declined {len(occs)} passed date(s) for {name}: {listed}. "
+        f"They will not be charged or offered again."
+    )
+
+
 def recurring_updated(item: RecurringItem) -> str:
     return "Updated " + recurring_created(item)
 

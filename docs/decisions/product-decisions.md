@@ -299,7 +299,7 @@ safe_to_spend = forecast_income
 
 ## ADR-020 — Generic recurrence engine (every-N interval) + daily due-driven materialization
 
-**Status:** accepted (case C2) · **Supersedes** the `frequency` enum + `due_day` and the `(recurring_id, period)` key of the original spec (§5, P3)
+**Status:** accepted (case C2) · **Supersedes** the `frequency` enum + `due_day` and the `(recurring_id, period)` key of the original spec (§5, P3) · **partially superseded by ADR-026** — the every-N engine, the `(recurring_id, due_date)` key and due-driven materialization all stand; the silent creation of past dates and the batch rollback do not
 
 **Context.** The spec modeled `frequency ∈ {monthly, weekly, biweekly, yearly}` with a `due_day` (day-of-month) and an occurrence with a unique key `(recurring_id, period=YYYY-MM)` → **a single occurrence per recurring item per month**. That clashes with any sub-monthly frequency: a weekly recurring item falls ~4 times/month, a biweekly one 2. As it stood, weekly/biweekly fired only once. Moreover the user asked for **real variety**: monthly, every 3 and 4 months, semiannual, annual, weekly, every 2 weeks, etc.
 
@@ -397,3 +397,20 @@ The card account stays a normal account with a **negative balance = debt**; the 
 **Consequences.** New sub-project spec `docs/superpowers/specs/2026-06-20-P6-frontend-crud-design.md` (Phase 1). P6 grows from 2 views to 12 routes; `ui/` gains form primitives (dialog, select, checkbox, textarea, dropdown-menu) under the ADR-0002 boundary; `lib/api.ts` grows to ~35 methods + a `lib/query.ts` invalidation map. The agent (MCP, P2) remains a **co-equal write path** — the UI does not replace it. Phase 2 becomes the trigger for exposing the goals/budgets/recurring write endpoints in P4/P3. The thin-client rule (no business logic in the frontend) is preserved across both phases.
 
 - 2026-07-03 — Personal-finance data is now backed up daily on the VPS via `pg_dump` (ADR-0024). Up to 24h of unsynced changes may be lost in a VPS failure.
+
+---
+
+## ADR-026 — The engine never charges a date the user did not agree to, and one broken obligation costs only itself
+
+**Status:** accepted (feature 007, 2026-08-02) · **Partially supersedes** ADR-020 · Technical detail in `docs/adr/0035` and `docs/adr/0036`
+
+**Context.** ADR-020 fixed the shape of the engine — every-N interval, occurrence keyed by `(recurring_id, due_date)`, due-driven daily materialization — and two of its consequences turned out to be product decisions, not implementation detail. First, "the daily scheduler materializes each day the occurrences with `due_date ≤ today` not yet created" makes no distinction between a date missed because the machine was off and a date that was already in the past when the obligation was declared: declaring Netflix at 25.900 on 2 August with a start date of 5 January takes 181.300 out of the balance on the next run, unannounced. Second, the batch is one transaction, so a single obligation pointing at an archived account costs every other obligation its day, silently, every day until someone notices. The engine is the only surface in Quaestor that moves a balance with no user action, which is what makes both of these expensive.
+
+**Decision.** Two rules, both scoped to what the user experiences:
+
+- **Dates already passed when the obligation was declared are offered, never imposed.** They are presented one by one to accept or decline, and nothing is created until the user answers. A declined date is permanent: never charged, never offered again, never recreated by a later run. Declining every date is allowed and leaves the obligation live from its next future date. **Catch-up after downtime is unchanged** — an obligation that already existed was approved when it was declared, so the engine charges its missed dates unattended (this is the AC-9 / AC-12 line). The one place a missed date is *not* charged unattended is when the obligation was switched off and back on in the meantime: resuming cannot tell an outage's dates from the pause's, so it offers them too rather than deciding either way (ADR-0037, amended).
+- **A failure on one obligation does not stop the others.** The rest of the day's charges still land, and the failure is reported naming which obligation and why. Each charge stays all-or-nothing on its own: its movement and its balance change together, or neither.
+
+**Alternatives rejected.** (A) **Refuse a start date in the past outright**, as Firefly III does and as Actual Budget and YNAB effectively do by keeping schedules forward-only: simplest and the majority precedent, but it removes a capability the user asked for — declaring an obligation you have been paying for months and pulling that history in — and the workaround is entering months of movements by hand. GnuCash is the precedent for the chosen option, through its *Since Last Run* assistant, which lists every missed date and lets the user mark each Create / Postpone / Ignore. (B) **Keep the batch atomic and add a validation pass** before materializing: catches the predictable failures only, and duplicates the write path's rules in a second place that can drift.
+
+**Consequences.** The every-N engine, the `(recurring_id, due_date)` key and due-driven daily materialization all stand exactly as ADR-020 states them. What changes is that a due date now has a fourth outcome — offered, awaiting the user's answer — and that the daily run reports per-obligation failures instead of failing whole. Feature 007's AC-12, AC-22 and AC-24 are the executable form of this decision.

@@ -9,14 +9,13 @@ import uuid
 from datetime import date as Date
 from typing import Callable
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ..domain.errors import IllegalTransition, NotFound, ValidationError
 from ..domain.models import (
     Account,
     Category,
     OccurrenceStatus,
-    RecurringOccurrence,
     Settings,
     Source,
     Transaction,
@@ -27,6 +26,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.planned import OutstandingQueue
 from ..domain.rules import delta_balance, transfer_deltas
+from . import occurrences as _occ
 from . import transactions as _tx
 
 
@@ -181,21 +181,9 @@ def to_pay(
     return OutstandingQueue.from_lists(overdue_items, upcoming_items)
 
 
-def _occurrence_of(session: Session, tx: Transaction) -> RecurringOccurrence | None:
-    """The recurring occurrence this tx materialized, if it came from one."""
-    return session.exec(
-        select(RecurringOccurrence).where(
-            RecurringOccurrence.transaction_id == tx.id
-        )
-    ).first()
-
-
 def _sync_occurrence_posted(session: Session, tx: Transaction) -> None:
     """If tx came from a manual occurrence, mark that occurrence posted."""
-    occ = _occurrence_of(session, tx)
-    if occ is not None and occ.status != OccurrenceStatus.posted:
-        occ.status = OccurrenceStatus.posted
-        session.add(occ)
+    _occ.sync_occurrence_status(session, tx, OccurrenceStatus.posted)
 
 
 def confirm_payment(
@@ -318,10 +306,7 @@ def _move_status(
             f"transaction {tx_id} is {tx.status.value}, not {from_status.value}"
         )
     tx.status = to_status
-    occ = _occurrence_of(session, tx)
-    if occ is not None:
-        occ.status = occurrence_status
-        session.add(occ)
+    _occ.sync_occurrence_status(session, tx, occurrence_status)
     session.add(tx)
     session.commit()
     session.refresh(tx)

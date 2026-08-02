@@ -133,8 +133,9 @@ def init_db(target_engine: Engine = engine) -> None:
     """
     _apply_migrations(target_engine)
     _seed_default_settings(target_engine)
-    from .services.bootstrap import register_goal_hooks
+    from .services.bootstrap import register_goal_hooks, register_recurring_hooks
     register_goal_hooks()
+    register_recurring_hooks()
 
 
 @contextmanager

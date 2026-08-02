@@ -1,8 +1,12 @@
-"""Output DTOs returned by budget/goal services (not DB models)."""
+"""Output DTOs returned by budget/goal/recurring services (not DB models)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import RecurringOccurrence
 
 
 @dataclass(frozen=True)
@@ -60,3 +64,27 @@ class GoalProgress:
     on_track: bool | None = None
     eta: date | None = None
     remaining: int | None = None
+
+
+@dataclass(frozen=True)
+class RunFailure:
+    """One obligation the engine could not charge, and why (ADR-0036)."""
+
+    recurring_id: int
+    name: str
+    reason: str
+
+    def __str__(self) -> str:
+        return f"{self.name}: {self.reason}"
+
+
+@dataclass(frozen=True)
+class MaterializationReport:
+    """The outcome of one engine run: what landed, and what needs attention.
+
+    A run is no longer all-or-nothing — each charge commits on its own, so a
+    failure costs its obligation the day and nothing else (ADR-0036).
+    """
+
+    created: list[RecurringOccurrence]
+    failures: list[RunFailure]

@@ -13,7 +13,7 @@ from sqlmodel import Session
 
 from ...domain.models import RecurringMode, TxType
 from ...domain.planned import OutstandingQueue
-from ...services import fx, planned, recurring
+from ...services import fx, occurrences, planned, recurring
 from .. import format
 from .core import _as_text, _resolve_account, _resolve_category
 
@@ -71,6 +71,15 @@ class RestorePaymentInput(BaseModel):
 class SkipRecurringInput(BaseModel):
     recurring_id: int = Field(description="The recurring item id")
     due_date: Date = Field(description="The single occurrence date to skip, YYYY-MM-DD")
+
+
+class PendingDatesInput(BaseModel):
+    recurring_id: int
+
+
+class AnswerPendingDatesInput(BaseModel):
+    recurring_id: int
+    due_dates: list[Date]
 
 
 class ToPayInput(BaseModel):
@@ -165,6 +174,27 @@ def restore_payment(session: Session, inp: RestorePaymentInput) -> str:
 def skip_recurring(session: Session, inp: SkipRecurringInput) -> str:
     occ = recurring.skip_recurring(session, inp.recurring_id, inp.due_date)
     return format.recurring_skipped(occ)
+
+
+@_as_text
+def pending_recurring_dates(session: Session, inp: PendingDatesInput) -> str:
+    item = recurring.get_recurring(session, inp.recurring_id)
+    dates = occurrences.pending_dates(session, inp.recurring_id)
+    return format.recurring_pending_dates(item.name, dates)
+
+
+@_as_text
+def accept_recurring_dates(session: Session, inp: AnswerPendingDatesInput) -> str:
+    item = recurring.get_recurring(session, inp.recurring_id)
+    occs = occurrences.accept_pending_dates(session, inp.recurring_id, inp.due_dates)
+    return format.recurring_dates_accepted(item.name, occs)
+
+
+@_as_text
+def decline_recurring_dates(session: Session, inp: AnswerPendingDatesInput) -> str:
+    item = recurring.get_recurring(session, inp.recurring_id)
+    occs = occurrences.decline_pending_dates(session, inp.recurring_id, inp.due_dates)
+    return format.recurring_dates_declined(item.name, occs)
 
 
 @_as_text

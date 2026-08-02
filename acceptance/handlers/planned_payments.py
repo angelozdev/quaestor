@@ -41,6 +41,7 @@ from quaestor.domain.models import (
 from quaestor.domain.money import cents_to_major, major_to_cents
 from quaestor.services import (
     fx,
+    occurrences,
     planned,
     recurring,
     reports,
@@ -175,7 +176,7 @@ def _materialize_manual_recurring(
         start_date=world.today,
     )
     world.recurring_ids[payee] = item.id
-    recurring.materialize_due(world.session, world.today)
+    occurrences.materialize_due(world.session, world.today)
 
 
 def _occurrence(world: World, payee: str) -> RecurringOccurrence:
@@ -467,7 +468,7 @@ def when_delete_transfer(world: World, account: str) -> None:
 
 @step(r"the obligations that have come due are raised again")
 def when_materialize_again(world: World) -> None:
-    world.attempt(recurring.materialize_due, world.session, world.today)
+    world.attempt(occurrences.materialize_due, world.session, world.today)
 
 
 @step(

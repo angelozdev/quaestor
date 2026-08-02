@@ -24,8 +24,10 @@ import {
   updateRecurring,
 } from "@/lib/api/recurring"
 import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
+import { hasEnded } from "@/lib/date"
 import { invalidate, qk } from "@/lib/query"
-import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
+import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
+import { PendingDatesDialog } from "./pending-dates-dialog"
 import { type RecurringCreateValues, recurringCreateSchema } from "./recurring.schema"
 
 const TYPE_ITEMS = [
@@ -73,6 +75,7 @@ export default function RecurringPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Recurring | null>(null)
   const [deleting, setDeleting] = useState<Recurring | null>(null)
+  const [answering, setAnswering] = useState<Recurring | null>(null)
 
   const createForm = useTanStackForm({
     defaultValues: {
@@ -272,6 +275,7 @@ export default function RecurringPage() {
                   <td className="px-3 py-2.5 font-medium">
                     {r.name}
                     {!r.active && <StatusBadge kind="archived" value={true} />}
+                    {r.active && hasEnded(r.end_date) && <Badge variant="ghost">Terminada</Badge>}
                   </td>
                   <td className="px-3 py-2.5" style={{ color: "var(--muted-foreground)" }}>
                     {intervalLabel(r.interval_unit, r.interval_count)}
@@ -310,6 +314,9 @@ export default function RecurringPage() {
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => setSkipping(r)}>
                           Omitir
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setAnswering(r)}>
+                          Fechas pendientes
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
                           Eliminar
@@ -665,6 +672,10 @@ export default function RecurringPage() {
           )}
         </DialogPopup>
       </Dialog>
+
+      {answering && (
+        <PendingDatesDialog recurring={answering} onOpenChange={(o) => !o && setAnswering(null)} />
+      )}
 
       <ConfirmDialog
         open={deleting !== null}
