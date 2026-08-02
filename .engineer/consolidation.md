@@ -102,16 +102,26 @@ pipeline generation → tests green. Bounded, one feature per task.
    four transfer creation paths never stored a leg direction (CP6), and
    single-leg goal-contribution proposals were undeletable (CP7). ADR-0032
    accepted, ADR-0033 proposed.
-2. planned-payments-to-pay (+ outstanding-queue-buckets as one folder — same
-   surface) ← **in progress**, `features/006-planned-payments-to-pay`
-   (CP7 verify done 2026-08-02, branch `planned-payments-to-pay`). 24 ACs,
-   59 acceptance scenarios / 60 executions, all green; mutation 87.0% on the
-   changed functions of `services/planned.py` + `mcp/format.py` (95.2%
-   excluding 6 documented equivalent mutants). Three defects the pipeline
-   found, not users: planned income inflated the to-pay total (AC-15), the
-   chat answer never stated the combined total (AC-24), and a mistaken skip
-   was unrecoverable (AC-8). **Blocked on merge:** ADR-0034 is still
-   `proposed` and needs a human decision.
+2. ~~planned-payments-to-pay~~ (+ outstanding-queue-buckets as one folder —
+   same surface) ← **DONE 2026-08-02.** Full pipeline CP1→CP7, merged to
+   `main` (merge commit `22c8303`). 24 ACs, 59 acceptance scenarios / 60
+   executions, all green; mutation 87.0% on the changed functions of
+   `services/planned.py` + `mcp/format.py` (95.2% excluding 6 documented
+   equivalent mutants). Three defects the pipeline found, not users: planned
+   income inflated the to-pay total (AC-15), the chat answer never stated the
+   combined total (AC-24), and a mistaken skip was unrecoverable (AC-8).
+   ADR-0034 accepted.
+   - Followup, no ADR needed: three backend tests inventory the MCP tool
+     registry by hand (`test_temporal.py` tool count, name lists in
+     `test_builder.py` and `test_tool_tiers.py`), and
+     `test_every_known_tool_is_in_some_tier_set` is vacuous for the same
+     reason. Derive them from the registry constants when rows 11-12 are
+     worked — `test_registry.py` already sets the precedent.
+   - Latent gap, not reachable today: `data-table.tsx` gates the actions
+     column on the declared action count but filters per row on `show`, so a
+     row with every action hidden would open an empty dropdown. Trigger to
+     fix: the first `show` predicate on `Editar`/`Eliminar`, or a page whose
+     whole action set is conditional.
 3. recurring-engine
 4. month-close-rollover (+ goal-contribution-hooks — the rollover seam; note:
    rollover mechanics survive the sinking-funds redesign, but re-check scope
