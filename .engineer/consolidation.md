@@ -22,8 +22,8 @@ all-❌ for every feature (no DAE artifacts existed before onboarding).
 |---|---------|--------|-----------|--------|---------|----|-----------|
 | 1 | budgets-envelopes + safe-to-spend | done | 🔜 | ❌ | ❌ | ❌ | ❌ |
 | 2 | transactions-crud | done | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 3 | planned-payments-to-pay | done | ❌ | ❌ | ❌ | ❌ | ❌ |
-| 4 | outstanding-queue-buckets | done | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 3 | planned-payments-to-pay | done | ✅ | ✅ | ✅ | ✅ | ✅ |
+| 4 | outstanding-queue-buckets | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 5 | recurring-engine | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 6 | month-close-rollover | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 7 | goals | done | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -102,7 +102,16 @@ pipeline generation → tests green. Bounded, one feature per task.
    four transfer creation paths never stored a leg direction (CP6), and
    single-leg goal-contribution proposals were undeletable (CP7). ADR-0032
    accepted, ADR-0033 proposed.
-2. planned-payments-to-pay (+ outstanding-queue-buckets as one folder — same surface)
+2. planned-payments-to-pay (+ outstanding-queue-buckets as one folder — same
+   surface) ← **in progress**, `features/006-planned-payments-to-pay`
+   (CP7 verify done 2026-08-02, branch `planned-payments-to-pay`). 24 ACs,
+   59 acceptance scenarios / 60 executions, all green; mutation 87.0% on the
+   changed functions of `services/planned.py` + `mcp/format.py` (95.2%
+   excluding 6 documented equivalent mutants). Three defects the pipeline
+   found, not users: planned income inflated the to-pay total (AC-15), the
+   chat answer never stated the combined total (AC-24), and a mistaken skip
+   was unrecoverable (AC-8). **Blocked on merge:** ADR-0034 is still
+   `proposed` and needs a human decision.
 3. recurring-engine
 4. month-close-rollover (+ goal-contribution-hooks — the rollover seam; note:
    rollover mechanics survive the sinking-funds redesign, but re-check scope

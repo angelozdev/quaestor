@@ -222,6 +222,21 @@ def test_pending_lines_empty_when_nothing_planned(session):
     assert reports._pending_lines(session, *month_bounds("2026-06"), TRM) == []
 
 
+def test_pending_lines_exclude_planned_income(session):
+    """Pending means what is owed — expected money in is not pending (AC-15)."""
+    from decimal import Decimal
+
+    from quaestor.domain.models import Transaction, TxStatus, TxType
+    acc = _acc(session)
+    session.add(Transaction(
+        date=date(2026, 6, 10), payee="Empleador", type=TxType.income,
+        status=TxStatus.planned, amount=5_000_000, currency="COP",
+        fx_rate=Decimal("1"), to_base=5_000_000, account_id=acc.id, source="manual",
+    ))
+    session.commit()
+    assert reports._pending_lines(session, *month_bounds("2026-06"), TRM) == []
+
+
 def test_monthly_report_pending_lines_exclude_prior_overdue(session):
     """Retrospective monthly report excludes items overdue from a prior month."""
     from datetime import date as Date

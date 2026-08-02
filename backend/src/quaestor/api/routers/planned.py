@@ -52,3 +52,10 @@ def skip_payment(tx_id: int, session: Session = Depends(get_session)):
     return TransactionOut.from_one(
         session, planned.skip_payment(session, tx_id), fx.get_trm_or_none(session)
     )
+
+
+@router.post("/{tx_id}/restore", response_model=TransactionOut)
+def restore_payment(tx_id: int, session: Session = Depends(get_session)):
+    return TransactionOut.from_one(
+        session, planned.restore_payment(session, tx_id), fx.get_trm_or_none(session)
+    )

@@ -14,6 +14,7 @@ import { TransactionCreateDialog } from "@/components/transaction-create-dialog"
 import { TransactionEditDialog } from "@/components/transaction-edit-dialog"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
+import { restorePlanned } from "@/lib/api/planned"
 import { listTags } from "@/lib/api/tags"
 import { deleteTransaction, listTransactions } from "@/lib/api/transactions"
 import type { Transaction, TransactionFilters, TxStatus, TxType } from "@/lib/api/types"
@@ -65,6 +66,16 @@ export default function TransactionsPage() {
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })
+
+  const restore = useMutation({
+    mutationFn: (id: number) => restorePlanned(id),
+    onSuccess: () => {
+      toast.success("Pago restaurado")
+      invalidate(qc, "transactionWrite")
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+  })
+
   const { values, patch, clear } = useUrlFilters(TX_FILTER_SCHEMA)
 
   const accounts = useQuery({
@@ -174,6 +185,11 @@ export default function TransactionsPage() {
 
   const actions: RowAction<Transaction>[] = [
     { label: "Editar", onClick: (t) => setEditing(t) },
+    {
+      label: "Restaurar",
+      show: (t) => t.status === "skipped",
+      onClick: (t) => restore.mutate(t.id),
+    },
     {
       label: "Eliminar",
       variant: "destructive",

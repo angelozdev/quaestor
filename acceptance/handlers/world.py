@@ -60,6 +60,16 @@ class World:
         self.alembic_cfg = None
         self.migration_expected: list[tuple[str, int, str]] = []
 
+        # Outstanding queue (feature 006)
+        self.queue = None                       # OutstandingQueue | None
+        self.queue_total: int | None = None     # COP cents across both buckets
+        self.recurring_ids: dict[str, int] = {}  # payee -> RecurringItem id
+        self.transfer_ids: dict[str, int] = {}   # destination name -> planned tx id
+        self.assistant_answer: str | None = None
+
+        # Undo hooks for global registrations a scenario installs.
+        self.cleanups: list[Callable[[], None]] = []
+
         # Error stream: When-steps capture domain failures here so Then-steps
         # can either consume them ("is rejected") or fail loudly with them.
         self.errors: list[Exception] = []
@@ -120,5 +130,8 @@ class World:
         self.session = Session(self.engine)
 
     def close(self) -> None:
+        for undo in self.cleanups:
+            undo()
+        self.cleanups.clear()
         self.session.close()
         self.engine.dispose()

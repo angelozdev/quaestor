@@ -10,3 +10,5 @@ export const confirmPayment = (id: number, body: ConfirmPaymentBody = {}) =>
   post<Transaction>(`/planned/${id}/confirm`, body)
 
 export const skipPlanned = (id: number) => post<Transaction>(`/planned/${id}/skip`, {})
+
+export const restorePlanned = (id: number) => post<Transaction>(`/planned/${id}/restore`, {})
