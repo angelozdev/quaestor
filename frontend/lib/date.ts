@@ -16,3 +16,14 @@ export function formatDate(value: string): string {
 export function isOverdue(value: string, now: Date = new Date()): boolean {
   return startOfDay(parseISO(value)).getTime() < startOfDay(now).getTime()
 }
+/**
+ * True when a repeating obligation is past its end date.
+ *
+ * The end date is itself a due date, so an obligation ending today has not
+ * ended yet; one with no end date never ends. Mirrors what the backend
+ * derives rather than reading a stored flag (ADR-0037) — `active` still
+ * means only that the user switched it off.
+ */
+export function hasEnded(endDate: string | null, now: Date = new Date()): boolean {
+  return endDate !== null && isOverdue(endDate, now)
+}

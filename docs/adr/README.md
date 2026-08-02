@@ -48,3 +48,8 @@ New ADRs are created with the `adr` skill:
 | 0032 | Stored transfer-leg direction enables atomic pair deletion | accepted | 2026-07-31 |
 | 0033 | Migrations apply only at container start, never on autoreload | accepted | 2026-07-31 |
 | 0034 | Skipping a planned payment is reversible | accepted | 2026-08-01 |
+| 0035 | Passed due dates are offered for per-date acceptance, never backfilled silently | accepted | 2026-08-02 |
+| 0036 | Per-charge commit replaces batch-atomic recurring materialization | accepted | 2026-08-02 |
+| 0037 | A recurring item that ended is derived at read time; resuming offers the stretch left behind | accepted | 2026-08-02 |
+| 0038 | Engine-made movements carry their own source, and deleting one closes its due date | accepted | 2026-08-02 |
+| 0039 | Existing manual repeating incomes are migrated to automatic, their movements left alone | accepted | 2026-08-02 |

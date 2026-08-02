@@ -67,6 +67,9 @@ class World:
         self.transfer_ids: dict[str, int] = {}   # destination name -> planned tx id
         self.assistant_answer: str | None = None
 
+        self.recurring_view: list | None = None
+        self.run_failures: list[str] = []
+
         # Undo hooks for global registrations a scenario installs.
         self.cleanups: list[Callable[[], None]] = []
 

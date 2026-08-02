@@ -168,3 +168,28 @@ describe("TransactionsPage single-leg transfer deletion", () => {
     await waitFor(() => expect(deleteTransaction).toHaveBeenCalledWith(11))
   })
 })
+
+describe("TransactionsPage engine provenance", () => {
+  beforeEach(() => {
+    deleteTransaction.mockReset()
+    currentParams = new URLSearchParams("")
+  })
+
+  it("marks a movement the recurring engine made", async () => {
+    listTransactions
+      .mockReset()
+      .mockResolvedValue([makeTransaction({ id: 21, payee: "Netflix", source: "recurring" })])
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    const row = (await screen.findByText("Netflix")).closest("tr") as HTMLElement
+    expect(within(row).getByText("Recurrente")).toBeInTheDocument()
+  })
+
+  it("leaves a hand-entered movement unmarked", async () => {
+    listTransactions
+      .mockReset()
+      .mockResolvedValue([makeTransaction({ id: 22, payee: "Tienda", source: "manual" })])
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+    const row = (await screen.findByText("Tienda")).closest("tr") as HTMLElement
+    expect(within(row).queryByText("Recurrente")).not.toBeInTheDocument()
+  })
+})

@@ -6,7 +6,7 @@ export type AccountType = "debit" | "credit" | "cash" | "savings"
 export type IntervalUnit = "day" | "week" | "month" | "year"
 export type RecurringMode = "auto" | "manual"
 export type RecurringType = "expense" | "income"
-export type OccurrenceStatus = "posted" | "planned" | "skipped"
+export type OccurrenceStatus = "posted" | "planned" | "skipped" | "offered"
 
 export interface Transaction {
   id: number

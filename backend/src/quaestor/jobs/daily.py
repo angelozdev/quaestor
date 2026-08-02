@@ -19,7 +19,7 @@ from sqlmodel import Session
 
 from .. import db
 from ..services.fx import set_trm
-from ..services.recurring import materialize_due
+from ..services.occurrences import materialize_due
 from ..services.rollover import ensure_month_closed
 from .fx_fetch import fetch_usd_cop
 
@@ -39,12 +39,15 @@ def run_daily(
 
     Returns:
         dict with keys: fx_rate (Decimal|None), fx_error (str|None),
-        materialized_count (int), month_closed (str "YYYY-MM").
+        materialized_count (int), failures (list[str] — obligations the engine
+        could not charge, each naming the obligation), month_closed
+        (str "YYYY-MM").
     """
     report: dict = {
         "fx_rate": None,
         "fx_error": None,
         "materialized_count": 0,
+        "failures": [],
         "month_closed": f"{today.year:04d}-{today.month:02d}",
     }
 
@@ -57,8 +60,11 @@ def run_daily(
             log.exception("FX fetch failed; continuing")
             report["fx_error"] = repr(exc)
 
-    occurrences = materialize_due(session, today)
-    report["materialized_count"] = len(occurrences)
+    run = materialize_due(session, today)
+    report["materialized_count"] = len(run.created)
+    report["failures"] = [str(failure) for failure in run.failures]
+    for message in report["failures"]:
+        log.warning("recurring obligation needs attention: %s", message)
 
     ensure_month_closed(session, today)
     return report

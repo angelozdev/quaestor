@@ -36,9 +36,13 @@ class RecurringMode(str, Enum):
 
 
 class OccurrenceStatus(str, Enum):
+    """`offered` is a due date waiting for the user's answer: it consumes the
+    date so no run creates it, but it is not a charge (ADR-0035)."""
+
     posted = "posted"
     planned = "planned"
     skipped = "skipped"
+    offered = "offered"
 
 
 class TxStatus(str, Enum):
@@ -50,9 +54,13 @@ class TxStatus(str, Enum):
 
 
 class Source(str, Enum):
+    """Who created the row. `recurring` is the engine acting on its own,
+    which is what makes an unattended balance change reconcilable (ADR-0038)."""
+
     manual = "manual"
     agent = "agent"
     import_ = "import"
+    recurring = "recurring"
 
 
 class TransferDirection(str, Enum):

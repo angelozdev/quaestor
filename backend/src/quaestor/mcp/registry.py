@@ -111,6 +111,7 @@ _READ_ONLY_TOOLS: frozenset[str] = frozenset(
         "get_account",
         "get_category",
         "list_recurring",
+        "pending_recurring_dates",
         "to_pay",
         "get_settings",
     }
@@ -155,6 +156,8 @@ _WRITE_DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
         "skip_payment",
         "restore_payment",
         "skip_recurring",
+        "accept_recurring_dates",
+        "decline_recurring_dates",
         "confirm_payment",
         "update_goal",
         "pause_goal",
@@ -184,6 +187,9 @@ TEMPORAL_TOOL_NAMES = (
     "skip_payment",
     "restore_payment",
     "skip_recurring",
+    "pending_recurring_dates",
+    "accept_recurring_dates",
+    "decline_recurring_dates",
     "to_pay",
     "update_recurring",
     "archive_recurring",
@@ -358,6 +364,21 @@ def register_temporal_tools(mcp) -> None:
     def skip_recurring(skip: SkipRecurringInput) -> str:
         with Session(db.engine) as session:
             return temporal.skip_recurring(session, skip)
+
+    @mcp.tool(name="pending_recurring_dates", description="Passed due dates of a recurring item waiting for the user to accept or decline.")
+    def pending_recurring_dates(item: temporal.PendingDatesInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.pending_recurring_dates(session, item)
+
+    @mcp.tool(name="accept_recurring_dates", description="Record the passed due dates the user accepted, each on its own date.")
+    def accept_recurring_dates(answer: temporal.AnswerPendingDatesInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.accept_recurring_dates(session, answer)
+
+    @mcp.tool(name="decline_recurring_dates", description="Close the passed due dates the user declined; they are never charged or offered again.")
+    def decline_recurring_dates(answer: temporal.AnswerPendingDatesInput) -> str:
+        with Session(db.engine) as session:
+            return temporal.decline_recurring_dates(session, answer)
 
     @mcp.tool(name="to_pay", description="What's still to pay in a date window (the confirmation queue).")
     def to_pay(window: ToPayInput) -> str:

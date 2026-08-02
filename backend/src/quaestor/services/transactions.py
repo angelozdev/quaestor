@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date as Date
+from typing import Callable
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -27,6 +28,18 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortField, SortSpec, SortableColumns
+
+PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
+
+
+def register_pre_delete_hook(fn: Callable[[Transaction, Session], None]) -> None:
+    """Register a hook fired inside delete_transaction, before the row goes.
+
+    The seam the recurring engine uses to close the due date a deleted charge
+    belonged to (ADR-0038), so this module never learns what a recurring item
+    is. Wired once in `services/bootstrap.py`.
+    """
+    PRE_DELETE_HOOKS.append(fn)
 
 
 def _require_account(session: Session, account_id: int) -> Account:
@@ -427,6 +440,36 @@ def _reverse_balance(session: Session, tx: Transaction) -> None:
         session.add(acc)
 
 
+def _group_members(session: Session, leg: Transaction) -> list[Transaction]:
+    """The other legs sharing this transfer's group."""
+    return [
+        member
+        for member in session.exec(
+            select(Transaction).where(
+                Transaction.transfer_group_id == leg.transfer_group_id
+            )
+        ).all()
+        if member.id != leg.id
+    ]
+
+
+def _fire_pre_delete(session: Session, rows: list[Transaction]) -> None:
+    """Let every registered hook settle what hangs off these rows.
+
+    Fired from `delete_transaction` rather than from one of the two deletion
+    paths, so a transfer pair cannot slip past a hook that a single row runs.
+    A hook that fails takes its own partial writes with it, so the caller never
+    inherits a half-settled session.
+    """
+    try:
+        for tx in rows:
+            for hook in PRE_DELETE_HOOKS:
+                hook(tx, session)
+    except Exception:
+        session.rollback()
+        raise
+
+
 def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
     if leg.transfer_group_id is None:
         raise ValidationError(
@@ -477,6 +520,8 @@ def delete_transaction(session: Session, tx_id: int) -> None:
     """
     tx = get_transaction(session, tx_id)
     if tx.type == TxType.transfer and tx.transfer_group_id is not None:
+        _fire_pre_delete(session, [tx, *_group_members(session, tx)])
         _delete_transfer_pair(session, tx)
         return
+    _fire_pre_delete(session, [tx])
     _delete_single(session, tx)

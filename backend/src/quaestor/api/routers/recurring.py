@@ -1,12 +1,21 @@
-"""Recurring REST router — thin adapter over services.recurring."""
+"""Recurring REST router — thin adapter over services.recurring/occurrences."""
 from __future__ import annotations
+
+from datetime import date as Date
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from ...services import recurring
+from ...services import occurrences, recurring
 from ..deps import get_session
-from ..schemas import OccurrenceOut, RecurringCreate, RecurringOut, RecurringUpdate, SkipRecurringIn
+from ..schemas import (
+    OccurrenceOut,
+    PendingDatesIn,
+    RecurringCreate,
+    RecurringOut,
+    RecurringUpdate,
+    SkipRecurringIn,
+)
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -59,3 +68,22 @@ def skip_recurring(
     recurring_id: int, body: SkipRecurringIn, session: Session = Depends(get_session)
 ):
     return recurring.skip_recurring(session, recurring_id, body.due_date)
+
+
+@router.get("/{recurring_id}/pending-dates", response_model=list[Date])
+def pending_dates(recurring_id: int, session: Session = Depends(get_session)):
+    return occurrences.pending_dates(session, recurring_id)
+
+
+@router.post("/{recurring_id}/pending-dates/accept", response_model=list[OccurrenceOut])
+def accept_pending_dates(
+    recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)
+):
+    return occurrences.accept_pending_dates(session, recurring_id, body.due_dates)
+
+
+@router.post("/{recurring_id}/pending-dates/decline", response_model=list[OccurrenceOut])
+def decline_pending_dates(
+    recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)
+):
+    return occurrences.decline_pending_dates(session, recurring_id, body.due_dates)

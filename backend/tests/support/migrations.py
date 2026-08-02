@@ -59,3 +59,29 @@ def directions_by_id(engine):
                 sa.text('SELECT id, transfer_direction FROM "transaction"')
             ).fetchall()
         )
+
+
+def insert_recurring(conn, recurring_id, name, tx_type, mode, account_id=1):
+    conn.execute(
+        sa.text(
+            "INSERT INTO recurring_item "
+            "(id, name, payee, type, mode, amount, currency, account_id, "
+            "interval_unit, interval_count, start_date, active) "
+            "VALUES (:id, :name, :name, :type, :mode, 1000, 'COP', :account_id, "
+            "'month', 1, '2026-06-01', 1)"
+        ),
+        {
+            "id": recurring_id,
+            "name": name,
+            "type": tx_type,
+            "mode": mode,
+            "account_id": account_id,
+        },
+    )
+
+
+def recurring_modes_by_id(engine):
+    with engine.connect() as conn:
+        return dict(
+            conn.execute(sa.text("SELECT id, mode FROM recurring_item")).fetchall()
+        )

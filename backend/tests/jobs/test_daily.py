@@ -7,8 +7,9 @@ from decimal import Decimal
 import pytest
 from sqlmodel import Session
 
-from quaestor.domain.models import Account, AccountType, Category, RecurringItem, RecurringMode, IntervalUnit
+from quaestor.domain.models import Account, AccountType, Category, RecurringItem, RecurringMode, IntervalUnit, TxType
 from quaestor.jobs import daily
+from tests.support.recurring import declare_existing
 
 
 class _StubClient:
@@ -46,6 +47,7 @@ def _make_recurring(session: Session, account: Account) -> RecurringItem:
         name="Rent", payee="Landlord", type="expense", mode=RecurringMode.manual,
         amount=100000, currency="COP", category_id=None, account_id=account.id,
         interval_unit=IntervalUnit.month, interval_count=1, start_date=Date(2026, 6, 1),
+        declared_on=Date(2026, 6, 1),
     )
     session.add(item)
     session.commit()
@@ -109,3 +111,24 @@ def test_fx_failure_does_not_block_other_jobs(session, monkeypatch):
     assert result["fx_error"] is not None
     assert "network down" in result["fx_error"]
     assert result["materialized_count"] == 1  # materialize_due still ran
+
+
+def test_run_daily_reports_the_obligations_that_need_attention(session):
+    from quaestor.services import accounts
+
+    good = _make_account(session)
+    _make_recurring(session, good)
+    bad = accounts.create_account(session, "Nequi", AccountType.debit, "COP", balance=200_000)
+    declare_existing(
+        session, name="Spotify", payee="Spotify", type=TxType.expense,
+        mode=RecurringMode.auto, amount=15_000, currency="COP", category_id=None,
+        account_id=bad.id, interval_unit=IntervalUnit.month, interval_count=1,
+        start_date=Date(2026, 6, 1),
+    )
+    accounts.archive_account(session, bad.id)
+
+    result = daily.run_daily(session, Date(2026, 6, 1), fx_url="", fx_key=None)
+
+    assert result["materialized_count"] == 1
+    assert any("Spotify" in message for message in result["failures"])
+    assert not any("Rent" in message for message in result["failures"])

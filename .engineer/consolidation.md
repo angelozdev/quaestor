@@ -24,7 +24,7 @@ all-❌ for every feature (no DAE artifacts existed before onboarding).
 | 2 | transactions-crud | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 3 | planned-payments-to-pay | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 4 | outstanding-queue-buckets | done | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 5 | recurring-engine | done | ❌ | ❌ | ❌ | ❌ | ❌ |
+| 5 | recurring-engine | done | ✅ | ✅ | ✅ | ✅ | ❌ |
 | 6 | month-close-rollover | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 7 | goals | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 8 | goal-contribution-hooks | done | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -122,7 +122,42 @@ pipeline generation → tests green. Bounded, one feature per task.
      row with every action hidden would open an empty dropdown. Trigger to
      fix: the first `show` predicate on `Editar`/`Eliminar`, or a page whose
      whole action set is conditional.
-3. recurring-engine
+3. recurring-engine ← **in progress.** `features/007-recurring-engine`, branch
+   `recurring-engine`, CP1.5 done 2026-08-02. Method fixed at intake by user
+   decision: design the ACs clean-room (product-first, without reading
+   `services/recurring.py`), then diff against shipped behaviour and resolve
+   every divergence explicitly as fix-or-accept.
+   - CP2 done 2026-08-02: 28 ACs, 18 high. Ten divergences, all resolved as fix
+     (AC-6, 12, 13, 17, 20, 21, 22, 24, 25, 28). Costliest: the daily run rolls
+     the whole batch back on one failure, so a single unchargeable obligation
+     silently costs every other one its day (AC-24). Runner-up: deleting an
+     engine-made charge returns the money but leaves that due date recorded as
+     charged and pointing at a deleted row — consumed forever, invisible
+     everywhere (AC-28).
+   - `consistency-check` 2026-08-02: 0 errors, 8 warnings. W6/W7 closed by an
+     AC edit pass (AC-27, AC-28). Still open: W1 + I3 (`feature-edit` — 007
+     cites ADR-0013, superseded by 0026; the pre-DAE `ADR-020` pointer resolves
+     to `docs/decisions/product-decisions.md`, not the P3 spec), W2/W3/W4/W5
+     (ADR work at plan time), W8 (count existing manual recurring incomes in
+     the production DB before implementing AC-6 — human-gated).
+   - CP3 done 2026-08-02: `spec.md` with 70 scenarios / 77 executions, new
+     handler module `acceptance/handlers/recurring_engine.py`. Red phase is
+     exactly the target set — 24 failed / 53 passed on 007, 24 failed / 177
+     passed across the whole suite (002, 005, 006 unaffected). Five bindings
+     name service APIs that do not exist yet (`recurring.pending_dates`,
+     `accept_pending_dates`, `decline_pending_dates`, a `failures` report on
+     `materialize_due`, an engine value on `Source`) — CP4 owns their shape.
+   - Project-level drift found on the way: `docs/decisions/product-decisions.md`
+     has no entry since 2026-07-03. Feature 006's five product decisions and
+     007's nine live only in their `acs.md`. CLAUDE.md puts product decisions in
+     that file — decide whether to backfill both or make `acs.md` the home.
+   - Follow-up to open with `discuss`: a **Por cobrar** view for expected
+     incoming money. Surfaced at AC discovery; the user wants it, but it is a
+     new surface and feature 006 already ruled one-off planned incomes out.
+     AC-6 (recurring incomes are always automatic) removes the urgency.
+   - Follow-up, likely an ADR at plan time: `Source` has `manual`, `agent` and
+     `import` but no value for the engine, so engine-created movements record
+     themselves as hand-entered — blocks AC-25.
 4. month-close-rollover (+ goal-contribution-hooks — the rollover seam; note:
    rollover mechanics survive the sinking-funds redesign, but re-check scope
    when 003 unparks)
