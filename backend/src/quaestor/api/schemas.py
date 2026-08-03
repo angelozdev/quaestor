@@ -153,6 +153,7 @@ class TransferIn(BaseModel):
     date: Date
     notes: str | None = None
     source: str = "manual"
+    category_id: int | None = None
 
 
 class TransactionOut(BaseModel):

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Category, CategoryGroup, TxType
+from ..domain.models import Category, CategoryGroup, RecurringItem, Transaction, TxType
 from ..domain.rules import category_is_income_for
 
 
@@ -163,6 +164,35 @@ def get_category(session: Session, category_id: int) -> Category:
     return cat
 
 
+def _uses_of(session: Session, category_id: int) -> int:
+    """How many movements and repeating obligations are filed under it."""
+    movements = session.exec(
+        select(func.count()).select_from(Transaction).where(Transaction.category_id == category_id)
+    ).one()
+    obligations = session.exec(
+        select(func.count()).select_from(RecurringItem).where(RecurringItem.category_id == category_id)
+    ).one()
+    return movements + obligations
+
+
+def _refuse_direction_change_in_use(session: Session, cat: Category) -> None:
+    """A category in use cannot change direction (ADR-0042).
+
+    Everything filed under it matched its direction when it was written, so
+    flipping the flag would make every one of them contradict its own type —
+    the condition the direction rule exists to remove, reintroduced in a single
+    edit and invisible afterwards.
+    """
+    uses = _uses_of(session, cat.id)
+    if not uses:
+        return
+    holds = "movement" if uses == 1 else "movements"
+    raise ValidationError(
+        f"category {cat.name!r} is already filed on {uses} {holds}, so its direction cannot change — "
+        f"create a category of the other direction instead"
+    )
+
+
 def update_category(
     session: Session,
     category_id: int,
@@ -177,9 +207,12 @@ def update_category(
 
     Raises:
         NotFound: If the category does not exist.
-        ValidationError: Empty name, or group_id that does not exist.
+        ValidationError: Empty name, a group_id that does not exist, or a
+            direction change on a category something is already filed under.
     """
     cat = get_category(session, category_id)
+    if is_income is not None and is_income != cat.is_income:
+        _refuse_direction_change_in_use(session, cat)
     if name is not None:
         if not name.strip():
             raise ValidationError("category name is required")

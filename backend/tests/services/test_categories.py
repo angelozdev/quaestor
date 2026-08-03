@@ -1,6 +1,9 @@
+from datetime import date
+
 import pytest
 from quaestor.domain.errors import ValidationError
-from quaestor.services import categories
+from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from quaestor.services import accounts, categories, recurring, transactions
 
 
 def test_create_group_and_linked_category(session):
@@ -113,3 +116,54 @@ def test_unarchive_group_clears_flag(session):
     g = categories.create_group(session, name="Bills")
     categories.archive_group(session, g.id)
     assert categories.unarchive_group(session, g.id).archived is False
+
+
+def test_a_category_in_use_cannot_change_direction(session):
+    """Flipping is_income would make every movement filed under it contradict
+    its own type — the condition ADR-0042 exists to remove."""
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=100_000)
+    comida = categories.create_category(session, "Comida")
+    transactions.record_expense(session, acc.id, 20_000, "COP", date(2026, 8, 3), "Exito", category_id=comida.id)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.update_category(session, comida.id, is_income=True)
+
+    assert "Comida" in str(refusal.value)
+    assert categories.get_category(session, comida.id).is_income is False
+
+
+def test_a_category_no_movement_uses_can_still_change_direction(session):
+    unused = categories.create_category(session, "Rendimientos")
+    flipped = categories.update_category(session, unused.id, is_income=True)
+    assert flipped.is_income is True
+
+
+def test_a_recurring_item_also_pins_its_category_direction(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=0)
+    servicios = categories.create_category(session, "Servicios")
+    recurring.create_recurring(
+        session,
+        name="Internet",
+        payee="Hogar",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=85_000,
+        currency="COP",
+        category_id=servicios.id,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 8, 1),
+    )
+
+    with pytest.raises(ValidationError):
+        categories.update_category(session, servicios.id, is_income=True)
+
+
+def test_renaming_a_category_in_use_is_still_allowed(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=100_000)
+    comida = categories.create_category(session, "Comida")
+    transactions.record_expense(session, acc.id, 20_000, "COP", date(2026, 8, 3), "Exito", category_id=comida.id)
+
+    renamed = categories.update_category(session, comida.id, name="Alimentación")
+    assert renamed.name == "Alimentación"

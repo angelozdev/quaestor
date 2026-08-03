@@ -221,3 +221,15 @@ def test_record_expense_under_an_income_category_is_refused_as_text(session, see
     )
     assert "direction" in out
     assert accounts.get_account(session, seeded["account"].id).balance == 10_000_000
+
+
+def test_transfer_carrying_a_category_is_refused_as_text(session, seeded):
+    from quaestor.services import transactions as tx_service
+
+    accounts.create_account(session, "Savings", "savings", "COP", balance=0)
+    out = core.transfer(
+        session,
+        TransferInput(from_account="Bancolombia", to_account="Savings", amount=1_000_000, category="Groceries"),
+    )
+    assert "categor" in out
+    assert tx_service.list_transactions(session, type="transfer") == []

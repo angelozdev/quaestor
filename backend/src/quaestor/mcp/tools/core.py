@@ -72,6 +72,10 @@ class TransferInput(BaseModel):
     )
     date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
+    category: str | None = Field(
+        default=None,
+        description="Not accepted — a transfer between your own accounts carries no category",
+    )
 
 
 class SetFxRateInput(BaseModel):
@@ -241,6 +245,7 @@ def record_income(session: Session, inp: RecordIncomeInput) -> str:
 def transfer(session: Session, inp: TransferInput) -> str:
     src = _resolve_account(session, inp.from_account)
     dst = _resolve_account(session, inp.to_account)
+    category = _resolve_category(session, inp.category) if inp.category else None
     _, leg_to = transactions.transfer(
         session,
         from_account_id=src.id,
@@ -251,6 +256,7 @@ def transfer(session: Session, inp: TransferInput) -> str:
         notes=inp.notes,
         source="agent",
         amount_received=inp.amount_received,
+        category_id=category.id if category else None,
     )
     src = accounts.get_account(session, src.id)
     dst = accounts.get_account(session, dst.id)

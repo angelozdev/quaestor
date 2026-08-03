@@ -727,3 +727,27 @@ def test_create_expense_with_no_category_at_all_is_422(client, auth, two_account
     assert resp.status_code == 422
     assert "category" in resp.json()["detail"]
     assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0
+
+
+def test_transfer_carrying_a_category_is_refused_at_the_door(client, auth, two_accounts, expense_category):
+    """AC-3 through the API, not through the services layer a client cannot reach."""
+    cash, bank = two_accounts
+    before = client.get("/api/transactions?type=transfer", headers=auth).json()
+
+    resp = client.post(
+        "/api/transactions/transfer",
+        headers=auth,
+        json={
+            "from_account_id": cash["id"],
+            "to_account_id": bank["id"],
+            "amount": 100_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "category_id": expense_category,
+        },
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "categor" in resp.json()["detail"]
+    after = client.get("/api/transactions?type=transfer", headers=auth).json()
+    assert len(after) == len(before)

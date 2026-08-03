@@ -100,6 +100,7 @@ def create_transfer(body: TransferIn, session: Session = Depends(get_session)):
         notes=body.notes,
         source=body.source,
         amount_received=body.amount_received,
+        category_id=body.category_id,
     )
     trm = fx.get_trm_or_none(session)
     return TransferOut(
