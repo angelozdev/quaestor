@@ -162,9 +162,12 @@ pipeline generation → tests green. Bounded, one feature per task.
    - Follow-up, likely an ADR at plan time: `Source` has `manual`, `agent` and
      `import` but no value for the engine, so engine-created movements record
      themselves as hand-entered — blocks AC-25.
-4. month-close-rollover (+ goal-contribution-hooks — the rollover seam; note:
-   rollover mechanics survive the sinking-funds redesign, but re-check scope
-   when 003 unparks)
+4. month-close-rollover ← **scope resolved 2026-08-02.** `goal-contribution-hooks`
+   is dropped from this task: the discuss that promoted 003 decided goals
+   collapse into funds, so the month-close hook that proposes one planned
+   transfer per active goal is deleted rather than covered. Do not write
+   acceptance tests for it. Rollover mechanics themselves survive the redesign,
+   so the remainder of this task is safe to work now — it no longer waits on 003.
 5. monthly-report (+ month-aggregate-read-path — shared read path)
 6. mcp-tool-surface (+ mcp-tool-tier-policy)
 7. chat-coach (+ chat-wire-adapter, chat-output-sanitization)
@@ -174,9 +177,14 @@ pipeline generation → tests green. Bounded, one feature per task.
 11. bff-api-proxy
 12. markdown-rendering
 13. Tier 4 features (masters + UI infra), one folder per row, in table order
-14. goals ← **paused pending sinking-funds redesign (features/003-sinking-funds)**
+14. goals ← **cancelled 2026-08-02.** The discuss that promoted 003 decided goals
+    are not a feature: a goal becomes a fund with a `target-by-date` funding
+    rule, and the `Goal` / `GoalContribution` tables plus the goals screen are
+    deleted. There is nothing left to cover — 003's own acceptance suite owns
+    the behaviour. Delete this row once 003 ships; keep it until then so the
+    cancellation is not mistaken for an oversight.
 15. budgets-envelopes + safe-to-spend ← **formalized at onboarding; paused pending
-    sinking-funds redesign (features/003-sinking-funds)**
+    sinking-funds redesign (features/003-sinking-funds, now `ready`)**
     - Open followup from fix `2026-07-31-phantom-budget-assignment`
       (gap: `missing_ac`): when this unpauses, land "archived and
       budget-excluded categories cannot hold an envelope" as an AC in
