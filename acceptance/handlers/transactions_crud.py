@@ -367,11 +367,12 @@ def when_act_on_missing_transaction(world: World, action: str) -> None:
 
 @step(
     r"the assistant records an expense of (?P<amount>" + _DEC + r") "
-    r'(?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" paying "(?P<payee>[^"]+)" '
+    r'(?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" paying "(?P<payee>[^"]+)"'
+    r'(?: in category "(?P<category>[^"]+)")? '
     r'tagged "(?P<tag>[^"]+)"'
 )
 def when_assistant_records_expense(
-    world: World, amount: str, currency: str, account: str, payee: str, tag: str
+    world: World, amount: str, currency: str, account: str, payee: str, tag: str, category: str | None
 ) -> None:
     def action():
         from quaestor.mcp.tools import core as mcp_core
@@ -383,6 +384,7 @@ def when_assistant_records_expense(
                 amount=major_to_cents(amount),
                 account=account,
                 currency=currency,
+                category=category,
                 tags=[tag],
                 date=world.today,
             ),

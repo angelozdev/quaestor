@@ -21,6 +21,14 @@ AC-25 and AC-28. The to-pay queue's own behaviour is pinned by feature 006 and
 appears here only where this engine feeds it; read-time COP conversion is
 pinned by feature 005.
 
+Amended 2026-08-03 by feature 008: every action that files money under a
+category now names it, because an obligation can no longer be declared without
+one. A `Given` obligation is filed under a category the scenario does not name
+— the category exists, it is just irrelevant to the cadence it pins. An
+untyped `a category "X"` is an expense category; income categories are written
+`an income category "X"`. Repeating transfers are untouched: they carry no
+category by rule.
+
 ```gherkin
 Feature: Recurring engine with due-driven materialization
 ```
@@ -30,7 +38,8 @@ Feature: Recurring engine with due-driven materialization
 ```gherkin
 Scenario: A declared obligation starts charging on its own
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today in category "Suscripciones", paying itself
   And the daily run happens
   Then "Netflix" has been charged 1 time
   And "Bancolombia" has balance 474100.00 COP
@@ -142,7 +151,8 @@ Scenario: A repeating income lands on its own and raises the balance
 
 Scenario: An income that waits for approval cannot be declared
   Given an account "Bancolombia" in COP with balance 100000.00 COP
-  When the user tries to declare a repeating income of 4500000.00 COP from "Empresa" into "Bancolombia" every 1 month starting today, waiting for approval
+  And an income category "Sueldo"
+  When the user tries to declare a repeating income of 4500000.00 COP from "Empresa" into "Bancolombia" every 1 month starting today in category "Sueldo", waiting for approval
   Then the declaration is rejected
 
 Scenario: No expected income is left where nobody can resolve it
@@ -254,28 +264,32 @@ Scenario: Nothing happens before the start date
 ```gherkin
 Scenario: Declaring with a start date already behind offers the passed dates
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   Then the user is offered 4 passed dates for "Netflix"
   And "Netflix" has been charged 0 times
   And "Bancolombia" has balance 500000.00 COP
 
 Scenario: Only the accepted dates become charges
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   And the user accepts 2 of the passed dates for "Netflix"
   Then "Netflix" has been charged 2 times
   And "Bancolombia" has balance 448200.00 COP
 
 Scenario: An accepted date keeps its own real date
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   And the user accepts every passed date for "Netflix"
   Then "Netflix" was charged 21 days ago
   And "Netflix" was charged 7 days ago
 
 Scenario: Declined dates are never charged and never offered again
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   And the user declines every passed date for "Netflix"
   And the daily run happens
   Then "Netflix" has been charged 0 times
@@ -284,7 +298,8 @@ Scenario: Declined dates are never charged and never offered again
 
 Scenario: Declining every date leaves the obligation live from its next date
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the user declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   And the user declines every passed date for "Netflix"
   And the daily run happens as if it were in 7 days
   Then "Netflix" has been charged 1 time
@@ -432,7 +447,8 @@ Scenario Outline: A declaration that cannot hold is refused
 
 Scenario: An end date before the start is refused
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user tries to declare a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting today ending 7 days ago, paying itself
+  And a category "Suscripciones"
+  When the user tries to declare a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting today ending 7 days ago in category "Suscripciones", paying itself
   Then the declaration is rejected
 
 Scenario: The same rules hold when editing
@@ -609,7 +625,8 @@ Scenario: A manual charge carries the same mark
 
 Scenario: A movement the user entered by hand is not marked as the engine's
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user registers an expense of 30000.00 COP from "Bancolombia" to "Tienda"
+  And a category "Mercado"
+  When the user registers an expense of 30000.00 COP from "Bancolombia" to "Tienda" in category "Mercado"
   Then the movements list shows the charge to "Tienda" as entered by hand
 ```
 
@@ -618,7 +635,8 @@ Scenario: A movement the user entered by hand is not marked as the engine's
 ```gherkin
 Scenario: The assistant can declare an obligation
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the assistant declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
+  And a category "Suscripciones"
+  When the assistant declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today in category "Suscripciones", paying itself
   And the daily run happens
   Then "Netflix" has been charged 1 time
 
@@ -631,7 +649,8 @@ Scenario: The assistant reports the same obligations the screen shows
 
 Scenario: The assistant is offered the passed dates rather than defaulting
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the assistant declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago, paying itself
+  And a category "Suscripciones"
+  When the assistant declares a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 week starting 21 days ago in category "Suscripciones", paying itself
   Then the user is offered 4 passed dates for "Netflix"
   And "Netflix" has been charged 0 times
 ```

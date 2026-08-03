@@ -303,9 +303,10 @@ def when_user_plans_payment(
     r"the assistant plans a payment of (?P<amount>" + _DEC + r")"
     r' (?P<currency>[A-Z]{3}) to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"'
     r" (?P<due>" + _DUE + r")"
+    r'(?: in category "(?P<category>[^"]+)")?'
 )
 def when_assistant_plans_payment(
-    world: World, amount: str, currency: str, payee: str, account: str, due: str, **_
+    world: World, amount: str, currency: str, payee: str, account: str, due: str, category: str | None = None, **_
 ) -> None:
     def action():
         from quaestor.mcp.tools import temporal
@@ -316,6 +317,7 @@ def when_assistant_plans_payment(
                 payee=payee,
                 amount=major_to_cents(amount),
                 currency=currency,
+                category=category,
                 due_date=_due_date(world, due),
                 account=account,
             ),

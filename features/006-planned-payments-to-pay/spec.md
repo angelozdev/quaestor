@@ -11,6 +11,12 @@ behaviour on top. AC-8 (restoring a skipped payment) and AC-15 (incomes
 leaving the queue) describe decided target behaviour and are expected RED
 against current code (ATDD red phase).
 
+Amended 2026-08-03 by feature 008: every action that files money under a
+category now names it, because a payment can no longer be planned without one.
+A `Given` planned payment is filed under a category the scenario does not name
+— the category exists, it is just irrelevant to the queue behaviour it pins.
+An untyped `a category "X"` is an expense category.
+
 ```gherkin
 Feature: Planned payments and the to-pay confirmation queue
 ```
@@ -20,7 +26,8 @@ Feature: Planned payments and the to-pay confirmation queue
 ```gherkin
 Scenario: Planning a payment leaves the balance untouched
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user plans a payment of 300000.00 COP to "Taller" from "Bancolombia" due in 19 days
+  And a category "Carro"
+  When the user plans a payment of 300000.00 COP to "Taller" from "Bancolombia" due in 19 days in category "Carro"
   Then "Bancolombia" has balance 500000.00 COP
   And the outstanding list for the next 30 days shows "Taller" as upcoming
 
@@ -33,7 +40,8 @@ Scenario: A planned payment keeps its descriptive details
 Scenario: Planning works before any exchange rate exists
   Given no TRM has been set
   And an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user plans a payment of 85000.00 COP to "Claro" from "Bancolombia" due in 3 days
+  And a category "Servicios"
+  When the user plans a payment of 85000.00 COP to "Claro" from "Bancolombia" due in 3 days in category "Servicios"
   Then the payment to "Claro" is waiting to be resolved
 ```
 
@@ -357,7 +365,8 @@ Scenario: A period that ends before it starts is refused
 ```gherkin
 Scenario Outline: Impossible amounts are refused
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user tries to plan a payment of <amount> COP to "Claro" from "Bancolombia" due in 3 days
+  And a category "Servicios"
+  When the user tries to plan a payment of <amount> COP to "Claro" from "Bancolombia" due in 3 days in category "Servicios"
   Then the plan is rejected
   And the outstanding list for the next 7 days is empty
 
@@ -368,17 +377,20 @@ Scenario Outline: Impossible amounts are refused
 
 Scenario: A payment cannot be planned against an account that does not exist
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user tries to plan a payment of 85000.00 COP to "Claro" from "Cuenta fantasma" due in 3 days
+  And a category "Servicios"
+  When the user tries to plan a payment of 85000.00 COP to "Claro" from "Cuenta fantasma" due in 3 days in category "Servicios"
   Then the plan is rejected
 
 Scenario: A payment cannot be planned against an archived account
   Given an archived account "Vieja" in COP
-  When the user tries to plan a payment of 85000.00 COP to "Claro" from "Vieja" due in 3 days
+  And a category "Servicios"
+  When the user tries to plan a payment of 85000.00 COP to "Claro" from "Vieja" due in 3 days in category "Servicios"
   Then the plan is rejected
 
 Scenario: A payment cannot be planned in a currency the account does not hold
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the user tries to plan a payment of 1000.00 USD to "SaaS" from "Bancolombia" due in 3 days
+  And a category "Servicios"
+  When the user tries to plan a payment of 1000.00 USD to "SaaS" from "Bancolombia" due in 3 days in category "Servicios"
   Then the plan is rejected
 
 Scenario: A payment cannot be planned under an archived category
@@ -538,7 +550,8 @@ Scenario: The assistant reports the same outstanding figures as the app
 
 Scenario: A payment can be planned by talking to the assistant
   Given an account "Bancolombia" in COP with balance 500000.00 COP
-  When the assistant plans a payment of 85000.00 COP to "Claro" from "Bancolombia" due in 3 days
+  And a category "Servicios"
+  When the assistant plans a payment of 85000.00 COP to "Claro" from "Bancolombia" due in 3 days in category "Servicios"
   Then the outstanding list for the next 7 days shows "Claro" as upcoming
 
 Scenario: Confirming and skipping are reachable outside the app

@@ -5,6 +5,13 @@ Amounts are written as plain decimals (`40000.00 COP`) — no thousands
 separators. "The TRM" is the single USD→COP rate the app knows (ADR-0031,
 amended: single scalar value).
 
+Amended 2026-08-03 by feature 008: every action that files money under a
+category now names it, because the app no longer accepts an expense without
+one. A `Given` movement (`a recorded expense of …`) is filed under a category
+the scenario does not name — the category exists, it is just irrelevant to the
+conversion these scenarios pin. An untyped `a category "X"` is an expense
+category.
+
 ```gherkin
 Feature: Read-time FX conversion and cross-currency transfers
 ```
@@ -15,7 +22,8 @@ Feature: Read-time FX conversion and cross-currency transfers
 Scenario: Register a USD expense without providing a rate
   Given no TRM has been set
   And an account "Wise" in USD with balance 500.00 USD
-  When the user registers an expense of 100.00 USD from "Wise"
+  And a category "Comida"
+  When the user registers an expense of 100.00 USD from "Wise" in category "Comida"
   Then the expense is recorded with amount 100.00 USD
   And viewing the expense shows no exchange rate
   And "Wise" has balance 400.00 USD
