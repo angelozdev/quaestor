@@ -252,3 +252,18 @@ pipeline generation → tests green. Bounded, one feature per task.
   against half the gate understates coverage and sends you writing tests for
   behaviour that was already pinned — by a scenario rather than a unit test,
   which is where this project's rules mostly live.
+- C12. The recurring engine mints charges under **archived** categories.
+  Reproduced by the CP7 reviewer: create an item under "Servicios", archive
+  "Servicios", run `materialize_due` — the charge is created carrying the
+  archived category, with no failure reported. AC-16 refuses an archived
+  category for a new movement and AC-10 says archiving removes it from the
+  choices offered for new movements; the engine is a new-movement path neither
+  covers, because `occurrences._create_occurrence_tx` copies `item.category_id`
+  without re-validating. The copy predates feature 008, but 008 is the feature
+  that pins AC-16. Decide whether the engine should refuse, fall back, or warn —
+  it is the one path that moves money with nobody watching.
+- C13. `chatAssistantTurn` in `frontend/lib/query.ts` excludes the categories
+  root, justified by "no chat tool mutates them in v1". `create_category` was
+  already `write_safe`, and feature 008 added `new_category` to four more
+  LLM-reachable tools, so an assistant turn can now create a category and leave
+  every list in the UI stale. Add the root, or re-check the claim.

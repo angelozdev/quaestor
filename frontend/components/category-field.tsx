@@ -19,12 +19,17 @@ export function CategoryField({
   isIncome,
   error,
   id = "category",
+  allowCreate = true,
 }: {
   value: CategoryChoice
   onChange: (choice: CategoryChoice) => void
   isIncome: boolean
   error?: string
   id?: string
+  /** Whether this form can create a category in the same request. Only the
+   * paths that carry `new_category` may offer it — see the recurring edit
+   * dialog, whose update endpoint does not. */
+  allowCreate?: boolean
 }) {
   const [creating, setCreating] = useState(false)
   const direction = isIncome ? "ingreso" : "gasto"
@@ -38,11 +43,13 @@ export function CategoryField({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label htmlFor={id}>Categoría *</Label>
-        <Button type="button" variant="ghost" size="sm" onClick={toggleCreating}>
-          {creating ? "Elegir una existente" : "Crear categoría"}
-        </Button>
+        {allowCreate ? (
+          <Button type="button" variant="ghost" size="sm" onClick={toggleCreating}>
+            {creating ? "Elegir una existente" : "Crear categoría"}
+          </Button>
+        ) : null}
       </div>
-      {creating ? (
+      {allowCreate && creating ? (
         <Input
           id={id}
           autoFocus

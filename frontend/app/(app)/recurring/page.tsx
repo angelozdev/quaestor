@@ -630,6 +630,7 @@ export default function RecurringPage() {
               {(field) => (
                 <CategoryField
                   id="recurring-edit-category"
+                  allowCreate={false}
                   isIncome={editForm.getFieldValue("type") === "income"}
                   value={{
                     categoryId: field.state.value as number | null,

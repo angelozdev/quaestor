@@ -546,6 +546,7 @@ The card account stays a normal account with a **negative balance = debt**; the 
 **Alternatives rejected.** (A) **Show the origin only in the detail view**: the question "why did this move?" is asked while scanning a list, not while reading one row. (B) **Infer it from the payee matching the obligation's name**: breaks the moment the user renames either one.
 
 **Consequences.** Origin becomes a displayed property, not merely a stored one. Charges made by the engine, by import, by the agent and by hand are told apart at a glance — which is also what makes ADR-034's deletion path safe to reach for.
+
 ---
 
 ## ADR-036 — Every peso that moves in or out says what it was for

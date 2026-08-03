@@ -3,7 +3,9 @@
 - **Status:** accepted
 - **Date:** 2026-08-03
 - **Deciders:** Angelo
-- **Supersedes:** —
+- **Supersedes:** — (this ADR supersedes no technical decision; the product
+  clause it rests on, ADR-024's "optional category when recording", is
+  superseded by `docs/decisions/product-decisions.md` § ADR-036)
 - **Superseded by:** —
 
 ## Context and problem statement

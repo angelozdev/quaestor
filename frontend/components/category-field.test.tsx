@@ -76,3 +76,21 @@ describe("CategoryField", () => {
     expect(screen.getByText("Requerido")).toBeInTheDocument()
   })
 })
+
+describe("CategoryField without inline creation", () => {
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME] : [EXPENSE]),
+      )
+  })
+
+  it("hides the affordance on a form whose endpoint cannot create one", () => {
+    render(
+      <CategoryField value={NO_CATEGORY} onChange={vi.fn()} isIncome={false} allowCreate={false} />,
+      { wrapper },
+    )
+    expect(screen.queryByRole("button", { name: "Crear categoría" })).not.toBeInTheDocument()
+  })
+})
