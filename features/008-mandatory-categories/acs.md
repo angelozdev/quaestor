@@ -185,9 +185,6 @@ existing active one is refused. If the match is an archived category, the app
 offers to restore it instead of creating a second one. Production already
 carries one such pair (`🛡️ Auto Insurance` exists twice, one archived).
 
-> Proposed during discovery rather than decided by the owner — flagged for
-> review.
-
 ## AC-14: The rule holds on every way in, not just the form
 
 - **Priority:** high
