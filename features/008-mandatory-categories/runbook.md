@@ -2,14 +2,14 @@
 slug: 008-mandatory-categories
 checkpoint: 4
 created: 2026-08-03
-status: open
+status: closed
 steps:
   - id: backup-before-migration
     description: "Dump the local production Postgres to iCloud before revision 0010 touches the schema"
     owner: human
     command: "just backup"
-    evidence: null
-    completed: false
+    evidence: "quaestor-local-2026-08-03.dump, 54k, written 3 Aug 10:08. Angelo said the backup was not necessary and then asked for it anyway before applying; taken. Verified a genuine pre-migration restore point rather than a file that merely satisfies the date gate: pg_restore of its alembic_version yields 0009, its schema section does not contain ck_transaction_category_by_type, and it carries 13 TABLE DATA sections."
+    completed: true
     blocking_acs:
       - AC-17
       - AC-18
@@ -38,8 +38,8 @@ steps:
     description: "Apply revision 0010 (pre-flight guard, type-discriminated CHECK on transaction, NOT NULL on recurring_item.category_id) to the local production Postgres"
     owner: human
     command: "just migrate"
-    evidence: null
-    completed: false
+    evidence: "Applied 2026-08-03. `Running upgrade 0009 -> 0010`. Before: 549 expenses, 50 incomes, 39 transfers, 14 recurring items, revision 0009. After: identical counts, revision 0010. The pre-flight guard passed silently, as it should over clean data."
+    completed: true
     blocking_acs:
       - AC-17
       - AC-18
@@ -49,8 +49,8 @@ steps:
     description: "Confirm the CHECK exists in production and that the 39 transfers survived it"
     owner: human
     command: "QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db psql -U \"${POSTGRES_USER:-quaestor}\" -d \"${POSTGRES_DB:-quaestor}\" -c \"select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid = 'transaction'::regclass and contype = 'c';\" -c \"select count(*) from \\\"transaction\\\" where type = 'transfer' and category_id is null;\""
-    evidence: null
-    completed: false
+    evidence: "CHECK ((((type = ANY (ARRAY['expense'::txtype, 'income'::txtype])) AND (category_id IS NOT NULL)) OR ((type = 'transfer'::txtype) AND (category_id IS NULL)))) — the type discrimination survived into Postgres with the enum cast. All 39 transfers alive and still uncategorised, which is what a blanket NOT NULL would have destroyed. recurring_item.category_id is_nullable = NO. Proven live inside a rolled-back transaction: forcing an uncategorised expense raises `violates check constraint ck_transaction_category_by_type`, and the table still holds 638 rows."
+    completed: true
     blocking_acs:
       - AC-17
 ---
