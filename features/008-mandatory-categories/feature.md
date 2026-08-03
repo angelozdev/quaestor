@@ -2,7 +2,7 @@
 title: "Category becomes mandatory on every expense and income"
 slug: mandatory-categories
 number: 008
-status: ready
+status: done
 autonomy_level: medium
 branch: mandatory-categories
 area: core
