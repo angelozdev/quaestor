@@ -101,3 +101,28 @@ describe("TransactionCreateDialog category", () => {
     )
   })
 })
+
+describe("TransactionCreateDialog category direction", () => {
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME_CATEGORY] : [EXPENSE_CATEGORY]),
+      )
+    listAccounts.mockReset().mockResolvedValue([ACCOUNT])
+    createTransaction.mockReset().mockResolvedValue(undefined)
+  })
+
+  it("drops the chosen category when the direction changes under it", async () => {
+    const user = userEvent.setup()
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await waitFor(() => expect(listCategories).toHaveBeenCalledWith(false, false))
+
+    await user.click(screen.getByRole("combobox", { name: "Categoría *" }))
+    await user.click(screen.getByRole("option", { name: "Restaurantes" }))
+    await user.click(screen.getByRole("combobox", { name: "Tipo *" }))
+    await user.click(screen.getByRole("option", { name: "Ingreso" }))
+
+    expect(screen.queryByText("Restaurantes")).not.toBeInTheDocument()
+  })
+})

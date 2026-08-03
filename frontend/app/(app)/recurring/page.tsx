@@ -364,10 +364,16 @@ export default function RecurringPage() {
               <createForm.Field name="type">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Tipo *</Label>
+                    <Label htmlFor="recurring-create-type">Tipo *</Label>
                     <Select
+                      id="recurring-create-type"
                       value={field.state.value as string}
-                      onValueChange={(v) => v && field.handleChange(v as never)}
+                      onValueChange={(v) => {
+                        if (!v) return
+                        field.handleChange(v as never)
+                        createForm.setFieldValue("categoryId", null)
+                        createForm.setFieldValue("newCategory", "")
+                      }}
                       items={TYPE_ITEMS}
                     />
                   </div>
