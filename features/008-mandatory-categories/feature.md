@@ -33,9 +33,12 @@ silent bucket for money to fall into.
 - **Backfill** the posted rows that predate the rule, and the 10 active
   recurring items missing a category.
 - **Product decision** recorded in `docs/decisions/product-decisions.md`.
-- **Out of scope:** re-categorising rows that already have a category, any
-  change to the category taxonomy itself, and `skipped` rows (they never
-  happened — decide at AC time whether to backfill or exempt them).
+- **Direction.** A category belongs to one direction: income categories are
+  offered only when recording money coming in, expense categories only when
+  recording money going out. Decided at AC time 2026-08-02 — see `acs.md`.
+- **Out of scope:** re-categorising rows that already have a category, and any
+  change to the category taxonomy itself. `skipped` rows are **in** scope — the
+  owner's rule admits no exception for charges that never happened.
 
 ## Why transfers are the exception
 
@@ -46,7 +49,12 @@ Emergency Fund. All 39 existing transfers are correctly uncategorised and must
 stay that way; the rule has to distinguish by transaction type, not apply
 blanket NOT NULL.
 
-## The gap, measured in production 2026-08-02
+## The gap, measured in production 2026-08-02 — since closed
+
+**Backfilled the same day** (see `acs.md` AC-19). Every figure below is now
+zero except the transfer row, which is the rule working. Kept as the record of
+why the feature exists.
+
 
 Read-only counts against the local Postgres (ADR-0030):
 
@@ -99,6 +107,15 @@ DolarApp Premium.
   three-month average inflated by uncategorised rows.
 - Owner's framing, 2026-08-02: *"Todos los pagos recurrentes deberían tener
   categoría. Cualquier cosa que yo haga debe entrar en una categoría, debe."*
-- Open at AC time: what the UI does when the owner has no fitting category yet
-  (create inline vs. force a trip to the categories screen), and whether
-  `skipped` rows are backfilled or exempted.
+- **Both AC-time questions resolved 2026-08-02.** A missing category is created
+  from the movement form without leaving it (the `4x1000` charges were the real
+  case that forced it); `skipped` rows carry a category like everything else.
+- **Historical backfill done 2026-08-02**, after a fresh backup
+  (`quaestor-local-2026-08-02.dump`). 131 rows resolved — 101 by setting the 10
+  recurring items that lacked a category, 30 individually. Seven new categories
+  created. The remaining work is the rule and the migration, not the data.
+- **Parked, not part of this feature:** transfer categories (Monarch and Lunch
+  Money both have them; the owner improvised `🔄 Payment / Transfer`),
+  splitting one movement into two, duplicate `skipped` rows produced by the
+  recurring engine, and negative `amount` values used as refunds. Full list in
+  `acs.md`.
