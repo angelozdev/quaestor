@@ -5,6 +5,7 @@ typed domain error becomes agent text instead of an exception. Impls take a
 ``Session`` (one per request, opened by the registry wrapper) plus a validated
 Pydantic input model.
 """
+
 from __future__ import annotations
 
 import functools
@@ -26,9 +27,7 @@ from .. import format
 
 class RecordExpenseInput(BaseModel):
     payee: str = Field(description="Merchant or payee, e.g. 'Supermarket'")
-    amount: int = Field(
-        gt=0, description="Amount in cents, original currency (40000 COP = 4000000)"
-    )
+    amount: int = Field(gt=0, description="Amount in cents, original currency (40000 COP = 4000000)")
     account: str = Field(description="Account name, e.g. 'Bancolombia'")
     currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
     category: str | None = Field(default=None, description="Category name (optional)")
@@ -51,9 +50,7 @@ class RecordIncomeInput(BaseModel):
 class TransferInput(BaseModel):
     from_account: str = Field(description="Source account name")
     to_account: str = Field(description="Destination account name")
-    amount: int = Field(
-        gt=0, description="Amount SENT in cents, in the source account's currency"
-    )
+    amount: int = Field(gt=0, description="Amount SENT in cents, in the source account's currency")
     amount_received: int | None = Field(
         default=None,
         gt=0,
@@ -85,19 +82,13 @@ class ListTransactionsInput(BaseModel):
     account: str | None = Field(default=None, description="Filter by account name")
     category: str | None = Field(default=None, description="Filter by category name")
     tag: str | None = Field(default=None, description="Filter by tag name")
-    type: Literal["expense", "income", "transfer"] | None = Field(
-        default=None, description="Transaction type"
-    )
-    status: Literal["posted", "planned"] | None = Field(
-        default=None, description="Transaction status"
-    )
+    type: Literal["expense", "income", "transfer"] | None = Field(default=None, description="Transaction type")
+    status: Literal["posted", "planned"] | None = Field(default=None, description="Transaction status")
     sort: Literal["date", "created_at"] = Field(
         default="date",
         description="Primary sort field (date = logical date; created_at = row creation).",
     )
-    order: Literal["asc", "desc"] = Field(
-        default="desc", description="Sort direction."
-    )
+    order: Literal["asc", "desc"] = Field(default="desc", description="Sort direction.")
 
 
 # ----- error-to-text wrapper -----
@@ -119,9 +110,7 @@ def _as_text(fn):
 # ----- name resolution (agent speaks names; services speak ids) -----
 
 
-def _resolve_account_by_name(
-    session: Session, name: str, *, allow_archived: bool = False
-) -> Account:
+def _resolve_account_by_name(session: Session, name: str, *, allow_archived: bool = False) -> Account:
     all_accounts = accounts.list_accounts(session, include_archived=allow_archived)
     target = name.strip().lower()
     match = next((a for a in all_accounts if a.name.lower() == target), None)
@@ -136,9 +125,7 @@ def _resolve_category_by_name(session: Session, name: str) -> Category:
     for category in categories.list_categories(session):
         if category.name.lower() == target:
             return category
-    raise NotFound(
-        f"Category '{name}' not found. You can create it or record without a category."
-    )
+    raise NotFound(f"Category '{name}' not found. You can create it or record without a category.")
 
 
 def _resolve_category_group_by_name(session: Session, name: str) -> CategoryGroup:
@@ -148,9 +135,7 @@ def _resolve_category_group_by_name(session: Session, name: str) -> CategoryGrou
     if match is not None:
         return match
     available = ", ".join(g.name for g in all_groups) or "(none)"
-    raise NotFound(
-        f"Category group '{name}' not found. Available: {available}."
-    )
+    raise NotFound(f"Category group '{name}' not found. Available: {available}.")
 
 
 def _resolve_tag_by_name(session: Session, name: str) -> Tag:
@@ -273,9 +258,7 @@ def set_fx_rate(session: Session, inp: SetFxRateInput) -> str:
 @_as_text
 def list_transactions(session: Session, inp: ListTransactionsInput) -> str:
     account_id = _resolve_account(session, inp.account).id if inp.account else None
-    category_id = (
-        _resolve_category(session, inp.category).id if inp.category else None
-    )
+    category_id = _resolve_category(session, inp.category).id if inp.category else None
     txs = transactions.list_transactions(
         session,
         account_id=account_id,
@@ -303,9 +286,7 @@ def list_accounts(session: Session) -> str:
 
 @_as_text
 def list_categories(session: Session) -> str:
-    return format.categories_table(
-        categories.list_categories(session), categories.list_groups(session)
-    )
+    return format.categories_table(categories.list_categories(session), categories.list_groups(session))
 
 
 @_as_text

@@ -5,6 +5,7 @@ shape). Tool-call deltas are accumulated per `index` and emitted as
 TOOL_INPUT_START → TOOL_INPUT_DELTA* → TOOL_INPUT_AVAILABLE once
 `finish_reason` arrives.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,9 +36,7 @@ class LiteLLMProvider:
         self._api_key = api_key
         self._base_url = base_url
 
-    async def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> AsyncIterator[LLMEvent]:
+    async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
@@ -51,7 +50,6 @@ class LiteLLMProvider:
             kwargs["base_url"] = self._base_url
 
         # Track per-tool-call state across chunks.
-        # accumulated[idx] = {"id": str|None, "name": str|None, "args_buf": str, "started": bool}
         accumulated: dict[int, dict[str, Any]] = {}
         text_started = False
         # Token usage, captured from the last chunk that carries `.usage`.
@@ -139,17 +137,13 @@ class LiteLLMProvider:
                 if choice.finish_reason:
                     if text_started:
                         yield LLMEvent(type=LLMEventType.TEXT_END, content_index=0)
-                    for idx, slot in sorted(accumulated.items()):
+                    for _idx, slot in sorted(accumulated.items()):
                         # Parse accumulated arguments; if it's malformed JSON,
                         # surface it as an error rather than dropping the call.
                         try:
-                            args_obj: Any = (
-                                json.loads(slot["args_buf"]) if slot["args_buf"].strip() else {}
-                            )
+                            args_obj: Any = json.loads(slot["args_buf"]) if slot["args_buf"].strip() else {}
                         except json.JSONDecodeError as exc:
-                            raise UpstreamLLMError(
-                                f"tool_call {slot['id']} arguments not valid JSON: {exc}"
-                            ) from exc
+                            raise UpstreamLLMError(f"tool_call {slot['id']} arguments not valid JSON: {exc}") from exc
                         if not isinstance(args_obj, dict):
                             args_obj = {"value": args_obj}
                         yield LLMEvent(
@@ -172,7 +166,7 @@ class LiteLLMProvider:
 
 # Vercel AI SDK UI Message Stream `finishReason` enum (the SSE wire format
 # the frontend's `useChat` validates against). See ai-sdk.dev/docs/ai-sdk-ui/
-# stream-protocol#finish-event. The renderer (events.py) is dumb on purpose
+# stream-protocol, finish-event section. The renderer (events.py) is dumb on purpose
 # — all provider-specific values are normalized HERE, so the renderer can
 # trust whatever stop_reason it receives.
 _VERCEL_FINISH_REASON = "stop"

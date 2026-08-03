@@ -26,9 +26,18 @@ def accounts_balance(session, account_id):
 def test_materialize_auto_posts_on_each_due_date(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=2_000_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=2_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     report = occurrences.materialize_due(session, date(2026, 3, 15))
     assert [o.due_date for o in report.created] == [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)]
@@ -41,9 +50,18 @@ def test_materialize_auto_posts_on_each_due_date(session):
 def test_materialize_submonthly_generates_several_in_a_month(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Allowance", payee="Self", type=TxType.expense, mode=RecurringMode.auto,
-        amount=10_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.week, interval_count=2, start_date=date(2026, 1, 1),
+        session,
+        name="Allowance",
+        payee="Self",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=10_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.week,
+        interval_count=2,
+        start_date=date(2026, 1, 1),
     )
     report = occurrences.materialize_due(session, date(2026, 1, 31))
     assert [o.due_date for o in report.created] == [date(2026, 1, 1), date(2026, 1, 15), date(2026, 1, 29)]
@@ -52,9 +70,18 @@ def test_materialize_submonthly_generates_several_in_a_month(session):
 def test_materialize_manual_leaves_planned_without_balance(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
-        amount=50_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 5),
+        session,
+        name="Water",
+        payee="Utility",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=50_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 5),
     )
     report = occurrences.materialize_due(session, date(2026, 1, 31))
     assert len(report.created) == 1 and report.created[0].status == OccurrenceStatus.planned
@@ -66,9 +93,18 @@ def test_materialize_manual_leaves_planned_without_balance(session):
 def test_materialize_is_idempotent(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=2_000_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=2_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     first = occurrences.materialize_due(session, date(2026, 2, 15))
     again = occurrences.materialize_due(session, date(2026, 2, 15))
@@ -80,9 +116,18 @@ def test_materialize_is_idempotent(session):
 def test_materialize_missed_day_self_heals(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=1_000_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=1_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     occurrences.materialize_due(session, date(2026, 1, 15))
     report = occurrences.materialize_due(session, date(2026, 3, 15))
@@ -92,9 +137,18 @@ def test_materialize_missed_day_self_heals(session):
 def test_materialize_skips_inactive_items(session):
     acc = _acc(session)
     item = declare_existing(
-        session, name="Old", payee="x", type=TxType.expense, mode=RecurringMode.auto,
-        amount=1000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Old",
+        payee="x",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=1000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     item.active = False
     session.add(item)
@@ -105,9 +159,18 @@ def test_materialize_skips_inactive_items(session):
 def test_skip_recurring_before_materialization_blocks_it(session):
     acc = _acc(session)
     item = declare_existing(
-        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=1_000_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=1_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     occ = occurrences.skip(session, item.id, date(2026, 2, 1))
     assert occ.status == OccurrenceStatus.skipped and occ.transaction_id is None
@@ -118,9 +181,18 @@ def test_skip_recurring_before_materialization_blocks_it(session):
 def test_skip_recurring_after_manual_materialization_skips_the_planned_tx(session):
     acc = _acc(session)
     item = declare_existing(
-        session, name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
-        amount=50_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 5),
+        session,
+        name="Water",
+        payee="Utility",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=50_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 5),
     )
     occurrences.materialize_due(session, date(2026, 1, 31))
     assert len(transactions.list_transactions(session, status="planned")) == 1
@@ -137,9 +209,18 @@ def test_skip_recurring_unknown_item(session):
 
 def _recurring(session, name, account_id, amount, mode=RecurringMode.auto):
     return declare_existing(
-        session, name=name, payee=name, type=TxType.expense, mode=mode,
-        amount=amount, currency="COP", category_id=None, account_id=account_id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name=name,
+        payee=name,
+        type=TxType.expense,
+        mode=mode,
+        amount=amount,
+        currency="COP",
+        category_id=None,
+        account_id=account_id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
 
 
@@ -208,9 +289,18 @@ def test_one_failure_is_reported_per_obligation_not_per_date(session):
 def test_an_auto_charge_records_the_engine_as_its_source(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=1_000_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=1_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     occurrences.materialize_due(session, date(2026, 1, 31))
     tx = transactions.list_transactions(session, status="posted")[0]
@@ -220,9 +310,18 @@ def test_an_auto_charge_records_the_engine_as_its_source(session):
 def test_a_manual_charge_records_the_engine_as_its_source(session):
     acc = _acc(session)
     declare_existing(
-        session, name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
-        amount=50_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 5),
+        session,
+        name="Water",
+        payee="Utility",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=50_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 5),
     )
     occurrences.materialize_due(session, date(2026, 1, 31))
     tx = transactions.list_transactions(session, status="planned")[0]
@@ -231,17 +330,23 @@ def test_a_manual_charge_records_the_engine_as_its_source(session):
 
 def test_a_hand_entered_movement_is_not_the_engines(session):
     acc = _acc(session)
-    tx = transactions.record_expense(
-        session, acc.id, 30_000, "COP", date(2026, 1, 5), "Tienda"
-    )
+    tx = transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 1, 5), "Tienda")
     assert tx.source == Source.manual
 
 
 def _weekly(session, acc_id, start):
     return declare_existing(
-        session, name="Gimnasio", payee="Gimnasio", type=TxType.expense,
-        mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
-        account_id=acc_id, interval_unit=IntervalUnit.week, interval_count=1,
+        session,
+        name="Gimnasio",
+        payee="Gimnasio",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=8_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc_id,
+        interval_unit=IntervalUnit.week,
+        interval_count=1,
         start_date=start,
     )
 
@@ -255,9 +360,7 @@ def test_resuming_does_not_charge_the_paused_stretch(session):
     recurring.restore_recurring(session, item.id, today=date(2026, 1, 22))
     occurrences.materialize_due(session, date(2026, 1, 22))
 
-    charged = [
-        o.due_date for o in _live_occurrences(session, item.id)
-    ]
+    charged = [o.due_date for o in _live_occurrences(session, item.id)]
     assert charged == [date(2026, 1, 1), date(2026, 1, 22)]
     assert accounts.get_account(session, acc.id).balance == 500_000 - 2 * 8_000
 
@@ -284,7 +387,8 @@ def test_the_dates_left_behind_by_a_pause_are_offered_not_written_off(session):
     recurring.restore_recurring(session, item.id, today=date(2026, 1, 22))
 
     assert occurrences.pending_dates(session, item.id) == [
-        date(2026, 1, 8), date(2026, 1, 15),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
     ]
     assert accounts.get_account(session, acc.id).balance == 500_000 - 8_000
 
@@ -303,16 +407,27 @@ def test_restoring_something_already_live_closes_nothing(session):
 def test_an_ended_obligation_still_gets_the_date_the_engine_missed(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     declare_existing(
-        session, name="Gimnasio", payee="Gimnasio", type=TxType.expense,
-        mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.week, interval_count=1,
-        start_date=date(2026, 1, 1), end_date=date(2026, 1, 15),
+        session,
+        name="Gimnasio",
+        payee="Gimnasio",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=8_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.week,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
+        end_date=date(2026, 1, 15),
     )
 
     report = occurrences.materialize_due(session, date(2026, 2, 1))
 
     assert [o.due_date for o in report.created] == [
-        date(2026, 1, 1), date(2026, 1, 8), date(2026, 1, 15),
+        date(2026, 1, 1),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
     ]
     assert recurring.list_recurring(session, active=True, today=date(2026, 2, 1)) == []
 
@@ -361,9 +476,17 @@ def test_the_refused_skip_leaves_the_money_and_the_record_alone(session):
 def test_a_turn_waiting_for_approval_can_still_be_skipped(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = declare_existing(
-        session, name="Arriendo", payee="Arriendo", type=TxType.expense,
-        mode=RecurringMode.manual, amount=1_800_000, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.month, interval_count=1,
+        session,
+        name="Arriendo",
+        payee="Arriendo",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=1_800_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
         start_date=date(2026, 1, 1),
     )
     occurrences.materialize_due(session, date(2026, 1, 1))
@@ -453,10 +576,19 @@ def test_deleting_a_hand_entered_movement_touches_no_occurrence(session):
 def _declared_late(session, acc_id, declared_on):
     """Weekly Netflix whose start is three weeks behind the day it was declared."""
     return recurring.create_recurring(
-        session, name="Netflix", payee="Netflix", type=TxType.expense,
-        mode=RecurringMode.auto, amount=25_900, currency="COP", category_id=None,
-        account_id=acc_id, interval_unit=IntervalUnit.week, interval_count=1,
-        start_date=date(2026, 1, 1), declared_on=declared_on,
+        session,
+        name="Netflix",
+        payee="Netflix",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=25_900,
+        currency="COP",
+        category_id=None,
+        account_id=acc_id,
+        interval_unit=IntervalUnit.week,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
+        declared_on=declared_on,
     )
 
 
@@ -465,7 +597,10 @@ def test_declaring_with_a_start_already_behind_offers_and_charges_nothing(sessio
     item = _declared_late(session, acc.id, declared_on=date(2026, 1, 22))
 
     assert occurrences.pending_dates(session, item.id) == [
-        date(2026, 1, 1), date(2026, 1, 8), date(2026, 1, 15), date(2026, 1, 22),
+        date(2026, 1, 1),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
+        date(2026, 1, 22),
     ]
     assert _live_occurrences(session, item.id) == []
     assert accounts.get_account(session, acc.id).balance == 500_000
@@ -493,12 +628,13 @@ def test_an_accepted_date_keeps_its_own_real_date(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = _declared_late(session, acc.id, declared_on=date(2026, 1, 22))
 
-    occurrences.accept_pending_dates(
-        session, item.id, occurrences.pending_dates(session, item.id)
-    )
+    occurrences.accept_pending_dates(session, item.id, occurrences.pending_dates(session, item.id))
 
     assert [o.due_date for o in _live_occurrences(session, item.id)] == [
-        date(2026, 1, 1), date(2026, 1, 8), date(2026, 1, 15), date(2026, 1, 22),
+        date(2026, 1, 1),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
+        date(2026, 1, 22),
     ]
     assert [t.date for t in transactions.list_transactions(session, status="posted")] != []
 
@@ -507,9 +643,7 @@ def test_declined_dates_are_never_charged_and_never_offered_again(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = _declared_late(session, acc.id, declared_on=date(2026, 1, 22))
 
-    occurrences.decline_pending_dates(
-        session, item.id, occurrences.pending_dates(session, item.id)
-    )
+    occurrences.decline_pending_dates(session, item.id, occurrences.pending_dates(session, item.id))
     occurrences.materialize_due(session, date(2026, 1, 22))
 
     assert _live_occurrences(session, item.id) == []
@@ -520,9 +654,7 @@ def test_declined_dates_are_never_charged_and_never_offered_again(session):
 def test_declining_every_date_leaves_the_obligation_live_from_its_next_date(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = _declared_late(session, acc.id, declared_on=date(2026, 1, 22))
-    occurrences.decline_pending_dates(
-        session, item.id, occurrences.pending_dates(session, item.id)
-    )
+    occurrences.decline_pending_dates(session, item.id, occurrences.pending_dates(session, item.id))
 
     occurrences.materialize_due(session, date(2026, 1, 29))
 
@@ -542,19 +674,27 @@ def test_an_offered_date_is_not_charged_by_the_daily_run(session):
 def test_moving_the_start_date_back_offers_the_dates_it_opens(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = declare_existing(
-        session, name="Netflix", payee="Netflix", type=TxType.expense,
-        mode=RecurringMode.auto, amount=25_900, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.week, interval_count=1,
+        session,
+        name="Netflix",
+        payee="Netflix",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=25_900,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.week,
+        interval_count=1,
         start_date=date(2026, 1, 22),
     )
     occurrences.materialize_due(session, date(2026, 1, 22))
 
-    recurring.update_recurring(
-        session, item.id, start_date=date(2026, 1, 1), today=date(2026, 1, 22)
-    )
+    recurring.update_recurring(session, item.id, start_date=date(2026, 1, 1), today=date(2026, 1, 22))
 
     assert occurrences.pending_dates(session, item.id) == [
-        date(2026, 1, 1), date(2026, 1, 8), date(2026, 1, 15),
+        date(2026, 1, 1),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
     ]
     assert len(_live_occurrences(session, item.id)) == 1
 
@@ -565,9 +705,17 @@ def test_skipping_an_already_skipped_date_changes_nothing(session):
     a no-op rather than a second downgrade."""
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = declare_existing(
-        session, name="Arriendo", payee="Arriendo", type=TxType.expense,
-        mode=RecurringMode.manual, amount=1_800_000, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.month, interval_count=1,
+        session,
+        name="Arriendo",
+        payee="Arriendo",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=1_800_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
         start_date=date(2026, 1, 1),
     )
     occurrences.materialize_due(session, date(2026, 1, 1))
@@ -651,7 +799,8 @@ def test_dates_missed_to_downtime_survive_a_pause_that_follows(session):
     recurring.restore_recurring(session, item.id, today=date(2026, 1, 22))
 
     assert occurrences.pending_dates(session, item.id) == [
-        date(2026, 1, 8), date(2026, 1, 15),
+        date(2026, 1, 8),
+        date(2026, 1, 15),
     ]
     assert accounts.get_account(session, acc.id).balance == 500_000 - 8_000
 
@@ -663,13 +812,12 @@ def test_the_user_can_still_write_off_the_stretch_they_paused(session):
     recurring.deactivate_recurring(session, item.id)
     recurring.restore_recurring(session, item.id, today=date(2026, 1, 22))
 
-    occurrences.decline_pending_dates(
-        session, item.id, occurrences.pending_dates(session, item.id)
-    )
+    occurrences.decline_pending_dates(session, item.id, occurrences.pending_dates(session, item.id))
     occurrences.materialize_due(session, date(2026, 1, 22))
 
     assert [o.due_date for o in _live_occurrences(session, item.id)] == [
-        date(2026, 1, 1), date(2026, 1, 22),
+        date(2026, 1, 1),
+        date(2026, 1, 22),
     ]
     assert accounts.get_account(session, acc.id).balance == 500_000 - 2 * 8_000
 
@@ -681,9 +829,7 @@ def test_the_user_can_claim_back_what_the_outage_lost(session):
     recurring.deactivate_recurring(session, item.id)
     recurring.restore_recurring(session, item.id, today=date(2026, 1, 22))
 
-    occurrences.accept_pending_dates(
-        session, item.id, occurrences.pending_dates(session, item.id)
-    )
+    occurrences.accept_pending_dates(session, item.id, occurrences.pending_dates(session, item.id))
 
     assert accounts.get_account(session, acc.id).balance == 500_000 - 3 * 8_000
 
@@ -693,10 +839,19 @@ def test_a_start_date_far_enough_back_to_flood_the_dialog_is_refused(session):
 
     with pytest.raises(ValidationError) as caught:
         recurring.create_recurring(
-            session, name="Almuerzo", payee="Almuerzo", type=TxType.expense,
-            mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
-            account_id=acc.id, interval_unit=IntervalUnit.day, interval_count=1,
-            start_date=date(2016, 1, 1), declared_on=date(2026, 1, 1),
+            session,
+            name="Almuerzo",
+            payee="Almuerzo",
+            type=TxType.expense,
+            mode=RecurringMode.auto,
+            amount=8_000,
+            currency="COP",
+            category_id=None,
+            account_id=acc.id,
+            interval_unit=IntervalUnit.day,
+            interval_count=1,
+            start_date=date(2016, 1, 1),
+            declared_on=date(2026, 1, 1),
         )
 
     message = str(caught.value)
@@ -709,10 +864,19 @@ def test_the_refused_declaration_leaves_nothing_behind(session):
 
     with pytest.raises(ValidationError):
         recurring.create_recurring(
-            session, name="Almuerzo", payee="Almuerzo", type=TxType.expense,
-            mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
-            account_id=acc.id, interval_unit=IntervalUnit.day, interval_count=1,
-            start_date=date(2016, 1, 1), declared_on=date(2026, 1, 1),
+            session,
+            name="Almuerzo",
+            payee="Almuerzo",
+            type=TxType.expense,
+            mode=RecurringMode.auto,
+            amount=8_000,
+            currency="COP",
+            category_id=None,
+            account_id=acc.id,
+            interval_unit=IntervalUnit.day,
+            interval_count=1,
+            start_date=date(2016, 1, 1),
+            declared_on=date(2026, 1, 1),
         )
 
     assert recurring.list_recurring(session) == []
@@ -723,10 +887,19 @@ def test_a_long_but_answerable_history_is_still_allowed(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=5_000_000)
 
     item = recurring.create_recurring(
-        session, name="Netflix", payee="Netflix", type=TxType.expense,
-        mode=RecurringMode.auto, amount=25_900, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.month, interval_count=1,
-        start_date=date(2021, 2, 1), declared_on=date(2026, 1, 1),
+        session,
+        name="Netflix",
+        payee="Netflix",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=25_900,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2021, 2, 1),
+        declared_on=date(2026, 1, 1),
     )
 
     assert len(occurrences.pending_dates(session, item.id)) == 60
@@ -735,16 +908,22 @@ def test_a_long_but_answerable_history_is_still_allowed(session):
 def test_moving_the_start_back_too_far_is_refused_too(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = declare_existing(
-        session, name="Almuerzo", payee="Almuerzo", type=TxType.expense,
-        mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
-        account_id=acc.id, interval_unit=IntervalUnit.day, interval_count=1,
+        session,
+        name="Almuerzo",
+        payee="Almuerzo",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=8_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.day,
+        interval_count=1,
         start_date=date(2026, 1, 1),
     )
 
     with pytest.raises(ValidationError):
-        recurring.update_recurring(
-            session, item.id, start_date=date(2016, 1, 1), today=date(2026, 1, 1)
-        )
+        recurring.update_recurring(session, item.id, start_date=date(2016, 1, 1), today=date(2026, 1, 1))
 
 
 def test_accepting_dates_is_all_or_nothing(session, monkeypatch):

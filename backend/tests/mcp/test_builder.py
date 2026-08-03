@@ -1,4 +1,5 @@
 """Sanity tests for the extracted build_mcp() factory."""
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP

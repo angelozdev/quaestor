@@ -22,8 +22,11 @@ def test_category_with_nonexistent_group_fails(session):
 
 def test_category_flags(session):
     cat = categories.create_category(
-        session, "Transfers", is_income=False,
-        exclude_from_budget=True, exclude_from_totals=True,
+        session,
+        "Transfers",
+        is_income=False,
+        exclude_from_budget=True,
+        exclude_from_totals=True,
     )
     assert cat.exclude_from_budget is True
     assert cat.exclude_from_totals is True
@@ -68,9 +71,7 @@ def test_get_category_missing_raises(session):
 def test_update_category_reassigns_group_and_flags(session):
     g = categories.create_group(session, "Essentials")
     cat = categories.create_category(session, "Groceries")
-    updated = categories.update_category(
-        session, cat.id, name="Food", group_id=g.id, exclude_from_budget=True
-    )
+    updated = categories.update_category(session, cat.id, name="Food", group_id=g.id, exclude_from_budget=True)
     assert updated.name == "Food"
     assert updated.group_id == g.id
     assert updated.exclude_from_budget is True
@@ -100,6 +101,7 @@ def test_archive_category_hides_from_default_list(session):
 
 def test_unarchive_category_clears_flag(session):
     from quaestor.services import categories
+
     cat = categories.create_category(session, name="Food")
     categories.archive_category(session, cat.id)
     assert categories.unarchive_category(session, cat.id).archived is False
@@ -107,6 +109,7 @@ def test_unarchive_category_clears_flag(session):
 
 def test_unarchive_group_clears_flag(session):
     from quaestor.services import categories
+
     g = categories.create_group(session, name="Bills")
     categories.archive_group(session, g.id)
     assert categories.unarchive_group(session, g.id).archived is False

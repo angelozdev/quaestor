@@ -61,9 +61,7 @@ def test_list_transactions_filters_by_account_name(session, seeded):
 
     fx.set_trm(session, "4000")
     other = accounts.create_account(session, "Savings", "savings", "COP", balance=0)
-    tx_service.record_expense(
-        session, seeded["account"].id, 1_000_000, "COP", date(2026, 6, 18), "Here"
-    )
+    tx_service.record_expense(session, seeded["account"].id, 1_000_000, "COP", date(2026, 6, 18), "Here")
     out = core.list_transactions(session, ListTransactionsInput(account="Savings"))
     assert "Here" not in out  # filtered to the empty account
     assert other.id is not None
@@ -85,9 +83,7 @@ def _row_of(out: str, payee: str) -> int:
     for i, line in enumerate(out.splitlines()):
         if needle in line:
             return i
-    raise AssertionError(
-        f"payee {payee!r} not found in transactions_table output:\n{out}"
-    )
+    raise AssertionError(f"payee {payee!r} not found in transactions_table output:\n{out}")
 
 
 def test_mcp_list_transactions_default_orders_by_date_desc(session, seeded):
@@ -104,8 +100,7 @@ def test_mcp_list_transactions_default_orders_by_date_desc(session, seeded):
     mid_row = _row_of(out, "mid")
     old_row = _row_of(out, "old")
     assert new_row < mid_row < old_row, (
-        f"expected order new < mid < old; got rows new={new_row}, "
-        f"mid={mid_row}, old={old_row}\n{out}"
+        f"expected order new < mid < old; got rows new={new_row}, mid={mid_row}, old={old_row}\n{out}"
     )
 
 
@@ -117,13 +112,10 @@ def test_mcp_list_transactions_explicit_sort_date_asc(session, seeded):
     tx_service.record_expense(session, acc.id, 100, "COP", date(2026, 6, 15), "mid")
     tx_service.record_expense(session, acc.id, 200, "COP", date(2026, 6, 1), "old")
     tx_service.record_expense(session, acc.id, 300, "COP", date(2026, 7, 1), "new")
-    out = core.list_transactions(
-        session, ListTransactionsInput(sort="date", order="asc")
-    )
+    out = core.list_transactions(session, ListTransactionsInput(sort="date", order="asc"))
     old_row = _row_of(out, "old")
     mid_row = _row_of(out, "mid")
     new_row = _row_of(out, "new")
     assert old_row < mid_row < new_row, (
-        f"expected order old < mid < new; got rows old={old_row}, "
-        f"mid={mid_row}, new={new_row}\n{out}"
+        f"expected order old < mid < new; got rows old={old_row}, mid={mid_row}, new={new_row}\n{out}"
     )

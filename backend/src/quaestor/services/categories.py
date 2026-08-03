@@ -1,4 +1,5 @@
 """Use cases for category groups and categories (ADR-023: group as entity)."""
+
 from __future__ import annotations
 
 from sqlmodel import Session, select
@@ -30,9 +31,7 @@ def create_group(session: Session, name: str, sort_order: int = 0) -> CategoryGr
     return group
 
 
-def list_groups(
-    session: Session, include_archived: bool = False
-) -> list[CategoryGroup]:
+def list_groups(session: Session, include_archived: bool = False) -> list[CategoryGroup]:
     """List all category groups ordered by sort_order.
 
     Args:
@@ -89,9 +88,7 @@ def create_category(
     return cat
 
 
-def list_categories(
-    session: Session, include_archived: bool = False
-) -> list[Category]:
+def list_categories(session: Session, include_archived: bool = False) -> list[Category]:
     """List all categories.
 
     Args:
@@ -107,9 +104,7 @@ def list_categories(
     return list(session.exec(stmt).all())
 
 
-def update_group(
-    session: Session, group_id: int, name=None, sort_order=None
-) -> CategoryGroup:
+def update_group(session: Session, group_id: int, name=None, sort_order=None) -> CategoryGroup:
     """Update a category group's name and/or sort_order.
 
     Raises:

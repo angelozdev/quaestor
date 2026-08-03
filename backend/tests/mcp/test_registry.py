@@ -169,12 +169,19 @@ def test_register_recurring_restore_tools_exposes_one():
 
 def test_build_mcp_registers_every_new_group():
     import asyncio
+
     mcp = builder.build_mcp()
     names = {t.name for t in asyncio.run(mcp.list_tools())}
     for grp in (
-        ACCOUNTS_TOOL_NAMES, CATEGORIES_TOOL_NAMES, CATEGORY_GROUPS_TOOL_NAMES,
-        TAGS_TOOL_NAMES, TRANSACTIONS_WRITES_TOOL_NAMES, SETTINGS_TOOL_NAMES,
-        BUDGETS_READS_TOOL_NAMES, GOALS_READS_TOOL_NAMES, REPORTS_TOOL_NAMES,
+        ACCOUNTS_TOOL_NAMES,
+        CATEGORIES_TOOL_NAMES,
+        CATEGORY_GROUPS_TOOL_NAMES,
+        TAGS_TOOL_NAMES,
+        TRANSACTIONS_WRITES_TOOL_NAMES,
+        SETTINGS_TOOL_NAMES,
+        BUDGETS_READS_TOOL_NAMES,
+        GOALS_READS_TOOL_NAMES,
+        REPORTS_TOOL_NAMES,
         RECURRING_RESTORE_TOOL_NAMES,
     ):
         assert set(grp) <= names, f"missing tools: {set(grp) - names}"

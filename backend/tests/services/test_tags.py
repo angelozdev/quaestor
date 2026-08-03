@@ -12,8 +12,11 @@ def _make_transaction(session):
     session.commit()
     session.refresh(acc)
     tx = Transaction(
-        date=date(2026, 6, 1), payee="Test", type=TxType.expense,
-        amount=1000, currency="COP",
+        date=date(2026, 6, 1),
+        payee="Test",
+        type=TxType.expense,
+        amount=1000,
+        currency="COP",
         account_id=acc.id,
     )
     session.add(tx)
@@ -129,8 +132,12 @@ def test_untag_missing_transaction_raises(session):
 def test_untag_leaves_other_transactions_links(session):
     first = _make_transaction(session)
     second = Transaction(
-        date=first.date, payee="Other", type=TxType.expense,
-        amount=500, currency="COP", account_id=first.account_id,
+        date=first.date,
+        payee="Other",
+        type=TxType.expense,
+        amount=500,
+        currency="COP",
+        account_id=first.account_id,
     )
     session.add(second)
     session.commit()
@@ -164,8 +171,12 @@ def test_set_transaction_tags_missing_transaction_raises(session):
 def test_tag_names_by_transaction_maps_each_id(session):
     first = _make_transaction(session)
     second = Transaction(
-        date=first.date, payee="Other", type=TxType.expense,
-        amount=500, currency="COP", account_id=first.account_id,
+        date=first.date,
+        payee="Other",
+        type=TxType.expense,
+        amount=500,
+        currency="COP",
+        account_id=first.account_id,
     )
     session.add(second)
     session.commit()

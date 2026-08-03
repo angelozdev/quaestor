@@ -15,7 +15,7 @@ import { isTextUIPart as aiIsTextUIPart, isToolUIPart as aiIsToolUIPart } from "
  * `UIMessage` is the canonical message type from `ai`; we narrow it locally
  * with type guards rather than redefining shapes.
  */
-export type { UIMessage, UIMessagePart, TextUIPart, ToolUIPart, DynamicToolUIPart }
+export type { DynamicToolUIPart, TextUIPart, ToolUIPart, UIMessage, UIMessagePart }
 
 /**
  * Any tool part the assistant can emit, whether typed (server declared the
@@ -34,8 +34,6 @@ export const isTextPart = aiIsTextUIPart
  * Narrows any `UIMessagePart` to a tool part (typed OR dynamic).
  * Use this anywhere a component needs the tool name, input, output, or state.
  */
-export function isAnyToolPart(
-  part: UIMessagePart<UIDataTypes, UITools>,
-): part is AnyToolPart {
+export function isAnyToolPart(part: UIMessagePart<UIDataTypes, UITools>): part is AnyToolPart {
   return aiIsToolUIPart(part)
 }

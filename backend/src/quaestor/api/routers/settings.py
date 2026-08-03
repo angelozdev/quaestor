@@ -1,4 +1,5 @@
 """Settings REST router — thin adapter over services.settings."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

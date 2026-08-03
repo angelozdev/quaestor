@@ -6,29 +6,35 @@ budget_status per category (= _assigned 1 + _spent 2 + _available recursion
 safe_to_spend's _has_envelope adds one query per recurring item / planned tx /
 unbudgeted posted tx. Both far exceed the bounds below before the refactor.
 """
+
 from tests.support.query_counter import count_queries
 
 
 def _seed(client, auth, n_categories=15):
     assert client.post("/api/fx", json={"usd_cop": "4000"}, headers=auth).status_code == 201
     acc = client.post(
-        "/api/accounts", json={"name": "Bank", "type": "debit", "currency": "COP"},
+        "/api/accounts",
+        json={"name": "Bank", "type": "debit", "currency": "COP"},
         headers=auth,
     ).json()
     for name, tx_type, amount in [("Salary", "income", 2_000_000), ("Rent", "expense", 800_000)]:
         client.post(
             "/api/recurring",
             json={
-                "name": name, "type": tx_type, "mode": "manual", "amount": amount,
-                "currency": "COP", "account_id": acc["id"], "interval_unit": "month",
-                "interval_count": 1, "start_date": "2026-01-01",
+                "name": name,
+                "type": tx_type,
+                "mode": "manual",
+                "amount": amount,
+                "currency": "COP",
+                "account_id": acc["id"],
+                "interval_unit": "month",
+                "interval_count": 1,
+                "start_date": "2026-01-01",
             },
             headers=auth,
         )
     for i in range(n_categories):
-        cat = client.post(
-            "/api/categories", json={"name": f"Cat {i}"}, headers=auth
-        ).json()
+        cat = client.post("/api/categories", json={"name": f"Cat {i}"}, headers=auth).json()
         for m in ("2026-04", "2026-05", "2026-06"):
             client.put(
                 "/api/budgets",
@@ -38,8 +44,12 @@ def _seed(client, auth, n_categories=15):
             client.post(
                 "/api/transactions",
                 json={
-                    "type": "expense", "account_id": acc["id"], "amount": 5_000,
-                    "currency": "COP", "date": f"{m}-10", "category_id": cat["id"],
+                    "type": "expense",
+                    "account_id": acc["id"],
+                    "amount": 5_000,
+                    "currency": "COP",
+                    "date": f"{m}-10",
+                    "category_id": cat["id"],
                     "payee": "seed",
                 },
                 headers=auth,

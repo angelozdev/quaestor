@@ -8,6 +8,7 @@ These tests pin the contract `make_engine` advertises:
 
 If the engine factory ever stops branching on URL scheme, these tests fail.
 """
+
 from __future__ import annotations
 
 import pytest

@@ -11,6 +11,7 @@ new sortable field is one line in the service's registry, zero changes here);
 DIP (`resolve` accepts the column map and tiebreaker, so the spec has no
 direct dependency on a specific SQLModel class).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -56,10 +57,7 @@ class SortSpec:
         """
         col = sortable.get(self.field)
         if col is None:
-            raise ValidationError(
-                f"unknown sort field: {self.field!r}; "
-                f"allowed: {sorted(sortable)}"
-            )
+            raise ValidationError(f"unknown sort field: {self.field!r}; allowed: {sorted(sortable)}")
         desc = self.order == "desc"
         return (
             col.desc() if desc else col.asc(),

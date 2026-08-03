@@ -2,8 +2,9 @@ from datetime import date
 
 import pytest
 from quaestor.domain.errors import NotFound, ValidationError
-from quaestor.domain.models import AccountType, GoalStatus
-from quaestor.services import accounts, goals
+from quaestor.domain.models import AccountType, Goal, GoalStatus, Transaction, TxStatus, TxType
+from quaestor.services import accounts, goals, planned, transactions
+from quaestor.services import settings as settings_svc
 
 
 def _savings(session, archived=False):
@@ -15,9 +16,14 @@ def _savings(session, archived=False):
 
 def test_create_defined_goal(session):
     sav = _savings(session)
-    g = goals.create_goal(session, name="Trip", monthly_amount=200_000,
-                          savings_account_id=sav.id, target_amount=1_200_000,
-                          deadline=date(2026, 12, 1))
+    g = goals.create_goal(
+        session,
+        name="Trip",
+        monthly_amount=200_000,
+        savings_account_id=sav.id,
+        target_amount=1_200_000,
+        deadline=date(2026, 12, 1),
+    )
     assert g.id is not None and g.status == GoalStatus.active
     assert g.target_amount == 1_200_000 and g.deadline == date(2026, 12, 1)
 
@@ -31,15 +37,15 @@ def test_create_open_ended_goal(session):
 def test_create_goal_only_target_raises(session):
     sav = _savings(session)
     with pytest.raises(ValidationError):
-        goals.create_goal(session, name="x", monthly_amount=100_000,
-                          savings_account_id=sav.id, target_amount=500_000)
+        goals.create_goal(session, name="x", monthly_amount=100_000, savings_account_id=sav.id, target_amount=500_000)
 
 
 def test_create_goal_only_deadline_raises(session):
     sav = _savings(session)
     with pytest.raises(ValidationError):
-        goals.create_goal(session, name="x", monthly_amount=100_000,
-                          savings_account_id=sav.id, deadline=date(2026, 12, 1))
+        goals.create_goal(
+            session, name="x", monthly_amount=100_000, savings_account_id=sav.id, deadline=date(2026, 12, 1)
+        )
 
 
 def test_create_goal_rejects_non_positive_monthly(session):
@@ -63,11 +69,6 @@ def test_create_goal_rejects_archived_savings(session):
 def test_create_goal_rejects_unknown_account(session):
     with pytest.raises(ValidationError):
         goals.create_goal(session, name="x", monthly_amount=100_000, savings_account_id=999)
-
-
-from quaestor.domain.models import TxType
-from quaestor.services import settings as settings_svc
-from quaestor.services import transactions
 
 
 def _funded(session):
@@ -99,6 +100,7 @@ def test_goal_contribution_is_not_expense_or_income(session):
 
 def test_goal_contribution_stores_both_leg_directions(session):
     from quaestor.domain.models import TransferDirection
+
     src, sav = _funded(session)
     g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     goals.goal_contribution(session, g.id, 150_000, date(2026, 6, 15))
@@ -115,15 +117,23 @@ def test_goal_contribution_without_default_source_is_atomic(session):
         goals.goal_contribution(session, g.id, 150_000, date(2026, 6, 15))
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     assert session.exec(select(GoalContribution)).all() == []  # nothing recorded
 
 
 def test_goal_contribution_reaching_target_marks_reached(session):
     _src, sav = _funded(session)
-    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
-                          target_amount=300_000, deadline=date(2026, 12, 1))
+    g = goals.create_goal(
+        session,
+        name="Trip",
+        monthly_amount=200_000,
+        savings_account_id=sav.id,
+        target_amount=300_000,
+        deadline=date(2026, 12, 1),
+    )
     goals.goal_contribution(session, g.id, 300_000, date(2026, 6, 15))
     from quaestor.domain.models import Goal, GoalStatus
+
     assert session.get(Goal, g.id).status == GoalStatus.reached
 
 
@@ -207,8 +217,14 @@ def test_goals_progress_open_ended_reports_saved(session):
 
 def test_goals_progress_defined_reports_on_track_and_eta(session):
     _src, sav = _funded(session)
-    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
-                          target_amount=1_200_000, deadline=date(2026, 12, 1))
+    g = goals.create_goal(
+        session,
+        name="Trip",
+        monthly_amount=200_000,
+        savings_account_id=sav.id,
+        target_amount=1_200_000,
+        deadline=date(2026, 12, 1),
+    )
     goals.goal_contribution(session, g.id, 200_000, date(2026, 6, 1))
     [p] = goals.goals_progress(session, today=date(2026, 6, 19))
     assert p.type == "defined" and p.remaining == 1_000_000
@@ -221,6 +237,7 @@ def test_goals_progress_default_lists_only_active(session):
     active = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
     paused = goals.create_goal(session, name="B", monthly_amount=100_000, savings_account_id=sav.id)
     from quaestor.domain.models import Goal, GoalStatus
+
     session.get(Goal, paused.id).status = GoalStatus.paused
     session.commit()
     ids = [p.goal_id for p in goals.goals_progress(session, today=date(2026, 6, 19))]
@@ -231,13 +248,11 @@ def test_goals_progress_explicit_ids_include_inactive(session):
     _src, sav = _funded(session)
     g = goals.create_goal(session, name="A", monthly_amount=100_000, savings_account_id=sav.id)
     from quaestor.domain.models import Goal, GoalStatus
+
     session.get(Goal, g.id).status = GoalStatus.paused
     session.commit()
     ids = [p.goal_id for p in goals.goals_progress(session, goal_ids=[g.id], today=date(2026, 6, 19))]
     assert ids == [g.id]
-
-
-from quaestor.domain.models import Goal, Transaction, TxStatus
 
 
 def _planned_transfers(session):
@@ -316,9 +331,6 @@ def test_propose_archived_savings_raises(session):
         goals.propose_goal_contributions("2026-06", session)
 
 
-from quaestor.services import planned
-
-
 @pytest.fixture
 def goal_post_confirm_hook():
     # Idempotent: from Task 13 onward init_db registers this hook globally, so only
@@ -338,11 +350,18 @@ def goal_post_confirm_hook():
 def test_record_confirmed_contribution_unit(session):
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     _src, sav = _funded(session)
     g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
-    tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
-                     amount=200_000, currency="COP",
-                     account_id=sav.id, goal_id=g.id)
+    tx = Transaction(
+        date=date(2026, 6, 30),
+        type=TxType.transfer,
+        status=TxStatus.posted,
+        amount=200_000,
+        currency="COP",
+        account_id=sav.id,
+        goal_id=g.id,
+    )
     session.add(tx)
     session.flush()
     c = goals.record_confirmed_contribution(tx, session)
@@ -355,10 +374,16 @@ def test_record_confirmed_contribution_unit(session):
 def test_record_confirmed_contribution_noop_without_goal_id(session):
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     _src, sav = _funded(session)
-    tx = Transaction(date=date(2026, 6, 30), type=TxType.transfer, status=TxStatus.posted,
-                     amount=100_000, currency="COP",
-                     account_id=sav.id)
+    tx = Transaction(
+        date=date(2026, 6, 30),
+        type=TxType.transfer,
+        status=TxStatus.posted,
+        amount=100_000,
+        currency="COP",
+        account_id=sav.id,
+    )
     session.add(tx)
     session.flush()
     assert goals.record_confirmed_contribution(tx, session) is None
@@ -369,6 +394,7 @@ def test_record_confirmed_contribution_noop_without_goal_id(session):
 def test_confirm_proposal_records_contribution(session, goal_post_confirm_hook):
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     src, sav = _funded(session)
     goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     goals.propose_goal_contributions("2026-06", session)
@@ -384,6 +410,7 @@ def test_confirm_proposal_records_contribution(session, goal_post_confirm_hook):
 def test_confirm_with_smaller_amount_adjusts_contribution(session, goal_post_confirm_hook):
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     _src, sav = _funded(session)
     goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     goals.propose_goal_contributions("2026-06", session)
@@ -398,6 +425,7 @@ def test_confirm_with_smaller_amount_adjusts_contribution(session, goal_post_con
 def test_skip_proposal_contributes_nothing(session, goal_post_confirm_hook):
     from quaestor.domain.models import GoalContribution
     from sqlmodel import select
+
     _src, sav = _funded(session)
     goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     goals.propose_goal_contributions("2026-06", session)
@@ -410,9 +438,16 @@ def test_skip_proposal_contributes_nothing(session, goal_post_confirm_hook):
 
 def test_confirm_reaching_target_marks_reached(session, goal_post_confirm_hook):
     from quaestor.domain.models import Goal, GoalStatus
+
     _src, sav = _funded(session)
-    g = goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
-                          target_amount=200_000, deadline=date(2026, 12, 1))
+    g = goals.create_goal(
+        session,
+        name="Trip",
+        monthly_amount=200_000,
+        savings_account_id=sav.id,
+        target_amount=200_000,
+        deadline=date(2026, 12, 1),
+    )
     goals.propose_goal_contributions("2026-06", session)
     session.commit()
     tx = _planned_transfers(session)[0]
@@ -445,12 +480,16 @@ def test_update_goal_to_defined_requires_both(session):
 
 def test_update_goal_to_open_ended_clears_both(session):
     sav = _savings(session)
-    g = goals.create_goal(session, name="A", monthly_amount=100_000,
-                          savings_account_id=sav.id, target_amount=1_000_000,
-                          deadline=date(2026, 12, 1))
+    g = goals.create_goal(
+        session,
+        name="A",
+        monthly_amount=100_000,
+        savings_account_id=sav.id,
+        target_amount=1_000_000,
+        deadline=date(2026, 12, 1),
+    )
     out = goals.update_goal(session, g.id, target_amount=None, deadline=None)
     assert out.target_amount is None and out.deadline is None
-
 
 
 def test_pause_then_restore_goal(session):

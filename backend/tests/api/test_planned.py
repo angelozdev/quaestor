@@ -12,9 +12,16 @@ def _seed_account(engine, balance=1_000_000, currency="COP", name="Bank"):
 
 def test_plan_without_trm_then_to_pay_confirm_flow(client, engine, auth):
     acc_id = _seed_account(engine)
-    plan = client.post("/api/planned", json={
-        "payee": "Friend", "amount": 80_000, "due_date": "2026-12-15", "account_id": acc_id,
-    }, headers=auth)
+    plan = client.post(
+        "/api/planned",
+        json={
+            "payee": "Friend",
+            "amount": 80_000,
+            "due_date": "2026-12-15",
+            "account_id": acc_id,
+        },
+        headers=auth,
+    )
     assert plan.status_code == 201, plan.text
     tx_id = plan.json()["id"]
     assert plan.json()["status"] == "planned"
@@ -32,22 +39,34 @@ def test_plan_without_trm_then_to_pay_confirm_flow(client, engine, auth):
 
 
 def test_to_pay_without_trm_is_409(client, auth):
-    resp = client.get(
-        "/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth
-    )
+    resp = client.get("/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth)
     assert resp.status_code == 409 and resp.json()["error"] == "MissingRate"
 
 
 def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, auth):
     cop_acc = _seed_account(engine, name="Bank COP")
     usd_acc = _seed_account(engine, currency="USD", name="Bank USD")
-    client.post("/api/planned", json={
-        "payee": "Rent", "amount": 500_000, "due_date": "2026-12-10", "account_id": cop_acc,
-    }, headers=auth)
-    client.post("/api/planned", json={
-        "payee": "SaaS", "amount": 1_000, "currency": "USD",
-        "due_date": "2026-12-20", "account_id": usd_acc,
-    }, headers=auth)
+    client.post(
+        "/api/planned",
+        json={
+            "payee": "Rent",
+            "amount": 500_000,
+            "due_date": "2026-12-10",
+            "account_id": cop_acc,
+        },
+        headers=auth,
+    )
+    client.post(
+        "/api/planned",
+        json={
+            "payee": "SaaS",
+            "amount": 1_000,
+            "currency": "USD",
+            "due_date": "2026-12-20",
+            "account_id": usd_acc,
+        },
+        headers=auth,
+    )
     _set_trm(client, auth, "4000")
     first = client.get(
         "/api/planned/to-pay", params={"since": "2026-12-01", "until": "2026-12-31"}, headers=auth
@@ -64,9 +83,16 @@ def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, aut
 
 def test_confirm_non_planned_is_409(client, engine, auth):
     acc_id = _seed_account(engine)
-    plan = client.post("/api/planned", json={
-        "payee": "Friend", "amount": 80_000, "due_date": "2026-06-20", "account_id": acc_id,
-    }, headers=auth)
+    plan = client.post(
+        "/api/planned",
+        json={
+            "payee": "Friend",
+            "amount": 80_000,
+            "due_date": "2026-06-20",
+            "account_id": acc_id,
+        },
+        headers=auth,
+    )
     tx_id = plan.json()["id"]
     client.post(f"/api/planned/{tx_id}/confirm", json={}, headers=auth)
     again = client.post(f"/api/planned/{tx_id}/confirm", json={}, headers=auth)
@@ -75,18 +101,32 @@ def test_confirm_non_planned_is_409(client, engine, auth):
 
 def test_skip_planned_payment_works_without_trm(client, engine, auth):
     acc_id = _seed_account(engine)
-    tx_id = client.post("/api/planned", json={
-        "payee": "Friend", "amount": 80_000, "due_date": "2026-06-20", "account_id": acc_id,
-    }, headers=auth).json()["id"]
+    tx_id = client.post(
+        "/api/planned",
+        json={
+            "payee": "Friend",
+            "amount": 80_000,
+            "due_date": "2026-06-20",
+            "account_id": acc_id,
+        },
+        headers=auth,
+    ).json()["id"]
     r = client.post(f"/api/planned/{tx_id}/skip", json={}, headers=auth)
     assert r.status_code == 200 and r.json()["status"] == "skipped"
 
 
 def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth):
     acc_id = _seed_account(engine)
-    tx_id = client.post("/api/planned", json={
-        "payee": "Claro", "amount": 85_000, "due_date": "2026-06-20", "account_id": acc_id,
-    }, headers=auth).json()["id"]
+    tx_id = client.post(
+        "/api/planned",
+        json={
+            "payee": "Claro",
+            "amount": 85_000,
+            "due_date": "2026-06-20",
+            "account_id": acc_id,
+        },
+        headers=auth,
+    ).json()["id"]
     client.post(f"/api/planned/{tx_id}/skip", json={}, headers=auth)
     r = client.post(f"/api/planned/{tx_id}/restore", json={}, headers=auth)
     assert r.status_code == 200 and r.json()["status"] == "planned"
@@ -95,9 +135,16 @@ def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth):
 
 def test_restore_non_skipped_payment_is_409(client, engine, auth):
     acc_id = _seed_account(engine)
-    tx_id = client.post("/api/planned", json={
-        "payee": "Claro", "amount": 85_000, "due_date": "2026-06-20", "account_id": acc_id,
-    }, headers=auth).json()["id"]
+    tx_id = client.post(
+        "/api/planned",
+        json={
+            "payee": "Claro",
+            "amount": 85_000,
+            "due_date": "2026-06-20",
+            "account_id": acc_id,
+        },
+        headers=auth,
+    ).json()["id"]
     r = client.post(f"/api/planned/{tx_id}/restore", json={}, headers=auth)
     assert r.status_code == 409
 

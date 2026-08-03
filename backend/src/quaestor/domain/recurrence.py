@@ -4,6 +4,7 @@ Pure — no session, no I/O. Split out of `rules.py`, which mixes balance signs,
 recurrence, envelope math and goal progress. Calendar helpers stay here and
 `rules.py` imports them.
 """
+
 from __future__ import annotations
 
 import calendar
@@ -86,11 +87,7 @@ def is_due_on(
     """
     if target < start_date:
         return False
-    return bool(
-        due_dates(
-            start_date, end_date, interval_unit, interval_count, target, target
-        )
-    )
+    return bool(due_dates(start_date, end_date, interval_unit, interval_count, target, target))
 
 
 def has_ended(end_date: date | None, today: date) -> bool:

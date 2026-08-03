@@ -1,4 +1,5 @@
 """Hybrid budget services: envelopes with rollover + global safe-to-spend (ADR-002/003/005)."""
+
 from __future__ import annotations
 
 import re
@@ -26,9 +27,7 @@ def _validate_year_month(year_month: str) -> None:
         raise ValidationError(f"malformed year_month (expected YYYY-MM): {year_month!r}")
 
 
-def set_budget(
-    session: Session, category_id: int, year_month: str, amount_assigned: int
-) -> Budget:
+def set_budget(session: Session, category_id: int, year_month: str, amount_assigned: int) -> Budget:
     """Upsert a category's envelope for a month.
 
     Only a category the budget can show may hold an envelope: archived and
@@ -52,14 +51,10 @@ def set_budget(
     if category.exclude_from_budget:
         raise ValidationError(f"category {category_id} is excluded from the budget")
     budget = session.exec(
-        select(Budget).where(
-            Budget.category_id == category_id, Budget.year_month == year_month
-        )
+        select(Budget).where(Budget.category_id == category_id, Budget.year_month == year_month)
     ).first()
     if budget is None:
-        budget = Budget(
-            category_id=category_id, year_month=year_month, amount_assigned=amount_assigned
-        )
+        budget = Budget(category_id=category_id, year_month=year_month, amount_assigned=amount_assigned)
     else:
         budget.amount_assigned = amount_assigned
     session.add(budget)
@@ -74,8 +69,12 @@ def _income_forecast(agg: MonthAggregate) -> int:
         if item.type != TxType.income:
             continue
         occurrences = due_dates(
-            item.start_date, item.end_date, item.interval_unit,
-            item.interval_count, agg.start, agg.end,
+            item.start_date,
+            item.end_date,
+            item.interval_unit,
+            item.interval_count,
+            agg.start,
+            agg.end,
         )
         total += len(occurrences) * to_cop_cents(item.amount, item.currency, agg.trm)
     return total
@@ -91,8 +90,12 @@ def _committed(agg: MonthAggregate) -> tuple[int, list]:
             continue
         amount = to_cop_cents(item.amount, item.currency, agg.trm)
         for d in due_dates(
-            item.start_date, item.end_date, item.interval_unit,
-            item.interval_count, agg.start, agg.end,
+            item.start_date,
+            item.end_date,
+            item.interval_unit,
+            item.interval_count,
+            agg.start,
+            agg.end,
         ):
             total += amount
             breakdown.append(CommittedItem(kind="recurring", name=item.name, date=d, amount=amount))
@@ -145,8 +148,12 @@ def _safe_to_spend(agg: MonthAggregate) -> SafeToSpend:
     overspend = _sum_overspend(agg)
     free = safe_to_spend_calc(income, committed, assigned, unbudgeted, overspend)
     return SafeToSpend(
-        year_month=agg.year_month, income_forecast=income, committed=committed,
-        assigned_envelopes=assigned, free=free, committed_breakdown=breakdown,
+        year_month=agg.year_month,
+        income_forecast=income,
+        committed=committed,
+        assigned_envelopes=assigned,
+        free=free,
+        committed_breakdown=breakdown,
     )
 
 
@@ -187,17 +194,19 @@ def budget_status(session: Session, category_id: int, year_month: str) -> Budget
 
 def _budget_lines(agg: MonthAggregate) -> list[BudgetLine]:
     lines: list[BudgetLine] = []
-    eligible = [
-        c for c in agg.categories.values()
-        if not c.archived and not c.exclude_from_budget
-    ]
+    eligible = [c for c in agg.categories.values() if not c.archived and not c.exclude_from_budget]
     for cat in sorted(eligible, key=lambda c: c.id):
         st = _status(agg, cat.id)
         lines.append(
             BudgetLine(
-                category_id=cat.id, category_name=cat.name, assigned=st.assigned,
-                rollover_in=st.rollover_in, spent=st.spent, available=st.available,
-                pct_used=st.pct_used, status=st.status,
+                category_id=cat.id,
+                category_name=cat.name,
+                assigned=st.assigned,
+                rollover_in=st.rollover_in,
+                spent=st.spent,
+                available=st.available,
+                pct_used=st.pct_used,
+                status=st.status,
             )
         )
     return lines

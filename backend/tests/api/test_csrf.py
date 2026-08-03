@@ -5,6 +5,7 @@ The middleware compares the `X-CSRF-Token` header against the
 Login is exempt (no cookie to forge yet); safe HTTP methods are exempt
 (they're required to be idempotent).
 """
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient

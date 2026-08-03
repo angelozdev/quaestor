@@ -4,6 +4,7 @@ Reuses P0 (reads), P3 (to_pay), P4 (budget_status, safe_to_spend, goals_progress
 Every COP aggregate converts at read time from the current TRM (ADR-0031),
 fetched once per report.
 """
+
 from __future__ import annotations
 
 import re
@@ -52,9 +53,7 @@ def _usd_share(agg: MonthAggregate, expenses: list[Transaction], expense_total: 
     return usd / expense_total
 
 
-def _category_sections(
-    agg: MonthAggregate, expenses: list[Transaction], expense_total: int
-) -> list[CategorySection]:
+def _category_sections(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> list[CategorySection]:
     """Group expenses by category (None -> 'Uncategorized'); pct over total expense."""
     buckets: dict[int | None, int] = {}
     for tx in expenses:
@@ -73,9 +72,7 @@ def _category_sections(
     return sections
 
 
-def _group_sections(
-    agg: MonthAggregate, expenses: list[Transaction], expense_total: int
-) -> list[GroupSection]:
+def _group_sections(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> list[GroupSection]:
     """Rollup of expenses by CategoryGroup name; pct over total expense (ADR-023)."""
     buckets: dict[str, int] = {}
     for tx in expenses:
@@ -83,7 +80,8 @@ def _group_sections(
         buckets[name] = buckets.get(name, 0) + agg.to_cop_cents(tx)
     sections = [
         GroupSection(
-            group=name, total=total,
+            group=name,
+            total=total,
             pct=(total / expense_total * 100) if expense_total > 0 else 0.0,
         )
         for name, total in buckets.items()
@@ -104,9 +102,12 @@ def _drift(agg: MonthAggregate, income: int, expense: int, net: int) -> DriftMoM
 
     return DriftMoM(
         prev_month=prev,
-        income_abs=income - p_income, income_pct=pct(income, p_income),
-        expense_abs=expense - p_expense, expense_pct=pct(expense, p_expense),
-        net_abs=net - p_net, net_pct=pct(net, p_net),
+        income_abs=income - p_income,
+        income_pct=pct(income, p_income),
+        expense_abs=expense - p_expense,
+        expense_pct=pct(expense, p_expense),
+        net_abs=net - p_net,
+        net_pct=pct(net, p_net),
     )
 
 
@@ -119,17 +120,19 @@ def _envelope_lines(agg: MonthAggregate) -> tuple[list[EnvelopeLine], EnvelopesS
         name = cat.name if cat is not None else f"category {b.category_id}"
         lines.append(
             EnvelopeLine(
-                category=name, allocated=st.assigned, rollover_in=st.rollover_in,
-                spent=st.spent, available=st.available, status=st.status,
+                category=name,
+                allocated=st.assigned,
+                rollover_in=st.rollover_in,
+                spent=st.spent,
+                available=st.available,
+                status=st.status,
             )
         )
     lines.sort(key=lambda e: e.category)
     n_green = sum(1 for e in lines if e.status == "under")
     n_red = sum(1 for e in lines if e.status == "over")
     rollover_generated = sum(max(e.available, 0) for e in lines)
-    return lines, EnvelopesSummary(
-        n_green=n_green, n_red=n_red, rollover_generated=rollover_generated
-    )
+    return lines, EnvelopesSummary(n_green=n_green, n_red=n_red, rollover_generated=rollover_generated)
 
 
 def _goal_lines(session: Session, today: Date) -> list[GoalLine]:
@@ -138,8 +141,11 @@ def _goal_lines(session: Session, today: Date) -> list[GoalLine]:
     for p in _goals.goals_progress(session, today=today):
         lines.append(
             GoalLine(
-                name=p.name, accumulated=p.saved,
-                target=p.target_amount, eta=p.eta, on_track=p.on_track,
+                name=p.name,
+                accumulated=p.saved,
+                target=p.target_amount,
+                eta=p.eta,
+                on_track=p.on_track,
             )
         )
     return lines
@@ -154,9 +160,7 @@ def _balance_lines(session: Session) -> list[AccountBalance]:
     ]
 
 
-def _pending_lines(
-    session: Session, start: Date, end: Date, trm: Decimal
-) -> list[str]:
+def _pending_lines(session: Session, start: Date, end: Date, trm: Decimal) -> list[str]:
     """Alert lines for unconfirmed (planned) entries in the month, grouped by account.
 
     Retrospective view: pass `retrospective=True` so the
@@ -167,15 +171,15 @@ def _pending_lines(
     of when the report is generated.
     """
     queue = _planned.to_pay(
-        session, start, end,
+        session,
+        start,
+        end,
         retrospective=True,
         today=start - timedelta(days=1),
     )
     by_account: dict[int, int] = {}
     for tx in queue.upcoming:
-        by_account[tx.account_id] = by_account.get(tx.account_id, 0) + to_cop_cents(
-            tx.amount, tx.currency, trm
-        )
+        by_account[tx.account_id] = by_account.get(tx.account_id, 0) + to_cop_cents(tx.amount, tx.currency, trm)
     rows: list[tuple[str, int]] = []
     for account_id, total in by_account.items():
         acc = session.get(Account, account_id)
@@ -185,9 +189,7 @@ def _pending_lines(
     return [f"{name}: {money(total)} pending" for name, total in rows]
 
 
-def monthly_report(
-    session: Session, month: str, *, today: Date | None = None
-) -> MonthlyReport:
+def monthly_report(session: Session, month: str, *, today: Date | None = None) -> MonthlyReport:
     """Build the retrospective monthly report (data + markdown) for "YYYY-MM".
 
     Posted-only aggregates in COP cents, converted at read time from ONE
@@ -210,7 +212,9 @@ def monthly_report(
     envelopes, envelopes_summary = _envelope_lines(agg)
     report = MonthlyReport(
         month=month,
-        income=income, expense=expense, net=net,
+        income=income,
+        expense=expense,
+        net=net,
         envelopes_summary=envelopes_summary,
         envelopes=envelopes,
         by_category=_category_sections(agg, expenses, expense),

@@ -1,4 +1,5 @@
 """Goals REST router — thin adapter over services.goals."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

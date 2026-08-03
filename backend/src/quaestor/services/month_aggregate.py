@@ -12,6 +12,7 @@ Postgres — each sees its own snapshot). A concurrent write landing mid-load
 can skew one aggregate against another within a single response. Accepted
 for this app; see the bounded-read-path ADR.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -115,9 +116,7 @@ class MonthAggregate:
     def posted_in_month(self, year_month: str, tx_type: TxType) -> list[Transaction]:
         """Posted rows of the month, minus excluded categories. Valid ONLY
         for the report month and its previous month (the loaded window)."""
-        source = (
-            self._window_expense if tx_type == TxType.expense else self._window_income
-        )
+        source = self._window_expense if tx_type == TxType.expense else self._window_income
         kept: list[Transaction] = []
         for tx in source:
             if _ym(tx.date) != year_month:
@@ -144,9 +143,7 @@ class MonthAggregate:
         return income, expense, income - expense
 
 
-def load_month_aggregate(
-    session: Session, year_month: str, trm: Decimal
-) -> MonthAggregate:
+def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> MonthAggregate:
     """Bulk-load the month at one TRM, fetched once by the caller
     (the read path entry point) and used for every read-time conversion."""
     start, end = month_bounds(year_month)
@@ -177,9 +174,7 @@ def load_month_aggregate(
     spent_by_cat_month: dict[tuple[int | None, str], int] = {}
     for cat_id, y, m, currency, total in spent_rows:
         key = (cat_id, f"{int(y):04d}-{int(m):02d}")
-        spent_by_cat_month[key] = spent_by_cat_month.get(key, 0) + to_cop_cents(
-            int(total), currency, trm
-        )
+        spent_by_cat_month[key] = spent_by_cat_month.get(key, 0) + to_cop_cents(int(total), currency, trm)
 
     def _window(tx_type: TxType) -> list[Transaction]:
         return list(
@@ -214,9 +209,7 @@ def load_month_aggregate(
         ).all()
     )
 
-    assigned_by_cat_month = {
-        (b.category_id, b.year_month): b.amount_assigned for b in budgets_all
-    }
+    assigned_by_cat_month = {(b.category_id, b.year_month): b.amount_assigned for b in budgets_all}
     budgets_month = [b for b in budgets_all if b.year_month == year_month]
 
     first_active: dict[int, str] = {}
@@ -227,8 +220,12 @@ def load_month_aggregate(
             first_active[cat_id] = ym
 
     return MonthAggregate(
-        year_month=year_month, start=start, end=end, trm=trm,
-        categories=categories, groups=groups,
+        year_month=year_month,
+        start=start,
+        end=end,
+        trm=trm,
+        categories=categories,
+        groups=groups,
         budgets_month=budgets_month,
         budgeted_category_ids=frozenset(b.category_id for b in budgets_month),
         active_recurring=active_recurring,

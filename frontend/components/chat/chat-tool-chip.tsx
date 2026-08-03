@@ -50,12 +50,10 @@ export function ChatToolChip({ part }: Props) {
 
   // Prefer JSON.stringify with 2-space indent for both input and output.
   const inputJson =
-    part.input !== undefined && part.input !== null
-      ? JSON.stringify(part.input, null, 2)
-      : null
+    part.input !== undefined && part.input !== null ? JSON.stringify(part.input, null, 2) : null
   const outputText =
     part.state === "output-error"
-      ? (part as { errorText?: string }).errorText ?? ""
+      ? ((part as { errorText?: string }).errorText ?? "")
       : part.state === "output-available"
         ? String((part as { output?: unknown }).output ?? "")
         : ""

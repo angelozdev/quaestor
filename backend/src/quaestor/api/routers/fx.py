@@ -1,4 +1,5 @@
 """FX REST router — thin adapter over services.fx (scalar TRM, ADR-0031)."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

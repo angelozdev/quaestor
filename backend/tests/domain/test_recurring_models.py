@@ -29,9 +29,16 @@ def test_skipped_status_exists():
 
 def test_create_recurring_item_and_occurrence(session):
     item = RecurringItem(
-        name="Rent", payee="Landlord", type=TxType.expense, mode=RecurringMode.auto,
-        amount=2_000_000, currency="COP", account_id=1,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=2_000_000,
+        currency="COP",
+        account_id=1,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     session.add(item)
     session.commit()
@@ -39,7 +46,9 @@ def test_create_recurring_item_and_occurrence(session):
     assert item.id is not None and item.active is True
 
     occ = RecurringOccurrence(
-        recurring_id=item.id, due_date=date(2026, 1, 1), status=OccurrenceStatus.planned,
+        recurring_id=item.id,
+        due_date=date(2026, 1, 1),
+        status=OccurrenceStatus.planned,
     )
     session.add(occ)
     session.commit()
@@ -49,9 +58,16 @@ def test_create_recurring_item_and_occurrence(session):
 
 def test_unique_recurring_due_date(session):
     item = RecurringItem(
-        name="Water", payee="Utility", type=TxType.expense, mode=RecurringMode.manual,
-        amount=50_000, currency="COP", account_id=1,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 1, 1),
+        name="Water",
+        payee="Utility",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=50_000,
+        currency="COP",
+        account_id=1,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
     )
     session.add(item)
     session.commit()

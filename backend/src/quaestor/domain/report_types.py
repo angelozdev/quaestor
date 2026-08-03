@@ -3,6 +3,7 @@
 These are the stable types P1 (endpoints), P2 (MCP tools), and P6 (screens) wire
 against. SafeToSpend is reused from P4 (domain.dtos) — single source of truth.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

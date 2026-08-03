@@ -18,9 +18,7 @@ def test_categories_crud(client, auth):
     got = client.get(f"/api/categories/{cid}", headers=auth)
     assert got.status_code == 200 and got.json()["name"] == "Groceries"
 
-    patched = client.patch(
-        f"/api/categories/{cid}", headers=auth, json={"name": "Food", "exclude_from_budget": True}
-    )
+    patched = client.patch(f"/api/categories/{cid}", headers=auth, json={"name": "Food", "exclude_from_budget": True})
     assert patched.status_code == 200
     assert patched.json()["name"] == "Food" and patched.json()["exclude_from_budget"] is True
 
@@ -30,15 +28,14 @@ def test_categories_crud(client, auth):
 
 
 def test_create_category_bad_group_is_422(client, auth):
-    resp = client.post(
-        "/api/categories", headers=auth, json={"name": "X", "group_id": 9999}
-    )
+    resp = client.post("/api/categories", headers=auth, json={"name": "X", "group_id": 9999})
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
 
 
 def test_restore_category_endpoint(client, engine, auth):
     from quaestor.services import categories
     from sqlmodel import Session
+
     with Session(engine) as s:
         cat = categories.create_category(s, name="Food")
         categories.archive_category(s, cat.id)

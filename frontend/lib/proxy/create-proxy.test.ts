@@ -62,7 +62,9 @@ describe("createProxy", () => {
     const response = await createProxy(req(), ["chat"])
     expect(response.headers.get("content-type")).toBe("text/event-stream")
     expect(response.body).toBeInstanceOf(ReadableStream)
-    const reader = response.body!.getReader()
+    const body = response.body
+    if (!body) throw new Error("expected a streaming body")
+    const reader = body.getReader()
     const decoder = new TextDecoder()
     const out: string[] = []
     while (true) {
@@ -142,7 +144,7 @@ describe("createProxy", () => {
     vi.stubGlobal("fetch", fetchImpl)
     ac.abort()
     await expect(createProxy(req({ signal: ac.signal }), ["chat"])).rejects.toThrow()
-    expect((lastFetch!.init.signal as AbortSignal).aborted).toBe(true)
+    expect((lastFetch?.init.signal as AbortSignal).aborted).toBe(true)
   })
 
   it("builds the target URL by joining path segments and preserving query string", async () => {
@@ -152,7 +154,7 @@ describe("createProxy", () => {
     }) as typeof fetch
     vi.stubGlobal("fetch", fetchImpl)
     await createProxy(req(), ["transactions", "list"])
-    expect(lastFetch!.url).toBe("http://localhost:8000/api/transactions/list")
+    expect(lastFetch?.url).toBe("http://localhost:8000/api/transactions/list")
   })
 
   it("preserves set-cookie from upstream in the outgoing response", async () => {

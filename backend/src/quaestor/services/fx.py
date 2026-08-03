@@ -4,6 +4,7 @@ The daily job and manual corrections both go through ``set_trm`` (last
 write wins). Every read path that produces COP figures calls ``get_trm``
 once per request and converts via ``domain.money.to_cop_cents``.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal

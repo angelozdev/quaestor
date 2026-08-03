@@ -2,9 +2,11 @@ from datetime import date
 
 import pytest
 from quaestor.domain.errors import NotFound, ValidationError
-from quaestor.domain.models import AccountType
-from quaestor.services import accounts, budgets, categories, fx, occurrences, transactions
+from quaestor.domain.models import AccountType, IntervalUnit, RecurringMode, TxType
+from quaestor.services import accounts, budgets, categories, fx, occurrences, planned, transactions
 from quaestor.services.budgets import budget_status as budget_status_for
+
+from tests.support.recurring import declare_existing
 
 
 def _cat(session, **kwargs):
@@ -69,12 +71,20 @@ def test_budget_status_sums_only_expense_posted_in_month_category(session):
 
 def test_budget_status_ignores_planned(session):
     from quaestor.services import planned
+
     fx.set_trm(session, "4000")
     cat = _cat(session)
     acc = _acc(session)
     budgets.set_budget(session, cat.id, "2026-06", 100_000)
-    planned.plan_payment(session, payee="p", amount=40_000, currency="COP",
-                         due_date=date(2026, 6, 15), account_id=acc.id, category_id=cat.id)
+    planned.plan_payment(
+        session,
+        payee="p",
+        amount=40_000,
+        currency="COP",
+        due_date=date(2026, 6, 15),
+        account_id=acc.id,
+        category_id=cat.id,
+    )
     s = budget_status_for(session, cat.id, "2026-06")
     assert s.spent == 0
 
@@ -112,17 +122,20 @@ def test_budget_status_negative_rollover_resets_to_zero(session):
     assert s.rollover_in == 0  # max(-50k, 0)
 
 
-from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
-from quaestor.services import planned
-
-from tests.support.recurring import declare_existing
-
-
 def _income(session, acc, amount=1_000_000, start=date(2026, 6, 1)):
     return declare_existing(
-        session, name="Salary", payee="Job", type=TxType.income, mode=RecurringMode.auto,
-        amount=amount, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=start,
+        session,
+        name="Salary",
+        payee="Job",
+        type=TxType.income,
+        mode=RecurringMode.auto,
+        amount=amount,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=start,
     )
 
 
@@ -132,8 +145,9 @@ def test_safe_to_spend_basic_cascade(session):
     cat = _cat(session)
     _income(session, acc)  # 1,000,000 forecast
     budgets.set_budget(session, cat.id, "2026-06", 300_000)
-    planned.plan_payment(session, payee="Rent", amount=200_000, currency="COP",
-                         due_date=date(2026, 6, 15), account_id=acc.id)  # no category -> committed
+    planned.plan_payment(
+        session, payee="Rent", amount=200_000, currency="COP", due_date=date(2026, 6, 15), account_id=acc.id
+    )  # no category -> committed
     sts = budgets.safe_to_spend(session, "2026-06")
     assert sts.income_forecast == 1_000_000
     assert sts.committed == 200_000
@@ -161,9 +175,18 @@ def test_safe_to_spend_double_count_guard_auto_recurring(session):
     acc = _acc(session)
     _income(session, acc)
     declare_existing(
-        session, name="Netflix", payee="Netflix", type=TxType.expense, mode=RecurringMode.auto,
-        amount=250_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 5),
+        session,
+        name="Netflix",
+        payee="Netflix",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=250_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 6, 5),
     )
     free_before = budgets.safe_to_spend(session, "2026-06").free
     occurrences.materialize_due(session, date(2026, 6, 30))
@@ -176,9 +199,18 @@ def test_safe_to_spend_due_driven_stability_manual(session):
     acc = _acc(session)
     _income(session, acc)
     declare_existing(
-        session, name="Gym", payee="Gym", type=TxType.expense, mode=RecurringMode.manual,
-        amount=80_000, currency="COP", category_id=None, account_id=acc.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 20),
+        session,
+        name="Gym",
+        payee="Gym",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=80_000,
+        currency="COP",
+        category_id=None,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 6, 20),
     )
     before_first_due, after_first_due = date(2026, 6, 5), date(2026, 6, 25)
     occurrences.materialize_due(session, before_first_due)
@@ -192,8 +224,9 @@ def test_safe_to_spend_confirm_planned_does_not_move_it(session):
     fx.set_trm(session, "4000")
     acc = _acc(session)
     _income(session, acc)
-    tx = planned.plan_payment(session, payee="Vet", amount=120_000, currency="COP",
-                              due_date=date(2026, 6, 15), account_id=acc.id)  # no category
+    tx = planned.plan_payment(
+        session, payee="Vet", amount=120_000, currency="COP", due_date=date(2026, 6, 15), account_id=acc.id
+    )  # no category
     free_before = budgets.safe_to_spend(session, "2026-06").free
     planned.confirm_payment(session, tx.id)  # planned expense -> posted unbudgeted
     free_after = budgets.safe_to_spend(session, "2026-06").free
@@ -233,6 +266,7 @@ def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
     from quaestor.domain.models import AccountType
     from quaestor.services import accounts as accs
     from quaestor.services import goals as goals_svc
+
     fx.set_trm(session, "4000")
     acc = _acc(session)
     sav = accs.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
@@ -252,9 +286,9 @@ def test_list_budgets_one_line_per_eligible_category(session):
     categories.create_category(session, name="Hidden", exclude_from_budget=True)
     budgets.set_budget(session, food.id, "2026-06", 500_000)
     lines = budgets.list_budgets(session, "2026-06")
-    names = [l.category_name for l in lines]
+    names = [row.category_name for row in lines]
     assert "Food" in names and "Hidden" not in names
-    food_line = next(l for l in lines if l.category_name == "Food")
+    food_line = next(row for row in lines if row.category_name == "Food")
     assert food_line.assigned == 500_000
     assert food_line.category_id == food.id
 
@@ -263,7 +297,7 @@ def test_list_budgets_includes_unassigned_eligible_category(session):
     fx.set_trm(session, "4000")
     categories.create_category(session, name="Transport")
     lines = budgets.list_budgets(session, "2026-06")
-    line = next(l for l in lines if l.category_name == "Transport")
+    line = next(row for row in lines if row.category_name == "Transport")
     assert line.assigned == 0
 
 

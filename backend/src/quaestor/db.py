@@ -11,6 +11,7 @@ Alembic is the source of truth for schema. `init_db()` runs
 `alembic upgrade head` to the latest revision, seeds the canonical
 `Settings(id=1)` row, then registers the goal-event hooks.
 """
+
 from __future__ import annotations
 
 import os
@@ -58,7 +59,7 @@ def _resolve_driver(url: str) -> str:
     through untouched.
     """
     if url.startswith(_POSTGRESQL_SCHEME):
-        return _PSYCOG3_SCHEME + url[len(_POSTGRESQL_SCHEME):]
+        return _PSYCOG3_SCHEME + url[len(_POSTGRESQL_SCHEME) :]
     return url
 
 
@@ -117,9 +118,7 @@ def _seed_default_settings(target_engine: Engine) -> None:
     """Insert the canonical `Settings(id=1)` row if it is missing."""
     with Session(target_engine) as session:
         if session.get(Settings, _DEFAULT_SETTINGS_ID) is None:
-            session.add(
-                Settings(id=_DEFAULT_SETTINGS_ID, base_currency=_DEFAULT_BASE_CURRENCY)
-            )
+            session.add(Settings(id=_DEFAULT_SETTINGS_ID, base_currency=_DEFAULT_BASE_CURRENCY))
             session.commit()
 
 

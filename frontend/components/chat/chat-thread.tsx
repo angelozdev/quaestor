@@ -41,8 +41,7 @@ export function ChatThread({ messages, status }: Props) {
   }, [messages, status])
 
   const last = messages[messages.length - 1]
-  const showCursorOnLast =
-    status === "streaming" && last?.role === "assistant"
+  const showCursorOnLast = status === "streaming" && last?.role === "assistant"
 
   return (
     <section

@@ -13,6 +13,7 @@ with a fallback to `QUAESTOR_DB`.
 In offline mode the URL is read from the same sources and migrations
 are emitted as SQL.
 """
+
 from __future__ import annotations
 
 import os
@@ -39,10 +40,7 @@ target_metadata = SQLModel.metadata
 
 def run_migrations_offline() -> None:
     """Emit migrations as SQL using only a URL — no live DB connection."""
-    url = (
-        config.get_main_option("sqlalchemy.url")
-        or os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
-    )
+    url = config.get_main_option("sqlalchemy.url") or os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
     url = _db._resolve_driver(url)
     context.configure(
         url=url,
@@ -66,9 +64,7 @@ def run_migrations_online() -> None:
     if connectable is None:
         section = config.get_section(config.config_ini_section, {})
         if "sqlalchemy.url" not in section:
-            section["sqlalchemy.url"] = _db._resolve_driver(
-                os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL)
-            )
+            section["sqlalchemy.url"] = _db._resolve_driver(os.environ.get("QUAESTOR_DB", _DEFAULT_DB_URL))
         connectable = engine_from_config(
             section,
             prefix="sqlalchemy.",

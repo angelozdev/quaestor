@@ -1,7 +1,9 @@
 """Scheduler tests — TDD RED phase."""
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 import pytest
@@ -94,18 +96,14 @@ class TestRunForever:
 
         # Now cancel — first action was definitely _run_once
         task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
         assert calls[0] == "_run_once", f"Expected _run_once first, got {calls}"
         assert "sleep" in calls[1], f"Expected sleep second, got {calls}"
 
     @pytest.mark.asyncio
-    async def test_run_forever_skips_initial_when_run_on_boot_0(
-        self, monkeypatch
-    ):
+    async def test_run_forever_skips_initial_when_run_on_boot_0(self, monkeypatch):
         """RUN_ON_BOOT=0 → first action is asyncio.sleep(INTERVAL_S), no immediate run."""
         import quaestor.scheduler as scheduler_module
 

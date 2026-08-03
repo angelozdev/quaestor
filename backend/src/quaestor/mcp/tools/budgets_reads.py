@@ -2,6 +2,7 @@
 
 Writes (`assign_budget`) live in `planning.py`.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

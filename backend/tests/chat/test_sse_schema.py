@@ -13,6 +13,7 @@ internal representation. They import nothing from `quaestor.chat.llm
 .provider` (no `LLMEventType`, no `LLMEvent`). They only inspect SSE
 bytes after the service has rendered them.
 """
+
 from __future__ import annotations
 
 import json
@@ -98,8 +99,7 @@ class _RaisingToolMCP:
 
     async def call_tool(self, name, arguments):
         raise ToolError(
-            f"1 validation error for {name}Arguments: inp "
-            f"Input should be a valid dictionary, got {arguments!r}"
+            f"1 validation error for {name}Arguments: inp Input should be a valid dictionary, got {arguments!r}"
         )
 
     async def list_tools(self):
@@ -299,11 +299,7 @@ async def test_tool_error_chunk_has_required_fields(patch_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    err_chunks = [
-        ToolOutputErrorChunk.model_validate(e)
-        for e in events
-        if e.get("type") == "tool-output-error"
-    ]
+    err_chunks = [ToolOutputErrorChunk.model_validate(e) for e in events if e.get("type") == "tool-output-error"]
     # The service retry loop may re-emit the tool call on later iterations,
     # so we lock the chunk-shape contract on the first chunk and only assert
     # "at least one" emission. Exact count is an artifact of the retry loop,
@@ -360,11 +356,7 @@ async def test_tool_success_chunk_has_no_is_error_field(patch_mcp):
         blob += chunk
 
     events = _parse_sse(blob)
-    success = [
-        ToolOutputAvailableChunk.model_validate(e)
-        for e in events
-        if e.get("type") == "tool-output-available"
-    ]
+    success = [ToolOutputAvailableChunk.model_validate(e) for e in events if e.get("type") == "tool-output-available"]
     # At least one success chunk must round-trip the strict schema. The
     # exact count is an artifact of the current retry loop and is not
     # the contract we are pinning here — the contract is "no `isError`

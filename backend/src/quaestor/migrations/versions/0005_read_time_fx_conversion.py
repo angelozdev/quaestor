@@ -18,6 +18,7 @@ Revises: 0004
 Create Date: 2026-07-30
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -40,9 +41,7 @@ def upgrade() -> None:
 
 def _preload_trm_from_latest_dated_rate() -> None:
     conn = op.get_bind()
-    row = conn.execute(
-        sa.text("SELECT usd_cop FROM fx_rate ORDER BY date DESC LIMIT 1")
-    ).fetchone()
+    row = conn.execute(sa.text("SELECT usd_cop FROM fx_rate ORDER BY date DESC LIMIT 1")).fetchone()
     if row is not None:
         conn.execute(sa.text("UPDATE settings SET usd_cop = :rate"), {"rate": row[0]})
 

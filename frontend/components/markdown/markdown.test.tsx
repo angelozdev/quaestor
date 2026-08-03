@@ -53,9 +53,7 @@ describe("Markdown", () => {
   })
 
   it("opens links with safe rel and target", () => {
-    const { container } = render(
-      <Markdown>{"[t](https://example.com)"}</Markdown>,
-    )
+    const { container } = render(<Markdown>{"[t](https://example.com)"}</Markdown>)
     const a = container.querySelector("a")
     expect(a).toBeInTheDocument()
     expect(a?.getAttribute("target")).toBe("_blank")
@@ -64,9 +62,7 @@ describe("Markdown", () => {
   })
 
   it("strips dangerous url schemes (javascript:)", () => {
-    const { container } = render(
-      <Markdown>{"[t](javascript:alert(1))"}</Markdown>,
-    )
+    const { container } = render(<Markdown>{"[t](javascript:alert(1))"}</Markdown>)
     // rehype-harden must drop the href or replace it with a safe value.
     const a = container.querySelector("a")
     if (a) {
@@ -78,22 +74,16 @@ describe("Markdown", () => {
   })
 
   it("strips raw <script> tags from input", () => {
-    const { container } = render(
-      <Markdown>{"<script>alert(1)</script>"}</Markdown>,
-    )
+    const { container } = render(<Markdown>{"<script>alert(1)</script>"}</Markdown>)
     expect(container.querySelector("script")).toBeNull()
   })
 
   it("handles unterminated markdown without throwing", () => {
-    expect(() =>
-      render(<Markdown>{"**bold sin cerrar"}</Markdown>),
-    ).not.toThrow()
+    expect(() => render(<Markdown>{"**bold sin cerrar"}</Markdown>)).not.toThrow()
   })
 
   it("passes className through to the root element", () => {
-    const { container } = render(
-      <Markdown className="my-custom-class">{"hola"}</Markdown>,
-    )
+    const { container } = render(<Markdown className="my-custom-class">{"hola"}</Markdown>)
     expect(container.firstChild).not.toBeNull()
     const root = container.firstChild as HTMLElement
     expect(root.className).toContain("my-custom-class")

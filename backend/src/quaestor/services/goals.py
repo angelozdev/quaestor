@@ -1,4 +1,5 @@
 """Savings goals: create, standalone contribution, progress, and the P3 hook seam (ADR-006/007)."""
+
 from __future__ import annotations
 
 import uuid
@@ -46,10 +47,7 @@ def create_goal(
     has_target = target_amount is not None
     has_deadline = deadline is not None
     if has_target != has_deadline:
-        raise ValidationError(
-            "a defined goal needs both target_amount and deadline; "
-            "an open-ended goal needs neither"
-        )
+        raise ValidationError("a defined goal needs both target_amount and deadline; an open-ended goal needs neither")
     if has_target and target_amount <= 0:
         raise ValidationError("target_amount must be > 0")
     acc = session.get(Account, savings_account_id)
@@ -60,8 +58,12 @@ def create_goal(
     if acc.archived:
         raise ValidationError(f"savings account {savings_account_id} is archived")
     goal = Goal(
-        name=name, monthly_amount=monthly_amount, savings_account_id=savings_account_id,
-        target_amount=target_amount, deadline=deadline, status=GoalStatus.active,
+        name=name,
+        monthly_amount=monthly_amount,
+        savings_account_id=savings_account_id,
+        target_amount=target_amount,
+        deadline=deadline,
+        status=GoalStatus.active,
     )
     session.add(goal)
     session.commit()
@@ -104,10 +106,7 @@ def update_goal(
     new_target = goal.target_amount if target_amount is _UNSET else target_amount
     new_deadline = goal.deadline if deadline is _UNSET else deadline
     if (new_target is None) != (new_deadline is None):
-        raise ValidationError(
-            "a defined goal needs both target_amount and deadline; "
-            "an open-ended goal needs neither"
-        )
+        raise ValidationError("a defined goal needs both target_amount and deadline; an open-ended goal needs neither")
     if new_target is not None and new_target <= 0:
         raise ValidationError("target_amount must be > 0")
     goal.target_amount = new_target
@@ -128,9 +127,7 @@ def update_goal(
 
 
 def _saved(session: Session, goal_id: int) -> int:
-    rows = session.exec(
-        select(GoalContribution.amount).where(GoalContribution.goal_id == goal_id)
-    ).all()
+    rows = session.exec(select(GoalContribution.amount).where(GoalContribution.goal_id == goal_id)).all()
     return sum(rows)
 
 
@@ -147,9 +144,7 @@ def _maybe_mark_reached(session: Session, goal: Goal) -> None:
         session.add(goal)
 
 
-def goal_contribution(
-    session: Session, goal_id: int, amount: int, date: Date
-) -> GoalContribution:
+def goal_contribution(session: Session, goal_id: int, amount: int, date: Date) -> GoalContribution:
     """Standalone manual contribution: internal transfer + GoalContribution, atomic.
 
     Raises:
@@ -180,15 +175,27 @@ def goal_contribution(
     d_from, d_to = transfer_deltas(amount)
     try:
         leg_from = Transaction(
-            date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
-            status=TxStatus.posted, amount=amount, currency=dst.currency,
-            account_id=src.id, transfer_group_id=group, source=Source.manual,
+            date=date,
+            payee=f"Goal: {goal.name}",
+            type=TxType.transfer,
+            status=TxStatus.posted,
+            amount=amount,
+            currency=dst.currency,
+            account_id=src.id,
+            transfer_group_id=group,
+            source=Source.manual,
             transfer_direction=TransferDirection.out,
         )
         leg_to = Transaction(
-            date=date, payee=f"Goal: {goal.name}", type=TxType.transfer,
-            status=TxStatus.posted, amount=amount, currency=dst.currency,
-            account_id=dst.id, transfer_group_id=group, source=Source.manual,
+            date=date,
+            payee=f"Goal: {goal.name}",
+            type=TxType.transfer,
+            status=TxStatus.posted,
+            amount=amount,
+            currency=dst.currency,
+            account_id=dst.id,
+            transfer_group_id=group,
+            source=Source.manual,
             transfer_direction=TransferDirection.in_,
         )
         src.balance += d_from
@@ -196,8 +203,11 @@ def goal_contribution(
         session.add_all([leg_from, leg_to, src, dst])
         session.flush()
         contribution = GoalContribution(
-            goal_id=goal.id, date=date, amount=amount,
-            source=ContributionSource.manual, transaction_id=leg_to.id,
+            goal_id=goal.id,
+            date=date,
+            amount=amount,
+            source=ContributionSource.manual,
+            transaction_id=leg_to.id,
         )
         session.add(contribution)
         _maybe_mark_reached(session, goal)
@@ -225,8 +235,13 @@ def goals_progress(
     goals_ = session.exec(stmt.order_by(Goal.id)).all()
     return [
         goal_progress_calc(
-            goal.id, goal.name, goal.monthly_amount, _saved(session, goal.id),
-            goal.target_amount, goal.deadline, today,
+            goal.id,
+            goal.name,
+            goal.monthly_amount,
+            _saved(session, goal.id),
+            goal.target_amount,
+            goal.deadline,
+            today,
         )
         for goal in goals_
     ]
@@ -263,9 +278,15 @@ def propose_goal_contributions(period: str, session: Session) -> list[Transactio
         if dst.archived:
             raise ValidationError(f"goal {goal.id} savings account is archived")
         tx = Transaction(
-            date=end, payee=f"Goal: {goal.name}", type=TxType.transfer,
-            status=TxStatus.planned, amount=goal.monthly_amount, currency=dst.currency,
-            account_id=goal.savings_account_id, goal_id=goal.id, source=Source.manual,
+            date=end,
+            payee=f"Goal: {goal.name}",
+            type=TxType.transfer,
+            status=TxStatus.planned,
+            amount=goal.monthly_amount,
+            currency=dst.currency,
+            account_id=goal.savings_account_id,
+            goal_id=goal.id,
+            source=Source.manual,
         )
         session.add(tx)
         created.append(tx)
@@ -286,8 +307,11 @@ def record_confirmed_contribution(tx: Transaction, session: Session) -> GoalCont
     if goal is None:
         return None
     contribution = GoalContribution(
-        goal_id=goal.id, date=tx.date, amount=tx.amount,
-        source=ContributionSource.confirmed, transaction_id=tx.id,
+        goal_id=goal.id,
+        date=tx.date,
+        amount=tx.amount,
+        source=ContributionSource.confirmed,
+        transaction_id=tx.id,
     )
     session.add(contribution)
     _maybe_mark_reached(session, goal)

@@ -8,6 +8,7 @@ that produces an `OutstandingQueue`, and the date ranges it queries are
 disjoint by construction — so the mutual-exclusion invariant between
 buckets is preserved at the call site, not enforced at the VO.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable
@@ -34,9 +35,7 @@ class OutstandingQueue:
 
     def total_cop_cents(self, trm: Decimal) -> int:
         """COP cents across both buckets, converted at `trm`."""
-        return sum(
-            to_cop_cents(t.amount, t.currency, trm) for t in self.all_items()
-        )
+        return sum(to_cop_cents(t.amount, t.currency, trm) for t in self.all_items())
 
     @property
     def is_empty(self) -> bool:
@@ -47,8 +46,6 @@ class OutstandingQueue:
         return [*self.overdue, *self.upcoming]
 
     @classmethod
-    def from_lists(
-        cls, overdue: Iterable[Transaction], upcoming: Iterable[Transaction]
-    ) -> OutstandingQueue:
+    def from_lists(cls, overdue: Iterable[Transaction], upcoming: Iterable[Transaction]) -> OutstandingQueue:
         """Construct with eager evaluation; both iterables are consumed once."""
         return cls(overdue=list(overdue), upcoming=list(upcoming))

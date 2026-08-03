@@ -3,6 +3,7 @@
 The engine's shape rests on two invariants that no unit test would notice
 breaking. They are cheap to check and expensive to lose.
 """
+
 import ast
 from pathlib import Path
 
@@ -23,19 +24,14 @@ def _writes_occurrences(path: Path) -> bool:
     """
     tree = ast.parse(path.read_text())
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and ast.unparse(node.func).endswith(
-            "RecurringOccurrence"
-        ):
+        if isinstance(node, ast.Call) and ast.unparse(node.func).endswith("RecurringOccurrence"):
             return True
         if not isinstance(node, (ast.Assign, ast.AnnAssign)):
             continue
         targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        touches_status = any(
-            isinstance(t, ast.Attribute) and t.attr == "status" for t in targets
-        )
-        if touches_status and node.value is not None:
-            if "OccurrenceStatus" in ast.unparse(node.value):
-                return True
+        touches_status = any(isinstance(t, ast.Attribute) and t.attr == "status" for t in targets)
+        if touches_status and node.value is not None and "OccurrenceStatus" in ast.unparse(node.value):
+            return True
     return False
 
 
@@ -51,10 +47,7 @@ def test_only_one_module_writes_a_recurring_occurrence():
         for p in _python_files()
         if p != WRITER and p.name != "models.py" and _writes_occurrences(p)
     ]
-    assert writers == [], (
-        f"these modules write a RecurringOccurrence but only "
-        f"services/occurrences.py may: {writers}"
-    )
+    assert writers == [], f"these modules write a RecurringOccurrence but only services/occurrences.py may: {writers}"
 
 
 def test_the_recurrence_engine_stays_pure():
@@ -72,9 +65,7 @@ def test_the_recurrence_engine_stays_pure():
             imported.update(a.name for a in node.names)
 
     forbidden = {m for m in imported if "service" in m or "sqlmodel" in m or m == "db"}
-    assert forbidden == set(), (
-        f"domain/recurrence.py must stay pure but imports: {sorted(forbidden)}"
-    )
+    assert forbidden == set(), f"domain/recurrence.py must stay pure but imports: {sorted(forbidden)}"
 
 
 def test_the_transaction_service_never_learns_about_recurring_items():

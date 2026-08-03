@@ -1,4 +1,5 @@
 """FX fetch job — provider-agnostic USD->COP rate extraction."""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -18,9 +19,7 @@ class _StubResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise httpx.HTTPStatusError(
-                f"{self.status_code}", request=None, response=None
-            )
+            raise httpx.HTTPStatusError(f"{self.status_code}", request=None, response=None)
 
 
 class _StubClient:
@@ -70,7 +69,7 @@ def test_no_api_key_sends_no_query_params():
 
 def test_missing_rates_cop_raises():
     client = _StubClient({"foo": "bar"})
-    with pytest.raises(ValueError, match="rates.COP"):
+    with pytest.raises(ValueError, match=r"rates\.COP"):
         fetch_usd_cop("https://api.example.com/latest", client=client)
 
 

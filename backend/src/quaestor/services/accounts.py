@@ -1,4 +1,5 @@
 """Account use cases."""
+
 from __future__ import annotations
 
 from sqlmodel import Session, select
@@ -8,9 +9,7 @@ from ..domain.models import Account, AccountType
 from ..domain.money import is_supported
 
 
-def create_account(
-    session: Session, name: str, type, currency: str, balance: int = 0
-) -> Account:
+def create_account(session: Session, name: str, type, currency: str, balance: int = 0) -> Account:
     """Create a new account with the given parameters.
 
     Validates that the account name is not empty and the currency is supported.

@@ -3,6 +3,7 @@
 Lets the agent set `default_source_account_id`, which is required by
 `contribute_goal` (services/goals.py).
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field
@@ -27,9 +28,7 @@ class UpdateSettingsInput(BaseModel):
     # test passing without modifying `core._as_text`, base_currency is typed
     # as `str | None` and validated inside `update_settings` (which raises
     # `domain.errors.ValidationError`; caught by `@_as_text` → "Invalid input").
-    base_currency: str | None = Field(
-        default=None, description="New base currency (COP or USD)"
-    )
+    base_currency: str | None = Field(default=None, description="New base currency (COP or USD)")
     default_source_account: str | None = Field(
         default=None, description="New default source account name (None to clear)"
     )
@@ -48,9 +47,7 @@ def update_settings(session: Session, inp: UpdateSettingsInput) -> str:
         if inp.default_source_account == "":
             default_source_id = None
         else:
-            default_source_id = _resolve_account(
-                session, inp.default_source_account
-            ).id
+            default_source_id = _resolve_account(session, inp.default_source_account).id
     if inp.base_currency is not None and not is_supported(inp.base_currency):
         raise ValidationError(f"unsupported currency: {inp.base_currency}")
     updated = settings.update_settings(

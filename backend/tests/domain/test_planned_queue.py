@@ -7,6 +7,7 @@ preserve at the call site; the VO itself does not enforce it
 (structurally, the construction site is the only place that produces
 buckets, and the date ranges are disjoint by query construction).
 """
+
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
@@ -20,9 +21,7 @@ from quaestor.services import accounts, transactions
 
 
 def _tx(session, account_id: int, payee: str, amount: int, due: date) -> Transaction:
-    return transactions.record_expense(
-        session, account_id, amount, "COP", due, payee
-    )
+    return transactions.record_expense(session, account_id, amount, "COP", due, payee)
 
 
 def test_outstanding_queue_is_empty_when_both_buckets_empty():

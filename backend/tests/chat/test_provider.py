@@ -29,9 +29,7 @@ def test_llm_event_tool_input_available_carries_arguments_dict():
 
 def test_llm_provider_protocol_is_runtime_checkable():
     class Fake:
-        async def stream(
-            self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-        ) -> AsyncIterator[LLMEvent]:
+        async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
             if False:
                 yield  # pragma: no cover
 

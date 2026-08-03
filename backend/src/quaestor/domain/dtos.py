@@ -1,4 +1,5 @@
 """Output DTOs returned by budget/goal/recurring services (not DB models)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

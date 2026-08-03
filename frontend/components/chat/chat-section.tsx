@@ -1,7 +1,7 @@
 "use client"
 
-import { useQueryClient } from "@tanstack/react-query"
 import { useChat } from "@ai-sdk/react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useMemo } from "react"
 import { createChatTransport } from "@/lib/chat-transport"
 import { invalidate } from "@/lib/query"
@@ -55,15 +55,9 @@ export function ChatSection() {
           <ChatThread messages={messages} status={status} />
         )}
 
-        {status === "error" && error && (
-          <ChatErrorBanner error={error} onRetry={regenerate} />
-        )}
+        {status === "error" && error && <ChatErrorBanner error={error} onRetry={regenerate} />}
 
-        <ChatInput
-          status={status}
-          onSend={(text) => sendMessage({ text })}
-          onStop={stop}
-        />
+        <ChatInput status={status} onSend={(text) => sendMessage({ text })} onStop={stop} />
       </div>
     </section>
   )

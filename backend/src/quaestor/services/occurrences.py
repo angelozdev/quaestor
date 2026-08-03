@@ -5,6 +5,7 @@ skipping a date, and keeping an occurrence in step with the transaction it
 produced. `services/recurring.py` owns the item itself and calls in; this
 module never imports it back, so the dependency stays one-way.
 """
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -29,16 +30,10 @@ from ..domain.rules import delta_balance
 
 def occurrence_of(session: Session, tx: Transaction) -> RecurringOccurrence | None:
     """The recurring occurrence this tx materialized, if it came from one."""
-    return session.exec(
-        select(RecurringOccurrence).where(
-            RecurringOccurrence.transaction_id == tx.id
-        )
-    ).first()
+    return session.exec(select(RecurringOccurrence).where(RecurringOccurrence.transaction_id == tx.id)).first()
 
 
-def sync_occurrence_status(
-    session: Session, tx: Transaction, status: OccurrenceStatus
-) -> None:
+def sync_occurrence_status(session: Session, tx: Transaction, status: OccurrenceStatus) -> None:
     """Move the occurrence behind `tx`, if any, to `status`. Does NOT commit."""
     occ = occurrence_of(session, tx)
     if occ is not None and occ.status != status:
@@ -49,9 +44,7 @@ def sync_occurrence_status(
 def existing_due_dates(session: Session, recurring_id: int) -> set[Date]:
     """Every due date of this item that already has an occurrence."""
     rows = session.exec(
-        select(RecurringOccurrence.due_date).where(
-            RecurringOccurrence.recurring_id == recurring_id
-        )
+        select(RecurringOccurrence.due_date).where(RecurringOccurrence.recurring_id == recurring_id)
     ).all()
     return set(rows)
 
@@ -72,7 +65,9 @@ def _chargeable_account(session: Session, item: RecurringItem) -> Account:
 
 
 def _create_occurrence_tx(
-    session: Session, item: RecurringItem, due_date: Date,
+    session: Session,
+    item: RecurringItem,
+    due_date: Date,
     occ: RecurringOccurrence | None = None,
 ) -> RecurringOccurrence:
     """Create the tx for one (item, due_date) and point an occurrence at it.
@@ -105,9 +100,7 @@ def _create_occurrence_tx(
     session.flush()
     status = OccurrenceStatus.posted if is_auto else OccurrenceStatus.planned
     if occ is None:
-        occ = RecurringOccurrence(
-            recurring_id=item.id, due_date=due_date, status=status
-        )
+        occ = RecurringOccurrence(recurring_id=item.id, due_date=due_date, status=status)
     occ.status = status
     occ.transaction_id = tx.id
     session.add(occ)
@@ -121,17 +114,13 @@ def _items_to_charge(session: Session) -> list[RecurringItem]:
     list, which excludes items past their end date, and one of those can still
     hold a due date the engine never got to.
     """
-    return list(
-        session.exec(
-            select(RecurringItem)
-            .where(RecurringItem.active)
-            .order_by(RecurringItem.id)
-        ).all()
-    )
+    return list(session.exec(select(RecurringItem).where(RecurringItem.active).order_by(RecurringItem.id)).all())
 
 
 def _charge(
-    session: Session, item: RecurringItem, due_date: Date,
+    session: Session,
+    item: RecurringItem,
+    due_date: Date,
     occ: RecurringOccurrence | None = None,
 ) -> RecurringOccurrence:
     """One charge, all-or-nothing: movement, balance and occurrence, or none.
@@ -162,8 +151,12 @@ def materialize_due(session: Session, until_date: Date) -> MaterializationReport
     for item in _items_to_charge(session):
         existing = existing_due_dates(session, item.id)
         for d in due_dates(
-            item.start_date, item.end_date, item.interval_unit,
-            item.interval_count, item.start_date, until_date,
+            item.start_date,
+            item.end_date,
+            item.interval_unit,
+            item.interval_count,
+            item.start_date,
+            until_date,
         ):
             if d in existing:
                 continue
@@ -201,24 +194,24 @@ def guard_offer_size(name: str, dates: list[Date]) -> list[Date]:
     return dates
 
 
-def _unclaimed_dates(
-    session: Session, item: RecurringItem, through: Date
-) -> list[Date]:
+def _unclaimed_dates(session: Session, item: RecurringItem, through: Date) -> list[Date]:
     """Due dates up to `through` that no occurrence stands for yet."""
     existing = existing_due_dates(session, item.id)
     return [
         d
         for d in due_dates(
-            item.start_date, item.end_date, item.interval_unit,
-            item.interval_count, item.start_date, through,
+            item.start_date,
+            item.end_date,
+            item.interval_unit,
+            item.interval_count,
+            item.start_date,
+            through,
         )
         if d not in existing
     ]
 
 
-def _offer(
-    session: Session, item: RecurringItem, dates: list[Date]
-) -> list[Date]:
+def _offer(session: Session, item: RecurringItem, dates: list[Date]) -> list[Date]:
     """Put these dates up for the user's decision.
 
     Writing the row in `offered` both records the question and consumes the
@@ -226,11 +219,7 @@ def _offer(
     Nothing is charged and no balance moves.
     """
     for d in dates:
-        session.add(
-            RecurringOccurrence(
-                recurring_id=item.id, due_date=d, status=OccurrenceStatus.offered
-            )
-        )
+        session.add(RecurringOccurrence(recurring_id=item.id, due_date=d, status=OccurrenceStatus.offered))
     session.commit()
     return dates
 
@@ -254,9 +243,7 @@ def pending_dates(session: Session, recurring_id: int) -> list[Date]:
     )
 
 
-def _offered_on(
-    session: Session, recurring_id: int, dates: list[Date]
-) -> list[RecurringOccurrence]:
+def _offered_on(session: Session, recurring_id: int, dates: list[Date]) -> list[RecurringOccurrence]:
     """The offered occurrences for exactly these dates.
 
     Raises:
@@ -279,16 +266,11 @@ def _offered_on(
     )
     unknown = sorted(set(dates) - {occ.due_date for occ in found})
     if unknown:
-        raise ValidationError(
-            "these dates are not waiting for an answer: "
-            + ", ".join(str(d) for d in unknown)
-        )
+        raise ValidationError("these dates are not waiting for an answer: " + ", ".join(str(d) for d in unknown))
     return found
 
 
-def accept_pending_dates(
-    session: Session, recurring_id: int, dates: list[Date]
-) -> list[RecurringOccurrence]:
+def accept_pending_dates(session: Session, recurring_id: int, dates: list[Date]) -> list[RecurringOccurrence]:
     """Charge the offered dates the user ticked, each on its own real date.
 
     All-or-nothing, unlike the daily run. Per-charge commit (ADR-0036) exists so
@@ -305,9 +287,7 @@ def accept_pending_dates(
         raise NotFound(f"recurring item {recurring_id} not found")
     offered = _offered_on(session, recurring_id, dates)
     try:
-        accepted = [
-            _create_occurrence_tx(session, item, occ.due_date, occ) for occ in offered
-        ]
+        accepted = [_create_occurrence_tx(session, item, occ.due_date, occ) for occ in offered]
         session.commit()
     except Exception:
         session.rollback()
@@ -317,9 +297,7 @@ def accept_pending_dates(
     return accepted
 
 
-def decline_pending_dates(
-    session: Session, recurring_id: int, dates: list[Date]
-) -> list[RecurringOccurrence]:
+def decline_pending_dates(session: Session, recurring_id: int, dates: list[Date]) -> list[RecurringOccurrence]:
     """Close the offered dates the user turned down, for good.
 
     A declined date is never charged and never offered again: it becomes
@@ -355,9 +333,7 @@ def close_date_of_deleted_charge(tx: Transaction, session: Session) -> None:
     session.add(occ)
 
 
-def offer_paused_stretch(
-    session: Session, item: RecurringItem, today: Date
-) -> list[Date]:
+def offer_paused_stretch(session: Session, item: RecurringItem, today: Date) -> list[Date]:
     """Offer the dates left behind when a switched-off obligation comes back.
 
     Resuming must not charge the stretch in one lump — that would turn pausing
@@ -391,12 +367,13 @@ def skip(session: Session, recurring_id: int, due_date: Date) -> RecurringOccurr
     if item is None:
         raise NotFound(f"recurring item {recurring_id} not found")
     if not is_due_on(
-        item.start_date, item.end_date, item.interval_unit,
-        item.interval_count, due_date,
+        item.start_date,
+        item.end_date,
+        item.interval_unit,
+        item.interval_count,
+        due_date,
     ):
-        raise ValidationError(
-            f"{item.name!r} never falls due on {due_date}; there is nothing to skip"
-        )
+        raise ValidationError(f"{item.name!r} never falls due on {due_date}; there is nothing to skip")
     occ = session.exec(
         select(RecurringOccurrence).where(
             RecurringOccurrence.recurring_id == recurring_id,
@@ -405,8 +382,7 @@ def skip(session: Session, recurring_id: int, due_date: Date) -> RecurringOccurr
     ).first()
     if occ is not None and occ.status == OccurrenceStatus.posted:
         raise ValidationError(
-            f"the turn of {item.name!r} due on {due_date} was already charged; "
-            f"delete that movement to undo it"
+            f"the turn of {item.name!r} due on {due_date} was already charged; delete that movement to undo it"
         )
     if occ is None:
         occ = RecurringOccurrence(

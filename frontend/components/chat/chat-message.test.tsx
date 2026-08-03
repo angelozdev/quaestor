@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
 import type { UIMessage } from "ai"
+import { describe, expect, it } from "vitest"
 import { ChatMessage } from "./chat-message"
 
 function userMessage(text: string): UIMessage {
@@ -93,9 +93,7 @@ describe("ChatMessage", () => {
 
   it("renders assistant text containing markdown as structured HTML", () => {
     const md = "**importante**: saldo $1.250.000"
-    const { container } = render(
-      <ChatMessage message={assistantMessage(md)} showCursor={false} />,
-    )
+    const { container } = render(<ChatMessage message={assistantMessage(md)} showCursor={false} />)
     const strong = container.querySelector("strong")
     expect(strong).toBeInTheDocument()
     expect(strong?.textContent).toBe("importante")

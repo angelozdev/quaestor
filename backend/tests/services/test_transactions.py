@@ -13,9 +13,7 @@ def _make_account(session, currency="COP", balance=0, type=AccountType.debit):
 
 def test_record_expense_decrements_balance(session):
     acc = _make_account(session, balance=100_000)
-    tx = transactions.record_expense(
-        session, acc.id, 45_000, "COP", date(2026, 6, 1), "Store"
-    )
+    tx = transactions.record_expense(session, acc.id, 45_000, "COP", date(2026, 6, 1), "Store")
     assert tx.type == TxType.expense
     assert tx.status == TxStatus.posted
     assert tx.amount == 45_000
@@ -24,17 +22,13 @@ def test_record_expense_decrements_balance(session):
 
 def test_record_income_increments_balance(session):
     acc = _make_account(session, balance=0)
-    transactions.record_income(
-        session, acc.id, 3_200_000, "COP", date(2026, 6, 1), "Salary"
-    )
+    transactions.record_income(session, acc.id, 3_200_000, "COP", date(2026, 6, 1), "Salary")
     assert accounts.get_account(session, acc.id).balance == 3_200_000
 
 
 def test_expense_usd_records_without_any_trm(session):
     acc = _make_account(session, currency="USD", balance=0)
-    tx = transactions.record_expense(
-        session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
-    )
+    tx = transactions.record_expense(session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify")
     assert tx.amount == 1200
     assert tx.currency == "USD"
     assert getattr(tx, "fx_rate", None) is None
@@ -44,9 +38,7 @@ def test_expense_usd_records_without_any_trm(session):
 
 def test_usd_cop_equivalent_follows_the_current_trm(session):
     acc = _make_account(session, currency="USD", balance=0)
-    tx = transactions.record_expense(
-        session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify"
-    )
+    tx = transactions.record_expense(session, acc.id, 1200, "USD", date(2026, 6, 1), "Spotify")
     fx.set_trm(session, "4150")
     stored = transactions.get_transaction(session, tx.id)
     assert to_cop_cents(stored.amount, stored.currency, fx.get_trm(session)) == 4_980_000
@@ -57,9 +49,7 @@ def test_usd_cop_equivalent_follows_the_current_trm(session):
 def test_currency_must_match_account(session):
     acc = _make_account(session, currency="COP")
     with pytest.raises(ValidationError):
-        transactions.record_expense(
-            session, acc.id, 1200, "USD", date(2026, 6, 1), "X"
-        )
+        transactions.record_expense(session, acc.id, 1200, "USD", date(2026, 6, 1), "X")
 
 
 def test_non_positive_amount_fails(session):
@@ -76,17 +66,13 @@ def test_nonexistent_account_fails(session):
 def test_nonexistent_category_fails(session):
     acc = _make_account(session)
     with pytest.raises(ValidationError):
-        transactions.record_expense(
-            session, acc.id, 1000, "COP", date(2026, 6, 1), "X", category_id=999
-        )
+        transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "X", category_id=999)
 
 
 def test_transfer_moves_both_balances_and_shares_group(session):
     source = accounts.create_account(session, "Debit", AccountType.debit, "COP", balance=1_000_000)
     destination = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
-    leg_from, leg_to = transactions.transfer(
-        session, source.id, destination.id, 500_000, "COP", date(2026, 6, 1)
-    )
+    leg_from, leg_to = transactions.transfer(session, source.id, destination.id, 500_000, "COP", date(2026, 6, 1))
     assert leg_from.type == TxType.transfer and leg_to.type == TxType.transfer
     assert leg_from.transfer_group_id == leg_to.transfer_group_id
     assert accounts.get_account(session, source.id).balance == 500_000
@@ -101,16 +87,19 @@ def test_transfer_same_account_fails(session):
 
 def _cross_currency_pair(session):
     wise = accounts.create_account(session, "Wise", AccountType.debit, "USD", balance=50_000)
-    banco = accounts.create_account(
-        session, "Bancolombia", AccountType.debit, "COP", balance=100_000_000
-    )
+    banco = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=100_000_000)
     return wise, banco
 
 
 def test_cross_currency_transfer_moves_each_physical_amount(session):
     wise, banco = _cross_currency_pair(session)
     leg_from, leg_to = transactions.transfer(
-        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        session,
+        wise.id,
+        banco.id,
+        10_000,
+        "USD",
+        date(2026, 6, 1),
         amount_received=40_000_000,
     )
     assert leg_from.amount == 10_000 and leg_from.currency == "USD"
@@ -123,7 +112,12 @@ def test_cross_currency_transfer_moves_each_physical_amount(session):
 def test_cross_currency_transfer_stores_no_rate(session):
     wise, banco = _cross_currency_pair(session)
     legs = transactions.transfer(
-        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        session,
+        wise.id,
+        banco.id,
+        10_000,
+        "USD",
+        date(2026, 6, 1),
         amount_received=1_000,
     )
     for leg in legs:
@@ -144,12 +138,22 @@ def test_transfer_rejects_non_positive_amounts(session):
     wise, banco = _cross_currency_pair(session)
     with pytest.raises(ValidationError):
         transactions.transfer(
-            session, wise.id, banco.id, 0, "USD", date(2026, 6, 1),
+            session,
+            wise.id,
+            banco.id,
+            0,
+            "USD",
+            date(2026, 6, 1),
             amount_received=40_000_000,
         )
     with pytest.raises(ValidationError):
         transactions.transfer(
-            session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+            session,
+            wise.id,
+            banco.id,
+            10_000,
+            "USD",
+            date(2026, 6, 1),
             amount_received=-40_000_000,
         )
     assert accounts.get_account(session, wise.id).balance == 50_000
@@ -159,7 +163,12 @@ def test_transfer_rejects_non_positive_amounts(session):
 def test_transfer_currency_defaults_to_source_account(session):
     wise, banco = _cross_currency_pair(session)
     leg_from, _ = transactions.transfer(
-        session, wise.id, banco.id, 10_000, None, date(2026, 6, 1),
+        session,
+        wise.id,
+        banco.id,
+        10_000,
+        None,
+        date(2026, 6, 1),
         amount_received=40_000_000,
     )
     assert leg_from.currency == "USD"
@@ -168,7 +177,12 @@ def test_transfer_currency_defaults_to_source_account(session):
 def test_transfer_accepts_one_cent_legs(session):
     wise, banco = _cross_currency_pair(session)
     leg_from, leg_to = transactions.transfer(
-        session, wise.id, banco.id, 1, "USD", date(2026, 6, 1),
+        session,
+        wise.id,
+        banco.id,
+        1,
+        "USD",
+        date(2026, 6, 1),
         amount_received=1,
     )
     assert leg_from.amount == 1 and leg_to.amount == 1
@@ -180,40 +194,31 @@ def test_list_filters_by_category(session):
     acc = _make_account(session, balance=100_000)
     cat = categories.create_category(session, "Food")
     transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
-    tx = transactions.record_expense(
-        session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market", category_id=cat.id
-    )
+    tx = transactions.record_expense(session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market", category_id=cat.id)
     rows = transactions.list_transactions(session, category_id=cat.id)
     assert [r.id for r in rows] == [tx.id]
 
 
 def test_list_includes_transactions_on_the_date_to_boundary(session):
     acc = _make_account(session, balance=100_000)
-    tx = transactions.record_expense(
-        session, acc.id, 1_000, "COP", date(2026, 6, 15), "Store"
-    )
+    tx = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 15), "Store")
     rows = transactions.list_transactions(session, date_to=date(2026, 6, 15))
     assert [r.id for r in rows] == [tx.id]
 
 
 def test_update_transaction_rejects_missing_category(session):
     acc = _make_account(session, balance=100_000)
-    tx = transactions.record_expense(
-        session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store"
-    )
+    tx = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
     with pytest.raises(ValidationError):
         transactions.update_transaction(session, tx.id, category_id=9999)
 
 
 def test_delete_transaction_keeps_other_transactions_tags(session):
     from quaestor.services import tags
+
     acc = _make_account(session, balance=100_000)
-    tx_a = transactions.record_expense(
-        session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store"
-    )
-    tx_b = transactions.record_expense(
-        session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market"
-    )
+    tx_a = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), "Store")
+    tx_b = transactions.record_expense(session, acc.id, 2_000, "COP", date(2026, 6, 2), "Market")
     tags.tag_transaction(session, tx_a.id, ["trip"])
     tags.tag_transaction(session, tx_b.id, ["work"])
     transactions.delete_transaction(session, tx_a.id)
@@ -223,9 +228,7 @@ def test_delete_transaction_keeps_other_transactions_tags(session):
 
 def test_record_without_a_payee_stores_an_empty_string(session):
     acc = _make_account(session, balance=100_000)
-    tx = transactions.record_expense(
-        session, acc.id, 1_000, "COP", date(2026, 6, 1), None
-    )
+    tx = transactions.record_expense(session, acc.id, 1_000, "COP", date(2026, 6, 1), None)
     assert tx.payee == ""
 
 
@@ -251,18 +254,14 @@ def test_list_filters_to_the_legs_of_one_transfer(session):
     a, _b, (leg_from, leg_to) = _same_currency_transfer(session)
     transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
     _, _, (other_from, _) = _same_currency_transfer(session)
-    rows = transactions.list_transactions(
-        session, transfer_group_id=leg_from.transfer_group_id
-    )
+    rows = transactions.list_transactions(session, transfer_group_id=leg_from.transfer_group_id)
     assert sorted(r.id for r in rows) == sorted([leg_from.id, leg_to.id])
     assert other_from.id not in [r.id for r in rows]
 
 
 def test_deleting_an_expense_that_shares_a_transfer_group_spares_the_pair(session):
     a, b, (leg_from, leg_to) = _same_currency_transfer(session)
-    intruder = transactions.record_expense(
-        session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
-    )
+    intruder = transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
     intruder.transfer_group_id = leg_from.transfer_group_id
     session.add(intruder)
     session.commit()
@@ -279,7 +278,12 @@ def test_transfer_currency_must_match_source_account(session):
     wise, banco = _cross_currency_pair(session)
     with pytest.raises(ValidationError):
         transactions.transfer(
-            session, wise.id, banco.id, 10_000, "COP", date(2026, 6, 1),
+            session,
+            wise.id,
+            banco.id,
+            10_000,
+            "COP",
+            date(2026, 6, 1),
             amount_received=40_000_000,
         )
 
@@ -319,6 +323,7 @@ def test_list_filters_by_account_type_and_range(session):
 
 def test_list_filters_by_tag(session):
     from quaestor.services import tags
+
     a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=1_000_000)
     tx = transactions.record_expense(session, a.id, 1000, "COP", date(2026, 6, 1), "x")
     transactions.record_expense(session, a.id, 2000, "COP", date(2026, 6, 2), "y")
@@ -336,9 +341,7 @@ def test_update_transaction_edits_safe_fields(session):
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
     cat = categories.create_category(session, "Food")
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Store")
-    updated = transactions.update_transaction(
-        session, tx.id, payee="Supermarket", notes="deals", category_id=cat.id
-    )
+    updated = transactions.update_transaction(session, tx.id, payee="Supermarket", notes="deals", category_id=cat.id)
     assert updated.payee == "Supermarket"
     assert updated.notes == "deals"
     assert updated.category_id == cat.id
@@ -411,7 +414,12 @@ def test_delete_receiving_leg_deletes_pair_and_restores_balances(session):
 def test_delete_cross_currency_pair_restores_each_physical_amount(session):
     wise, banco = _cross_currency_pair(session)
     leg_from, _ = transactions.transfer(
-        session, wise.id, banco.id, 10_000, "USD", date(2026, 6, 1),
+        session,
+        wise.id,
+        banco.id,
+        10_000,
+        "USD",
+        date(2026, 6, 1),
         amount_received=40_000_000,
     )
     transactions.delete_transaction(session, leg_from.id)
@@ -423,9 +431,7 @@ def test_delete_transfer_pair_removes_only_its_tag_links(session):
     from quaestor.services import tags
 
     a, _b, (leg_from, leg_to) = _same_currency_transfer(session)
-    other = transactions.record_expense(
-        session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
-    )
+    other = transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
     tags.tag_transaction(session, leg_from.id, ["viaje"])
     tags.tag_transaction(session, leg_to.id, ["viaje"])
     tags.tag_transaction(session, other.id, ["viaje"])
@@ -442,8 +448,13 @@ def _group_less_transfer(session, status):
 
     acc = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=500_000)
     tx = Transaction(
-        date=date(2026, 6, 30), payee="Goal: Korea", type=TxType.transfer,
-        status=status, amount=300_000, currency="COP", account_id=acc.id,
+        date=date(2026, 6, 30),
+        payee="Goal: Korea",
+        type=TxType.transfer,
+        status=status,
+        amount=300_000,
+        currency="COP",
+        account_id=acc.id,
     )
     session.add(tx)
     session.commit()
@@ -481,9 +492,14 @@ def test_delete_grouped_transfer_without_direction_still_fails_loud(session):
     b = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=200_000)
     legs = [
         Transaction(
-            date=date(2026, 6, 17), payee="transfer", type=TxType.transfer,
-            status=TxStatus.posted, amount=100_000, currency="COP",
-            account_id=account.id, transfer_group_id="orphaned",
+            date=date(2026, 6, 17),
+            payee="transfer",
+            type=TxType.transfer,
+            status=TxStatus.posted,
+            amount=100_000,
+            currency="COP",
+            account_id=account.id,
+            transfer_group_id="orphaned",
         )
         for account in (a, b)
     ]

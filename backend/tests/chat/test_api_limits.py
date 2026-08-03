@@ -1,5 +1,3 @@
-
-
 def _oversize_content(n_chars: int) -> dict:
     return {"messages": [{"role": "user", "content": "x" * n_chars}]}
 

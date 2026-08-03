@@ -11,9 +11,15 @@ def _seed_account(engine):
 def test_create_and_list_recurring(client, engine, auth):
     acc_id = _seed_account(engine)
     body = {
-        "name": "Rent", "payee": "Landlord", "type": "expense", "mode": "auto",
-        "amount": 2_000_000, "account_id": acc_id, "interval_unit": "month",
-        "interval_count": 1, "start_date": "2026-01-01",
+        "name": "Rent",
+        "payee": "Landlord",
+        "type": "expense",
+        "mode": "auto",
+        "amount": 2_000_000,
+        "account_id": acc_id,
+        "interval_unit": "month",
+        "interval_count": 1,
+        "start_date": "2026-01-01",
     }
     r = client.post("/api/recurring", json=body, headers=auth)
     assert r.status_code == 201, r.text
@@ -27,9 +33,15 @@ def test_create_and_list_recurring(client, engine, auth):
 def test_create_recurring_transfer_type_is_422(client, engine, auth):
     acc_id = _seed_account(engine)
     body = {
-        "name": "X", "payee": "Y", "type": "transfer", "mode": "auto",
-        "amount": 1000, "account_id": acc_id, "interval_unit": "month",
-        "interval_count": 1, "start_date": "2026-01-01",
+        "name": "X",
+        "payee": "Y",
+        "type": "transfer",
+        "mode": "auto",
+        "amount": 1000,
+        "account_id": acc_id,
+        "interval_unit": "month",
+        "interval_count": 1,
+        "start_date": "2026-01-01",
     }
     r = client.post("/api/recurring", json=body, headers=auth)
     assert r.status_code == 422
@@ -38,9 +50,15 @@ def test_create_recurring_transfer_type_is_422(client, engine, auth):
 def test_skip_recurring_occurrence(client, engine, auth):
     acc_id = _seed_account(engine)
     body = {
-        "name": "Water", "payee": "Utility", "type": "expense", "mode": "manual",
-        "amount": 50_000, "account_id": acc_id, "interval_unit": "month",
-        "interval_count": 1, "start_date": "2026-01-05",
+        "name": "Water",
+        "payee": "Utility",
+        "type": "expense",
+        "mode": "manual",
+        "amount": 50_000,
+        "account_id": acc_id,
+        "interval_unit": "month",
+        "interval_count": 1,
+        "start_date": "2026-01-05",
     }
     rec_id = client.post("/api/recurring", json=body, headers=auth).json()["id"]
     r = client.post(f"/api/recurring/{rec_id}/skip", json={"due_date": "2026-01-05"}, headers=auth)
@@ -55,9 +73,15 @@ def test_recurring_requires_auth(client):
 def _seed_recurring(client, engine, auth):
     acc_id = _seed_account(engine)
     body = {
-        "name": "Rent", "payee": "LL", "type": "expense", "mode": "auto",
-        "amount": 2_000_000, "account_id": acc_id, "interval_unit": "month",
-        "interval_count": 1, "start_date": "2026-01-01",
+        "name": "Rent",
+        "payee": "LL",
+        "type": "expense",
+        "mode": "auto",
+        "amount": 2_000_000,
+        "account_id": acc_id,
+        "interval_unit": "month",
+        "interval_count": 1,
+        "start_date": "2026-01-01",
     }
     return client.post("/api/recurring", json=body, headers=auth).json()["id"]
 

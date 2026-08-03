@@ -1,4 +1,5 @@
 """Round-trip the in-memory fastmcp.Client against the real build_mcp()."""
+
 from __future__ import annotations
 
 import pytest
@@ -31,9 +32,7 @@ async def test_call_tool_returns_text_output(engine, session, seeded, monkeypatc
     monkeypatch.setattr(db, "engine", engine)
     mcp = build_mcp()
     async with MCPClient(mcp) as client:
-        result = await client.call_tool(
-            "list_accounts", {}
-        )
+        result = await client.call_tool("list_accounts", {})
     assert result.is_error is False
     assert "Bancolombia" in result.output
 

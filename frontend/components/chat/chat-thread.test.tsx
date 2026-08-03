@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
-import { describe, expect, it } from "vitest"
 import type { UIMessage } from "ai"
+import { describe, expect, it } from "vitest"
 import { ChatThread } from "./chat-thread"
 
 function msg(role: "user" | "assistant", text: string, id: string): UIMessage {
@@ -31,7 +31,11 @@ describe("ChatThread", () => {
       <ChatThread
         messages={[
           msg("user", "hola", "u1"),
-          { id: "a1", role: "assistant", parts: [{ type: "text", text: "partial", state: "streaming" }] },
+          {
+            id: "a1",
+            role: "assistant",
+            parts: [{ type: "text", text: "partial", state: "streaming" }],
+          },
         ]}
         status="streaming"
       />,
@@ -40,12 +44,7 @@ describe("ChatThread", () => {
   })
 
   it("does NOT render the cursor when status is ready", () => {
-    render(
-      <ChatThread
-        messages={[msg("assistant", "done", "a1")]}
-        status="ready"
-      />,
-    )
+    render(<ChatThread messages={[msg("assistant", "done", "a1")]} status="ready" />)
     expect(screen.queryByTestId("chat-cursor")).not.toBeInTheDocument()
   })
 

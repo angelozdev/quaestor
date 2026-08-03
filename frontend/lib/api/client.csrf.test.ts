@@ -1,7 +1,7 @@
+import type { InternalAxiosRequestConfig } from "axios"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { type InternalAxiosRequestConfig } from "axios"
-import { http } from "./client"
 import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME } from "@/lib/csrf"
+import { http } from "./client"
 
 function setCookie(name: string, value: string) {
   document.cookie = `${name}=${value}; path=/`

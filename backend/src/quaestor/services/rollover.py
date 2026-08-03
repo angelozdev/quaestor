@@ -6,6 +6,7 @@ register_rollover_hook without touching close_month. Each hook is
 (period, session) -> None, runs in the same transaction, must be idempotent on
 its own, and a failure in any hook aborts the whole close.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -26,30 +26,57 @@ def _bank(session):
 
 def test_create_recurring_tool(session):
     _bank(session)
-    out = temporal.create_recurring(session, CreateRecurringInput(
-        name="Rent", payee="Landlord", type="expense", mode="auto",
-        amount=2_000_000, account="Bancolombia", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 1),
-    ))
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Rent",
+            payee="Landlord",
+            type="expense",
+            mode="auto",
+            amount=2_000_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 1),
+        ),
+    )
     assert "Rent" in out and "id=" in out
 
 
 def test_create_recurring_unknown_account_returns_text(session):
-    out = temporal.create_recurring(session, CreateRecurringInput(
-        name="Rent", payee="Landlord", type="expense", mode="auto",
-        amount=2_000_000, account="Nope", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 1),
-    ))
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Rent",
+            payee="Landlord",
+            type="expense",
+            mode="auto",
+            amount=2_000_000,
+            account="Nope",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 1),
+        ),
+    )
     assert "not found" in out
 
 
 def test_list_recurring_tool(session):
     _bank(session)
-    temporal.create_recurring(session, CreateRecurringInput(
-        name="Rent", payee="Landlord", type="expense", mode="auto",
-        amount=2_000_000, account="Bancolombia", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 1),
-    ))
+    temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Rent",
+            payee="Landlord",
+            type="expense",
+            mode="auto",
+            amount=2_000_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 1),
+        ),
+    )
     out = temporal.list_recurring(session, ListRecurringInput())
     assert "Rent" in out
 
@@ -57,9 +84,15 @@ def test_list_recurring_tool(session):
 def test_plan_confirm_to_pay_skip_flow(session):
     _bank(session)
     fx.set_trm(session, "4000")
-    planned_out = temporal.plan_payment(session, PlanPaymentInput(
-        payee="Friend", amount=80_000, account="Bancolombia", due_date=date(2026, 6, 20),
-    ))
+    planned_out = temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Friend",
+            amount=80_000,
+            account="Bancolombia",
+            due_date=date(2026, 6, 20),
+        ),
+    )
     assert "Friend" in planned_out and "id=" in planned_out
 
     to_pay_out = temporal.to_pay(session, ToPayInput(since=date(2026, 6, 1), until=date(2026, 6, 30)))
@@ -67,6 +100,7 @@ def test_plan_confirm_to_pay_skip_flow(session):
 
     # extract the planned tx id from the queue
     from quaestor.services import transactions
+
     tx_id = transactions.list_transactions(session, status="planned")[0].id
     confirmed = temporal.confirm_payment(session, ConfirmPaymentInput(tx_id=tx_id, amount=85_000))
     assert "Confirmed" in confirmed
@@ -74,9 +108,15 @@ def test_plan_confirm_to_pay_skip_flow(session):
 
 def test_to_pay_without_trm_returns_missing_rate_text(session):
     _bank(session)
-    temporal.plan_payment(session, PlanPaymentInput(
-        payee="Friend", amount=80_000, account="Bancolombia", due_date=date(2026, 6, 20),
-    ))
+    temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Friend",
+            amount=80_000,
+            account="Bancolombia",
+            due_date=date(2026, 6, 20),
+        ),
+    )
     out = temporal.to_pay(session, ToPayInput(since=date(2026, 6, 1), until=date(2026, 6, 30)))
     assert "No TRM is set" in out
     assert "set_fx_rate" in out
@@ -85,6 +125,7 @@ def test_to_pay_without_trm_returns_missing_rate_text(session):
 def test_confirm_non_planned_returns_text(session):
     _bank(session)
     from quaestor.services import transactions
+
     tx = transactions.record_expense(session, 1, 1000, "COP", date(2026, 6, 1), "x")
     out = temporal.confirm_payment(session, ConfirmPaymentInput(tx_id=tx.id))
     assert "Can't do that" in out
@@ -92,10 +133,17 @@ def test_confirm_non_planned_returns_text(session):
 
 def test_skip_payment_tool(session):
     _bank(session)
-    temporal.plan_payment(session, PlanPaymentInput(
-        payee="Friend", amount=80_000, account="Bancolombia", due_date=date(2026, 6, 20),
-    ))
+    temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Friend",
+            amount=80_000,
+            account="Bancolombia",
+            due_date=date(2026, 6, 20),
+        ),
+    )
     from quaestor.services import transactions
+
     tx_id = transactions.list_transactions(session, status="planned")[0].id
     out = temporal.skip_payment(session, SkipPaymentInput(tx_id=tx_id))
     assert "Skipped" in out
@@ -103,25 +151,46 @@ def test_skip_payment_tool(session):
 
 def test_skip_recurring_tool(session):
     _bank(session)
-    temporal.create_recurring(session, CreateRecurringInput(
-        name="Water", payee="Utility", type="expense", mode="manual",
-        amount=50_000, account="Bancolombia", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 5),
-    ))
+    temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Water",
+            payee="Utility",
+            type="expense",
+            mode="manual",
+            amount=50_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 5),
+        ),
+    )
     from quaestor.services import recurring
+
     item_id = recurring.list_recurring(session)[0].id
-    out = temporal.skip_recurring(session, SkipRecurringInput(
-        recurring_id=item_id, due_date=date(2026, 1, 5),
-    ))
+    out = temporal.skip_recurring(
+        session,
+        SkipRecurringInput(
+            recurring_id=item_id,
+            due_date=date(2026, 1, 5),
+        ),
+    )
     assert "Skipped" in out
 
 
 def test_restore_payment_tool(session):
     _bank(session)
-    temporal.plan_payment(session, PlanPaymentInput(
-        payee="Claro", amount=85_000, account="Bancolombia", due_date=date(2026, 6, 20),
-    ))
+    temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Claro",
+            amount=85_000,
+            account="Bancolombia",
+            due_date=date(2026, 6, 20),
+        ),
+    )
     from quaestor.services import transactions
+
     tx_id = transactions.list_transactions(session, status="planned")[0].id
     temporal.skip_payment(session, SkipPaymentInput(tx_id=tx_id))
     out = temporal.restore_payment(session, RestorePaymentInput(tx_id=tx_id))
@@ -138,17 +207,23 @@ def test_restore_payment_confirmation_names_payee_amount_and_due_date(session):
     planned.skip_payment(session, tx.id)
     restored = planned.restore_payment(session, tx.id)
     assert format.payment_restored(restored) == (
-        f"✅ Restored **Claro** — 85000.00 COP "
-        f"due {display_date(date(2026, 7, 15))}. id={tx.id} (back in the queue)"
+        f"✅ Restored **Claro** — 85000.00 COP due {display_date(date(2026, 7, 15))}. id={tx.id} (back in the queue)"
     )
 
 
 def test_restore_payment_tool_rejects_non_skipped(session):
     _bank(session)
-    temporal.plan_payment(session, PlanPaymentInput(
-        payee="Claro", amount=85_000, account="Bancolombia", due_date=date(2026, 6, 20),
-    ))
+    temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Claro",
+            amount=85_000,
+            account="Bancolombia",
+            due_date=date(2026, 6, 20),
+        ),
+    )
     from quaestor.services import transactions
+
     tx_id = transactions.list_transactions(session, status="planned")[0].id
     out = temporal.restore_payment(session, RestorePaymentInput(tx_id=tx_id))
     assert "Can't do that" in out
@@ -176,28 +251,46 @@ def test_register_temporal_tools_matches_the_registry_list():
 
 def test_mcp_update_recurring(session):
     _bank(session)
-    temporal.create_recurring(session, CreateRecurringInput(
-        name="Rent", payee="Landlord", type="expense", mode="auto",
-        amount=2_000_000, account="Bancolombia", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 1),
-    ))
+    temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Rent",
+            payee="Landlord",
+            type="expense",
+            mode="auto",
+            amount=2_000_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 1),
+        ),
+    )
     from quaestor.services import recurring as _rec_svc
+
     item_id = _rec_svc.list_recurring(session)[0].id
-    out = temporal.update_recurring(session, UpdateRecurringInput(
-        recurring_id=item_id, amount=5_000_000
-    ))
+    out = temporal.update_recurring(session, UpdateRecurringInput(recurring_id=item_id, amount=5_000_000))
     assert "5" in out  # formatted amount appears
     assert _rec_svc.list_recurring(session)[0].amount == 5_000_000
 
 
 def test_mcp_archive_recurring(session):
     _bank(session)
-    temporal.create_recurring(session, CreateRecurringInput(
-        name="Rent", payee="Landlord", type="expense", mode="auto",
-        amount=2_000_000, account="Bancolombia", interval_unit="month",
-        interval_count=1, start_date=date(2026, 1, 1),
-    ))
+    temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Rent",
+            payee="Landlord",
+            type="expense",
+            mode="auto",
+            amount=2_000_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 1, 1),
+        ),
+    )
     from quaestor.services import recurring as _rec_svc
+
     item_id = _rec_svc.list_recurring(session)[0].id
     temporal.archive_recurring(session, ArchiveRecurringInput(recurring_id=item_id))
     assert _rec_svc.list_recurring(session, active=True) == []
@@ -206,10 +299,20 @@ def test_mcp_archive_recurring(session):
 def test_to_pay_table_renders_two_sections(session):
     a = _bank(session)
     overdue = planned.plan_payment(
-        session, "Tigo", 8_500_00, "COP", date(2026, 6, 28), a.id,
+        session,
+        "Tigo",
+        8_500_00,
+        "COP",
+        date(2026, 6, 28),
+        a.id,
     )
     upcoming = planned.plan_payment(
-        session, "Rent", 5_000_00, "COP", date(2026, 7, 15), a.id,
+        session,
+        "Rent",
+        5_000_00,
+        "COP",
+        date(2026, 7, 15),
+        a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -223,7 +326,12 @@ def test_to_pay_table_renders_two_sections(session):
 def test_to_pay_table_omits_empty_overdue_section(session):
     a = _bank(session)
     upcoming = planned.plan_payment(
-        session, "Rent", 5_000_00, "COP", date(2026, 7, 15), a.id,
+        session,
+        "Rent",
+        5_000_00,
+        "COP",
+        date(2026, 7, 15),
+        a.id,
     )
     queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -234,7 +342,12 @@ def test_to_pay_table_omits_empty_overdue_section(session):
 def test_to_pay_table_omits_empty_upcoming_section(session):
     a = _bank(session)
     overdue = planned.plan_payment(
-        session, "Tigo", 8_500_00, "COP", date(2026, 6, 28), a.id,
+        session,
+        "Tigo",
+        8_500_00,
+        "COP",
+        date(2026, 6, 28),
+        a.id,
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -315,20 +428,28 @@ def test_to_pay_table_single_section_layout_is_exact(session):
 def _declared_late(session):
     """Weekly Netflix declared today with a start three weeks behind."""
     _bank(session)
-    temporal.create_recurring(session, CreateRecurringInput(
-        name="Netflix", payee="Netflix", type="expense", mode="auto",
-        amount=25_900, account="Bancolombia", interval_unit="week",
-        interval_count=1, start_date=date.today() - timedelta(days=21),
-    ))
+    temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Netflix",
+            payee="Netflix",
+            type="expense",
+            mode="auto",
+            amount=25_900,
+            account="Bancolombia",
+            interval_unit="week",
+            interval_count=1,
+            start_date=date.today() - timedelta(days=21),
+        ),
+    )
     from quaestor.services import recurring
+
     return recurring.list_recurring(session)[0].id
 
 
 def test_pending_recurring_dates_tool_lists_what_awaits_a_decision(session):
     item_id = _declared_late(session)
-    out = temporal.pending_recurring_dates(
-        session, temporal.PendingDatesInput(recurring_id=item_id)
-    )
+    out = temporal.pending_recurring_dates(session, temporal.PendingDatesInput(recurring_id=item_id))
     assert "Netflix" in out and "4 passed due date" in out
 
 

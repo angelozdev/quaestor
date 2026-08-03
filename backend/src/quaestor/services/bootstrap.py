@@ -7,6 +7,7 @@ Keeping the wiring here is what lets each service stay unaware of the others:
 `transactions.py` never learns what a recurring item is, and `occurrences.py`
 never imports the transaction service.
 """
+
 from __future__ import annotations
 
 

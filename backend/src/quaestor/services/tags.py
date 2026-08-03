@@ -1,4 +1,5 @@
 """Tags and tagging use cases (m2m relationship)."""
+
 from __future__ import annotations
 
 from sqlalchemy import delete
@@ -39,17 +40,10 @@ def _resolve_tags(session: Session, names: list[str]) -> dict[str, Tag]:
 def _link_tags(session: Session, tx_id: int, names: list[str]) -> None:
     by_name = _resolve_tags(session, names)
     linked = {
-        link.tag_id
-        for link in session.exec(
-            select(TransactionTag).where(TransactionTag.transaction_id == tx_id)
-        ).all()
+        link.tag_id for link in session.exec(select(TransactionTag).where(TransactionTag.transaction_id == tx_id)).all()
     }
     session.add_all(
-        [
-            TransactionTag(transaction_id=tx_id, tag_id=tag.id)
-            for tag in by_name.values()
-            if tag.id not in linked
-        ]
+        [TransactionTag(transaction_id=tx_id, tag_id=tag.id) for tag in by_name.values() if tag.id not in linked]
     )
 
 
@@ -192,9 +186,7 @@ def set_transaction_tags(session: Session, tx_id: int, tags: list[str]) -> list[
     return sorted(set(desired))
 
 
-def tag_names_by_transaction(
-    session: Session, tx_ids: list[int]
-) -> dict[int, list[str]]:
+def tag_names_by_transaction(session: Session, tx_ids: list[int]) -> dict[int, list[str]]:
     """Map each transaction id to its sorted tag names, in one query.
 
     Args:

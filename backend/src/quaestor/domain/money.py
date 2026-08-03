@@ -3,6 +3,7 @@
 ADR-0031: base-currency (COP) figures are never stored; `to_cop_cents` is the
 single conversion gate every read path goes through with the current TRM.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,9 +22,7 @@ def is_supported(currency: str) -> bool:
 
 def major_to_cents(value) -> int:
     """'12.34' -> 1234 (half-up rounding to cent)."""
-    cents = (Decimal(str(value)) * CENTS_PER_MAJOR).quantize(
-        Decimal("1"), rounding=ROUND_HALF_UP
-    )
+    cents = (Decimal(str(value)) * CENTS_PER_MAJOR).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return int(cents)
 
 

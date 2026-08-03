@@ -11,9 +11,7 @@ def _data(text: bytes) -> dict:
 
 
 def test_serialize_message_start():
-    ev = LLMEvent(
-        type=LLMEventType.MESSAGE_START, message_id="msg_1", model="MiniMax-M3"
-    )
+    ev = LLMEvent(type=LLMEventType.MESSAGE_START, message_id="msg_1", model="MiniMax-M3")
     out = _data(serialize_event(ev, message_id="msg_1"))
     assert out == {"type": "start", "messageId": "msg_1"}
 
@@ -32,7 +30,9 @@ def test_serialize_text_delta_uses_text_part_id_not_message_id():
 
 def test_serialize_text_start_and_end_share_text_part_id():
     start = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_START, content_index=0), message_id="msg_abc"))
-    delta = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_DELTA, content_index=0, delta="x"), message_id="msg_abc"))
+    delta = _data(
+        serialize_event(LLMEvent(type=LLMEventType.TEXT_DELTA, content_index=0, delta="x"), message_id="msg_abc")
+    )
     end = _data(serialize_event(LLMEvent(type=LLMEventType.TEXT_END, content_index=0), message_id="msg_abc"))
     assert start == {"type": "text-start", "id": "text-1"}
     assert delta["id"] == "text-1"

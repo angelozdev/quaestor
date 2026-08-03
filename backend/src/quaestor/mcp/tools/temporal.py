@@ -3,6 +3,7 @@
 Mirrors core.py: parse input, resolve names, call ONE service, format output.
 materialize_due/close_month are NOT exposed (the scheduler runs them, ADR-017/020).
 """
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -92,9 +93,7 @@ class UpdateRecurringInput(BaseModel):
     payee: str | None = Field(default=None, description="New payee")
     mode: Literal["auto", "manual"] | None = Field(default=None, description="New mode")
     amount: int | None = Field(default=None, gt=0, description="New amount in cents")
-    interval_unit: Literal["day", "week", "month", "year"] | None = Field(
-        default=None, description="New interval unit"
-    )
+    interval_unit: Literal["day", "week", "month", "year"] | None = Field(default=None, description="New interval unit")
     interval_count: int | None = Field(default=None, ge=1, description="New interval count")
     start_date: Date | None = Field(default=None, description="New anchor date YYYY-MM-DD")
     end_date: Date | None = Field(default=None, description="New last date YYYY-MM-DD")

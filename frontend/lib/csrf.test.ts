@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest"
-import {
-  CSRF_COOKIE_NAME,
-  CSRF_HEADER_NAME,
-  csrfHeaders,
-  getCsrfToken,
-} from "./csrf"
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME, csrfHeaders, getCsrfToken } from "./csrf"
 
 function setCookie(name: string, value: string) {
   document.cookie = `${name}=${value}; path=/`

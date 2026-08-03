@@ -53,8 +53,11 @@ def test_goal_contribution_links_goal_and_transaction(session):
     session.add(goal)
     session.commit()
     c = GoalContribution(
-        goal_id=goal.id, date=date(2026, 6, 30), amount=200_000,
-        source=ContributionSource.confirmed, transaction_id=None,
+        goal_id=goal.id,
+        date=date(2026, 6, 30),
+        amount=200_000,
+        source=ContributionSource.confirmed,
+        transaction_id=None,
     )
     session.add(c)
     session.commit()
@@ -70,8 +73,12 @@ def test_transaction_has_goal_id_column(session):
     session.add(goal)
     session.commit()
     tx = Transaction(
-        date=date(2026, 6, 30), type=TxType.transfer, amount=200_000, currency="COP",
-        account_id=acc.id, goal_id=goal.id,
+        date=date(2026, 6, 30),
+        type=TxType.transfer,
+        amount=200_000,
+        currency="COP",
+        account_id=acc.id,
+        goal_id=goal.id,
     )
     session.add(tx)
     session.commit()

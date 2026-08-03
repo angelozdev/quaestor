@@ -5,6 +5,7 @@ Mock `litellm.acompletion` (not the LLM API). Cover:
   - tool-call stream → TOOL_INPUT_START/DELTA/AVAILABLE events with arguments reassembled
   - upstream error → UpstreamLLMError
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -45,9 +46,7 @@ def _chunk(
     )
 
 
-def _tool_call_delta(
-    *, index: int, id: str | None = None, name: str | None = None, args: str | None = None
-) -> Any:
+def _tool_call_delta(*, index: int, id: str | None = None, name: str | None = None, args: str | None = None) -> Any:
     from types import SimpleNamespace
 
     func: SimpleNamespace | None = None
@@ -81,9 +80,7 @@ async def test_text_only_stream_emits_message_start_then_deltas_then_finish():
 
     with patch("litellm.acompletion", side_effect=fake_acompletion):
         provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
-        events = await _collect(
-            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
-        )
+        events = await _collect(provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[]))
 
     types = [e.type for e in events]
     assert types[0] == LLMEventType.MESSAGE_START
@@ -96,9 +93,7 @@ async def test_text_only_stream_emits_message_start_then_deltas_then_finish():
 @pytest.mark.asyncio
 async def test_tool_call_stream_assembles_arguments_from_deltas():
     chunks = [
-        _chunk(
-            tool_calls=[_tool_call_delta(index=0, id="tc_1", name="list_transactions", args="")]
-        ),
+        _chunk(tool_calls=[_tool_call_delta(index=0, id="tc_1", name="list_transactions", args="")]),
         _chunk(tool_calls=[_tool_call_delta(index=0, args='{"date_')]),
         _chunk(tool_calls=[_tool_call_delta(index=0, args='from":')]),
         _chunk(tool_calls=[_tool_call_delta(index=0, args='"2026-06-01"}')]),
@@ -178,9 +173,7 @@ async def test_message_id_is_uuid4_not_msg_unknown():
 
     with patch("litellm.acompletion", side_effect=fake_acompletion):
         provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
-        events = await _collect(
-            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
-        )
+        events = await _collect(provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[]))
 
     starts = [e for e in events if e.type == LLMEventType.MESSAGE_START]
     assert len(starts) == 1, f"expected exactly one MESSAGE_START, got {len(starts)}"
@@ -228,9 +221,7 @@ async def test_message_finish_carries_usage_from_final_chunk():
 
     with patch("litellm.acompletion", side_effect=fake_acompletion):
         provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
-        events = await _collect(
-            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
-        )
+        events = await _collect(provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[]))
 
     finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
     assert len(finishes) == 1
@@ -261,9 +252,7 @@ async def test_message_finish_usage_omits_missing_total_tokens():
 
     with patch("litellm.acompletion", side_effect=fake_acompletion):
         provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
-        events = await _collect(
-            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
-        )
+        events = await _collect(provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[]))
 
     finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
     assert finishes[0].usage == {"promptTokens": 10, "completionTokens": 5}
@@ -283,9 +272,7 @@ async def test_message_finish_usage_none_when_provider_omits_it():
 
     with patch("litellm.acompletion", side_effect=fake_acompletion):
         provider = LiteLLMProvider(model="anthropic/MiniMax-M3", api_key="x", base_url=None)
-        events = await _collect(
-            provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[])
-        )
+        events = await _collect(provider.stream(messages=[{"role": "user", "content": "hola"}], tools=[]))
 
     finishes = [e for e in events if e.type == LLMEventType.MESSAGE_FINISH]
     assert finishes[0].usage is None

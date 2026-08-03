@@ -3,6 +3,7 @@
 This module is named `format` (per the P2 spec) and shadows the builtin
 `format()` for importers; do not call the builtin here.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -38,10 +39,7 @@ def money(cents: int, currency: str) -> str:
 def domain_error_text(exc: QuaestorError) -> str:
     """Translate a typed domain error into clear agent text (never a stack trace)."""
     if isinstance(exc, MissingRate):
-        return (
-            "No TRM is set. Set the USD→COP rate with `set_fx_rate` "
-            "(usd_cop) and retry."
-        )
+        return "No TRM is set. Set the USD→COP rate with `set_fx_rate` (usd_cop) and retry."
     if isinstance(exc, TransferImbalance):
         return f"Could not record the transfer: {exc}."
     if isinstance(exc, IllegalTransition):
@@ -53,34 +51,25 @@ def domain_error_text(exc: QuaestorError) -> str:
     return f"Error: {exc}."
 
 
-def _confirmation(
-    verb: str, tx: Transaction, account: Account, cop_equivalent: int | None
-) -> str:
+def _confirmation(verb: str, tx: Transaction, account: Account, cop_equivalent: int | None) -> str:
     lines = [
         f"✅ {verb}: **{tx.payee}** — {money(tx.amount, tx.currency)}",
-        f"- Account: {account.name} "
-        f"(new balance: {money(account.balance, account.currency)})",
+        (f"- Account: {account.name} (new balance: {money(account.balance, account.currency)})"),
     ]
     if cop_equivalent is not None and tx.currency != "COP":
         lines.append(f"- Equivalent: {money(cop_equivalent, 'COP')}")
     return "\n".join(lines)
 
 
-def expense_confirmation(
-    tx: Transaction, account: Account, cop_equivalent: int | None = None
-) -> str:
+def expense_confirmation(tx: Transaction, account: Account, cop_equivalent: int | None = None) -> str:
     return _confirmation("Expense recorded", tx, account, cop_equivalent)
 
 
-def income_confirmation(
-    tx: Transaction, account: Account, cop_equivalent: int | None = None
-) -> str:
+def income_confirmation(tx: Transaction, account: Account, cop_equivalent: int | None = None) -> str:
     return _confirmation("Income recorded", tx, account, cop_equivalent)
 
 
-def transfer_confirmation(
-    src: Account, dst: Account, amount_sent: int, amount_received: int
-) -> str:
+def transfer_confirmation(src: Account, dst: Account, amount_sent: int, amount_received: int) -> str:
     sent = money(amount_sent, src.currency)
     header = f"✅ Transfer: {sent} from **{src.name}** to **{dst.name}**"
     if src.currency != dst.currency:
@@ -111,9 +100,7 @@ def accounts_table(accounts: list[Account]) -> str:
         return "No accounts."
     rows = ["| Account | Type | Balance | Currency |", "|---|---|---|---|"]
     for a in accounts:
-        rows.append(
-            f"| {a.name} | {a.type.value} | {cents_to_major(a.balance)} | {a.currency} |"
-        )
+        rows.append(f"| {a.name} | {a.type.value} | {cents_to_major(a.balance)} | {a.currency} |")
     return "\n".join(rows)
 
 
@@ -156,9 +143,7 @@ def transactions_table(txs: list[Transaction], trm: Decimal) -> str:
 
 def recurring_created(item: RecurringItem) -> str:
     every = (
-        f"{item.interval_count} {item.interval_unit.value}"
-        if item.interval_count != 1
-        else item.interval_unit.value
+        f"{item.interval_count} {item.interval_unit.value}" if item.interval_count != 1 else item.interval_unit.value
     )
     end = f", until {display_date(item.end_date)}" if item.end_date else ""
     return (
@@ -173,11 +158,7 @@ def recurring_list(items: list[RecurringItem]) -> str:
         return "No recurring items."
     rows = ["| id | Name | Type | Mode | Amount | Every | Active |", "|---|---|---|---|---|---|---|"]
     for i in items:
-        every = (
-            f"{i.interval_count} {i.interval_unit.value}"
-            if i.interval_count != 1
-            else i.interval_unit.value
-        )
+        every = f"{i.interval_count} {i.interval_unit.value}" if i.interval_count != 1 else i.interval_unit.value
         rows.append(
             f"| {i.id} | {i.name} | {i.type.value} | {i.mode.value} | "
             f"{cents_to_major(i.amount)} {i.currency} | {every} | "
@@ -195,8 +176,7 @@ def payment_planned(tx: Transaction) -> str:
 
 def payment_confirmed(tx: Transaction) -> str:
     return (
-        f"✅ Confirmed **{tx.payee}** — {money(tx.amount, tx.currency)} "
-        f"posted on {display_date(tx.date)}. id={tx.id}"
+        f"✅ Confirmed **{tx.payee}** — {money(tx.amount, tx.currency)} posted on {display_date(tx.date)}. id={tx.id}"
     )
 
 
@@ -212,20 +192,14 @@ def payment_restored(tx: Transaction) -> str:
 
 
 def recurring_skipped(occ: RecurringOccurrence) -> str:
-    return (
-        f"✅ Skipped the occurrence for recurring item {occ.recurring_id} "
-        f"due {display_date(occ.due_date)}."
-    )
+    return f"✅ Skipped the occurrence for recurring item {occ.recurring_id} due {display_date(occ.due_date)}."
 
 
 def recurring_pending_dates(name: str, dates: list) -> str:
     if not dates:
         return f"No passed due dates are waiting for a decision on {name}."
     listed = "\n".join(f"- {display_date(d)}" for d in dates)
-    return (
-        f"{name} has {len(dates)} passed due date(s) waiting for your decision:\n"
-        f"{listed}"
-    )
+    return f"{name} has {len(dates)} passed due date(s) waiting for your decision:\n{listed}"
 
 
 def recurring_dates_accepted(name: str, occs: list) -> str:
@@ -239,10 +213,7 @@ def recurring_dates_declined(name: str, occs: list) -> str:
     if not occs:
         return f"Nothing to decline on {name}."
     listed = ", ".join(display_date(o.due_date) for o in occs)
-    return (
-        f"✅ Declined {len(occs)} passed date(s) for {name}: {listed}. "
-        f"They will not be charged or offered again."
-    )
+    return f"✅ Declined {len(occs)} passed date(s) for {name}: {listed}. They will not be charged or offered again."
 
 
 def recurring_updated(item: RecurringItem) -> str:
@@ -255,8 +226,7 @@ def recurring_deleted(item: RecurringItem) -> str:
 
 def budget_assigned(status, category_name: str) -> str:
     return (
-        f"Assigned {category_name} envelope for {status.year_month}: "
-        f"{status.assigned} (available {status.available})."
+        f"Assigned {category_name} envelope for {status.year_month}: {status.assigned} (available {status.available})."
     )
 
 
@@ -328,10 +298,7 @@ def account_card(account: Account) -> str:
 def category_card(category: Category, group: CategoryGroup | None) -> str:
     group_name = group.name if group is not None else "(no group)"
     kind = "income" if category.is_income else "expense"
-    return (
-        f"Category **{category.name}** (id={category.id}, {kind}, "
-        f"group: {group_name})"
-    )
+    return f"Category **{category.name}** (id={category.id}, {kind}, group: {group_name})"
 
 
 def category_group_card(group: CategoryGroup) -> str:
@@ -352,15 +319,8 @@ def transaction_card(tx: Transaction, trm: Decimal) -> str:
 
 
 def settings_card(settings) -> str:
-    src = (
-        f"{settings.default_source_account_id}"
-        if settings.default_source_account_id is not None
-        else "(none)"
-    )
-    return (
-        f"Settings — Base currency: {settings.base_currency}; "
-        f"default source account: {src}"
-    )
+    src = f"{settings.default_source_account_id}" if settings.default_source_account_id is not None else "(none)"
+    return f"Settings — Base currency: {settings.base_currency}; default source account: {src}"
 
 
 def budgets_table(lines: list) -> str:
@@ -380,12 +340,14 @@ def budgets_table(lines: list) -> str:
 
 
 def safe_to_spend_card(sts: SafeToSpend) -> str:
-    return "\n".join([
-        f"Safe to spend for **{sts.year_month}**: {money(sts.free, 'COP')} free to spend.",
-        f"- Income forecast: {money(sts.income_forecast, 'COP')}",
-        f"- Committed: {money(sts.committed, 'COP')}",
-        f"- Assigned to envelopes: {money(sts.assigned_envelopes, 'COP')}",
-    ])
+    return "\n".join(
+        [
+            f"Safe to spend for **{sts.year_month}**: {money(sts.free, 'COP')} free to spend.",
+            f"- Income forecast: {money(sts.income_forecast, 'COP')}",
+            f"- Committed: {money(sts.committed, 'COP')}",
+            f"- Assigned to envelopes: {money(sts.assigned_envelopes, 'COP')}",
+        ]
+    )
 
 
 def goals_table(goals) -> str:
@@ -416,22 +378,21 @@ def goals_progress_table(progress: list) -> str:
     for p in progress:
         target = cents_to_major(p.target_amount) if p.target_amount is not None else "—"
         track = "on-track" if p.on_track else "behind"
-        rows.append(
-            f"| {p.goal_id} | {p.name} | {cents_to_major(p.saved)} COP | "
-            f"{target} | {track} |"
-        )
+        rows.append(f"| {p.goal_id} | {p.name} | {cents_to_major(p.saved)} COP | {target} | {track} |")
     return "\n".join(rows)
 
 
 def monthly_report_card(report) -> str:
-    return "\n".join([
-        f"# Monthly report — {report.month}",
-        f"- Income: {money(report.income, 'COP')}",
-        f"- Expense: {money(report.expense, 'COP')}",
-        f"- Net: {money(report.net, 'COP')}",
-        "",
-        report.markdown,
-    ])
+    return "\n".join(
+        [
+            f"# Monthly report — {report.month}",
+            f"- Income: {money(report.income, 'COP')}",
+            f"- Expense: {money(report.expense, 'COP')}",
+            f"- Net: {money(report.net, 'COP')}",
+            "",
+            report.markdown,
+        ]
+    )
 
 
 def recurring_restored(item: RecurringItem) -> str:

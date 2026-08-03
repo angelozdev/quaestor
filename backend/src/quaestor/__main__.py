@@ -2,6 +2,7 @@
 Quaestor container entrypoint: wait for DB → migrate → start uvicorn.
 Runs as `python -m quaestor` from the container CMD (ADR-0026).
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,7 +36,7 @@ def _resolve_db_url(url: str) -> str:
     ``create_engine`` calls use the same driver as the application proper.
     """
     if url.startswith(_POSTGRESQL_SCHEME):
-        return _PSYCOPG_SCHEME + url[len(_POSTGRESQL_SCHEME):]
+        return _PSYCOPG_SCHEME + url[len(_POSTGRESQL_SCHEME) :]
     return url
 
 
@@ -57,13 +58,14 @@ def wait_for_db(url: str) -> None:
                 _probe_sqlite(url)
             else:
                 _probe_postgres(url)
-            log(f"DB reachable (attempt {attempt}/{DB_WAIT_MAX_ATTEMPTS})")
-            return
         except Exception as exc:
             last_exc = exc
             if attempt >= DB_WAIT_MAX_ATTEMPTS:
                 break
             time.sleep(DB_WAIT_INTERVAL_S)
+        else:
+            log(f"DB reachable (attempt {attempt}/{DB_WAIT_MAX_ATTEMPTS})")
+            return
     log(f"DB unreachable after {DB_WAIT_MAX_ATTEMPTS} attempts: {last_exc}")
     sys.exit(1)
 
@@ -79,9 +81,7 @@ def _alembic_version_empty(url: str) -> bool:
     eng = create_engine(_resolve_db_url(url))
     try:
         with eng.connect() as conn:
-            row = conn.execute(
-                text("SELECT version_num FROM alembic_version LIMIT 1")
-            ).first()
+            row = conn.execute(text("SELECT version_num FROM alembic_version LIMIT 1")).first()
             return row is None
     except Exception:
         return True  # table doesn't exist yet
@@ -96,9 +96,7 @@ def _db_has_any_table(url: str) -> bool:
     eng = create_engine(_resolve_db_url(url))
     try:
         with eng.connect() as conn:
-            row = conn.execute(
-                text("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-            ).first()
+            row = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")).first()
             return row is not None
     except Exception:
         return False
@@ -111,19 +109,22 @@ def run_migrations() -> None:
             log("existing schema detected with no alembic_version row; stamping head (one-time)")
             subprocess.run(
                 [sys.executable, "-m", "alembic", "stamp", "head"],
-                check=True, cwd="/app",
+                check=True,
+                cwd="/app",
             )
         else:
             log("fresh DB; running alembic upgrade head")
             subprocess.run(
                 [sys.executable, "-m", "alembic", "upgrade", "head"],
-                check=True, cwd="/app",
+                check=True,
+                cwd="/app",
             )
     else:
         log("running alembic upgrade head")
         result = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
-            check=False, cwd="/app",
+            check=False,
+            cwd="/app",
         )
         if result.returncode != 0:
             log(f"alembic upgrade failed (rc={result.returncode}); aborting")

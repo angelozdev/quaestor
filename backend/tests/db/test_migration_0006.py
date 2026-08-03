@@ -38,9 +38,7 @@ def test_backfill_leaves_non_transfer_rows_without_direction():
     engine = _seeded_engine_at_rev_0005()
     alembic_command.upgrade(config_for(engine), "0006")
     with engine.connect() as conn:
-        row = conn.execute(
-            sa.text('SELECT transfer_direction FROM "transaction" WHERE id = 30')
-        ).fetchone()
+        row = conn.execute(sa.text('SELECT transfer_direction FROM "transaction" WHERE id = 30')).fetchone()
     assert row[0] is None
 
 

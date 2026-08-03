@@ -10,29 +10,21 @@ def test_get_settings_default_card(session):
 
 
 def test_update_settings_base_currency(session):
-    out = settings_tools.update_settings(
-        session, UpdateSettingsInput(base_currency="USD")
-    )
+    out = settings_tools.update_settings(session, UpdateSettingsInput(base_currency="USD"))
     assert "Base currency: USD" in out
 
 
 def test_update_settings_rejects_unsupported_currency(session):
-    out = settings_tools.update_settings(
-        session, UpdateSettingsInput(base_currency="XYZ")
-    )
+    out = settings_tools.update_settings(session, UpdateSettingsInput(base_currency="XYZ"))
     assert "Invalid input" in out
 
 
 def test_update_settings_default_source_account(session):
     accounts.create_account(session, "Bancolombia", "debit", "COP", balance=0)
-    out = settings_tools.update_settings(
-        session, UpdateSettingsInput(default_source_account="Bancolombia")
-    )
+    out = settings_tools.update_settings(session, UpdateSettingsInput(default_source_account="Bancolombia"))
     assert "default source account: 1" in out  # the new account's id
 
 
 def test_update_settings_unknown_account_returns_text(session):
-    out = settings_tools.update_settings(
-        session, UpdateSettingsInput(default_source_account="Ghost")
-    )
+    out = settings_tools.update_settings(session, UpdateSettingsInput(default_source_account="Ghost"))
     assert "not found" in out

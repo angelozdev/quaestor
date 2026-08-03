@@ -4,6 +4,7 @@ The loop is exercised end-to-end (text-only, tool-then-text, tool error,
 loop cap) and the SSE bytes are inspected with the same parser the frontend
 would use.
 """
+
 from __future__ import annotations
 
 import json
@@ -31,9 +32,7 @@ class ScriptedProvider(LLMProvider):
         self._scripts = list(scripts)
         self.calls = 0
 
-    async def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> AsyncIterator[LLMEvent]:
+    async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
         idx = min(self.calls, len(self._scripts) - 1)
         self.calls += 1
         for ev in self._scripts[idx]:
@@ -86,11 +85,7 @@ def fake_mcp(monkeypatch):
     """Patch MCPClient in the service module to return our fake."""
     holder: dict[str, FakeMCPClient] = {
         "client": FakeMCPClient(
-            {
-                "list_transactions": CallToolResult(
-                    output='[{"id":1,"payee":"Café","amount":15000}]', is_error=False
-                )
-            }
+            {"list_transactions": CallToolResult(output='[{"id":1,"payee":"Café","amount":15000}]', is_error=False)}
         )
     }
 
@@ -114,9 +109,7 @@ async def test_text_only_iteration_emits_full_sse_sequence(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_DELTA, delta="Hola"),
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
-                ),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
             ]
         ]
     )
@@ -147,9 +140,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
                     arguments={"date_from": "2026-06-01"},
                 ),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1
-                ),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="tool-calls", iterations=1),
             ],
             [
                 LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m2", model="MiniMax-M3"),
@@ -157,9 +148,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
                 LLMEvent(type=LLMEventType.TEXT_DELTA, delta="Tienes 1 gasto."),
                 LLMEvent(type=LLMEventType.TEXT_END, content_index=0),
                 LLMEvent(type=LLMEventType.STEP_FINISH),
-                LLMEvent(
-                    type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
-                ),
+                LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1),
             ],
         ]
     )
@@ -178,13 +167,7 @@ async def test_tool_call_then_text_calls_mcp_and_streams_results(fake_mcp):
 
 @pytest.mark.asyncio
 async def test_tool_error_emits_error_chunk_and_loop_continues(fake_mcp):
-    fake_mcp["client"] = FakeMCPClient(
-        {
-            "list_transactions": CallToolResult(
-                output="account not found", is_error=True
-            )
-        }
-    )
+    fake_mcp["client"] = FakeMCPClient({"list_transactions": CallToolResult(output="account not found", is_error=True)})
 
     provider = ScriptedProvider(
         [
@@ -280,9 +263,7 @@ async def test_provider_timeout_emits_error_and_dones(fake_mcp):
             await asyncio.sleep(1.0)
             yield LLMEvent(type=LLMEventType.MESSAGE_START, message_id="x")  # pragma: no cover
 
-    service = ChatService(
-        provider=StallProvider(), mcp=None, max_iterations=2, request_timeout_s=0.05
-    )
+    service = ChatService(provider=StallProvider(), mcp=None, max_iterations=2, request_timeout_s=0.05)
     blob = b""
     async for chunk in service.stream(messages=[{"role": "user", "content": "?"}]):
         blob += chunk
@@ -311,8 +292,7 @@ async def test_tool_call_raises_is_recovered_not_500(fake_mcp):
         async def call_tool(self, name, arguments):
             # Match fastmcp's production behavior: bad args → ToolError.
             raise ToolError(
-                f"1 validation error for {name}Arguments: inp "
-                f"Input should be a valid dictionary, got {arguments!r}"
+                f"1 validation error for {name}Arguments: inp Input should be a valid dictionary, got {arguments!r}"
             )
 
     fake_mcp["client"] = RaisingToolMCP({})
@@ -372,13 +352,7 @@ async def test_tool_call_timeout_emits_error_chunk_and_continues(fake_mcp):
             await asyncio.sleep(1.0)
             return await super().call_tool(name, arguments)  # pragma: no cover
 
-    fake_mcp["client"] = HangingToolMCP(
-        {
-            "list_transactions": CallToolResult(
-                output='[{"id":1}]', is_error=False
-            )
-        }
-    )
+    fake_mcp["client"] = HangingToolMCP({"list_transactions": CallToolResult(output='[{"id":1}]', is_error=False)})
 
     provider = ScriptedProvider(
         [
@@ -403,9 +377,7 @@ async def test_tool_call_timeout_emits_error_chunk_and_continues(fake_mcp):
             ],
         ]
     )
-    service = ChatService(
-        provider=provider, mcp=None, max_iterations=4, request_timeout_s=0.05
-    )
+    service = ChatService(provider=provider, mcp=None, max_iterations=4, request_timeout_s=0.05)
     blob = b""
     async for chunk in service.stream(messages=[{"role": "user", "content": "?"}]):
         blob += chunk
@@ -427,14 +399,10 @@ class RecordingProvider(LLMProvider):
     def __init__(self) -> None:
         self.calls: list[list[dict[str, Any]]] = []
 
-    async def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> AsyncIterator[LLMEvent]:
+    async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
         self.calls.append(list(messages))
         yield LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m")
-        yield LLMEvent(
-            type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
-        )
+        yield LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1)
 
 
 @pytest.mark.asyncio
@@ -477,9 +445,7 @@ async def test_no_system_prompt_means_no_injection(fake_mcp):
 async def test_empty_system_prompt_treated_as_unset(fake_mcp):
     """An empty string is a no-op, same as None."""
     provider = RecordingProvider()
-    service = ChatService(
-        provider=provider, mcp=None, max_iterations=2, system_prompt=""
-    )
+    service = ChatService(provider=provider, mcp=None, max_iterations=2, system_prompt="")
     async for _ in service.stream(messages=[{"role": "user", "content": "hola"}]):
         pass
 
@@ -550,9 +516,7 @@ async def test_system_prompt_present_on_every_iteration(fake_mcp):
             self.calls: list[list[dict[str, Any]]] = []
             self._idx = 0
 
-        async def stream(
-            self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-        ) -> AsyncIterator[LLMEvent]:
+        async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
             self.calls.append(list(messages))
             i = min(self._idx, len(script) - 1)
             self._idx += 1

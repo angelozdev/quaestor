@@ -247,20 +247,12 @@ function ToPayRow({
           <p className="text-sm font-medium truncate">{item.payee}</p>
           {badge}
         </div>
-        <time
-          dateTime={item.date}
-          className="text-xs"
-          style={{ color: dateColor }}
-        >
+        <time dateTime={item.date} className="text-xs" style={{ color: dateColor }}>
           {formatDate(item.date)}
         </time>
       </div>
       <div className="flex items-center gap-4 shrink-0">
-        <MoneyAmount
-          cents={item.amount}
-          currency={item.currency}
-          className="text-sm font-medium"
-        />
+        <MoneyAmount cents={item.amount} currency={item.currency} className="text-sm font-medium" />
         <button
           type="button"
           disabled={pending}

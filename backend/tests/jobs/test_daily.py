@@ -1,4 +1,5 @@
 """Daily orchestration: FX + materialize_due + ensure_month_closed, idempotent."""
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -12,15 +13,28 @@ from tests.support.recurring import declare_existing
 
 
 class _StubClient:
-    def __init__(self, payload): self.payload = payload
-    def __enter__(self): return self
-    def __exit__(self, *a): return False
-    def close(self): pass
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def close(self):
+        pass
+
     def get(self, url, params=None, timeout=None):
         class _R:
             status_code = 200
-            def json(self_inner): return self.payload
-            def raise_for_status(self_inner): pass
+
+            def json(self_inner):
+                return self.payload
+
+            def raise_for_status(self_inner):
+                pass
+
         return _R()
 
 
@@ -28,6 +42,7 @@ class _StubClient:
 def session(monkeypatch, tmp_path):
     monkeypatch.setenv("QUAESTOR_DB", f"sqlite:///{tmp_path / 'test.db'}")
     from quaestor import db
+
     db.init_db(db.engine)
     with Session(db.engine) as s:
         yield s
@@ -43,9 +58,17 @@ def _make_account(session: Session, name: str = "Bank") -> Account:
 
 def _make_recurring(session: Session, account: Account) -> RecurringItem:
     item = RecurringItem(
-        name="Rent", payee="Landlord", type="expense", mode=RecurringMode.manual,
-        amount=100000, currency="COP", category_id=None, account_id=account.id,
-        interval_unit=IntervalUnit.month, interval_count=1, start_date=Date(2026, 6, 1),
+        name="Rent",
+        payee="Landlord",
+        type="expense",
+        mode=RecurringMode.manual,
+        amount=100000,
+        currency="COP",
+        category_id=None,
+        account_id=account.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=Date(2026, 6, 1),
         declared_on=Date(2026, 6, 1),
     )
     session.add(item)
@@ -61,8 +84,10 @@ def test_run_daily_materializes_due_recurring(session, monkeypatch):
 
     # Stub the httpx.Client used inside fx_fetch by patching its module symbol.
     from quaestor.jobs import fx_fetch as fx_module
+
     monkeypatch.setattr(
-        fx_module, "httpx",
+        fx_module,
+        "httpx",
         type("X", (), {"Client": lambda *a, **kw: _StubClient({"rates": {"COP": 4150}})}),
     )
 
@@ -79,8 +104,10 @@ def test_run_daily_is_idempotent(session, monkeypatch):
     today = Date(2026, 6, 1)
 
     from quaestor.jobs import fx_fetch as fx_module
+
     monkeypatch.setattr(
-        fx_module, "httpx",
+        fx_module,
+        "httpx",
         type("X", (), {"Client": lambda *a, **kw: _StubClient({"rates": {"COP": 4150}})}),
     )
 
@@ -98,10 +125,17 @@ def test_fx_failure_does_not_block_other_jobs(session, monkeypatch):
     from quaestor.jobs import fx_fetch as fx_module
 
     class _BoomClient:
-        def __enter__(self): return self
-        def __exit__(self, *a): return False
-        def close(self): pass
-        def get(self, *a, **kw): raise RuntimeError("network down")
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def close(self):
+            pass
+
+        def get(self, *a, **kw):
+            raise RuntimeError("network down")
 
     monkeypatch.setattr(fx_module, "httpx", type("X", (), {"Client": lambda *a, **kw: _BoomClient()}))
 
@@ -119,9 +153,17 @@ def test_run_daily_reports_the_obligations_that_need_attention(session):
     _make_recurring(session, good)
     bad = accounts.create_account(session, "Nequi", AccountType.debit, "COP", balance=200_000)
     declare_existing(
-        session, name="Spotify", payee="Spotify", type=TxType.expense,
-        mode=RecurringMode.auto, amount=15_000, currency="COP", category_id=None,
-        account_id=bad.id, interval_unit=IntervalUnit.month, interval_count=1,
+        session,
+        name="Spotify",
+        payee="Spotify",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=15_000,
+        currency="COP",
+        category_id=None,
+        account_id=bad.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
         start_date=Date(2026, 6, 1),
     )
     accounts.archive_account(session, bad.id)

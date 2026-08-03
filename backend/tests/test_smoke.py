@@ -3,8 +3,7 @@ from quaestor.domain import errors
 
 
 def test_errors_form_a_hierarchy():
-    for cls in (errors.ValidationError, errors.MissingRate,
-                errors.TransferImbalance, errors.NotFound):
+    for cls in (errors.ValidationError, errors.MissingRate, errors.TransferImbalance, errors.NotFound):
         assert issubclass(cls, errors.QuaestorError)
 
 

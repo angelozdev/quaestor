@@ -9,6 +9,7 @@ If external MCP access is ever reintroduced, a new module (e.g. `http.py`)
 should wrap this `FastMCP` with `streamable_http_app()` + auth middleware —
 do NOT regress this file.
 """
+
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP

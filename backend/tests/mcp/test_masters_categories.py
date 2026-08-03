@@ -15,24 +15,18 @@ def _seed_group(session):
 
 def test_create_category_with_group_returns_card(session):
     _seed_group(session)
-    out = masters.create_category(
-        session, CreateCategoryInput(name="Groceries", group="Essentials")
-    )
+    out = masters.create_category(session, CreateCategoryInput(name="Groceries", group="Essentials"))
     assert "Groceries" in out and "Essentials" in out
 
 
 def test_create_category_income_flag(session):
-    out = masters.create_category(
-        session, CreateCategoryInput(name="Salary", is_income=True)
-    )
+    out = masters.create_category(session, CreateCategoryInput(name="Salary", is_income=True))
     assert "Salary" in out and "income" in out
 
 
 def test_create_category_unknown_group_returns_text(session):
     _seed_group(session)
-    out = masters.create_category(
-        session, CreateCategoryInput(name="X", group="Nonexistent")
-    )
+    out = masters.create_category(session, CreateCategoryInput(name="X", group="Nonexistent"))
     assert "not found" in out
 
 

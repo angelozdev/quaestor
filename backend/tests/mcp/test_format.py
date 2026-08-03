@@ -60,21 +60,17 @@ def test_missing_rate_uses_canonical_sentence():
 
 
 def test_not_found_passes_message_through():
-    assert format.domain_error_text(NotFound("Account 'X' not found.")) == (
-        "Account 'X' not found."
-    )
+    assert format.domain_error_text(NotFound("Account 'X' not found.")) == ("Account 'X' not found.")
 
 
 def test_validation_error_is_framed():
-    assert format.domain_error_text(ValidationError("amount must be > 0")).startswith(
-        "Invalid input:"
-    )
+    assert format.domain_error_text(ValidationError("amount must be > 0")).startswith("Invalid input:")
 
 
 def test_transfer_imbalance_is_framed():
-    assert format.domain_error_text(
-        TransferImbalance("source and destination cannot be the same account")
-    ).startswith("Could not record the transfer:")
+    assert format.domain_error_text(TransferImbalance("source and destination cannot be the same account")).startswith(
+        "Could not record the transfer:"
+    )
 
 
 def test_expense_confirmation_cop_omits_equivalent():
@@ -141,9 +137,7 @@ def test_categories_table_resolves_group_name():
 
 
 def test_tags_list():
-    assert format.tags_list([Tag(name="trip"), Tag(name="work")]) == (
-        "Tags: trip, work"
-    )
+    assert format.tags_list([Tag(name="trip"), Tag(name="work")]) == ("Tags: trip, work")
     assert format.tags_list([]) == "No tags."
 
 
@@ -157,9 +151,7 @@ def test_transactions_table_has_total_and_empty():
 
 
 def test_transactions_table_converts_usd_at_the_trm():
-    table = format.transactions_table(
-        [_expense(currency="USD", amount=1_000)], Decimal("4000")
-    )
+    table = format.transactions_table([_expense(currency="USD", amount=1_000)], Decimal("4000"))
     assert "40000.00" in table
     assert "Total (COP): 40000.00" in table
 
@@ -200,8 +192,13 @@ def test_tag_card():
 
 def test_transaction_card():
     tx = Transaction(
-        id=42, date=date(2026, 6, 18), payee="Lunch", type=TxType.expense,
-        status=TxStatus.posted, amount=5_000_000, currency="COP",
+        id=42,
+        date=date(2026, 6, 18),
+        payee="Lunch",
+        type=TxType.expense,
+        status=TxStatus.posted,
+        amount=5_000_000,
+        currency="COP",
         account_id=1,
     )
     text = format.transaction_card(tx, Decimal("4000"))
@@ -211,8 +208,13 @@ def test_transaction_card():
 
 def test_transaction_card_usd_shows_read_time_cop_equivalent():
     tx = Transaction(
-        id=7, date=date(2026, 6, 18), payee="Spotify", type=TxType.expense,
-        status=TxStatus.posted, amount=1_000, currency="USD",
+        id=7,
+        date=date(2026, 6, 18),
+        payee="Spotify",
+        type=TxType.expense,
+        status=TxStatus.posted,
+        amount=1_000,
+        currency="USD",
         account_id=1,
     )
     text = format.transaction_card(tx, Decimal("4000"))
@@ -234,9 +236,14 @@ def test_budgets_table_empty():
 def test_budgets_table_renders_lines():
     lines = [
         BudgetLine(
-            category_id=1, category_name="Groceries",
-            assigned=200_000, rollover_in=0, spent=80_000,
-            available=120_000, pct_used=40.0, status="under",
+            category_id=1,
+            category_name="Groceries",
+            assigned=200_000,
+            rollover_in=0,
+            spent=80_000,
+            available=120_000,
+            pct_used=40.0,
+            status="under",
         )
     ]
     text = format.budgets_table(lines)
@@ -247,8 +254,11 @@ def test_budgets_table_renders_lines():
 
 def test_safe_to_spend_card():
     sts = SafeToSpend(
-        year_month="2026-06", income_forecast=2_000_000,
-        committed=600_000, assigned_envelopes=400_000, free=1_000_000,
+        year_month="2026-06",
+        income_forecast=2_000_000,
+        committed=600_000,
+        assigned_envelopes=400_000,
+        free=1_000_000,
         committed_breakdown=[],
     )
     text = format.safe_to_spend_card(sts)
@@ -260,8 +270,15 @@ def test_safe_to_spend_card():
 
 def test_goals_table():
     goals = [
-        Goal(id=1, name="Trip", monthly_amount=500_000, savings_account_id=2,
-             target_amount=2_000_000, deadline=date(2026, 12, 31), status=GoalStatus.active),
+        Goal(
+            id=1,
+            name="Trip",
+            monthly_amount=500_000,
+            savings_account_id=2,
+            target_amount=2_000_000,
+            deadline=date(2026, 12, 31),
+            status=GoalStatus.active,
+        ),
     ]
     text = format.goals_table(goals)
     assert "Trip" in text and "5000.00 COP" in text
@@ -275,10 +292,15 @@ def test_goals_table_empty():
 def test_goals_progress_table():
     progress = [
         GoalProgress(
-            goal_id=1, name="Trip", type="defined",
-            monthly_amount=500_000, saved=600_000,
-            target_amount=2_000_000, deadline=date(2026, 12, 31),
-            eta=None, on_track=True,
+            goal_id=1,
+            name="Trip",
+            type="defined",
+            monthly_amount=500_000,
+            saved=600_000,
+            target_amount=2_000_000,
+            deadline=date(2026, 12, 31),
+            eta=None,
+            on_track=True,
         )
     ]
     text = format.goals_progress_table(progress)
@@ -294,6 +316,7 @@ def test_monthly_report_card_headline():
         expense = 3_000_000
         net = 2_000_000
         markdown = "# sample"
+
     text = format.monthly_report_card(_R())
     assert "2026-06" in text
     assert "50000.00 COP" in text  # income
@@ -303,11 +326,20 @@ def test_monthly_report_card_headline():
 
 def test_recurring_restored():
     item = RecurringItem(
-        id=5, name="Rent", payee="Landlord", type=TxType.expense,
-        mode=RecurringMode.auto, amount=2_000_000, currency="COP",
-        category_id=None, account_id=1,
-        interval_unit=IntervalUnit.month, interval_count=1,
-        start_date=date(2026, 1, 1), end_date=None, active=True,
+        id=5,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=2_000_000,
+        currency="COP",
+        category_id=None,
+        account_id=1,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
+        end_date=None,
+        active=True,
     )
     text = format.recurring_restored(item)
     assert "Rent" in text and "restored" in text

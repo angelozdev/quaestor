@@ -8,6 +8,7 @@ Runs three idempotent jobs in order:
 Re-runs on the same day are no-ops by construction (ADR-017/020). A missed
 day self-heals on the next run.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,9 +27,7 @@ from .fx_fetch import fetch_usd_cop
 log = logging.getLogger(__name__)
 
 
-def run_daily(
-    session: Session, today: Date, fx_url: str, fx_key: str | None
-) -> dict:
+def run_daily(session: Session, today: Date, fx_url: str, fx_key: str | None) -> dict:
     """Run the three daily jobs. Returns a small report dict (no secrets).
 
     Args:

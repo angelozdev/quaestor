@@ -4,6 +4,7 @@ Starlette signs the session cookie with `itsdangerous`. A short or default
 secret makes cookie forgery trivial. We refuse to start without a
 ≥32-byte secret instead of falling back to a known-public default.
 """
+
 from __future__ import annotations
 
 import pytest

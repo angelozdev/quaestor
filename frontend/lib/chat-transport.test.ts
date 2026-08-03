@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest"
-import { DefaultChatTransport } from "ai"
 import type { UIMessage } from "ai"
+import { DefaultChatTransport } from "ai"
+import { describe, expect, it, vi } from "vitest"
 import { createChatTransport } from "./chat-transport"
 
 // Structural type — avoids leaking DefaultChatTransport's <UI_MESSAGE> generic
@@ -39,9 +39,7 @@ describe("createChatTransport", () => {
       const { body } = transform({
         id: "conv1",
         trigger: "submit-message",
-        messages: [
-          { id: "m1", role: "user", parts: [{ type: "text", text: "hola" }] },
-        ],
+        messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "hola" }] }],
       })
       expect(body).toEqual({
         trigger: "submit-message",
@@ -127,11 +125,7 @@ describe("createChatTransport", () => {
           { id: "s", role: "system", parts: [{ type: "text", text: "c" }] },
         ],
       })
-      expect(body.messages.map((m) => m.role)).toEqual([
-        "user",
-        "assistant",
-        "system",
-      ])
+      expect(body.messages.map((m) => m.role)).toEqual(["user", "assistant", "system"])
     })
   })
 })

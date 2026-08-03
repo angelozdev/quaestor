@@ -3,9 +3,7 @@ import { translateChatError } from "./chat-errors"
 
 describe("translateChatError", () => {
   it("maps network failures to the offline copy", () => {
-    expect(translateChatError(new Error("fetch failed"))).toBe(
-      "No pudimos contactar al servidor",
-    )
+    expect(translateChatError(new Error("fetch failed"))).toBe("No pudimos contactar al servidor")
     expect(translateChatError(new TypeError("Failed to fetch"))).toBe(
       "No pudimos contactar al servidor",
     )

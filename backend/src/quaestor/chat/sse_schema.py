@@ -17,6 +17,7 @@ network. A drift in the wire shape (e.g. re-introducing `isError` on
 We only mirror the variants we emit today. Reasoning-* and other
 future chunks are added when we emit them — YAGNI.
 """
+
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
@@ -124,7 +125,18 @@ class _UIMessageChunkAdapter:
     def __init__(self) -> None:
         self._adapter: TypeAdapter = TypeAdapter(
             Annotated[
-                StartChunk | TextStartChunk | TextDeltaChunk | TextEndChunk | ToolInputStartChunk | ToolInputDeltaChunk | ToolInputAvailableChunk | ToolOutputAvailableChunk | ToolOutputErrorChunk | FinishStepChunk | FinishChunk | ErrorChunk,
+                StartChunk
+                | TextStartChunk
+                | TextDeltaChunk
+                | TextEndChunk
+                | ToolInputStartChunk
+                | ToolInputDeltaChunk
+                | ToolInputAvailableChunk
+                | ToolOutputAvailableChunk
+                | ToolOutputErrorChunk
+                | FinishStepChunk
+                | FinishChunk
+                | ErrorChunk,
                 Field(discriminator="type"),
             ]
         )
@@ -134,4 +146,3 @@ class _UIMessageChunkAdapter:
 
 
 UIMessageChunk = _UIMessageChunkAdapter()
-

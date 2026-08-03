@@ -1,4 +1,5 @@
 """Request-scoped dependencies for the API layer."""
+
 from __future__ import annotations
 
 import hmac
@@ -34,9 +35,7 @@ def _token_ok(authorization: str | None) -> bool:
     return hmac.compare_digest(token, expected)
 
 
-def require_auth(
-    request: Request, authorization: str | None = Header(default=None)
-) -> None:
+def require_auth(request: Request, authorization: str | None = Header(default=None)) -> None:
     """Authorize via bearer token OR a valid session cookie; else 401."""
     if _token_ok(authorization):
         return

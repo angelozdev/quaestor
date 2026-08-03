@@ -26,8 +26,7 @@ function autoGrow(el: HTMLTextAreaElement | null) {
 }
 
 // useLayoutEffect warns on SSR; alias to useEffect on the server.
-const useIsoLayoutEffect =
-  typeof window !== "undefined" ? useLayoutEffect : useEffect
+const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect
 
 export function ChatInput({
   status,

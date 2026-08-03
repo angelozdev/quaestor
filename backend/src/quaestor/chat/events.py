@@ -12,6 +12,7 @@ Each dataclass-style event is rendered as one `data:` line — the SSE `event:`
 field is intentionally NOT used because the consumer identifies events by
 the JSON `type`.
 """
+
 from __future__ import annotations
 
 import json

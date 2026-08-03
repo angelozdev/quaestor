@@ -8,6 +8,7 @@ the runtime ordering tests below would catch any mutation that actually
 broke behavior, and the Literal types are validated by Pydantic at the
 REST/MCP boundary in Tasks 4 and 5.
 """
+
 from __future__ import annotations
 
 from datetime import date

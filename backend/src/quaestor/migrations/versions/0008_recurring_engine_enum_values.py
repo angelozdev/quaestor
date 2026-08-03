@@ -20,6 +20,7 @@ Revises: 0007
 Create Date: 2026-08-02
 
 """
+
 from collections.abc import Sequence
 
 from alembic import op

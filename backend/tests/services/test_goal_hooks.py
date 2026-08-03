@@ -1,4 +1,3 @@
-
 from quaestor.domain.models import AccountType, GoalContribution, TxType
 from quaestor.services import accounts, goals, planned, rollover, transactions
 from quaestor.services import settings as settings_svc

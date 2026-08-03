@@ -11,8 +11,12 @@ def test_reports_endpoint(client, auth):
     client.post(
         "/api/transactions",
         json={
-            "type": "expense", "account_id": acc["id"], "amount": 50_000,
-            "currency": "COP", "date": "2026-06-10", "payee": "Groceries",
+            "type": "expense",
+            "account_id": acc["id"],
+            "amount": 50_000,
+            "currency": "COP",
+            "date": "2026-06-10",
+            "payee": "Groceries",
         },
         headers=auth,
     )

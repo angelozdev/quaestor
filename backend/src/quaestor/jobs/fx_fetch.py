@@ -5,6 +5,7 @@ Frankfurter (`https://api.frankfurter.app/latest?base=USD&symbols=COP`) and
 similar free providers. The provider URL is fully configurable via
 `FX_API_URL`; this module just extracts the rate.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -50,7 +51,5 @@ def fetch_usd_cop(
     try:
         rate = data["rates"]["COP"]
     except (KeyError, TypeError) as exc:
-        raise ValueError(
-            f"FX response missing rates.COP: {data!r}"
-        ) from exc
+        raise ValueError(f"FX response missing rates.COP: {data!r}") from exc
     return Decimal(str(rate))

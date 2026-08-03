@@ -425,11 +425,7 @@ function ToPayRow({
         </time>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <MoneyAmount
-          cents={item.amount}
-          currency={item.currency}
-          className="text-sm font-medium"
-        />
+        <MoneyAmount cents={item.amount} currency={item.currency} className="text-sm font-medium" />
         <Button size="sm" onClick={onConfirm}>
           Confirmar
         </Button>

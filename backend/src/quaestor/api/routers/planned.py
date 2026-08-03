@@ -1,4 +1,5 @@
 """Planned-payments REST router — thin adapter over services.planned."""
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -40,22 +41,16 @@ def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
 
 
 @router.post("/{tx_id}/confirm", response_model=TransactionOut)
-def confirm_payment(
-    tx_id: int, body: ConfirmPaymentIn, session: Session = Depends(get_session)
-):
+def confirm_payment(tx_id: int, body: ConfirmPaymentIn, session: Session = Depends(get_session)):
     tx = planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date)
     return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/skip", response_model=TransactionOut)
 def skip_payment(tx_id: int, session: Session = Depends(get_session)):
-    return TransactionOut.from_one(
-        session, planned.skip_payment(session, tx_id), fx.get_trm_or_none(session)
-    )
+    return TransactionOut.from_one(session, planned.skip_payment(session, tx_id), fx.get_trm_or_none(session))
 
 
 @router.post("/{tx_id}/restore", response_model=TransactionOut)
 def restore_payment(tx_id: int, session: Session = Depends(get_session)):
-    return TransactionOut.from_one(
-        session, planned.restore_payment(session, tx_id), fx.get_trm_or_none(session)
-    )
+    return TransactionOut.from_one(session, planned.restore_payment(session, tx_id), fx.get_trm_or_none(session))

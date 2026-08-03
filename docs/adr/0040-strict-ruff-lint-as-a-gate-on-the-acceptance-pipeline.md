@@ -72,8 +72,15 @@ select = [
     "PTH", "PERF", "LOG", "RUF", "ISC", "A", "INT", "PGH", "ERA",
     "S", "ASYNC", "BLE", "SLF", "TRY", "PLE", "PLW", "PLC",
 ]
-ignore = ["B008", "TRY003", "RUF012"]
+ignore = [
+    "B008", "TRY003", "TRY301", "RUF012", "UP042",
+    "RUF001", "RUF002", "PERF401",
+]
 ```
+
+The blanket `ignore` list grew during the sweep as each rule met the code it
+actually fires on. The full reasoning is below; the file itself is
+`ruff.toml` at the repo root and is the authority.
 
 `line-length = 120` because only 10 lines in the tree exceed it, against 119 at
 100 — the stricter number would buy a reformat of the whole codebase for no
@@ -89,6 +96,23 @@ correct:
   actionable (see ADR-029 in `product-decisions.md`).
 - **RUF012** mutable class default — collides with SQLModel/Pydantic field
   declarations.
+- **TRY301** raise-within-try — the services deliberately `raise` inside the
+  same `try` that rolls the transaction back; the raise *is* the rollback
+  trigger (`planned.confirm_payment` is the clearest case).
+- **UP042** replace-str-enum — would rewrite `class AccountType(str, Enum)` to
+  `StrEnum`. That base class is what maps these enums to native Postgres enum
+  columns, so a lint rule is the wrong instrument. Left as a possible future
+  change under its own ADR.
+- **RUF001 / RUF002** ambiguous unicode — fires on `×` and `−` used correctly
+  as typography in docstrings and rendered reports.
+- **PERF401** manual list comprehension — fires on the markdown report builder,
+  where `lines.append(f"…")` in a loop is clearer than an `extend` over a
+  multi-line f-string, and the performance difference is irrelevant for a
+  monthly report.
+
+The `A` (flake8-builtins) family was selected in the first draft and dropped:
+it fires on `type` and `status` as domain field names and on the project's own
+`mcp/format.py` module. Twenty-one hits, none of them defects.
 
 **PLC0415** (import-outside-top-level) was in this list in the first draft and
 was pulled out at the owner's instruction: *imports always go at the top*. The
@@ -108,13 +132,16 @@ demanding imports move into `TYPE_CHECKING` blocks, pure churn).
 
 Per-file ignores carry the rest, so no `# noqa` is ever needed:
 
-```toml
-[lint.per-file-ignores]
-"backend/tests/**" = ["S101", "SLF001", "ERA001", "PLW", "PLC0415"]
-"acceptance/**"    = ["S101", "SLF001", "ERA001", "PLW", "BLE001", "PLC0415"]
-"backend/src/quaestor/services/bootstrap.py" = ["PLC0415"]
-"backend/src/quaestor/migrations/**" = ["ERA001"]
-```
+Per-file ignores carry the rest — see `ruff.toml` for the final list. Each
+production-source entry names a construct that is correct where it sits:
+`services/bootstrap.py` (`PLC0415`, the decoupling seam), `services/
+occurrences.py` (`BLE001`, the per-charge failure isolation ADR-0036 requires),
+`chat/mcp/schema.py` (`PLW0603`, a module-level memo cache), `chat/events.py`
+(`S101`, the type-narrowing asserts above), `mcp/tools/**` (`SLF001`, a shared
+`_UNSET` sentinel), and `__main__.py` / `jobs/daily.py` / `acceptance/
+generator.py` (`T201`, where `print` **is** the output). Tests and acceptance
+handlers ignore the fixture-shaped rules (`S101`, `S105/S106` fake
+credentials, `PLC0415` lazy imports).
 
 `RUF100` (unused-noqa) is inside the selected `RUF` family, so a leftover
 suppression is itself reported — the configuration polices its own escape
@@ -152,8 +179,17 @@ hatch.
   read, enforced rather than optional.
 - Good: the gate makes zero-violation the resting state of `main`, so the sweep
   is paid once instead of compounding.
-- Cost: a one-time sweep of 444 violations before the gate can be switched on —
-  276 auto-fixable, the rest by hand.
+- Done: the sweep closed. 470 violations reached zero, and `ruff format`
+  reformatted 174 of 214 files. The backend (874) and acceptance (201) suites
+  were re-run after every step and never went red.
+- Found by the sweep, in the frontend half: `app/globals.css` imported the two
+  vendored stylesheets **twice** — a duplicated seven-line block that had been
+  shipping the same CSS on every page load. Biome's `noDuplicateAtImportRules`
+  caught it the first time it was ever run over that file.
+- Not closed by this decision: `backend/src` still holds **147 code comments**,
+  which `CLAUDE.md` bans project-wide. Ruff has no "forbid all comments" rule,
+  so the ban stays unenforced and unenforceable by this gate. Removing them is
+  its own sweep.
 - Cost: `run-acceptance-tests.sh` gains a failure mode unrelated to behaviour.
   A lint error will now stop the tests from running at all, which is the point,
   but it means a red pipeline no longer implies a broken feature.
@@ -181,8 +217,18 @@ hatch.
 
 ## Confirmation
 
-`run-acceptance-tests.sh` runs `ruff check` before generating or running any
-test and aborts non-zero on violations, so the decision is self-enforcing: it
-cannot regress without the acceptance suite going red. `just lint` runs the
-same check on demand. Both invoke ruff from the repo root against the single
-`ruff.toml`, covering `backend/` and `acceptance/` together.
+`run-acceptance-tests.sh` runs `ruff check` **and** `ruff format --check`
+before generating or running any test, and aborts non-zero on violations — so
+the decision is self-enforcing: it cannot regress without the acceptance suite
+going red. Verified both ways by injecting a bare `import os`: the pipeline
+exits 1 and the tests never run; clean, it exits 0 with 201 passing. The gate
+runs before generation so a lint failure never leaves stale `.build/` output.
+`QUAESTOR_SKIP_LINT=1` bypasses it while iterating.
+
+`just lint` runs the same Python check plus `biome check` and — added after
+the sweep exposed the gap — `tsc --noEmit`. Biome's unsafe autofix rewrote
+`response.body!.getReader()` to `response.body?.getReader()` in two proxy
+tests, which type-checks as possibly-undefined and broke `tsc` while Biome
+itself stayed green. A formatter/linter pass is not a type check, and only
+running both caught it. `just lint-fix` applies everything the tools can fix
+on their own.

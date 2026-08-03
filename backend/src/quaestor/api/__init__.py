@@ -1,10 +1,11 @@
 """FastAPI application factory. The single place where routers are registered."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -58,10 +59,8 @@ async def _lifespan(app: FastAPI):
     finally:
         log.info("api: lifespan shutdown; cancelling scheduler")
         task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await task
-        except asyncio.CancelledError:
-            pass
 
 
 _MIN_SESSION_SECRET_BYTES = 32
@@ -82,7 +81,7 @@ def _resolve_session_secret() -> str:
         raise RuntimeError(
             "SESSION_SECRET must be set and ≥32 bytes "
             f"(got {size} bytes). Generate one with: "
-            "`python -c \"import secrets; print(secrets.token_urlsafe(32))\"`."
+            '`python -c "import secrets; print(secrets.token_urlsafe(32))"`.'
         )
     return raw
 

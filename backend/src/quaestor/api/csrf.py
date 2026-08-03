@@ -15,6 +15,7 @@ Login is exempted because there is no CSRF cookie yet to forge against —
 the password itself is the auth check. Safe HTTP methods are exempted
 because they are required to be idempotent.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -56,8 +57,8 @@ def issue_csrf_cookie(response: Response) -> str:
 
 
 def _extract_cookie(cookie_header: str, name: str) -> str:
-    for part in cookie_header.split(";"):
-        part = part.strip()
+    for raw_part in cookie_header.split(";"):
+        part = raw_part.strip()
         if part.startswith(name + "="):
             return part[len(name) + 1 :]
     return ""

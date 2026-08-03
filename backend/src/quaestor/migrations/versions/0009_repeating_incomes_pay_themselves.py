@@ -23,6 +23,7 @@ Revises: 0008
 Create Date: 2026-08-02
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -36,10 +37,7 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     result = op.get_bind().execute(
-        sa.text(
-            "UPDATE recurring_item SET mode = 'auto' "
-            "WHERE type = 'income' AND mode = 'manual'"
-        )
+        sa.text("UPDATE recurring_item SET mode = 'auto' WHERE type = 'income' AND mode = 'manual'")
     )
     print(f"[0009] repeating incomes switched to automatic: {result.rowcount}")
 

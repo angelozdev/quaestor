@@ -2,6 +2,7 @@
 
 Mirrors temporal.py: parse input, resolve names, call ONE service, format output.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -57,8 +58,12 @@ def create_goal(session: Session, inp: CreateGoalInput) -> str:
     account = _resolve_account(session, inp.savings_account)
     deadline = date.fromisoformat(inp.deadline) if inp.deadline else None
     goal = goals.create_goal(
-        session, name=inp.name, monthly_amount=inp.monthly_amount,
-        savings_account_id=account.id, target_amount=inp.target_amount, deadline=deadline,
+        session,
+        name=inp.name,
+        monthly_amount=inp.monthly_amount,
+        savings_account_id=account.id,
+        target_amount=inp.target_amount,
+        deadline=deadline,
     )
     return format.goal_saved(goal)
 

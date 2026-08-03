@@ -3,6 +3,7 @@
 The recurrence date engine lives in `recurrence.py`; the calendar helpers it
 owns are imported from there.
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -18,9 +19,7 @@ def delta_balance(tx_type: TxType, amount: int) -> int:
         return amount
     if tx_type == TxType.expense:
         return -amount
-    raise ValueError(
-        "delta_balance only applies to expense/income; transfer uses transfer_deltas"
-    )
+    raise ValueError("delta_balance only applies to expense/income; transfer uses transfer_deltas")
 
 
 def transfer_deltas(amount: int) -> tuple[int, int]:
@@ -64,9 +63,14 @@ def envelope_status_calc(
     pct_used = round(spent / denom * 100) if denom > 0 else 0
     status = "over" if spent > denom else "under"
     return BudgetStatus(
-        category_id=category_id, year_month=year_month, assigned=assigned,
-        rollover_in=rollover_in, spent=spent, available=available,
-        pct_used=pct_used, status=status,
+        category_id=category_id,
+        year_month=year_month,
+        assigned=assigned,
+        rollover_in=rollover_in,
+        spent=spent,
+        available=available,
+        pct_used=pct_used,
+        status=status,
     )
 
 
@@ -82,13 +86,7 @@ def safe_to_spend_calc(
     free = income_forecast - committed - assigned_envelopes
            - unbudgeted_spending - overspend
     """
-    return (
-        income_forecast
-        - committed
-        - assigned_envelopes
-        - unbudgeted_spending
-        - overspend
-    )
+    return income_forecast - committed - assigned_envelopes - unbudgeted_spending - overspend
 
 
 def goal_progress_calc(
@@ -107,8 +105,11 @@ def goal_progress_calc(
     """
     if target_amount is None or deadline is None:
         return GoalProgress(
-            goal_id=goal_id, name=name, type="open-ended",
-            monthly_amount=monthly_amount, saved=saved,
+            goal_id=goal_id,
+            name=name,
+            type="open-ended",
+            monthly_amount=monthly_amount,
+            saved=saved,
         )
     remaining = max(target_amount - saved, 0)
     months_left = (deadline.year * 12 + deadline.month) - (today.year * 12 + today.month)
@@ -118,7 +119,15 @@ def goal_progress_calc(
     on_track = monthly_amount >= monthly_required
     eta = today if remaining == 0 else add_months(today, -(-remaining // monthly_amount))
     return GoalProgress(
-        goal_id=goal_id, name=name, type="defined", monthly_amount=monthly_amount,
-        saved=saved, target_amount=target_amount, deadline=deadline,
-        monthly_required=monthly_required, on_track=on_track, eta=eta, remaining=remaining,
+        goal_id=goal_id,
+        name=name,
+        type="defined",
+        monthly_amount=monthly_amount,
+        saved=saved,
+        target_amount=target_amount,
+        deadline=deadline,
+        monthly_required=monthly_required,
+        on_track=on_track,
+        eta=eta,
+        remaining=remaining,
     )

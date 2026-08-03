@@ -1,4 +1,5 @@
 """Declaring repeating obligations in tests, with the intent spelled out."""
+
 from quaestor.services import recurring
 
 

@@ -1,4 +1,5 @@
 """Budgets REST router — thin adapter over services.budgets."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -27,9 +28,14 @@ def assign_budget(body: BudgetAssignIn, session: Session = Depends(get_session))
     budgets.set_budget(session, body.category_id, body.year_month, body.amount_assigned)
     st = budgets.budget_status(session, body.category_id, body.year_month)
     return BudgetLine(
-        category_id=st.category_id, category_name=cat.name, assigned=st.assigned,
-        rollover_in=st.rollover_in, spent=st.spent, available=st.available,
-        pct_used=st.pct_used, status=st.status,
+        category_id=st.category_id,
+        category_name=cat.name,
+        assigned=st.assigned,
+        rollover_in=st.rollover_in,
+        spent=st.spent,
+        available=st.available,
+        pct_used=st.pct_used,
+        status=st.status,
     )
 
 

@@ -1,4 +1,5 @@
 """End-to-end POST /api/chat via TestClient with a stub LLMProvider."""
+
 from __future__ import annotations
 
 from quaestor.chat.llm.provider import LLMEvent, LLMEventType

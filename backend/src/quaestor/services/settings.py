@@ -1,4 +1,5 @@
 """Settings singleton use cases (id=1 row, seeded by init_db)."""
+
 from __future__ import annotations
 
 from sqlmodel import Session
@@ -21,9 +22,7 @@ def get_settings(session: Session) -> Settings:
     return s
 
 
-def update_settings(
-    session: Session, base_currency=None, default_source_account_id=_UNSET
-) -> Settings:
+def update_settings(session: Session, base_currency=None, default_source_account_id=_UNSET) -> Settings:
     """Update app settings.
 
     Raises:
@@ -36,10 +35,7 @@ def update_settings(
             raise ValidationError(f"unsupported currency: {base_currency}")
         s.base_currency = base_currency
     if default_source_account_id is not _UNSET:
-        if (
-            default_source_account_id is not None
-            and session.get(Account, default_source_account_id) is None
-        ):
+        if default_source_account_id is not None and session.get(Account, default_source_account_id) is None:
             raise ValidationError(f"account {default_source_account_id} does not exist")
         s.default_source_account_id = default_source_account_id
     session.add(s)

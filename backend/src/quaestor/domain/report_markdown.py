@@ -4,6 +4,7 @@ Both views (MCP chat in P2, the /reports screen in P6) consume the same object;
 this module turns its data into the markdown half. Section order follows ADR-019:
 the headline is net + envelope performance; safe-to-spend is the closing line.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -30,15 +31,9 @@ def render_markdown(report: MonthlyReport) -> str:
     # 1. Headline — net + envelope performance (ADR-019)
     lines.append(f"# Monthly report — {report.month}")
     lines.append("")
-    lines.append(
-        f"**Net:** {money(report.net)}  "
-        f"(income {money(report.income)} − expense {money(report.expense)})"
-    )
+    lines.append(f"**Net:** {money(report.net)}  (income {money(report.income)} − expense {money(report.expense)})")
     s = report.envelopes_summary
-    lines.append(
-        f"**Envelopes:** {s.n_green} green / {s.n_red} red · "
-        f"rollover generated {money(s.rollover_generated)}"
-    )
+    lines.append(f"**Envelopes:** {s.n_green} green / {s.n_red} red · rollover generated {money(s.rollover_generated)}")
     lines.append("")
 
     # 2. Envelopes detail
@@ -61,9 +56,7 @@ def render_markdown(report: MonthlyReport) -> str:
         lines.append("| Category | Group | Total | % |")
         lines.append("|---|---|---|---|")
         for c in report.by_category:
-            lines.append(
-                f"| {c.category} | {c.group or '—'} | {money(c.total)} | {_pct(c.pct)} |"
-            )
+            lines.append(f"| {c.category} | {c.group or '—'} | {money(c.total)} | {_pct(c.pct)} |")
     else:
         lines.append("_No expenses this month._")
     lines.append("")
@@ -86,10 +79,7 @@ def render_markdown(report: MonthlyReport) -> str:
             if g.target is not None:
                 track = "on track" if g.on_track else "behind"
                 eta = display_date(g.eta) if g.eta else "—"
-                lines.append(
-                    f"- **{g.name}**: {money(g.accumulated)} / {money(g.target)} "
-                    f"· ETA {eta} · {track}"
-                )
+                lines.append(f"- **{g.name}**: {money(g.accumulated)} / {money(g.target)} · ETA {eta} · {track}")
             else:
                 lines.append(f"- **{g.name}**: {money(g.accumulated)} (open-ended)")
     else:

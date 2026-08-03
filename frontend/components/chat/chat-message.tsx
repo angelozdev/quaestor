@@ -73,9 +73,7 @@ function ChatMessageImpl({ message, showCursor }: Props) {
         return null
       })}
       {/* Cursor also appears when the message has NO text part but is the live tail. */}
-      {showCursor &&
-        isUser === false &&
-        lastTextIndex === -1 && <ChatBlinkingCursor />}
+      {showCursor && isUser === false && lastTextIndex === -1 && <ChatBlinkingCursor />}
     </div>
   )
 }

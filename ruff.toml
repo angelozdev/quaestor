@@ -8,12 +8,17 @@ select = [
     "PTH", "PERF", "LOG", "RUF", "ISC", "INT", "PGH", "ERA",
     "S", "ASYNC", "BLE", "SLF", "TRY", "PLE", "PLW", "PLC",
 ]
-ignore = ["B008", "TRY003", "RUF012", "UP042"]
+ignore = ["B008", "TRY003", "TRY301", "RUF012", "UP042", "RUF001", "RUF002", "PERF401"]
 
 [lint.per-file-ignores]
-"backend/tests/**" = ["S101", "S105", "S106", "SLF001", "ERA001", "PLW", "PLC0415"]
-"acceptance/**" = ["S101", "S105", "S106", "SLF001", "ERA001", "PLW", "BLE001", "PLC0415"]
+"backend/tests/**" = ["S101", "S104", "S105", "S106", "SLF001", "ERA001", "PLW", "PLC0415"]
+"acceptance/**" = ["S101", "S105", "S106", "SLF001", "ERA001", "PLW", "BLE001", "PLC0415", "TRY004"]
 "backend/src/quaestor/services/bootstrap.py" = ["PLC0415"]
-"backend/src/quaestor/migrations/**" = ["ERA001", "T201"]
-"backend/src/quaestor/__main__.py" = ["T201"]
+"backend/src/quaestor/services/occurrences.py" = ["BLE001"]
+"backend/src/quaestor/migrations/**" = ["ERA001", "T201", "SLF001", "E501"]
+"backend/src/quaestor/__main__.py" = ["T201", "S104", "BLE001"]
 "backend/src/quaestor/jobs/daily.py" = ["T201"]
+"backend/src/quaestor/mcp/tools/**" = ["SLF001"]
+"backend/src/quaestor/chat/mcp/schema.py" = ["PLW0603"]
+"backend/src/quaestor/chat/events.py" = ["S101"]
+"acceptance/generator.py" = ["T201"]

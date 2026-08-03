@@ -29,14 +29,22 @@ def test_validate_month_rejects_malformed(session):
 
 def test_totals_posted_only_excludes_planned_and_transfer(session):
     from quaestor.services import planned
+
     acc = _acc(session)
     acc2 = _acc(session, currency="COP")
     cat = _cat(session)
     transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 6, 5), "groceries", category_id=cat.id)
     transactions.record_income(session, acc.id, 80_000, "COP", date(2026, 6, 1), "salary", category_id=cat.id)
     transactions.transfer(session, acc.id, acc2.id, 10_000, "COP", date(2026, 6, 6))  # excluded
-    planned.plan_payment(session, payee="rent", amount=50_000, currency="COP",
-                         account_id=acc.id, due_date=date(2026, 6, 10), category_id=cat.id)  # planned, excluded
+    planned.plan_payment(
+        session,
+        payee="rent",
+        amount=50_000,
+        currency="COP",
+        account_id=acc.id,
+        due_date=date(2026, 6, 10),
+        category_id=cat.id,
+    )  # planned, excluded
     agg = load_month_aggregate(session, "2026-06", TRM)
     income, expense, net = agg.totals_for("2026-06")
     assert income == 80_000
@@ -156,6 +164,7 @@ def test_drift_pct_none_when_previous_zero(session):
 
 def test_envelope_lines_and_summary(session):
     from quaestor.services import budgets
+
     acc = _acc(session)
     food = _cat(session, name="Food")
     fun = _cat(session, name="Fun")
@@ -165,7 +174,7 @@ def test_envelope_lines_and_summary(session):
     transactions.record_expense(session, acc.id, 70_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)  # over
     agg = load_month_aggregate(session, "2026-06", TRM)
     lines, summary = reports._envelope_lines(agg)
-    assert [l.category for l in lines] == ["Food", "Fun"]
+    assert [row.category for row in lines] == ["Food", "Fun"]
     food_line = lines[0]
     assert food_line.allocated == 100_000 and food_line.spent == 40_000
     assert food_line.available == 60_000 and food_line.status == "under"
@@ -184,12 +193,19 @@ def test_envelope_lines_empty_when_no_budgets(session):
 
 def test_goal_lines_defined_and_open_ended(session):
     from quaestor.services import goals
+
     sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
-    goals.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id,
-                      target_amount=1_200_000, deadline=date(2026, 12, 1))
+    goals.create_goal(
+        session,
+        name="Trip",
+        monthly_amount=200_000,
+        savings_account_id=sav.id,
+        target_amount=1_200_000,
+        deadline=date(2026, 12, 1),
+    )
     goals.create_goal(session, name="Buffer", monthly_amount=100_000, savings_account_id=sav.id)
     lines = reports._goal_lines(session, today=date(2026, 6, 1))
-    by_name = {l.name: l for l in lines}
+    by_name = {row.name: row for row in lines}
     assert by_name["Trip"].target == 1_200_000 and by_name["Trip"].eta is not None
     assert by_name["Trip"].on_track is not None
     assert by_name["Buffer"].target is None and by_name["Buffer"].eta is None
@@ -208,10 +224,18 @@ def test_balance_lines_exclude_archived_sorted(session):
 
 def test_pending_lines_group_by_account(session):
     from quaestor.services import planned
+
     acc = _acc(session)
     cat = _cat(session)
-    planned.plan_payment(session, payee="rent", amount=4_000_000, currency="COP",
-                         account_id=acc.id, due_date=date(2026, 6, 10), category_id=cat.id)
+    planned.plan_payment(
+        session,
+        payee="rent",
+        amount=4_000_000,
+        currency="COP",
+        account_id=acc.id,
+        due_date=date(2026, 6, 10),
+        category_id=cat.id,
+    )
     lines = reports._pending_lines(session, *month_bounds("2026-06"), TRM)
     assert len(lines) == 1
     assert "Acc COP" in lines[0] and "40,000.00" in lines[0]
@@ -226,12 +250,22 @@ def test_pending_lines_exclude_planned_income(session):
     from decimal import Decimal
 
     from quaestor.domain.models import Transaction, TxStatus, TxType
+
     acc = _acc(session)
-    session.add(Transaction(
-        date=date(2026, 6, 10), payee="Empleador", type=TxType.income,
-        status=TxStatus.planned, amount=5_000_000, currency="COP",
-        fx_rate=Decimal("1"), to_base=5_000_000, account_id=acc.id, source="manual",
-    ))
+    session.add(
+        Transaction(
+            date=date(2026, 6, 10),
+            payee="Empleador",
+            type=TxType.income,
+            status=TxStatus.planned,
+            amount=5_000_000,
+            currency="COP",
+            fx_rate=Decimal("1"),
+            to_base=5_000_000,
+            account_id=acc.id,
+            source="manual",
+        )
+    )
     session.commit()
     assert reports._pending_lines(session, *month_bounds("2026-06"), TRM) == []
 
@@ -247,12 +281,20 @@ def test_monthly_report_pending_lines_exclude_prior_overdue(session):
     fx.set_trm(session, "4000")
     a = accounts.create_account(session, "Bank", AccountType.debit, "COP", balance=10_000_000)
     planned.plan_payment(
-        session, payee="PriorOverdue", amount=100_000, currency="COP",
-        account_id=a.id, due_date=Date(2026, 5, 15),
+        session,
+        payee="PriorOverdue",
+        amount=100_000,
+        currency="COP",
+        account_id=a.id,
+        due_date=Date(2026, 5, 15),
     )
     planned.plan_payment(
-        session, payee="InMonth", amount=200_000, currency="COP",
-        account_id=a.id, due_date=Date(2026, 7, 5),
+        session,
+        payee="InMonth",
+        amount=200_000,
+        currency="COP",
+        account_id=a.id,
+        due_date=Date(2026, 7, 5),
     )
     rep = monthly_report(session, "2026-07", today=Date(2026, 7, 15))
     pending_text = "\n".join(rep.pending)
@@ -262,6 +304,7 @@ def test_monthly_report_pending_lines_exclude_prior_overdue(session):
 
 def test_monthly_report_end_to_end(session):
     from quaestor.services import budgets, goals
+
     fx.set_trm(session, "4000")
     acc = _acc(session)
     sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)

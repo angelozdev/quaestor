@@ -16,9 +16,7 @@ def test_accounts_crud_happy_path(client, auth):
     got = client.get(f"/api/accounts/{acc_id}", headers=auth)
     assert got.status_code == 200 and got.json()["id"] == acc_id
 
-    patched = client.patch(
-        f"/api/accounts/{acc_id}", headers=auth, json={"name": "Wallet"}
-    )
+    patched = client.patch(f"/api/accounts/{acc_id}", headers=auth, json={"name": "Wallet"})
     assert patched.status_code == 200 and patched.json()["name"] == "Wallet"
 
     listed = client.get("/api/accounts", headers=auth)
@@ -47,6 +45,7 @@ def test_create_account_bad_currency_is_422(client, auth):
 def test_restore_account_endpoint(client, engine, auth):
     from quaestor.services import accounts
     from sqlmodel import Session
+
     with Session(engine) as s:
         acc = accounts.create_account(s, "Bank", "debit", "COP", balance=0)
         accounts.archive_account(s, acc.id)

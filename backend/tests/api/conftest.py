@@ -1,4 +1,3 @@
-
 import pytest
 from fastapi.testclient import TestClient
 from quaestor.api import create_app

@@ -9,6 +9,7 @@ disable the persona and restore the pre-ADR-0017 generic behavior.
 See `docs/adr/0017-chat-system-prompt-injection-financial-coach-persona.md`
 for the rationale and the truncation ceiling (4 000 chars).
 """
+
 from __future__ import annotations
 
 COACH_SYSTEM_PROMPT: str = """\

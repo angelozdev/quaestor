@@ -6,6 +6,7 @@ Unknown names default to `WRITE_DESTRUCTIVE` (deny by default) so a new
 tool added without an entry in the registry is unreachable by the LLM
 until explicitly classified.
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -17,63 +18,61 @@ from quaestor.mcp.registry import (
     tool_tier,
 )
 
-_KNOWN_TOOL_NAMES: list[str] = (
-    [
-        "record_expense",
-        "record_income",
-        "transfer",
-        "set_fx_rate",
-        "list_transactions",
-        "get_fx_rate",
-        "list_accounts",
-        "list_categories",
-        "list_tags",
-        "create_recurring",
-        "list_recurring",
-        "plan_payment",
-        "confirm_payment",
-        "skip_payment",
-        "skip_recurring",
-        "to_pay",
-        "update_recurring",
-        "archive_recurring",
-        "assign_budget",
-        "create_goal",
-        "update_goal",
-        "contribute_goal",
-        "pause_goal",
-        "restore_goal",
-        "create_account",
-        "update_account",
-        "archive_account",
-        "restore_account",
-        "get_account",
-        "create_category",
-        "update_category",
-        "archive_category",
-        "restore_category",
-        "get_category",
-        "create_category_group",
-        "update_category_group",
-        "archive_category_group",
-        "restore_category_group",
-        "create_tag",
-        "update_tag",
-        "delete_tag",
-        "get_transaction",
-        "update_transaction",
-        "delete_transaction",
-        "get_settings",
-        "update_settings",
-        "list_budgets",
-        "safe_to_spend",
-        "list_goals",
-        "goals_progress",
-        "monthly_report",
-        "restore_recurring",
-        "restore_payment",
-    ]
-)
+_KNOWN_TOOL_NAMES: list[str] = [
+    "record_expense",
+    "record_income",
+    "transfer",
+    "set_fx_rate",
+    "list_transactions",
+    "get_fx_rate",
+    "list_accounts",
+    "list_categories",
+    "list_tags",
+    "create_recurring",
+    "list_recurring",
+    "plan_payment",
+    "confirm_payment",
+    "skip_payment",
+    "skip_recurring",
+    "to_pay",
+    "update_recurring",
+    "archive_recurring",
+    "assign_budget",
+    "create_goal",
+    "update_goal",
+    "contribute_goal",
+    "pause_goal",
+    "restore_goal",
+    "create_account",
+    "update_account",
+    "archive_account",
+    "restore_account",
+    "get_account",
+    "create_category",
+    "update_category",
+    "archive_category",
+    "restore_category",
+    "get_category",
+    "create_category_group",
+    "update_category_group",
+    "archive_category_group",
+    "restore_category_group",
+    "create_tag",
+    "update_tag",
+    "delete_tag",
+    "get_transaction",
+    "update_transaction",
+    "delete_transaction",
+    "get_settings",
+    "update_settings",
+    "list_budgets",
+    "safe_to_spend",
+    "list_goals",
+    "goals_progress",
+    "monthly_report",
+    "restore_recurring",
+    "restore_payment",
+]
 
 
 def test_every_known_tool_classified_with_no_duplicates():
@@ -167,9 +166,7 @@ def test_filter_for_llm_handles_malformed_entries_safely():
         {},
         {"function": {}},
     ]
-    assert filter_for_llm(tools, frozenset({"list_transactions"})) == [
-        {"function": {"name": "list_transactions"}}
-    ]
+    assert filter_for_llm(tools, frozenset({"list_transactions"})) == [{"function": {"name": "list_transactions"}}]
 
 
 def test_tier_sets_are_disjoint():

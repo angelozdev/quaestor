@@ -1,4 +1,5 @@
 """Test-only SQL query counter via SQLAlchemy's before_cursor_execute event."""
+
 from __future__ import annotations
 
 from contextlib import contextmanager

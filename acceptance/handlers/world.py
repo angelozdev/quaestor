@@ -4,6 +4,7 @@ Every scenario gets a fresh in-memory SQLite database migrated to head via
 ``quaestor.db.init_db`` — full state isolation between scenarios. All step
 handlers read/write only through this object.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -26,9 +27,7 @@ class World:
 
         self.today: date = date.today()
         # Any day safely inside the previous calendar month.
-        self.previous_month_day: date = (
-            self.today.replace(day=1) - timedelta(days=1)
-        ).replace(day=15)
+        self.previous_month_day: date = (self.today.replace(day=1) - timedelta(days=1)).replace(day=15)
 
         # name -> account id (accounts created by Given steps)
         self.accounts: dict[str, int] = {}
@@ -39,14 +38,14 @@ class World:
 
         self.last_expense_id: int | None = None
         self.viewed_cop_cents: int | None = None
-        self.report = None            # MonthlyReport | None
+        self.report = None  # MonthlyReport | None
         self.report_month: str | None = None
-        self.budget_lines = None      # list[BudgetLine] | None
-        self.transfer_legs = None     # (leg_from, leg_to) | None
-        self.implied_rate = None      # Decimal | None
+        self.budget_lines = None  # list[BudgetLine] | None
+        self.transfer_legs = None  # (leg_from, leg_to) | None
+        self.implied_rate = None  # Decimal | None
         self.implied_rate_error: Exception | None = None
-        self.app_cop_cents: int | None = None   # REST surface (AC-13)
-        self.mcp_cop_major = None                # Decimal from MCP text (AC-13)
+        self.app_cop_cents: int | None = None  # REST surface (AC-13)
+        self.mcp_cop_major = None  # Decimal from MCP text (AC-13)
 
         self.expense_ids: list[int] = []
         self.tx_view = None
@@ -61,10 +60,10 @@ class World:
         self.migration_expected: list[tuple[str, int, str]] = []
 
         # Outstanding queue (feature 006)
-        self.queue = None                       # OutstandingQueue | None
-        self.queue_total: int | None = None     # COP cents across both buckets
+        self.queue = None  # OutstandingQueue | None
+        self.queue_total: int | None = None  # COP cents across both buckets
         self.recurring_ids: dict[str, int] = {}  # payee -> RecurringItem id
-        self.transfer_ids: dict[str, int] = {}   # destination name -> planned tx id
+        self.transfer_ids: dict[str, int] = {}  # destination name -> planned tx id
         self.assistant_answer: str | None = None
 
         self.recurring_view: list | None = None
@@ -97,25 +96,17 @@ class World:
     def require_clean(self, what: str) -> None:
         """Fail if any earlier action error was never consumed by a Then."""
         if self.errors:
-            details = "; ".join(
-                f"{type(e).__name__}: {e}" for e in self.errors
-            )
-            raise AssertionError(
-                f"{what}: a preceding action failed — {details}"
-            )
+            details = "; ".join(f"{type(e).__name__}: {e}" for e in self.errors)
+            raise AssertionError(f"{what}: a preceding action failed — {details}")
 
     def consume_rejection(self, expected: tuple[type, ...], what: str) -> Exception:
         """Assert the last action was rejected with an expected error type."""
         err = self.last_error
         if err is None:
-            raise AssertionError(
-                f"{what}: expected the action to be rejected, but it succeeded"
-            )
+            raise AssertionError(f"{what}: expected the action to be rejected, but it succeeded")
         if not isinstance(err, expected):
             names = " | ".join(t.__name__ for t in expected)
-            raise AssertionError(
-                f"{what}: expected {names}, got {type(err).__name__}: {err}"
-            )
+            raise AssertionError(f"{what}: expected {names}, got {type(err).__name__}: {err}")
         self.errors.remove(err)
         return err
 

@@ -7,6 +7,7 @@ independently while sharing helpers (resolve-by-name, register functions).
 Tasks 3-6 each add input models, impls, and a `register_<entity>_tools(mcp)`
 function. Task 13 wires them all into the FastMCP instance via the registry.
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -37,9 +38,7 @@ class CreateAccountInput(BaseModel):
 class UpdateAccountInput(BaseModel):
     account: str = Field(description="Account name")
     name: str | None = Field(default=None, description="New name")
-    type: Literal["debit", "credit", "cash", "savings"] | None = Field(
-        default=None, description="New type"
-    )
+    type: Literal["debit", "credit", "cash", "savings"] | None = Field(default=None, description="New type")
 
 
 class ArchiveAccountInput(BaseModel):
@@ -69,9 +68,7 @@ def create_account(session: Session, inp: CreateAccountInput) -> str:
 @_as_text
 def update_account(session: Session, inp: UpdateAccountInput) -> str:
     acc = _resolve_account_by_name(session, inp.account)
-    updated = accounts.update_account(
-        session, acc.id, name=inp.name, type=inp.type
-    )
+    updated = accounts.update_account(session, acc.id, name=inp.name, type=inp.type)
     return format.account_card(updated)
 
 
@@ -229,9 +226,7 @@ def create_category_group(session: Session, inp: CreateCategoryGroupInput) -> st
 @_as_text
 def update_category_group(session: Session, inp: UpdateCategoryGroupInput) -> str:
     g = _resolve_category_group_by_name(session, inp.group)
-    updated = categories.update_group(
-        session, g.id, name=inp.name, sort_order=inp.sort_order
-    )
+    updated = categories.update_group(session, g.id, name=inp.name, sort_order=inp.sort_order)
     return format.category_group_card(updated)
 
 

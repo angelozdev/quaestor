@@ -4,6 +4,7 @@ The full markdown body comes from `services.reports.monthly_report`; the tool
 wrapper adds a compact headline (income/expense/net) so the agent gets the
 summary without parsing the long-form body.
 """
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

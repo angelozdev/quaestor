@@ -10,10 +10,7 @@ export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
     </h1>
   ),
   h2: ({ children, ...rest }) => (
-    <h2
-      {...rest}
-      className="font-display text-lg font-semibold tracking-tight mt-3 mb-1"
-    >
+    <h2 {...rest} className="font-display text-lg font-semibold tracking-tight mt-3 mb-1">
       {children}
     </h2>
   ),
@@ -38,10 +35,7 @@ export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
     </h6>
   ),
   p: ({ children, ...rest }) => (
-    <p
-      {...rest}
-      className="text-sm leading-relaxed my-1.5 first:mt-0 last:mb-0"
-    >
+    <p {...rest} className="text-sm leading-relaxed my-1.5 first:mt-0 last:mb-0">
       {children}
     </p>
   ),
@@ -82,10 +76,7 @@ export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
     </a>
   ),
   code: ({ children, ...rest }) => (
-    <code
-      {...rest}
-      className="rounded bg-[color:var(--muted)] px-1 py-0.5 text-[0.85em] font-mono"
-    >
+    <code {...rest} className="rounded bg-[color:var(--muted)] px-1 py-0.5 text-[0.85em] font-mono">
       {children}
     </code>
   ),
@@ -105,9 +96,7 @@ export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
       {children}
     </blockquote>
   ),
-  hr: ({ ...rest }) => (
-    <hr {...rest} className="my-3 border-[color:var(--border)]" />
-  ),
+  hr: ({ ...rest }) => <hr {...rest} className="my-3 border-[color:var(--border)]" />,
   table: ({ children, ...rest }) => (
     <table {...rest} className="my-2 w-full text-xs">
       {children}
@@ -124,18 +113,12 @@ export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
     </th>
   ),
   td: ({ children, ...rest }) => (
-    <td
-      {...rest}
-      className="py-1.5 px-2 align-top border-t border-[color:var(--border)]/50"
-    >
+    <td {...rest} className="py-1.5 px-2 align-top border-t border-[color:var(--border)]/50">
       {children}
     </td>
   ),
   del: ({ children, ...rest }) => (
-    <del
-      {...rest}
-      className="text-[color:var(--muted-foreground)] line-through"
-    >
+    <del {...rest} className="text-[color:var(--muted-foreground)] line-through">
       {children}
     </del>
   ),

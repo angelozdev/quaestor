@@ -6,10 +6,13 @@ from quaestor.services import rollover
 
 def test_close_month_runs_hooks_in_registration_order(session):
     calls = []
+
     def h1(period, s):
         return calls.append(("h1", period))
+
     def h2(period, s):
         return calls.append(("h2", period))
+
     rollover.register_rollover_hook(h1)
     rollover.register_rollover_hook(h2)
     try:

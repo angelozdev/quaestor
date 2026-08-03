@@ -22,7 +22,9 @@ describe("StreamingResponsePolicy", () => {
     expect(out.status).toBe(200)
     expect(out.headers.get("content-type")).toBe("text/event-stream")
     expect(out.body).toBeInstanceOf(ReadableStream)
-    const reader = out.body!.getReader()
+    const body = out.body
+    if (!body) throw new Error("expected a streaming body")
+    const reader = body.getReader()
     const decoder = new TextDecoder()
     const parts: string[] = []
     while (true) {

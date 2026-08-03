@@ -8,7 +8,9 @@
       "!**/out",
       "!**/build",
       "!**/next-env.d.ts",
-      "!**/tsconfig.tsbuildinfo"
+      "!**/tsconfig.tsbuildinfo",
+      "!ui/styles/tw-animate.css",
+      "!ui/styles/shadcn.css"
     ]
   },
   "linter": {
@@ -56,6 +58,29 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["app/globals.css"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noInvalidPositionAtImportRule": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDocumentCookie": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["ui/**/*.{ts,tsx}"],
       "linter": {

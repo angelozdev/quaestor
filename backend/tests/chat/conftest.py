@@ -49,9 +49,7 @@ def session(engine):
 
 @pytest.fixture
 def seeded(session):
-    account = accounts.create_account(
-        session, "Bancolombia", "debit", "COP", balance=10_000_000
-    )
+    account = accounts.create_account(session, "Bancolombia", "debit", "COP", balance=10_000_000)
     category = categories.create_category(session, "Groceries")
     return {"account": account, "category": category}
 
@@ -69,9 +67,7 @@ def app(monkeypatch, engine):
         def __init__(self) -> None:
             self.events: list[LLMEvent] = []
 
-        async def stream(
-            self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-        ) -> AsyncIterator[LLMEvent]:
+        async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
             for ev in self.events:
                 yield ev
 

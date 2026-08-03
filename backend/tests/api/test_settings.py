@@ -12,15 +12,11 @@ def test_get_and_patch_settings(client, auth):
         json={"name": "Savings", "type": "savings", "currency": "COP"},
     ).json()
 
-    patched = client.patch(
-        "/api/settings", headers=auth, json={"default_source_account_id": acc["id"]}
-    )
+    patched = client.patch("/api/settings", headers=auth, json={"default_source_account_id": acc["id"]})
     assert patched.status_code == 200
     assert patched.json()["default_source_account_id"] == acc["id"]
 
 
 def test_patch_settings_bad_account_is_422(client, auth):
-    resp = client.patch(
-        "/api/settings", headers=auth, json={"default_source_account_id": 9999}
-    )
+    resp = client.patch("/api/settings", headers=auth, json={"default_source_account_id": 9999})
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"

@@ -1,4 +1,5 @@
 """Categories REST router — thin adapter over services.categories."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -34,9 +35,7 @@ def create_category(body: CategoryCreate, session: Session = Depends(get_session
 
 
 @router.patch("/{category_id}", response_model=CategoryOut)
-def update_category(
-    category_id: int, body: CategoryUpdate, session: Session = Depends(get_session)
-):
+def update_category(category_id: int, body: CategoryUpdate, session: Session = Depends(get_session)):
     fields = body.model_dump(exclude_unset=True)
     return categories.update_category(session, category_id, **fields)
 

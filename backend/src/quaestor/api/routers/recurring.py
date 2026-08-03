@@ -1,4 +1,5 @@
 """Recurring REST router — thin adapter over services.recurring/occurrences."""
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -45,9 +46,7 @@ def create_recurring(body: RecurringCreate, session: Session = Depends(get_sessi
 
 
 @router.patch("/{recurring_id}", response_model=RecurringOut)
-def update_recurring(
-    recurring_id: int, body: RecurringUpdate, session: Session = Depends(get_session)
-):
+def update_recurring(recurring_id: int, body: RecurringUpdate, session: Session = Depends(get_session)):
     fields = body.model_dump(exclude_unset=True)
     return recurring.update_recurring(session, recurring_id, **fields)
 
@@ -64,9 +63,7 @@ def restore_recurring(recurring_id: int, session: Session = Depends(get_session)
 
 
 @router.post("/{recurring_id}/skip", response_model=OccurrenceOut)
-def skip_recurring(
-    recurring_id: int, body: SkipRecurringIn, session: Session = Depends(get_session)
-):
+def skip_recurring(recurring_id: int, body: SkipRecurringIn, session: Session = Depends(get_session)):
     return recurring.skip_recurring(session, recurring_id, body.due_date)
 
 
@@ -76,14 +73,10 @@ def pending_dates(recurring_id: int, session: Session = Depends(get_session)):
 
 
 @router.post("/{recurring_id}/pending-dates/accept", response_model=list[OccurrenceOut])
-def accept_pending_dates(
-    recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)
-):
+def accept_pending_dates(recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)):
     return occurrences.accept_pending_dates(session, recurring_id, body.due_dates)
 
 
 @router.post("/{recurring_id}/pending-dates/decline", response_model=list[OccurrenceOut])
-def decline_pending_dates(
-    recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)
-):
+def decline_pending_dates(recurring_id: int, body: PendingDatesIn, session: Session = Depends(get_session)):
     return occurrences.decline_pending_dates(session, recurring_id, body.due_dates)

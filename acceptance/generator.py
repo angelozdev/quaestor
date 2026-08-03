@@ -16,6 +16,7 @@ generated file shows fully-resolved, readable step texts). The generator
 reads ONLY the IR — it never parses ``spec.md``. Output is deterministic
 for a fixed IR. Do not hand-edit anything under ``.build/generated/``.
 """
+
 from __future__ import annotations
 
 import json
@@ -37,9 +38,7 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
 
 
-def _resolve_steps(
-    scenario: dict, row: dict[str, str] | None
-) -> list[tuple[str, str]]:
+def _resolve_steps(scenario: dict, row: dict[str, str] | None) -> list[tuple[str, str]]:
     """Resolve <param> placeholders for one execution; fail-fast markers on gaps."""
     steps: list[tuple[str, str]] = []
     for s in scenario["steps"]:
@@ -49,10 +48,12 @@ def _resolve_steps(
                 text = text.replace(f"<{key}>", value)
         missing = _PLACEHOLDER.findall(text)
         if missing:
-            return [(
-                "__FAIL__",
-                f"missing example value(s) {missing} for step {s['text']!r}",
-            )]
+            return [
+                (
+                    "__FAIL__",
+                    f"missing example value(s) {missing} for step {s['text']!r}",
+                )
+            ]
         steps.append((s["keyword"], text))
     return steps
 
@@ -96,13 +97,13 @@ def _emit_test_module(feature_dir: Path, ir: dict) -> str:
                 "",
             ]
         else:
-            out.append("@pytest.mark.parametrize(\"steps\", [")
+            out.append('@pytest.mark.parametrize("steps", [')
             for i, row in enumerate(examples, start=1):
                 steps = _resolve_steps(scenario, row)
                 out += [
                     "    pytest.param([",
                     _steps_literal(steps, "        "),
-                    f"    ], id=\"example-{i}\"),",
+                    f'    ], id="example-{i}"),',
                 ]
             out += [
                 "])",
@@ -145,19 +146,14 @@ def generate(feature_dir: Path) -> Path:
     feature_dir = feature_dir.resolve()
     ir_path = feature_dir / ".build" / "spec.json"
     if not ir_path.is_file():
-        raise SystemExit(
-            f"error: {ir_path} not found — run dae_gherkin.py first "
-            "(or use ./run-acceptance-tests.sh)"
-        )
+        raise SystemExit(f"error: {ir_path} not found — run dae_gherkin.py first (or use ./run-acceptance-tests.sh)")
     ir = json.loads(ir_path.read_text(encoding="utf-8"))
 
     generated_dir = feature_dir / ".build" / "generated"
     generated_dir.mkdir(parents=True, exist_ok=True)
 
     slug = _sanitize(feature_dir.name)
-    (generated_dir / "conftest.py").write_text(
-        _emit_conftest(generated_dir), encoding="utf-8"
-    )
+    (generated_dir / "conftest.py").write_text(_emit_conftest(generated_dir), encoding="utf-8")
     test_path = generated_dir / f"test_{slug}.py"
     test_path.write_text(_emit_test_module(feature_dir, ir), encoding="utf-8")
 

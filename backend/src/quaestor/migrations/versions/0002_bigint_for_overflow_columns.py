@@ -13,6 +13,7 @@ columns to BIGINT (8 bytes) to fit the data. Only the two columns with
 actual overflowing values are changed; other amount columns (budget,
 goal, recurring, goal_contribution) fit in INTEGER and are not modified.
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

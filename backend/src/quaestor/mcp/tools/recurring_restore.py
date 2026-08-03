@@ -1,4 +1,5 @@
 """MCP recurring restore tool (ADR-0009): undo an archive_recurring call."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field

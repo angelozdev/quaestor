@@ -1,4 +1,3 @@
-
 from quaestor.domain.report_types import (
     AccountBalance,
     CategorySection,
@@ -14,6 +13,7 @@ from quaestor.domain.report_types import (
 
 def test_safe_to_spend_is_reexported_from_dtos():
     from quaestor.domain import dtos
+
     assert SafeToSpend is dtos.SafeToSpend
 
 
@@ -22,8 +22,12 @@ def test_value_types_hold_their_fields():
     assert (summary.n_green, summary.n_red, summary.rollover_generated) == (2, 1, 5000)
 
     line = EnvelopeLine(
-        category="Food", allocated=100, rollover_in=10, spent=40,
-        available=70, status="under",
+        category="Food",
+        allocated=100,
+        rollover_in=10,
+        spent=40,
+        available=70,
+        status="under",
     )
     assert line.category == "Food" and line.available == 70
 
@@ -40,22 +44,42 @@ def test_value_types_hold_their_fields():
     assert bal.currency == "COP"
 
     drift = DriftMoM(
-        prev_month="2026-05", income_abs=10, income_pct=5.0,
-        expense_abs=-20, expense_pct=None, net_abs=30, net_pct=None,
+        prev_month="2026-05",
+        income_abs=10,
+        income_pct=5.0,
+        expense_abs=-20,
+        expense_pct=None,
+        net_abs=30,
+        net_pct=None,
     )
     assert drift.prev_month == "2026-05" and drift.expense_pct is None
 
 
 def test_monthly_report_markdown_is_mutable():
     sts = SafeToSpend(
-        year_month="2026-06", income_forecast=0, committed=0,
-        assigned_envelopes=0, free=12345, committed_breakdown=[],
+        year_month="2026-06",
+        income_forecast=0,
+        committed=0,
+        assigned_envelopes=0,
+        free=12345,
+        committed_breakdown=[],
     )
     report = MonthlyReport(
-        month="2026-06", income=0, expense=0, net=0,
-        envelopes_summary=EnvelopesSummary(0, 0, 0), envelopes=[],
-        by_category=[], by_group=[], goals=[], balances=[],
-        drift_mom=None, usd_share=0.0, pending=[], safe_to_spend=sts, markdown="",
+        month="2026-06",
+        income=0,
+        expense=0,
+        net=0,
+        envelopes_summary=EnvelopesSummary(0, 0, 0),
+        envelopes=[],
+        by_category=[],
+        by_group=[],
+        goals=[],
+        balances=[],
+        drift_mom=None,
+        usd_share=0.0,
+        pending=[],
+        safe_to_spend=sts,
+        markdown="",
     )
     report.markdown = "rendered"  # must be reassignable (renderer fills it last)
     assert report.markdown == "rendered"

@@ -16,8 +16,11 @@ def test_list_goals_empty(session):
 def test_list_goals_table_with_one(session):
     _bank(session)
     goals.create_goal(
-        session, name="Trip", monthly_amount=500_000,
-        savings_account_id=1, target_amount=2_000_000,
+        session,
+        name="Trip",
+        monthly_amount=500_000,
+        savings_account_id=1,
+        target_amount=2_000_000,
         deadline=date(2026, 12, 31),
     )
     out = goals_reads.list_goals(session, goals_reads.ListGoalsInput())
@@ -32,8 +35,11 @@ def test_goals_progress_empty(session):
 def test_goals_progress_active_goal(session):
     _bank(session)
     goals.create_goal(
-        session, name="Trip", monthly_amount=500_000,
-        savings_account_id=1, target_amount=2_000_000,
+        session,
+        name="Trip",
+        monthly_amount=500_000,
+        savings_account_id=1,
+        target_amount=2_000_000,
         deadline=date(2026, 12, 31),
     )
     out = goals_reads.goals_progress(session, goals_reads.GoalsProgressInput())

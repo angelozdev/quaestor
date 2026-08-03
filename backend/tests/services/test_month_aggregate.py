@@ -31,16 +31,25 @@ TRM = Decimal("4000")
 
 def _expense(acc_id, cat_id, d, amount):
     return Transaction(
-        date=d, type=TxType.expense, status=TxStatus.posted, amount=amount,
-        currency="COP", account_id=acc_id, category_id=cat_id, payee="seed",
+        date=d,
+        type=TxType.expense,
+        status=TxStatus.posted,
+        amount=amount,
+        currency="COP",
+        account_id=acc_id,
+        category_id=cat_id,
+        payee="seed",
     )
 
 
 def _setup(session):
     acc = Account(name="Bank", type=AccountType.debit, currency="COP")
     cat = Category(name="Food")
-    session.add(acc); session.add(cat); session.commit()
-    session.refresh(acc); session.refresh(cat)
+    session.add(acc)
+    session.add(cat)
+    session.commit()
+    session.refresh(acc)
+    session.refresh(cat)
     return acc, cat
 
 
@@ -94,8 +103,11 @@ def test_load_issues_bounded_query_count(session):
 def test_excluded_category_has_zero_budget_spend(session):
     acc = Account(name="Bank", type=AccountType.debit, currency="COP")
     cat = Category(name="Transfers", exclude_from_budget=True)
-    session.add(acc); session.add(cat); session.commit()
-    session.refresh(acc); session.refresh(cat)
+    session.add(acc)
+    session.add(cat)
+    session.commit()
+    session.refresh(acc)
+    session.refresh(cat)
     session.add(_expense(acc.id, cat.id, date(2026, 6, 3), 500_000))
     session.commit()
     agg = load_month_aggregate(session, "2026-06", TRM)

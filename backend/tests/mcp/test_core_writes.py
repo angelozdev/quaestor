@@ -50,9 +50,7 @@ def test_record_expense_unknown_account_returns_guidance(session, seeded):
 def test_record_expense_applies_tags(session, seeded):
     core.record_expense(
         session,
-        RecordExpenseInput(
-            payee="Trip", amount=2_000_000, account="Bancolombia", tags=["trip", "june"]
-        ),
+        RecordExpenseInput(payee="Trip", amount=2_000_000, account="Bancolombia", tags=["trip", "june"]),
     )
     # tag filter through the read service proves the link was created
     from quaestor.services import transactions as tx_service
@@ -63,9 +61,7 @@ def test_record_expense_applies_tags(session, seeded):
 def test_record_income_increments_balance(session, seeded):
     out = core.record_income(
         session,
-        RecordIncomeInput(
-            payee="Salary", amount=3_200_000, account="Bancolombia", date=date(2026, 6, 18)
-        ),
+        RecordIncomeInput(payee="Salary", amount=3_200_000, account="Bancolombia", date=date(2026, 6, 18)),
     )
     assert "Income recorded" in out
     assert accounts.get_account(session, seeded["account"].id).balance == 13_200_000
@@ -75,9 +71,7 @@ def test_transfer_confirms_both_balances(session, seeded):
     accounts.create_account(session, "Savings", "savings", "COP", balance=0)
     out = core.transfer(
         session,
-        TransferInput(
-            from_account="Bancolombia", to_account="Savings", amount=4_000_000
-        ),
+        TransferInput(from_account="Bancolombia", to_account="Savings", amount=4_000_000),
     )
     assert "Transfer" in out
     assert "Bancolombia" in out and "Savings" in out
@@ -88,9 +82,7 @@ def test_transfer_confirms_both_balances(session, seeded):
 def test_transfer_same_account_returns_imbalance_text(session, seeded):
     out = core.transfer(
         session,
-        TransferInput(
-            from_account="Bancolombia", to_account="Bancolombia", amount=1000
-        ),
+        TransferInput(from_account="Bancolombia", to_account="Bancolombia", amount=1000),
     )
     assert "Could not record the transfer" in out
 
@@ -120,7 +112,10 @@ def test_usd_expense_without_trm_records_and_omits_equivalent_line(session):
     out = core.record_expense(
         session,
         RecordExpenseInput(
-            payee="Spotify", amount=1200, account="Amex", currency="USD",
+            payee="Spotify",
+            amount=1200,
+            account="Amex",
+            currency="USD",
             date=date(2026, 6, 18),
         ),
     )
@@ -135,7 +130,10 @@ def test_usd_expense_with_trm_shows_cop_equivalent(session):
     out = core.record_expense(
         session,
         RecordExpenseInput(
-            payee="Spotify", amount=1200, account="Amex", currency="USD",
+            payee="Spotify",
+            amount=1200,
+            account="Amex",
+            currency="USD",
             date=date(2026, 6, 18),
         ),
     )
@@ -165,9 +163,7 @@ def test_cross_currency_transfer_without_amount_received_returns_text(session, s
     accounts.create_account(session, "Amex", "credit", "USD", balance=0)
     out = core.transfer(
         session,
-        TransferInput(
-            from_account="Bancolombia", to_account="Amex", amount=4_000_000
-        ),
+        TransferInput(from_account="Bancolombia", to_account="Amex", amount=4_000_000),
     )
     assert "Invalid input" in out
     assert "amount_received" in out

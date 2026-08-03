@@ -6,6 +6,7 @@ chat request and cache both the raw MCP list and the OpenAI-shaped list.
 
 `to_openai_tools()` is pure — easy to test without spinning up FastMCP.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -20,6 +20,7 @@ Revises: 0005
 Create Date: 2026-07-31
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -40,14 +41,10 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "sqlite":
         with op.batch_alter_table("transaction") as batch_op:
-            batch_op.add_column(
-                sa.Column("transfer_direction", direction, nullable=True)
-            )
+            batch_op.add_column(sa.Column("transfer_direction", direction, nullable=True))
     else:
         direction.create(bind, checkfirst=True)
-        op.add_column(
-            "transaction", sa.Column("transfer_direction", direction, nullable=True)
-        )
+        op.add_column("transaction", sa.Column("transfer_direction", direction, nullable=True))
     _backfill_directions()
 
 

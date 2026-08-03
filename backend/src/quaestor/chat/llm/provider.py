@@ -7,29 +7,30 @@ the per-event payload lives on the LLMEvent dataclass.
 The mapping to Vercel AI SDK UI Message Stream SSE bytes happens in
 `quaestor.chat.events` — `provider.py` does NOT know about SSE shapes.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 
 class LLMEventType(StrEnum):
     """Discriminator for LLMEvent. Mirrors Vercel AI SDK UI Message Stream."""
 
-    MESSAGE_START = "start"               # → Vercel `start`
-    TEXT_START = "text-start"             # → Vercel `text-start`
-    TEXT_DELTA = "text-delta"             # → Vercel `text-delta`
-    TEXT_END = "text-end"                 # → Vercel `text-end`
-    TOOL_INPUT_START = "tool-input-start"      # → Vercel `tool-input-start`
-    TOOL_INPUT_DELTA = "tool-input-delta"      # → Vercel `tool-input-delta`
+    MESSAGE_START = "start"  # → Vercel `start`
+    TEXT_START = "text-start"  # → Vercel `text-start`
+    TEXT_DELTA = "text-delta"  # → Vercel `text-delta`
+    TEXT_END = "text-end"  # → Vercel `text-end`
+    TOOL_INPUT_START = "tool-input-start"  # → Vercel `tool-input-start`
+    TOOL_INPUT_DELTA = "tool-input-delta"  # → Vercel `tool-input-delta`
     TOOL_INPUT_AVAILABLE = "tool-input-available"  # → Vercel `tool-input-available`
     TOOL_OUTPUT_AVAILABLE = "tool-output-available"  # → Vercel `tool-output-available`
-    TOOL_OUTPUT_ERROR = "tool-output-error"   # → Vercel `tool-output-error` (ADR-0022)
-    STEP_FINISH = "finish-step"           # → Vercel `finish-step`
-    MESSAGE_FINISH = "finish"             # → Vercel `finish`
-    ERROR = "error"                       # → Vercel `error`
+    TOOL_OUTPUT_ERROR = "tool-output-error"  # → Vercel `tool-output-error` (ADR-0022)
+    STEP_FINISH = "finish-step"  # → Vercel `finish-step`
+    MESSAGE_FINISH = "finish"  # → Vercel `finish`
+    ERROR = "error"  # → Vercel `error`
 
 
 @dataclass
@@ -62,7 +63,6 @@ class LLMEvent:
     iterations: int | None = None
     # Token usage, normalized to Vercel wire keys. `None` = provider didn't
     # report; renderer omits `messageMetadata` in that case.
-    # Shape: {"promptTokens": int, "completionTokens": int, "totalTokens": int}
     usage: dict[str, int] | None = None
 
     # error
@@ -93,7 +93,4 @@ class LLMProvider(Protocol):
     AnthropicNativeProvider / OpenAIProvider (future).
     """
 
-    def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> AsyncIterator[LLMEvent]:
-        ...
+    def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]: ...

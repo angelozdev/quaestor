@@ -3,6 +3,7 @@
 The scheduler (P7) is the real driver (ADR-017); this endpoint exists for
 manual/debug closes. It stays behind require_auth like the other routers.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

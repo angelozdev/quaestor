@@ -1,9 +1,10 @@
 """SQLModel tables and enums from the domain (P0)."""
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Annotated
 
 from sqlalchemy import BigInteger, Column, Index, Numeric, UniqueConstraint
@@ -103,9 +104,7 @@ class Transaction(SQLModel, table=True):
     """`amount` is positive integer cents in the account's currency; no rate
     or converted amount is stored — COP figures are read-time (ADR-0031)."""
 
-    __table_args__ = (
-        Index("ix_transaction_type_status_date", "type", "status", "date"),
-    )
+    __table_args__ = (Index("ix_transaction_type_status_date", "type", "status", "date"),)
 
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     date: date
@@ -168,9 +167,7 @@ class RecurringItem(SQLModel, table=True):
 
 class RecurringOccurrence(SQLModel, table=True):
     __tablename__ = "recurring_occurrence"
-    __table_args__ = (
-        UniqueConstraint("recurring_id", "due_date", name="uq_occurrence_recurring_due"),
-    )
+    __table_args__ = (UniqueConstraint("recurring_id", "due_date", name="uq_occurrence_recurring_due"),)
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     recurring_id: Annotated[int, Field(foreign_key="recurring_item.id", index=True)]
     due_date: date
@@ -196,9 +193,7 @@ class ContributionSource(StrEnum):
 class Budget(SQLModel, table=True):
     """`year_month` is "YYYY-MM"; `amount_assigned` is COP cents, >= 0."""
 
-    __table_args__ = (
-        UniqueConstraint("category_id", "year_month", name="uq_budget_category_month"),
-    )
+    __table_args__ = (UniqueConstraint("category_id", "year_month", name="uq_budget_category_month"),)
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     category_id: Annotated[int, Field(foreign_key="category.id")]
     year_month: str
@@ -223,9 +218,7 @@ class GoalContribution(SQLModel, table=True):
     the savings account's currency — no COP snapshot is stored (ADR-0031)."""
 
     __tablename__ = "goal_contribution"
-    __table_args__ = (
-        Index("ix_goal_contribution_goal_date", "goal_id", "date"),
-    )
+    __table_args__ = (Index("ix_goal_contribution_goal_date", "goal_id", "date"),)
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     goal_id: Annotated[int, Field(foreign_key="goal.id")]
     date: date

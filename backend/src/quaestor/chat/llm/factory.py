@@ -1,4 +1,5 @@
 """LLMProvider factory — select the active provider from `LLM_PROVIDER`."""
+
 from __future__ import annotations
 
 import os
@@ -14,9 +15,7 @@ def build_llm_provider() -> LLMProvider:
     name = os.environ.get("LLM_PROVIDER", "litellm").strip().lower() or "litellm"
     cls = _RECOGNIZED.get(name)
     if cls is None:
-        raise ValueError(
-            f"Unknown LLM_PROVIDER={name!r}. Recognized values: {sorted(_RECOGNIZED)}"
-        )
+        raise ValueError(f"Unknown LLM_PROVIDER={name!r}. Recognized values: {sorted(_RECOGNIZED)}")
     return cls(
         model=os.environ.get("LLM_MODEL", "anthropic/MiniMax-M3"),
         api_key=os.environ.get("ANTHROPIC_API_KEY") or None,

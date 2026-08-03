@@ -15,6 +15,7 @@ a strong foreign currency), it can be as large in magnitude as `amount`.
 Migration 0002 widened account.balance and transaction.amount. This
 migration widens transaction.to_base.
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa

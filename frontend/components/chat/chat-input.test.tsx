@@ -64,9 +64,7 @@ describe("ChatInput", () => {
   })
 
   it("wraps the textarea in a div with the chat-input-underline class", () => {
-    const { container } = render(
-      <ChatInput status="ready" onSend={vi.fn()} onStop={vi.fn()} />,
-    )
+    const { container } = render(<ChatInput status="ready" onSend={vi.fn()} onStop={vi.fn()} />)
     expect(container.querySelector(".chat-input-underline")).not.toBeNull()
   })
 })

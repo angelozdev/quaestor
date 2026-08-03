@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
 import type { DynamicToolUIPart, ToolUIPart } from "ai"
+import { describe, expect, it } from "vitest"
 import { ChatToolChip } from "./chat-tool-chip"
 
 function dynamicPart(overrides: Partial<DynamicToolUIPart> = {}): DynamicToolUIPart {
@@ -63,9 +63,7 @@ describe("ChatToolChip", () => {
 
   it("applies destructive styling when state is output-error", () => {
     render(
-      <ChatToolChip
-        part={dynamicPart({ state: "output-error", errorText: "tool blew up" })}
-      />,
+      <ChatToolChip part={dynamicPart({ state: "output-error", errorText: "tool blew up" })} />,
     )
     expect(screen.getByText("tool blew up")).toBeInTheDocument()
     // The output region exists and carries role=region for screen readers.

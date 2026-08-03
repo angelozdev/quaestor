@@ -4,6 +4,7 @@ ADR-0031: transactions store only their physical amount + currency. No
 rate and no converted amount are ever persisted; COP figures are computed
 at read time from the current TRM.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -71,9 +72,7 @@ def _record(
         raise ValidationError(f"unsupported currency: {currency}")
     acc = _require_account(session, account_id)
     if currency != acc.currency:
-        raise ValidationError(
-            f"currency {currency} does not match account currency ({acc.currency})"
-        )
+        raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
     if category_id is not None:
         cat = session.get(Category, category_id)
         if cat is None:
@@ -134,8 +133,16 @@ def record_expense(
         NotFound: Account does not exist.
     """
     return _record(
-        session, TxType.expense, account_id, amount, currency, date, payee,
-        category_id, notes, source,
+        session,
+        TxType.expense,
+        account_id,
+        amount,
+        currency,
+        date,
+        payee,
+        category_id,
+        notes,
+        source,
     )
 
 
@@ -173,8 +180,16 @@ def record_income(
         NotFound: Account does not exist.
     """
     return _record(
-        session, TxType.income, account_id, amount, currency, date, payee,
-        category_id, notes, source,
+        session,
+        TxType.income,
+        account_id,
+        amount,
+        currency,
+        date,
+        payee,
+        category_id,
+        notes,
+        source,
     )
 
 
@@ -251,15 +266,10 @@ def transfer(
     if not is_supported(sent_currency):
         raise ValidationError(f"unsupported currency: {sent_currency}")
     if sent_currency != src.currency:
-        raise ValidationError(
-            f"currency {sent_currency} does not match source account "
-            f"currency ({src.currency})"
-        )
+        raise ValidationError(f"currency {sent_currency} does not match source account currency ({src.currency})")
     cross_currency = src.currency != dst.currency
     if cross_currency and amount_received is None:
-        raise ValidationError(
-            "amount_received is required when the accounts use different currencies"
-        )
+        raise ValidationError("amount_received is required when the accounts use different currencies")
     received = amount_received if amount_received is not None else amount
     group = uuid.uuid4().hex
     payee = notes or "transfer"
@@ -303,7 +313,7 @@ def transfer(
 
 
 _TRANSACTION_SORTABLE: SortableColumns = {
-    "date":       Transaction.date,
+    "date": Transaction.date,
     "created_at": Transaction.created_at,
 }
 
@@ -416,9 +426,7 @@ def update_transaction(
 
 
 def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:
-    session.exec(
-        delete(TransactionTag).where(TransactionTag.transaction_id.in_(tx_ids))
-    )
+    session.exec(delete(TransactionTag).where(TransactionTag.transaction_id.in_(tx_ids)))
 
 
 def _delta_balance_of(tx: Transaction) -> int:
@@ -427,9 +435,7 @@ def _delta_balance_of(tx: Transaction) -> int:
     try:
         return leg_delta_balance(tx.transfer_direction, tx.amount)
     except ValueError as exc:
-        raise ValidationError(
-            f"transfer leg {tx.id} has no stored direction; cannot reverse safely"
-        ) from exc
+        raise ValidationError(f"transfer leg {tx.id} has no stored direction; cannot reverse safely") from exc
 
 
 def _reverse_balance(session: Session, tx: Transaction) -> None:
@@ -445,9 +451,7 @@ def _group_members(session: Session, leg: Transaction) -> list[Transaction]:
     return [
         member
         for member in session.exec(
-            select(Transaction).where(
-                Transaction.transfer_group_id == leg.transfer_group_id
-            )
+            select(Transaction).where(Transaction.transfer_group_id == leg.transfer_group_id)
         ).all()
         if member.id != leg.id
     ]
@@ -472,14 +476,8 @@ def _fire_pre_delete(session: Session, rows: list[Transaction]) -> None:
 
 def _delete_transfer_pair(session: Session, leg: Transaction) -> None:
     if leg.transfer_group_id is None:
-        raise ValidationError(
-            f"transfer {leg.id} has no transfer group; cannot delete its pair"
-        )
-    legs = session.exec(
-        select(Transaction).where(
-            Transaction.transfer_group_id == leg.transfer_group_id
-        )
-    ).all()
+        raise ValidationError(f"transfer {leg.id} has no transfer group; cannot delete its pair")
+    legs = session.exec(select(Transaction).where(Transaction.transfer_group_id == leg.transfer_group_id)).all()
     try:
         for member in legs:
             _reverse_balance(session, member)

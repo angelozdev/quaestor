@@ -4,6 +4,7 @@ Drives `POST /api/chat` end-to-end via the `app` fixture and asserts that
 the conversation list the upstream provider actually receives reflects the
 resolved system prompt (default / literal / truncated / disabled).
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -48,14 +49,10 @@ class CapturingProvider(LLMProvider):
     def __init__(self) -> None:
         self.calls: list[list[dict[str, Any]]] = []
 
-    async def stream(
-        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
-    ) -> AsyncIterator[LLMEvent]:
+    async def stream(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> AsyncIterator[LLMEvent]:
         self.calls.append(list(messages))
         yield LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m")
-        yield LLMEvent(
-            type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1
-        )
+        yield LLMEvent(type=LLMEventType.MESSAGE_FINISH, stop_reason="stop", iterations=1)
 
 
 @pytest.fixture
@@ -135,9 +132,7 @@ def test_oversize_prompt_truncated_at_4k(monkeypatch, capturing_app, caplog):
 
     injected = cap.calls[0][0]["content"]
     assert len(injected) == 4_000
-    assert any(
-        "truncating" in rec.message.lower() for rec in caplog.records
-    ), "expected a truncation warning log"
+    assert any("truncating" in rec.message.lower() for rec in caplog.records), "expected a truncation warning log"
 
 
 def test_blank_env_means_no_injection(monkeypatch, capturing_app):

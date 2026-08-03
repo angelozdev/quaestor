@@ -13,6 +13,7 @@ The service:
      the LLM sees its own prior tool calls on the next iteration
   6. emits a final `finish` event and the `[DONE]` sentinel
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -71,9 +72,7 @@ class ChatService:
 
         try:
             async with MCPClient(self._mcp) as mcp_client:
-                tools = filter_for_llm(
-                    await get_cached_tools(mcp_client), LLM_ALLOWED_TOOLS
-                )
+                tools = filter_for_llm(await get_cached_tools(mcp_client), LLM_ALLOWED_TOOLS)
 
                 for _iteration in range(1, self._max_iterations + 1):
                     tool_calls_this_iter: list[dict[str, Any]] = []
@@ -81,9 +80,7 @@ class ChatService:
                     try:
                         provider_iter = self._provider.stream(conversation, tools)
                         if self._request_timeout_s is not None:
-                            provider_iter = _timeout_iter(
-                                provider_iter, self._request_timeout_s
-                            )
+                            provider_iter = _timeout_iter(provider_iter, self._request_timeout_s)
                         async for event in provider_iter:
                             if event.type == LLMEventType.MESSAGE_START and event.message_id:
                                 message_id = event.message_id
@@ -200,9 +197,7 @@ class ChatService:
                             err_text = f"tool error: {type(exc).__name__}: {exc}".splitlines()[0]
                             err_text = err_text[:500]
                             safe_err = sanitize_tool_output(tc_name, err_text)
-                            _log.warning(
-                                "[chat] tool call failed: %s %s", tc_name, err_text
-                            )
+                            _log.warning("[chat] tool call failed: %s %s", tc_name, err_text)
                             yield serialize_event(
                                 LLMEvent(
                                     type=LLMEventType.TOOL_OUTPUT_ERROR,
@@ -255,9 +250,7 @@ class ChatService:
                         message_id=message_id,
                     )
                     yield serialize_event(
-                        LLMEvent(
-                            type=LLMEventType.TEXT_DELTA, delta="loop limit reached"
-                        ),
+                        LLMEvent(type=LLMEventType.TEXT_DELTA, delta="loop limit reached"),
                         message_id=message_id,
                     )
                     yield serialize_event(
@@ -292,9 +285,7 @@ def _json_dumps(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False)
 
 
-async def _timeout_iter(
-    source: AsyncIterator[LLMEvent], timeout_s: float
-) -> AsyncIterator[LLMEvent]:
+async def _timeout_iter(source: AsyncIterator[LLMEvent], timeout_s: float) -> AsyncIterator[LLMEvent]:
     """Yield events from `source`, aborting with asyncio.TimeoutError when the
     gap between events exceeds `timeout_s`.
 

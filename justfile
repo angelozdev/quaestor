@@ -78,6 +78,20 @@ dev-shell-api:
 dev-test:
 	cd backend && uv run pytest -q
 
+# Lint + format-check both halves (ADR-0040). The acceptance pipeline runs the
+# Python half itself, so a green suite already implies a green `just lint`.
+lint:
+	uv run --project backend ruff check backend/src backend/tests acceptance
+	uv run --project backend ruff format --check backend/src backend/tests acceptance
+	cd frontend && pnpm biome check .
+	cd frontend && pnpm tsc --noEmit
+
+# Apply every fix the linters can make on their own, then re-check.
+lint-fix:
+	uv run --project backend ruff check --fix backend/src backend/tests acceptance
+	uv run --project backend ruff format backend/src backend/tests acceptance
+	cd frontend && pnpm biome check --write .
+
 # Manually trigger the daily job (FX + materialize + close-month).
 daily:
 	{{sqlite}} exec api \

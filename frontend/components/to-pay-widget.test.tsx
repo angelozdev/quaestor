@@ -61,9 +61,7 @@ describe("ToPayWidget", () => {
   it("does not render the overdue section when overdue is empty", async () => {
     mockToPay.mockResolvedValue({
       overdue: [],
-      upcoming: [
-        { id: 3, payee: "Foo", date: "2026-07-15", amount: 1, currency: "COP" } as never,
-      ],
+      upcoming: [{ id: 3, payee: "Foo", date: "2026-07-15", amount: 1, currency: "COP" } as never],
       total_base: 1,
     })
     render(<ToPayWidget />, { wrapper })
@@ -89,8 +87,6 @@ describe("ToPayWidget", () => {
   it("shows the empty state when both buckets are empty", async () => {
     mockToPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
     render(<ToPayWidget />, { wrapper })
-    await waitFor(() =>
-      expect(screen.getByText(/nada pendiente/i)).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.getByText(/nada pendiente/i)).toBeInTheDocument())
   })
 })

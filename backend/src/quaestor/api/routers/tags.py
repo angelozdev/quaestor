@@ -1,4 +1,5 @@
 """Tags REST router — thin adapter over services.tags."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends

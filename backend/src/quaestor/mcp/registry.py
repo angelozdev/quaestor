@@ -14,7 +14,8 @@ registered on the MCP server (curl/MCP-direct + frontend HTTP UI can use
 them) but are dropped from the OpenAI-shaped tool list passed to the
 LLM, removing the indirect-prompt-injection blast radius.
 """
-from enum import Enum, StrEnum
+
+from enum import StrEnum
 
 from sqlmodel import Session
 
@@ -190,6 +191,7 @@ def tool_tier(name: str) -> ToolTier:
         return ToolTier.WRITE_SAFE
     return ToolTier.WRITE_DESTRUCTIVE
 
+
 TEMPORAL_TOOL_NAMES = (
     "create_recurring",
     "list_recurring",
@@ -277,13 +279,9 @@ GOALS_READS_TOOL_NAMES = (
     "goals_progress",
 )
 
-REPORTS_TOOL_NAMES = (
-    "monthly_report",
-)
+REPORTS_TOOL_NAMES = ("monthly_report",)
 
-RECURRING_RESTORE_TOOL_NAMES = (
-    "restore_recurring",
-)
+RECURRING_RESTORE_TOOL_NAMES = ("restore_recurring",)
 
 
 def register_core_tools(mcp) -> None:
@@ -376,17 +374,26 @@ def register_temporal_tools(mcp) -> None:
         with Session(db.engine) as session:
             return temporal.skip_recurring(session, skip)
 
-    @mcp.tool(name="pending_recurring_dates", description="Passed due dates of a recurring item waiting for the user to accept or decline.")
+    @mcp.tool(
+        name="pending_recurring_dates",
+        description="Passed due dates of a recurring item waiting for the user to accept or decline.",
+    )
     def pending_recurring_dates(item: temporal.PendingDatesInput) -> str:
         with Session(db.engine) as session:
             return temporal.pending_recurring_dates(session, item)
 
-    @mcp.tool(name="accept_recurring_dates", description="Record the passed due dates the user accepted, each on its own date.")
+    @mcp.tool(
+        name="accept_recurring_dates",
+        description="Record the passed due dates the user accepted, each on its own date.",
+    )
     def accept_recurring_dates(answer: temporal.AnswerPendingDatesInput) -> str:
         with Session(db.engine) as session:
             return temporal.accept_recurring_dates(session, answer)
 
-    @mcp.tool(name="decline_recurring_dates", description="Close the passed due dates the user declined; they are never charged or offered again.")
+    @mcp.tool(
+        name="decline_recurring_dates",
+        description="Close the passed due dates the user declined; they are never charged or offered again.",
+    )
     def decline_recurring_dates(answer: temporal.AnswerPendingDatesInput) -> str:
         with Session(db.engine) as session:
             return temporal.decline_recurring_dates(session, answer)
@@ -540,7 +547,9 @@ def register_transactions_writes_tools(mcp) -> None:
         with Session(db.engine) as session:
             return tx_tools.get_transaction(session, inp)
 
-    @mcp.tool(name="update_transaction", description="Edit a transaction's payee/notes/category/date; add or remove tags.")
+    @mcp.tool(
+        name="update_transaction", description="Edit a transaction's payee/notes/category/date; add or remove tags."
+    )
     def update_transaction(inp: UpdateTransactionInput) -> str:
         with Session(db.engine) as session:
             return tx_tools.update_transaction(session, inp)

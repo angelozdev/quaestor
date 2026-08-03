@@ -20,6 +20,7 @@ We treat every tool output as data, not as instructions:
 
 The function is pure: no side effects, deterministic. Easy to test.
 """
+
 from __future__ import annotations
 
 import re
@@ -49,9 +50,7 @@ _ROLE_PREFIXES = (
 )
 
 _PREFIX_RE = re.compile(
-    r"^(?P<prefix>\s*)(?P<token>(?:"
-    + "|".join(re.escape(p) for p in _ROLE_PREFIXES)
-    + r"))\s",
+    r"^(?P<prefix>\s*)(?P<token>(?:" + "|".join(re.escape(p) for p in _ROLE_PREFIXES) + r"))\s",
     re.IGNORECASE,
 )
 
@@ -102,9 +101,7 @@ def _strip_role_prefix_lines(text: str) -> str:
 
 
 _INLINE_PREFIX_RE = re.compile(
-    r"(?<![A-Za-z0-9_])("
-    + "|".join(re.escape(p.rstrip(":").rstrip(">")) for p in _ROLE_PREFIXES)
-    + r")\s*[:>]\s*",
+    r"(?<![A-Za-z0-9_])(" + "|".join(re.escape(p.rstrip(":").rstrip(">")) for p in _ROLE_PREFIXES) + r")\s*[:>]\s*",
     re.IGNORECASE,
 )
 

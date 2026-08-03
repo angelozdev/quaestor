@@ -16,6 +16,7 @@ Per-call timeout:
     (emits a `tool-output-available` with `is_error=true` for tool timeouts,
     and an `error` event with `code="timeout"` for provider timeouts).
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,4 +1,5 @@
 """Accounts REST router — thin adapter over services.accounts."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
@@ -29,9 +30,7 @@ def create_account(body: AccountCreate, session: Session = Depends(get_session))
 
 
 @router.patch("/{account_id}", response_model=AccountOut)
-def update_account(
-    account_id: int, body: AccountUpdate, session: Session = Depends(get_session)
-):
+def update_account(account_id: int, body: AccountUpdate, session: Session = Depends(get_session)):
     return accounts.update_account(session, account_id, name=body.name, type=body.type)
 
 

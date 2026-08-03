@@ -23,6 +23,7 @@ on its own.
 Dates are relative to ``world.today`` except where the end-of-month clamp
 needs a fixed calendar (AC-8), which uses absolute dates.
 """
+
 from __future__ import annotations
 
 import re as _re
@@ -110,8 +111,7 @@ def _occurrence_on(world: World, name: str, due: Date) -> RecurringOccurrence:
         if occ.due_date == due:
             return occ
     raise AssertionError(
-        f"{name!r} has no turn due on {due}; it has "
-        f"{[str(o.due_date) for o in _occurrences(world, name)]}"
+        f"{name!r} has no turn due on {due}; it has {[str(o.due_date) for o in _occurrences(world, name)]}"
     )
 
 
@@ -125,8 +125,7 @@ def _pending_dates(world: World, name: str) -> list[Date]:
     offer = getattr(occurrences, "pending_dates", None)
     if offer is None:
         raise AssertionError(
-            "no way to offer passed due dates for the user to accept or decline "
-            "(AC-12 is target behaviour)"
+            "no way to offer passed due dates for the user to accept or decline (AC-12 is target behaviour)"
         )
     return list(offer(world.session, _item(world, name).id))
 
@@ -167,9 +166,7 @@ def _declare(
         declared_on=start_date if already_existed else world.today,
     )
     if world.last_error is None:
-        item = world.session.exec(
-            select(RecurringItem).where(RecurringItem.name == name)
-        ).first()
+        item = world.session.exec(select(RecurringItem).where(RecurringItem.name == name)).first()
         if item is not None:
             world.recurring_ids[name] = item.id
 
@@ -192,10 +189,7 @@ def _linked_tx(world: World, name: str, due: Date) -> Transaction:
         raise AssertionError(f"the turn of {name!r} due on {due} has no movement")
     tx = world.session.get(Transaction, occ.transaction_id)
     if tx is None:
-        raise AssertionError(
-            f"the turn of {name!r} due on {due} points at a movement that no "
-            f"longer exists"
-        )
+        raise AssertionError(f"the turn of {name!r} due on {due} points at a movement that no longer exists")
     world.session.refresh(tx)
     return tx
 
@@ -204,13 +198,8 @@ def _linked_tx(world: World, name: str, due: Date) -> Transaction:
     r"a repeating payment of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
     r' to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"' + _DECLARATION
 )
-def given_repeating_payment(
-    world: World, payee: str, **kw
-) -> None:
-    _declare(
-        world, name=payee, payee=payee, tx_type=TxType.expense,
-        already_existed=True, **kw
-    )
+def given_repeating_payment(world: World, payee: str, **kw) -> None:
+    _declare(world, name=payee, payee=payee, tx_type=TxType.expense, already_existed=True, **kw)
     world.require_clean(f"declaring the repeating payment to {payee!r}")
 
 
@@ -219,10 +208,7 @@ def given_repeating_payment(
     r' from "(?P<payee>[^"]+)" into "(?P<account>[^"]+)"' + _DECLARATION
 )
 def given_repeating_income(world: World, payee: str, **kw) -> None:
-    _declare(
-        world, name=payee, payee=payee, tx_type=TxType.income,
-        already_existed=True, **kw
-    )
+    _declare(world, name=payee, payee=payee, tx_type=TxType.income, already_existed=True, **kw)
     world.require_clean(f"declaring the repeating income from {payee!r}")
 
 
@@ -250,9 +236,7 @@ def when_declare_income(world: World, payee: str, **kw) -> None:
     r' from "(?P<account>[^"]+)"' + _DECLARATION
 )
 def when_declare_transfer(world: World, **kw) -> None:
-    _declare(
-        world, name="Traslado", payee="Traslado", tx_type=TxType.transfer, **kw
-    )
+    _declare(world, name="Traslado", payee="Traslado", tx_type=TxType.transfer, **kw)
 
 
 @step(
@@ -291,9 +275,7 @@ def when_assistant_declares_payment(
                 end_date=_when(world, end) if end else None,
             ),
         )
-        item = world.session.exec(
-            select(RecurringItem).where(RecurringItem.name == payee)
-        ).first()
+        item = world.session.exec(select(RecurringItem).where(RecurringItem.name == payee)).first()
         if item is not None:
             world.recurring_ids[payee] = item.id
 
@@ -303,9 +285,7 @@ def when_assistant_declares_payment(
 @step(r"the assistant is asked about the repeating obligations")
 def when_assistant_asked_recurring(world: World) -> None:
     def action():
-        world.assistant_answer = temporal.list_recurring(
-            world.session, temporal.ListRecurringInput()
-        )
+        world.assistant_answer = temporal.list_recurring(world.session, temporal.ListRecurringInput())
 
     world.attempt(action)
 
@@ -322,16 +302,12 @@ def when_daily_run_as_if(world: World, when: str) -> None:
 
 @step(r"the user views the repeating obligations")
 def when_view_recurring(world: World) -> None:
-    world.recurring_view = recurring.list_recurring(
-        world.session, active=True, today=world.today
-    )
+    world.recurring_view = recurring.list_recurring(world.session, active=True, today=world.today)
 
 
 @step(r"the user views the switched-off obligations")
 def when_view_switched_off(world: World) -> None:
-    world.recurring_view = recurring.list_recurring(
-        world.session, active=False, today=world.today
-    )
+    world.recurring_view = recurring.list_recurring(world.session, active=False, today=world.today)
 
 
 @step(r'the user switches off "(?P<name>[^"]+)"')
@@ -398,9 +374,7 @@ def when_move_start_back(world: World, name: str, when: str) -> None:
     )
 
 
-@step(
-    r'the user extends the end of "(?P<name>[^"]+)" to (?P<when>' + _WHEN + r")"
-)
+@step(r'the user extends the end of "(?P<name>[^"]+)" to (?P<when>' + _WHEN + r")")
 def when_extend_end(world: World, name: str, when: str) -> None:
     world.attempt(
         recurring.update_recurring,
@@ -446,10 +420,7 @@ def when_delete_charge(world: World, name: str, when: str) -> None:
 def when_accept_some_passed(world: World, count: str, name: str) -> None:
     accept = getattr(occurrences, "accept_pending_dates", None)
     if accept is None:
-        raise AssertionError(
-            "no way to accept some of the passed due dates (AC-12 is target "
-            "behaviour)"
-        )
+        raise AssertionError("no way to accept some of the passed due dates (AC-12 is target behaviour)")
     dates = _pending_dates(world, name)[: int(count)]
     world.attempt(accept, world.session, _item(world, name).id, dates)
 
@@ -458,24 +429,16 @@ def when_accept_some_passed(world: World, count: str, name: str) -> None:
 def when_accept_all_passed(world: World, name: str) -> None:
     accept = getattr(occurrences, "accept_pending_dates", None)
     if accept is None:
-        raise AssertionError(
-            "no way to accept the passed due dates (AC-12 is target behaviour)"
-        )
-    world.attempt(
-        accept, world.session, _item(world, name).id, _pending_dates(world, name)
-    )
+        raise AssertionError("no way to accept the passed due dates (AC-12 is target behaviour)")
+    world.attempt(accept, world.session, _item(world, name).id, _pending_dates(world, name))
 
 
 @step(r'the user declines every passed date for "(?P<name>[^"]+)"')
 def when_decline_all_passed(world: World, name: str) -> None:
     decline = getattr(occurrences, "decline_pending_dates", None)
     if decline is None:
-        raise AssertionError(
-            "no way to decline the passed due dates (AC-12 is target behaviour)"
-        )
-    world.attempt(
-        decline, world.session, _item(world, name).id, _pending_dates(world, name)
-    )
+        raise AssertionError("no way to decline the passed due dates (AC-12 is target behaviour)")
+    world.attempt(decline, world.session, _item(world, name).id, _pending_dates(world, name))
 
 
 @step(r'the account "(?P<name>[^"]+)" is retired')
@@ -494,9 +457,7 @@ def when_restore_account(world: World, name: str) -> None:
     r"the user registers an expense of (?P<amount>" + _DEC + r")"
     r' (?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" to "(?P<payee>[^"]+)"'
 )
-def when_register_expense_to_payee(
-    world: World, amount: str, currency: str, account: str, payee: str
-) -> None:
+def when_register_expense_to_payee(world: World, amount: str, currency: str, account: str, payee: str) -> None:
     def action():
         tx = transactions.record_expense(
             world.session,
@@ -533,15 +494,12 @@ def then_charged_on(world: World, name: str, when: str) -> None:
     r'"(?P<name>[^"]+)" was charged (?P<amount>' + _DEC + r")"
     r" (?P<currency>[A-Z]{3}) (?P<when>" + _WHEN + r")"
 )
-def then_charged_amount_on(
-    world: World, name: str, amount: str, currency: str, when: str
-) -> None:
+def then_charged_amount_on(world: World, name: str, amount: str, currency: str, when: str) -> None:
     due = _when(world, when)
     tx = _linked_tx(world, name, due)
     expected = major_to_cents(amount)
     assert tx.amount == expected and tx.currency == currency, (
-        f"the charge to {name!r} on {due} is {tx.amount} {tx.currency}, "
-        f"expected {expected} {currency}"
+        f"the charge to {name!r} on {due} is {tx.amount} {tx.currency}, expected {expected} {currency}"
     )
     assert tx.date == due, f"the charge to {name!r} is dated {tx.date}, not {due}"
 
@@ -557,35 +515,26 @@ def then_turn_state(world: World, name: str, when: str, state: str) -> None:
         "skipped": OccurrenceStatus.skipped,
     }[state]
     occ = _occurrence_on(world, name, _when(world, when))
-    assert occ.status == expected, (
-        f"the turn of {name!r} due {when} is {occ.status.value}, expected "
-        f"{expected.value}"
-    )
+    assert occ.status == expected, f"the turn of {name!r} due {when} is {occ.status.value}, expected {expected.value}"
 
 
 @step(r'nothing about "(?P<name>[^"]+)" is waiting for the user\'s answer')
 def then_nothing_waiting(world: World, name: str) -> None:
-    waiting = [
-        o for o in _occurrences(world, name) if o.status == OccurrenceStatus.planned
-    ]
+    waiting = [o for o in _occurrences(world, name) if o.status == OccurrenceStatus.planned]
     assert not waiting, (
-        f"{name!r} left {len(waiting)} turn(s) waiting for approval: "
-        f"{[str(o.due_date) for o in waiting]}"
+        f"{name!r} left {len(waiting)} turn(s) waiting for approval: {[str(o.due_date) for o in waiting]}"
     )
     offer = getattr(occurrences, "pending_dates", None)
     if offer is not None:
         pending = list(offer(world.session, _item(world, name).id))
-        assert not pending, (
-            f"{name!r} left {len(pending)} date(s) awaiting the user's decision"
-        )
+        assert not pending, f"{name!r} left {len(pending)} date(s) awaiting the user's decision"
 
 
 @step(r'the user is offered (?P<count>\d+) passed dates for "(?P<name>[^"]+)"')
 def then_offered_passed_dates(world: World, count: str, name: str) -> None:
     dates = _pending_dates(world, name)
     assert len(dates) == int(count), (
-        f"{name!r} offers {len(dates)} passed date(s), expected {count}: "
-        f"{[str(d) for d in dates]}"
+        f"{name!r} offers {len(dates)} passed date(s), expected {count}: {[str(d) for d in dates]}"
     )
 
 
@@ -616,18 +565,13 @@ def then_described_as(
     category: str | None = None,
 ) -> None:
     item = _item(world, name)
-    assert item.amount == major_to_cents(amount), (
-        f"{name!r} is {item.amount}, expected {major_to_cents(amount)}"
-    )
+    assert item.amount == major_to_cents(amount), f"{name!r} is {item.amount}, expected {major_to_cents(amount)}"
     assert item.currency == currency, f"{name!r} is in {item.currency}, not {currency}"
     assert item.interval_count == int(count) and item.interval_unit.value == unit, (
-        f"{name!r} repeats every {item.interval_count} {item.interval_unit.value}, "
-        f"expected every {count} {unit}"
+        f"{name!r} repeats every {item.interval_count} {item.interval_unit.value}, expected every {count} {unit}"
     )
     if category is not None:
-        assert item.category_id == world.categories.get(category), (
-            f"{name!r} is not in category {category!r}"
-        )
+        assert item.category_id == world.categories.get(category), f"{name!r} is not in category {category!r}"
 
 
 @step(r'the list shows "(?P<name>[^"]+)"')
@@ -646,9 +590,7 @@ def then_list_omits_obligation(world: World, name: str) -> None:
     r'the list shows "(?P<name>[^"]+)" at (?P<amount>' + _DEC + r")"
     r" (?P<currency>[A-Z]{3}) every (?P<count>\d+) (?P<unit>day|week|month|year)"
 )
-def then_list_shows_detail(
-    world: World, name: str, amount: str, currency: str, count: str, unit: str
-) -> None:
+def then_list_shows_detail(world: World, name: str, amount: str, currency: str, count: str, unit: str) -> None:
     listed = {i.name: i for i in world.recurring_view or []}
     assert name in listed, f"{name!r} is not in the list ({list(listed)})"
     item = listed[name]
@@ -656,8 +598,7 @@ def then_list_shows_detail(
         f"{name!r} is listed at {item.amount} {item.currency}"
     )
     assert item.interval_count == int(count) and item.interval_unit.value == unit, (
-        f"{name!r} is listed as every {item.interval_count} "
-        f"{item.interval_unit.value}"
+        f"{name!r} is listed as every {item.interval_count} {item.interval_unit.value}"
     )
 
 
@@ -665,8 +606,7 @@ def then_list_shows_detail(
 def then_run_reports_failure(world: World, name: str) -> None:
     reported = world.run_failures
     assert any(name in message for message in reported), (
-        f"the run did not report {name!r} as needing attention (reported: "
-        f"{reported})"
+        f"the run did not report {name!r} as needing attention (reported: {reported})"
     )
 
 
@@ -686,9 +626,7 @@ def then_movement_origin(world: World, name: str, origin: str) -> None:
     if origin == "entered by hand":
         tx = world.session.get(Transaction, world.last_expense_id)
         assert tx is not None, "no movement was registered earlier in the scenario"
-        assert tx.source.value == "manual", (
-            f"the movement to {name!r} is marked {tx.source.value}, not hand-entered"
-        )
+        assert tx.source.value == "manual", f"the movement to {name!r} is marked {tx.source.value}, not hand-entered"
         return
     tx = _linked_tx(world, name, world.today)
     assert tx.source.value != "manual", (
@@ -701,13 +639,9 @@ def then_movement_origin(world: World, name: str, origin: str) -> None:
 @step(r'that movement names "(?P<name>[^"]+)" as the obligation behind it')
 def then_movement_names_obligation(world: World, name: str) -> None:
     tx = _linked_tx(world, name, world.today)
-    assert tx.recurring_id is not None, (
-        f"the charge to {name!r} does not point back at any obligation"
-    )
+    assert tx.recurring_id is not None, f"the charge to {name!r} does not point back at any obligation"
     item = world.session.get(RecurringItem, tx.recurring_id)
-    assert item is not None and item.name == name, (
-        f"the charge to {name!r} points at a different obligation"
-    )
+    assert item is not None and item.name == name, f"the charge to {name!r} points at a different obligation"
 
 
 @step(r'the assistant\'s answer names "(?P<name>[^"]+)"')
@@ -721,9 +655,7 @@ def then_assistant_names(world: World, name: str) -> None:
     r"the assistant's answer shows (?P<amount>" + _DEC + r")"
     r' (?P<currency>[A-Z]{3}) for "(?P<name>[^"]+)"'
 )
-def then_assistant_shows_amount(
-    world: World, amount: str, currency: str, name: str
-) -> None:
+def then_assistant_shows_amount(world: World, amount: str, currency: str, name: str) -> None:
     world.require_clean("asking the assistant about the repeating obligations")
     answer = world.assistant_answer or ""
     digits = amount.split(".", maxsplit=1)[0]
@@ -751,9 +683,7 @@ def then_skip_rejected(world: World) -> None:
 @step(r"the user is told that date was already charged")
 def then_told_already_charged(world: World) -> None:
     err = world.last_error
-    assert err is not None, (
-        "the skip succeeded; the user was never told the date was already charged"
-    )
+    assert err is not None, "the skip succeeded; the user was never told the date was already charged"
     message = str(err).lower()
     assert "charged" in message or "posted" in message or "paid" in message, (
         f"the refusal does not say the date was already charged: {err}"

@@ -20,8 +20,6 @@ def session(engine):
 @pytest.fixture
 def seeded(session):
     """A COP debit account 'Bancolombia' (100k COP) and a 'Groceries' category."""
-    account = accounts.create_account(
-        session, "Bancolombia", "debit", "COP", balance=10_000_000
-    )
+    account = accounts.create_account(session, "Bancolombia", "debit", "COP", balance=10_000_000)
     category = categories.create_category(session, "Groceries")
     return {"account": account, "category": category}

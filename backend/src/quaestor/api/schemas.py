@@ -1,4 +1,5 @@
 """Pydantic request/response models. `*Out` mirror the SQLModel rows (cents as int)."""
+
 from __future__ import annotations
 
 from datetime import date as Date

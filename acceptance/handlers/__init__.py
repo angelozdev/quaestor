@@ -8,10 +8,12 @@ A generated test calls :func:`run_scenario` with the literal steps from the
 IR; every scenario gets a fresh :class:`World` (in-memory SQLite, migrated
 via ``init_db``) from the generated ``conftest.py``'s ``world`` fixture.
 """
+
 from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from importlib import import_module
 
 from .world import World
 
@@ -65,16 +67,13 @@ def run_scenario(
     """
     for keyword, text in steps:
         if keyword == "__FAIL__":
-            raise AssertionError(
-                f"[{spec_path}] scenario {scenario_name!r}: {text}"
-            )
+            raise AssertionError(f"[{spec_path}] scenario {scenario_name!r}: {text}")
         fn, params = _lookup(text)
         try:
             fn(world, **params)
         except AssertionError as exc:
             raise AssertionError(
-                f"[{spec_path}] scenario {scenario_name!r} failed at step "
-                f"'{keyword} {text}': {exc}"
+                f"[{spec_path}] scenario {scenario_name!r} failed at step '{keyword} {text}': {exc}"
             ) from exc
         except Exception as exc:
             raise AssertionError(
@@ -83,8 +82,18 @@ def run_scenario(
             ) from exc
 
 
+_FEATURE_MODULES = (
+    "fx_read_time",
+    "planned_payments",
+    "recurring_engine",
+    "transactions_crud",
+)
+
+
 def _register_feature_step_handlers() -> None:
-    from . import fx_read_time, planned_payments, recurring_engine, transactions_crud
+    """Import each feature module so its ``@step`` decorators populate the registry."""
+    for module in _FEATURE_MODULES:
+        import_module(f".{module}", __name__)
 
 
 _register_feature_step_handlers()

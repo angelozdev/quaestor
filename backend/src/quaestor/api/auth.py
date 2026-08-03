@@ -1,4 +1,5 @@
 """Auth router: password login -> signed session cookie; logout; me probe."""
+
 from __future__ import annotations
 
 import hmac

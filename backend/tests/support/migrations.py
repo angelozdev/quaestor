@@ -1,4 +1,5 @@
 """Shared seeding helpers for Alembic revision tests."""
+
 import sqlalchemy as sa
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
@@ -24,9 +25,7 @@ def insert_account(conn, account_id, name):
     )
 
 
-def insert_transaction(
-    conn, tx_id, tx_type, account_id, group, created_at=DEFAULT_CREATED_AT
-):
+def insert_transaction(conn, tx_id, tx_type, account_id, group, created_at=DEFAULT_CREATED_AT):
     conn.execute(
         sa.text(
             'INSERT INTO "transaction" '
@@ -53,11 +52,7 @@ def engine_at_revision(revision):
 
 def directions_by_id(engine):
     with engine.connect() as conn:
-        return dict(
-            conn.execute(
-                sa.text('SELECT id, transfer_direction FROM "transaction"')
-            ).fetchall()
-        )
+        return dict(conn.execute(sa.text('SELECT id, transfer_direction FROM "transaction"')).fetchall())
 
 
 def insert_recurring(conn, recurring_id, name, tx_type, mode, account_id=1):
@@ -81,6 +76,4 @@ def insert_recurring(conn, recurring_id, name, tx_type, mode, account_id=1):
 
 def recurring_modes_by_id(engine):
     with engine.connect() as conn:
-        return dict(
-            conn.execute(sa.text("SELECT id, mode FROM recurring_item")).fetchall()
-        )
+        return dict(conn.execute(sa.text("SELECT id, mode FROM recurring_item")).fetchall())

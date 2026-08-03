@@ -3,6 +3,7 @@
 confirm_payment is the only planned -> posted transition and fires the
 post-confirm hooks (the seam P4 uses to record goal contributions).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -156,9 +157,7 @@ def to_pay(
             sort="date",
             order="asc",
         )
-        overdue_items = _obligations(
-            [t for t in overdue_rows if t.date < today_resolved]
-        )
+        overdue_items = _obligations([t for t in overdue_rows if t.date < today_resolved])
     else:
         overdue_items = []
 
@@ -205,9 +204,7 @@ def confirm_payment(
     """
     tx = _tx.get_transaction(session, tx_id)
     if tx.status != TxStatus.planned:
-        raise IllegalTransition(
-            f"transaction {tx_id} is {tx.status.value}, not planned"
-        )
+        raise IllegalTransition(f"transaction {tx_id} is {tx.status.value}, not planned")
     try:
         if tx.type == TxType.transfer:
             result = _materialize_planned_transfer(session, tx, amount, date)
@@ -301,9 +298,7 @@ def _move_status(
     """
     tx = _tx.get_transaction(session, tx_id)
     if tx.status != from_status:
-        raise IllegalTransition(
-            f"transaction {tx_id} is {tx.status.value}, not {from_status.value}"
-        )
+        raise IllegalTransition(f"transaction {tx_id} is {tx.status.value}, not {from_status.value}")
     tx.status = to_status
     _occ.sync_occurrence_status(session, tx, occurrence_status)
     session.add(tx)

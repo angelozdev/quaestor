@@ -14,7 +14,10 @@ def test_cascade_subtracts_every_term():
 
 def test_cascade_can_go_negative():
     free = safe_to_spend_calc(
-        income_forecast=100_000, committed=200_000,
-        assigned_envelopes=0, unbudgeted_spending=0, overspend=0,
+        income_forecast=100_000,
+        committed=200_000,
+        assigned_envelopes=0,
+        unbudgeted_spending=0,
+        overspend=0,
     )
     assert free == -100_000

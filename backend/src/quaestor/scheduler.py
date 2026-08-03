@@ -9,6 +9,7 @@ Behavior:
 - A job failure is logged but does not kill the loop (self-healing).
 - Lifespan shutdown cancels the task cleanly (SIGTERM from `docker stop`).
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -17,7 +17,9 @@ from quaestor.domain.report_types import (
 def _full_report():
     return MonthlyReport(
         month="2026-06",
-        income=5_000_000, expense=3_000_000, net=2_000_000,
+        income=5_000_000,
+        expense=3_000_000,
+        net=2_000_000,
         envelopes_summary=EnvelopesSummary(n_green=2, n_red=1, rollover_generated=150_000),
         envelopes=[
             EnvelopeLine("Food", 1_000_000, 0, 800_000, 200_000, "under"),
@@ -89,11 +91,21 @@ def test_render_cold_start_drift_none():
 
 def test_render_empty_sections_do_not_crash():
     report = MonthlyReport(
-        month="2026-06", income=0, expense=0, net=0,
-        envelopes_summary=EnvelopesSummary(0, 0, 0), envelopes=[],
-        by_category=[], by_group=[], goals=[], balances=[],
-        drift_mom=None, usd_share=0.0, pending=[],
-        safe_to_spend=SafeToSpend("2026-06", 0, 0, 0, 0, []), markdown="",
+        month="2026-06",
+        income=0,
+        expense=0,
+        net=0,
+        envelopes_summary=EnvelopesSummary(0, 0, 0),
+        envelopes=[],
+        by_category=[],
+        by_group=[],
+        goals=[],
+        balances=[],
+        drift_mom=None,
+        usd_share=0.0,
+        pending=[],
+        safe_to_spend=SafeToSpend("2026-06", 0, 0, 0, 0, []),
+        markdown="",
     )
     out = render_markdown(report)
     assert "# Monthly report — 2026-06" in out

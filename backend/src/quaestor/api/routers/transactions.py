@@ -4,6 +4,7 @@ Reads compute `cop_equivalent` at the current TRM and fail loud (409)
 when it is unset (AC-9); writes succeed without a TRM (AC-1) and omit
 the equivalent.
 """
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -82,11 +83,7 @@ def create_transaction(body: TransactionCreate, session: Session = Depends(get_s
         notes=body.notes,
         source=body.source,
     )
-    names = (
-        tags_service.set_transaction_tags(session, tx.id, body.tags)
-        if body.tags is not None
-        else []
-    )
+    names = tags_service.set_transaction_tags(session, tx.id, body.tags) if body.tags is not None else []
     return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
 
 
@@ -111,9 +108,7 @@ def create_transfer(body: TransferIn, session: Session = Depends(get_session)):
 
 
 @router.patch("/{tx_id}", response_model=TransactionOut)
-def update_transaction(
-    tx_id: int, body: TransactionUpdate, session: Session = Depends(get_session)
-):
+def update_transaction(tx_id: int, body: TransactionUpdate, session: Session = Depends(get_session)):
     fields = body.model_dump(exclude_unset=True)
     tag_names = fields.pop("tags", None)
     tx = transactions.update_transaction(session, tx_id, **fields)

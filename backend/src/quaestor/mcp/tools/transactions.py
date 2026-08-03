@@ -6,6 +6,7 @@ fields are immutable in the service layer (P0 invariant: balances only move
 via record_expense / record_income / transfer). Deleting a grouped transfer
 leg deletes its whole pair (ADR-0032).
 """
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -29,12 +30,8 @@ class UpdateTransactionInput(BaseModel):
     clear_notes: bool = Field(default=False, description="Set notes to None")
     category: str | None = Field(default=None, description="New category name (empty string clears)")
     date: Date | None = Field(default=None, description="New date")
-    add_tags: list[str] = Field(
-        default_factory=list, description="Tag names to add (auto-created by name)"
-    )
-    remove_tags: list[str] = Field(
-        default_factory=list, description="Tag names to remove (absent tags are ignored)"
-    )
+    add_tags: list[str] = Field(default_factory=list, description="Tag names to add (auto-created by name)")
+    remove_tags: list[str] = Field(default_factory=list, description="Tag names to remove (absent tags are ignored)")
 
 
 class DeleteTransactionInput(BaseModel):
@@ -52,9 +49,7 @@ def update_transaction(session: Session, inp: UpdateTransactionInput) -> str:
     notes = None if inp.clear_notes else inp.notes
     category_id = transactions._UNSET
     if inp.category is not None:
-        category_id = (
-            None if inp.category == "" else _resolve_category(session, inp.category).id
-        )
+        category_id = None if inp.category == "" else _resolve_category(session, inp.category).id
     updated = transactions.update_transaction(
         session,
         inp.tx_id,

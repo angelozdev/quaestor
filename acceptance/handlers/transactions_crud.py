@@ -18,6 +18,7 @@ contract, which is TRM-independent; the read-time COP surface contract
 ("the user views the transaction list" / "the list is not shown") fetches
 the TRM first and fails loud, mirroring the REST list endpoint (AC-9).
 """
+
 from __future__ import annotations
 
 import re as _re
@@ -92,9 +93,7 @@ def given_archived_account(world: World, name: str, currency: str) -> None:
     r"a recorded expense of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
     r' tagged "(?P<tag>[^"]+)"'
 )
-def given_recorded_tagged_expense(
-    world: World, amount: str, currency: str, tag: str
-) -> None:
+def given_recorded_tagged_expense(world: World, amount: str, currency: str, tag: str) -> None:
     payee = f"Payee {len(world.expense_ids) + 1}"
     tx = transactions.record_expense(
         world.session,
@@ -113,9 +112,7 @@ def given_recorded_tagged_expense(
     r"a planned payment of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
     r' to "(?P<payee>[^"]+)" due (?P<due>' + _DATE + r")"
 )
-def given_planned_payment(
-    world: World, amount: str, currency: str, payee: str, due: str
-) -> None:
+def given_planned_payment(world: World, amount: str, currency: str, payee: str, due: str) -> None:
     planned.plan_payment(
         world.session,
         payee,
@@ -175,9 +172,7 @@ def when_register_expense_detailed(
     r"the user registers an income of (?P<amount>" + _DEC + r") "
     r'(?P<currency>[A-Z]{3}) into "(?P<account>[^"]+)" from "(?P<payee>[^"]+)"'
 )
-def when_register_income(
-    world: World, amount: str, currency: str, account: str, payee: str
-) -> None:
+def when_register_income(world: World, amount: str, currency: str, account: str, payee: str) -> None:
     world.attempt(
         transactions.record_income,
         world.session,
@@ -194,9 +189,7 @@ def when_register_income(
     r'category to "(?P<category>[^"]+)", date to (?P<date>' + _DATE + r") "
     r'and notes to "(?P<notes>[^"]+)"'
 )
-def when_edit_expense(
-    world: World, payee: str, category: str, date: str, notes: str
-) -> None:
+def when_edit_expense(world: World, payee: str, category: str, date: str, notes: str) -> None:
     def action():
         transactions.update_transaction(
             world.session,
@@ -213,9 +206,7 @@ def when_edit_expense(
 @step(r"the user clears the expense's category")
 def when_clear_category(world: World) -> None:
     def action():
-        transactions.update_transaction(
-            world.session, _last_expense(world).id, category_id=None
-        )
+        transactions.update_transaction(world.session, _last_expense(world).id, category_id=None)
 
     world.attempt(action)
 
@@ -275,9 +266,7 @@ def when_assistant_removes_tag(world: World, name: str) -> None:
 
         mcp_transactions.update_transaction(
             world.session,
-            mcp_transactions.UpdateTransactionInput(
-                tx_id=_last_expense(world).id, remove_tags=[name]
-            ),
+            mcp_transactions.UpdateTransactionInput(tx_id=_last_expense(world).id, remove_tags=[name]),
         )
 
     world.attempt(action)
@@ -287,9 +276,7 @@ def when_assistant_removes_tag(world: World, name: str) -> None:
     r"the user transfers (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}) "
     r'from "(?P<src>[^"]+)" to "(?P<dst>[^"]+)" dated (?P<date>' + _DATE + r")"
 )
-def when_transfer_dated(
-    world: World, amount: str, currency: str, src: str, dst: str, date: str
-) -> None:
+def when_transfer_dated(world: World, amount: str, currency: str, src: str, dst: str, date: str) -> None:
     def action():
         world.transfer_legs = transactions.transfer(
             world.session,
@@ -306,9 +293,7 @@ def when_transfer_dated(
 @step(r"the user changes the date of the sending side to (?P<date>" + _DATE + r")")
 def when_change_sending_side_date(world: World, date: str) -> None:
     def action():
-        transactions.update_transaction(
-            world.session, _transfer_leg(world, 0).id, date=Date.fromisoformat(date)
-        )
+        transactions.update_transaction(world.session, _transfer_leg(world, 0).id, date=Date.fromisoformat(date))
 
     world.attempt(action)
 
@@ -316,9 +301,7 @@ def when_change_sending_side_date(world: World, date: str) -> None:
 @step(r"the user views the sending side of the transfer")
 def when_view_sending_side(world: World) -> None:
     def action():
-        world.viewed_leg = transactions.get_transaction(
-            world.session, _transfer_leg(world, 0).id
-        )
+        world.viewed_leg = transactions.get_transaction(world.session, _transfer_leg(world, 0).id)
 
     world.attempt(action)
 
@@ -332,9 +315,7 @@ def when_view_transaction_list(world: World) -> None:
     def action():
         trm = fx.get_trm(world.session)
         rows = transactions.list_transactions(world.session)
-        world.tx_view = [
-            (tx, money_mod.to_cop_cents(tx.amount, tx.currency, trm)) for tx in rows
-        ]
+        world.tx_view = [(tx, money_mod.to_cop_cents(tx.amount, tx.currency, trm)) for tx in rows]
 
     world.attempt(action)
 
@@ -343,9 +324,7 @@ def when_view_transaction_list(world: World) -> None:
     r'the user lists transactions in category "(?P<category>[^"]+)" '
     r"between (?P<start>" + _DATE + r") and (?P<end>" + _DATE + r")"
 )
-def when_list_by_category_and_dates(
-    world: World, category: str, start: str, end: str
-) -> None:
+def when_list_by_category_and_dates(world: World, category: str, start: str, end: str) -> None:
     world.filtered_rows = None
 
     def action():
@@ -380,12 +359,8 @@ def when_list_by_dates(world: World, start: str, end: str) -> None:
 def when_act_on_missing_transaction(world: World, action: str) -> None:
     operations = {
         "view": lambda: transactions.get_transaction(world.session, MISSING_ID),
-        "edit": lambda: transactions.update_transaction(
-            world.session, MISSING_ID, payee="Nadie"
-        ),
-        "delete": lambda: transactions.delete_transaction(
-            world.session, MISSING_ID
-        ),
+        "edit": lambda: transactions.update_transaction(world.session, MISSING_ID, payee="Nadie"),
+        "delete": lambda: transactions.delete_transaction(world.session, MISSING_ID),
     }
     world.attempt(operations[action])
 
@@ -413,9 +388,7 @@ def when_assistant_records_expense(
             ),
         )
         recorded = [
-            t
-            for t in transactions.list_transactions(world.session)
-            if t.payee == payee and t.type == TxType.expense
+            t for t in transactions.list_transactions(world.session) if t.payee == payee and t.type == TxType.expense
         ]
         if not recorded:
             raise AssertionError(f"the assistant did not record the expense: {reply}")
@@ -432,9 +405,7 @@ def when_app_lists_tagged(world: World, tag: str) -> None:
         client, auth = _rest_client(world)
         resp = client.get("/api/transactions", params={"tag": tag}, headers=auth)
         if resp.status_code != 200:
-            raise AssertionError(
-                f"GET /api/transactions?tag={tag} -> {resp.status_code}: {resp.text}"
-            )
+            raise AssertionError(f"GET /api/transactions?tag={tag} -> {resp.status_code}: {resp.text}")
         world.app_payees = sorted(row["payee"] for row in resp.json())
 
     world.attempt(action)
@@ -448,19 +419,9 @@ def when_assistant_lists_tagged(world: World, tag: str) -> None:
     def action():
         from quaestor.mcp.tools import core as mcp_core
 
-        text = mcp_core.list_transactions(
-            world.session, mcp_core.ListTransactionsInput(tag=tag)
-        )
-        matches = [
-            m
-            for m in (_MCP_TABLE_ROW.match(line) for line in text.splitlines())
-            if m is not None
-        ]
-        world.assistant_payees = sorted(
-            m.group("payee").strip()
-            for m in matches
-            if m.group("type").strip() != "Type"
-        )
+        text = mcp_core.list_transactions(world.session, mcp_core.ListTransactionsInput(tag=tag))
+        matches = [m for m in (_MCP_TABLE_ROW.match(line) for line in text.splitlines()) if m is not None]
+        world.assistant_payees = sorted(m.group("payee").strip() for m in matches if m.group("type").strip() != "Type")
 
     world.attempt(action)
 
@@ -479,16 +440,13 @@ def when_request_list_without_session(world: World) -> None:
     r'"(?P<category>[^"]+)", date (?P<date>' + _DATE + r") "
     r'and notes "(?P<notes>[^"]+)"'
 )
-def then_expense_details(
-    world: World, payee: str, category: str, date: str, notes: str
-) -> None:
+def then_expense_details(world: World, payee: str, category: str, date: str, notes: str) -> None:
     world.require_clean("the registration or edit should have succeeded")
     tx = _last_expense(world)
     assert tx.payee == payee, f"expected payee {payee!r}, got {tx.payee!r}"
     expected_category = world.categories[category]
     assert tx.category_id == expected_category, (
-        f"expected category {category!r} (id {expected_category}), "
-        f"got category_id={tx.category_id}"
+        f"expected category {category!r} (id {expected_category}), got category_id={tx.category_id}"
     )
     expected_date = Date.fromisoformat(date)
     assert tx.date == expected_date, f"expected date {expected_date}, got {tx.date}"
@@ -499,9 +457,7 @@ def then_expense_details(
 def then_expense_no_category(world: World) -> None:
     world.require_clean("clearing the category should have succeeded")
     tx = _last_expense(world)
-    assert tx.category_id is None, (
-        f"expected no category, got category_id={tx.category_id}"
-    )
+    assert tx.category_id is None, f"expected no category, got category_id={tx.category_id}"
 
 
 @step(r"the transfer is recorded as two movements linked as one transfer")
@@ -511,13 +467,10 @@ def then_transfer_pair_recorded(world: World) -> None:
     leg_from, leg_to = world.transfer_legs
     assert leg_from.id != leg_to.id, "the transfer produced a single movement"
     for leg in (leg_from, leg_to):
-        assert leg.type == TxType.transfer, (
-            f"leg {leg.id} has type {leg.type}, expected transfer"
-        )
+        assert leg.type == TxType.transfer, f"leg {leg.id} has type {leg.type}, expected transfer"
     assert leg_from.transfer_group_id, "the legs carry no transfer group id"
     assert leg_from.transfer_group_id == leg_to.transfer_group_id, (
-        "the two movements are not linked as one transfer "
-        f"({leg_from.transfer_group_id} != {leg_to.transfer_group_id})"
+        f"the two movements are not linked as one transfer ({leg_from.transfer_group_id} != {leg_to.transfer_group_id})"
     )
 
 
@@ -528,9 +481,7 @@ def then_list_order(world: World, upper: str, lower: str) -> None:
     payees = [tx.payee for tx in transactions.list_transactions(world.session)]
     assert upper in payees, f"{upper!r} is not in the list: {payees}"
     assert lower in payees, f"{lower!r} is not in the list: {payees}"
-    assert payees.index(upper) < payees.index(lower), (
-        f"expected {upper!r} above {lower!r}, got {payees}"
-    )
+    assert payees.index(upper) < payees.index(lower), f"expected {upper!r} above {lower!r}, got {payees}"
 
 
 @step(r'the list shows only "(?P<payee>[^"]+)"')
@@ -545,9 +496,7 @@ def then_list_shows_only(world: World, payee: str) -> None:
     r'the list shows "(?P<first>[^"]+)" and "(?P<second>[^"]+)" '
     r'but not "(?P<excluded>[^"]+)"'
 )
-def then_list_includes_and_excludes(
-    world: World, first: str, second: str, excluded: str
-) -> None:
+def then_list_includes_and_excludes(world: World, first: str, second: str, excluded: str) -> None:
     world.require_clean("listing should have succeeded")
     assert world.filtered_rows is not None, "no filtered list was produced"
     payees = [tx.payee for tx in world.filtered_rows]
@@ -559,8 +508,7 @@ def then_list_includes_and_excludes(
 @step(r"the list is not shown")
 def then_list_not_shown(world: World) -> None:
     assert world.tx_view is None, (
-        "the transaction list was shown although no TRM is set "
-        "(AC-9: reads fail loud, never assume rate 1)"
+        "the transaction list was shown although no TRM is set (AC-9: reads fail loud, never assume rate 1)"
     )
     world.consume_rejection((MissingRate,), "viewing the list without a TRM")
 
@@ -569,25 +517,17 @@ def then_list_not_shown(world: World) -> None:
 def then_list_without_expense(world: World) -> None:
     world.require_clean("the deletion should have succeeded")
     ids = [tx.id for tx in transactions.list_transactions(world.session)]
-    assert world.last_expense_id not in ids, (
-        f"deleted expense {world.last_expense_id} still appears in the list"
-    )
+    assert world.last_expense_id not in ids, f"deleted expense {world.last_expense_id} still appears in the list"
 
 
 @step(r"the transaction list shows no transfer")
 def then_list_shows_no_transfer(world: World) -> None:
-    leftovers = [
-        tx.id
-        for tx in transactions.list_transactions(world.session)
-        if tx.type == TxType.transfer
-    ]
+    leftovers = [tx.id for tx in transactions.list_transactions(world.session) if tx.type == TxType.transfer]
     context = ""
     if world.errors:
         details = "; ".join(f"{type(e).__name__}: {e}" for e in world.errors)
         context = f" (a preceding action failed — {details})"
-    assert not leftovers, (
-        f"transfer legs still present in the list (ids {leftovers}){context}"
-    )
+    assert not leftovers, f"transfer legs still present in the list (ids {leftovers}){context}"
 
 
 @step(r"the transaction list shows the expense")
@@ -604,9 +544,7 @@ def then_remaining_expense_keeps_tag(world: World, name: str) -> None:
     assert len(world.expense_ids) >= 2, "the scenario recorded fewer than two expenses"
     remaining = world.expense_ids[1]
     names = _tag_names(world, remaining)
-    assert name in names, (
-        f"expected tag {name!r} on the remaining expense {remaining}, got {names}"
-    )
+    assert name in names, f"expected tag {name!r} on the remaining expense {remaining}, got {names}"
 
 
 @step(r'viewing the expense shows the tags "(?P<first>[^"]+)" and "(?P<second>[^"]+)"')
@@ -644,9 +582,7 @@ def then_transfer_side_date(world: World, side: str, date: str) -> None:
     index = 0 if side == "sending" else 1
     leg = transactions.get_transaction(world.session, _transfer_leg(world, index).id)
     expected = Date.fromisoformat(date)
-    assert leg.date == expected, (
-        f"{side} side: expected date {expected}, got {leg.date}"
-    )
+    assert leg.date == expected, f"{side} side: expected date {expected}, got {leg.date}"
 
 
 @step(r"it is identified as part of a transfer")
@@ -671,13 +607,10 @@ def then_counterpart_reachable(world: World, account: str) -> None:
             )
         ).all()
     )
-    assert len(counterparts) == 1, (
-        f"expected exactly one counterpart, got {len(counterparts)}"
-    )
+    assert len(counterparts) == 1, f"expected exactly one counterpart, got {len(counterparts)}"
     counterpart = counterparts[0]
     assert counterpart.account_id == world.accounts[account], (
-        f"counterpart is in account {counterpart.account_id}, "
-        f"expected {account!r} ({world.accounts[account]})"
+        f"counterpart is in account {counterpart.account_id}, expected {account!r} ({world.accounts[account]})"
     )
 
 
@@ -689,9 +622,7 @@ def then_registration_rejected(world: World) -> None:
 @step(r"the user is told it does not exist")
 def then_told_it_does_not_exist(world: World) -> None:
     err = world.consume_rejection((NotFound,), "acting on a missing transaction")
-    assert "not found" in str(err).lower(), (
-        f"the answer does not say the transaction is missing: {err}"
-    )
+    assert "not found" in str(err).lower(), f"the answer does not say the transaction is missing: {err}"
 
 
 @step(r"the expense records the assistant as its origin")
@@ -715,9 +646,7 @@ def then_both_surfaces_list_same_movements(world: World) -> None:
 @step(r"access is denied")
 def then_access_denied(world: World) -> None:
     world.require_clean("the request should have reached the API")
-    assert world.denied_status in (401, 403), (
-        f"expected 401/403 without a session, got {world.denied_status}"
-    )
+    assert world.denied_status in (401, 403), f"expected 401/403 without a session, got {world.denied_status}"
 
 
 @step(
@@ -726,10 +655,6 @@ def then_access_denied(world: World) -> None:
 )
 def then_current_month_income_total(world: World, amount: str) -> None:
     world.require_clean("reading the report should be possible")
-    report = reports.monthly_report(
-        world.session, _month_str(world.today), today=world.today
-    )
+    report = reports.monthly_report(world.session, _month_str(world.today), today=world.today)
     expected = major_to_cents(amount)
-    assert report.income == expected, (
-        f"expected income total {expected} cents ({amount} COP), got {report.income}"
-    )
+    assert report.income == expected, f"expected income total {expected} cents ({amount} COP), got {report.income}"

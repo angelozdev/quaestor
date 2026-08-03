@@ -1,4 +1,3 @@
-
 import pytest
 from quaestor.mcp.tools import budgets_reads
 from quaestor.mcp.tools.budgets_reads import (

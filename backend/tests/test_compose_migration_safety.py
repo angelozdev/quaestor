@@ -4,6 +4,7 @@ The mount is what lets uvicorn autoreload fire on a file write, and the app
 lifespan runs `alembic upgrade head`. Mounting src under the postgres or remote
 env files therefore migrates real data on every save.
 """
+
 from __future__ import annotations
 
 import re
@@ -19,7 +20,7 @@ JUSTFILE = REPO_ROOT / "justfile"
 SRC_MOUNT_SOURCE = "./backend/src"
 DEV_OVERRIDE = "docker-compose.dev.yml"
 
-_ASSIGNMENT = re.compile(r'^(\w+) := (.+)$')
+_ASSIGNMENT = re.compile(r"^(\w+) := (.+)$")
 _INTERPOLATION = re.compile(r"\{\{(\w+)\}\}")
 
 
@@ -37,16 +38,12 @@ def _just_variables(lines: list[str]) -> dict[str, str]:
     for line in lines:
         match = _ASSIGNMENT.match(line)
         if match:
-            variables[match.group(1)] = "".join(
-                re.findall(r'"([^"]*)"', match.group(2))
-            ) or match.group(2)
+            variables[match.group(1)] = "".join(re.findall(r'"([^"]*)"', match.group(2))) or match.group(2)
     return variables
 
 
 def _expand(text: str, variables: dict[str, str]) -> str:
-    return _INTERPOLATION.sub(
-        lambda m: variables.get(m.group(1), m.group(0)), text
-    )
+    return _INTERPOLATION.sub(lambda m: variables.get(m.group(1), m.group(0)), text)
 
 
 def _recipe(name: str) -> str:
@@ -54,7 +51,7 @@ def _recipe(name: str) -> str:
     variables = _just_variables(lines)
     start = next(i for i, line in enumerate(lines) if line.startswith(f"{name}:"))
     body = [lines[start]]
-    for line in lines[start + 1:]:
+    for line in lines[start + 1 :]:
         if line and not line.startswith(("\t", " ")):
             break
         body.append(line)

@@ -3,6 +3,7 @@
 Materializing a due date and skipping one belong to `occurrences.py`, which is
 the only module that writes a `RecurringOccurrence`.
 """
+
 from __future__ import annotations
 
 from datetime import date as Date
@@ -110,8 +111,12 @@ def create_recurring(
         occurrences.guard_offer_size(
             name,
             due_dates(
-                start_date, end_date, interval_unit, interval_count,
-                start_date, as_of,
+                start_date,
+                end_date,
+                interval_unit,
+                interval_count,
+                start_date,
+                as_of,
             ),
         )
     if category_id is not None:
@@ -154,9 +159,7 @@ def get_recurring(session: Session, recurring_id: int) -> RecurringItem:
     return item
 
 
-def list_recurring(
-    session: Session, active: bool | None = None, today: Date | None = None
-) -> list[RecurringItem]:
+def list_recurring(session: Session, active: bool | None = None, today: Date | None = None) -> list[RecurringItem]:
     """List recurring items, optionally filtered by `active`, ordered by id.
 
     `active=True` is the live list: what is still going to be charged. An
@@ -235,8 +238,12 @@ def update_recurring(
             [
                 d
                 for d in due_dates(
-                    item.start_date, item.end_date, item.interval_unit,
-                    item.interval_count, item.start_date, as_of,
+                    item.start_date,
+                    item.end_date,
+                    item.interval_unit,
+                    item.interval_count,
+                    item.start_date,
+                    as_of,
                 )
                 if d not in claimed
             ],
@@ -244,9 +251,7 @@ def update_recurring(
     if account_id is not None:
         acc = _require_account(session, account_id)
         if item.currency != acc.currency:
-            raise ValidationError(
-                f"currency {item.currency} does not match account currency {acc.currency}"
-            )
+            raise ValidationError(f"currency {item.currency} does not match account currency {acc.currency}")
         item.account_id = account_id
     if category_id is not _UNSET:
         if category_id is not None:
@@ -289,9 +294,7 @@ def deactivate_recurring(session: Session, recurring_id: int) -> RecurringItem:
     return _set_active(session, recurring_id, False)
 
 
-def restore_recurring(
-    session: Session, recurring_id: int, today: Date | None = None
-) -> RecurringItem:
+def restore_recurring(session: Session, recurring_id: int, today: Date | None = None) -> RecurringItem:
     """Switch a paused obligation back on, picking up from today.
 
     The due dates left behind are offered for the user to accept or decline,
@@ -314,9 +317,7 @@ def restore_recurring(
     return item
 
 
-def skip_recurring(
-    session: Session, recurring_id: int, due_date: Date
-) -> RecurringOccurrence:
+def skip_recurring(session: Session, recurring_id: int, due_date: Date) -> RecurringOccurrence:
     """Mark (or create) the occurrence for (recurring_id, due_date) as skipped.
 
     Raises:

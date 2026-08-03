@@ -29,11 +29,7 @@ def test_converts_minimal_tool():
 
 
 def test_converts_tool_without_input_schema_uses_empty_object():
-    mcp_tools = [
-        SimpleNamespace(
-            name="noop", description="Does nothing.", inputSchema=None
-        )
-    ]
+    mcp_tools = [SimpleNamespace(name="noop", description="Does nothing.", inputSchema=None)]
     out = to_openai_tools(mcp_tools)
     assert out[0]["function"]["parameters"] == {"type": "object", "properties": {}}
 

@@ -23,6 +23,14 @@ if [ -z "${DAE_GHERKIN:-}" ] || [ ! -f "$DAE_GHERKIN" ]; then
     exit 1
 fi
 
+# --- lint gate (ADR-0040) ---------------------------------------------------
+# Runs before generation so a lint failure never leaves stale .build/ output.
+# Set QUAESTOR_SKIP_LINT=1 to bypass while iterating; CI and pushes must not.
+if [ "${QUAESTOR_SKIP_LINT:-0}" != "1" ]; then
+    uv run --project "$ROOT/backend" ruff check "$ROOT/backend/src" "$ROOT/backend/tests" "$ROOT/acceptance"
+    uv run --project "$ROOT/backend" ruff format --check "$ROOT/backend/src" "$ROOT/backend/tests" "$ROOT/acceptance"
+fi
+
 # --- select feature dirs ----------------------------------------------------
 if [ "$#" -gt 0 ]; then
     FEATURE_DIRS="$*"

@@ -7,6 +7,7 @@ The wrapper exists so the agentic loop never imports `fastmcp` directly;
 swapping to a remote streamable-HTTP transport later means changing this
 file, nothing else.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -19,6 +19,7 @@ Revises: 0006
 Create Date: 2026-07-31
 
 """
+
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
@@ -49,7 +50,7 @@ def _staggered_pairs() -> list[tuple[int, int]]:
     conn = op.get_bind()
     rows = conn.execute(
         sa.text(
-            "SELECT id, transfer_group_id, created_at FROM \"transaction\" "
+            'SELECT id, transfer_group_id, created_at FROM "transaction" '
             "WHERE transfer_group_id IS NOT NULL ORDER BY transfer_group_id, id"
         )
     ).fetchall()
@@ -76,15 +77,11 @@ def _apply(pairs: list[tuple[int, int]]) -> None:
     conn = op.get_bind()
     for outgoing_id, incoming_id in pairs:
         conn.execute(
-            sa.text(
-                "UPDATE \"transaction\" SET transfer_direction = 'out' WHERE id = :id"
-            ),
+            sa.text("UPDATE \"transaction\" SET transfer_direction = 'out' WHERE id = :id"),
             {"id": outgoing_id},
         )
         conn.execute(
-            sa.text(
-                "UPDATE \"transaction\" SET transfer_direction = 'in_' WHERE id = :id"
-            ),
+            sa.text("UPDATE \"transaction\" SET transfer_direction = 'in_' WHERE id = :id"),
             {"id": incoming_id},
         )
 

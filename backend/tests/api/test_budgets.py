@@ -30,6 +30,7 @@ def test_safe_to_spend_requires_auth(client):
 def _seed_category(engine, name="Food"):
     from quaestor.services import categories
     from sqlmodel import Session
+
     with Session(engine) as s:
         return categories.create_category(s, name=name).id
 
