@@ -148,10 +148,26 @@ The offering (AC-4, AC-10, AC-12) is a filter argument on the existing read —
 - Bad / cost: `services/transactions.py` and `services/planned.py` now import
   `services/categories.py`. Accepted: the alternative is the rule living in
   five places.
-- Bad / cost: category creation acquires a uniqueness rule it never had.
-  Production already carries one violating pair (`🛡️ Auto Insurance` exists
-  twice, one archived) — which is precisely why AC-13 offers to restore the
-  archived match instead of refusing flatly.
+- Bad / cost: category creation acquires a uniqueness rule it never had, in
+  `create_category`, so it holds on every surface. Production already carries
+  one violating pair (`🛡️ Auto Insurance` exists twice, one archived) — which is
+  precisely why AC-13 offers to restore the archived match instead of refusing
+  flatly. Existing pairs are left alone; the rule bites on creation only.
+- Neutral, and decided rather than fallen into (owner, 2026-08-03, after the
+  CP7 review surfaced it): **the name space is per direction.** Uniqueness is
+  scoped to one side of the ledger, so "Intereses" can be both what the bank
+  charges and what it pays. Scoping it globally was implemented first and
+  rejected: it produced a state where the app refuses to create a category
+  *because it already exists* while declining to offer it — the two facts are
+  consistent internally and unexplainable from the owner's seat — and it turned
+  the advice this ADR's own direction refusal gives ("file it under a category
+  of the other direction") into something the app then denies. A direction is
+  already how every list is filtered, so it is the natural boundary for a name.
+- Bad / cost: a category's direction becomes immutable once anything is filed
+  under it (`update_category` refuses the flip). Everything filed under a
+  category matched its direction when written, so a flip would not break some
+  of them — it would break all of them at once, silently, which is the exact
+  condition this ADR exists to prevent.
 - Bad / cost: the frontend category select must be re-queried when the
   movement's type changes, and `allowNullLabel="Sin categoría"` is removed from
   `transaction-create-dialog.tsx`. That option *is* the gap.

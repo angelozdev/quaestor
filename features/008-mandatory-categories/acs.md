@@ -185,6 +185,22 @@ existing active one is refused. If the match is an archived category, the app
 offers to restore it instead of creating a second one. Production already
 carries one such pair (`🛡️ Auto Insurance` exists twice, one archived).
 
+**Amended 2026-08-03, after CP7 review, on two points the original wording left
+open.**
+
+*Where the rule applies:* everywhere a category is created — the movement form,
+the Categorías screen, the API and the assistant — not only the form the
+paragraph above describes.
+
+*Which names collide:* **a name is unique per direction, not across the app.**
+"Intereses" can exist twice, once for the ones paid to the bank and once for
+the ones earned from it, and no offering ever shows the two together because
+every one is already filtered by direction (AC-4). The same goes for
+"Comisiones" and "Ajuste". Refusing across directions would leave the owner
+told a category exists while the app declines to offer it — and would make the
+advice AC-15's refusal gives ("use a category of the other direction") an
+action the app then denies.
+
 ## AC-14: The rule holds on every way in, not just the form
 
 - **Priority:** high

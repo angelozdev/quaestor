@@ -191,8 +191,32 @@ def test_a_name_an_archived_category_holds_offers_to_restore_it(session):
     assert "Vuelos" in str(refusal.value)
 
 
-def test_the_same_name_in_the_other_direction_is_still_refused(session):
-    categories.create_category(session, "Bonos")
+def test_the_same_name_in_the_other_direction_is_allowed(session):
+    """A name is unique per direction, not across the app (AC-13).
 
-    with pytest.raises(ValidationError):
-        categories.create_category(session, "Bonos", is_income=True)
+    "Intereses" is both what the bank charges and what it pays; no offering
+    ever shows the two together, because every one is filtered by direction.
+    """
+    paid = categories.create_category(session, "Intereses")
+    earned = categories.create_category(session, "Intereses", is_income=True)
+
+    assert paid.id != earned.id
+    assert [c.name for c in categories.list_categories(session, is_income=False)] == ["Intereses"]
+    assert [c.name for c in categories.list_categories(session, is_income=True)] == ["Intereses"]
+
+
+def test_the_same_name_in_the_same_direction_is_still_refused(session):
+    categories.create_category(session, "Bonos", is_income=True)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "bonos", is_income=True)
+
+    assert "income category" in str(refusal.value)
+
+
+def test_an_archived_match_of_the_other_direction_does_not_block(session):
+    archived = categories.create_category(session, "Ajuste")
+    categories.archive_category(session, archived.id)
+
+    created = categories.create_category(session, "Ajuste", is_income=True)
+    assert created.is_income is True

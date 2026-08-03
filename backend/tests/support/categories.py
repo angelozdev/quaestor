@@ -29,11 +29,16 @@ def a_named_category(session, name: str, tx_type: TxType = TxType.expense) -> in
     and including archived ones. A stricter lookup here would miss a match the
     guard then rejects, and the helper would raise instead of returning an id.
     """
+    is_income = category_is_income_for(tx_type)
     folded = name.casefold()
     existing = next(
-        (cat for cat in list_categories(session, include_archived=True) if cat.name.casefold() == folded),
+        (
+            cat
+            for cat in list_categories(session, include_archived=True, is_income=is_income)
+            if cat.name.casefold() == folded
+        ),
         None,
     )
     if existing is not None:
         return existing.id
-    return create_category(session, name, is_income=category_is_income_for(tx_type)).id
+    return create_category(session, name, is_income=is_income).id

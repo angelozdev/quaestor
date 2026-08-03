@@ -49,31 +49,45 @@ def list_groups(session: Session, include_archived: bool = False) -> list[Catego
     return list(session.exec(stmt.order_by(CategoryGroup.sort_order)).all())
 
 
-def _by_name(session: Session, name: str) -> Category | None:
-    """The category holding this name, archived or not, ignoring case."""
+def _by_name(session: Session, name: str, is_income: bool) -> Category | None:
+    """The category of that direction holding this name, archived or not.
+
+    Scoped to one direction on purpose (AC-13, owner's decision 2026-08-03): a
+    name is unique per direction, not across the app. "Intereses" can be both
+    the ones paid to the bank and the ones earned from it, and no list ever
+    shows the two together because every offering is already filtered by
+    direction.
+    """
     folded = name.strip().casefold()
     return next(
-        (cat for cat in session.exec(select(Category)).all() if cat.name.casefold() == folded),
+        (
+            cat
+            for cat in session.exec(select(Category).where(Category.is_income == is_income)).all()
+            if cat.name.casefold() == folded
+        ),
         None,
     )
 
 
-def _refuse_name_already_held(session: Session, name: str) -> None:
-    """Two categories with the same name are indistinguishable in every list.
+def _refuse_name_already_held(session: Session, name: str, is_income: bool) -> None:
+    """Two categories of the same direction with the same name are
+    indistinguishable in every list that offers them.
 
     The rule holds wherever a category is created — the movement form, the
     Categorías screen, the API and the assistant (AC-13). An archived match is
     refused with an offer to restore it, because creating a second one leaves
     the owner with the pair production already carries in `🛡️ Auto Insurance`.
     """
-    held = _by_name(session, name)
+    held = _by_name(session, name, is_income)
     if held is None:
         return
+    direction = "income" if is_income else "expense"
     if held.archived:
         raise ValidationError(
-            f"category {held.name!r} already exists but is archived — restore it instead of creating a second one"
+            f"an archived {direction} category is already named {held.name!r} — "
+            f"restore it instead of creating a second one"
         )
-    raise ValidationError(f"category {held.name!r} already exists")
+    raise ValidationError(f"an {direction} category named {held.name!r} already exists")
 
 
 def create_category(
@@ -103,7 +117,7 @@ def create_category(
     """
     if not name or not name.strip():
         raise ValidationError("category name is required")
-    _refuse_name_already_held(session, name)
+    _refuse_name_already_held(session, name, is_income)
     if group_id is not None and session.get(CategoryGroup, group_id) is None:
         raise ValidationError(f"group {group_id} does not exist")
     cat = Category(
