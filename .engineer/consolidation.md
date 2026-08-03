@@ -24,7 +24,7 @@ all-❌ for every feature (no DAE artifacts existed before onboarding).
 | 2 | transactions-crud | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 3 | planned-payments-to-pay | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 4 | outstanding-queue-buckets | done | ✅ | ✅ | ✅ | ✅ | ✅ |
-| 5 | recurring-engine | done | ✅ | ✅ | ✅ | ✅ | ❌ |
+| 5 | recurring-engine | done | ✅ | ✅ | ✅ | ✅ | ✅ |
 | 6 | month-close-rollover | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 7 | goals | done | ❌ | ❌ | ❌ | ❌ | ❌ |
 | 8 | goal-contribution-hooks | done | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -148,9 +148,13 @@ pipeline generation → tests green. Bounded, one feature per task.
      `accept_pending_dates`, `decline_pending_dates`, a `failures` report on
      `materialize_due`, an engine value on `Source`) — CP4 owns their shape.
    - Project-level drift found on the way: `docs/decisions/product-decisions.md`
-     has no entry since 2026-07-03. Feature 006's five product decisions and
-     007's nine live only in their `acs.md`. CLAUDE.md puts product decisions in
-     that file — decide whether to backfill both or make `acs.md` the home.
+     had no entry since 2026-07-03. Feature 006's five product decisions and
+     007's eight (this note said "nine" until 2026-08-02; `acs.md` lists eight)
+     lived only in their `acs.md`. **Resolved 2026-08-02** — the user chose to
+     backfill; `product-decisions.md` stays the home. ADR-026 already covered
+     two of 007's, so eleven were outstanding and became nine new ADRs:
+     006's five as 027–030 (AC-15 and the one-off-income scope call share 027),
+     007's six as 031–035 (AC-20 and AC-28 share 034). File now holds 35.
    - Follow-up to open with `discuss`: a **Por cobrar** view for expected
      incoming money. Surfaced at AC discovery; the user wants it, but it is a
      new surface and feature 006 already ruled one-off planned incomes out.
