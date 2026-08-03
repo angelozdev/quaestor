@@ -49,6 +49,33 @@ def list_groups(session: Session, include_archived: bool = False) -> list[Catego
     return list(session.exec(stmt.order_by(CategoryGroup.sort_order)).all())
 
 
+def _by_name(session: Session, name: str) -> Category | None:
+    """The category holding this name, archived or not, ignoring case."""
+    folded = name.strip().casefold()
+    return next(
+        (cat for cat in session.exec(select(Category)).all() if cat.name.casefold() == folded),
+        None,
+    )
+
+
+def _refuse_name_already_held(session: Session, name: str) -> None:
+    """Two categories with the same name are indistinguishable in every list.
+
+    The rule holds wherever a category is created — the movement form, the
+    Categorías screen, the API and the assistant (AC-13). An archived match is
+    refused with an offer to restore it, because creating a second one leaves
+    the owner with the pair production already carries in `🛡️ Auto Insurance`.
+    """
+    held = _by_name(session, name)
+    if held is None:
+        return
+    if held.archived:
+        raise ValidationError(
+            f"category {held.name!r} already exists but is archived — restore it instead of creating a second one"
+        )
+    raise ValidationError(f"category {held.name!r} already exists")
+
+
 def create_category(
     session: Session,
     name: str,
@@ -71,10 +98,12 @@ def create_category(
         The created Category.
 
     Raises:
-        ValidationError: If name is empty, whitespace-only, or group_id is invalid.
+        ValidationError: If name is empty, whitespace-only, already held by
+            another category — archived or not (AC-13) — or group_id is invalid.
     """
     if not name or not name.strip():
         raise ValidationError("category name is required")
+    _refuse_name_already_held(session, name)
     if group_id is not None and session.get(CategoryGroup, group_id) is None:
         raise ValidationError(f"group {group_id} does not exist")
     cat = Category(
@@ -261,28 +290,6 @@ def unarchive_category(session: Session, category_id: int) -> Category:
     return cat
 
 
-def _by_name(session: Session, name: str) -> Category | None:
-    """The category holding this name, archived or not, ignoring case."""
-    folded = name.strip().casefold()
-    return next(
-        (cat for cat in session.exec(select(Category)).all() if cat.name.casefold() == folded),
-        None,
-    )
-
-
-def _created_for_movement(session: Session, name: str, wants_income: bool) -> Category:
-    if not name or not name.strip():
-        raise ValidationError("category name is required")
-    taken = _by_name(session, name)
-    if taken is not None and taken.archived:
-        raise ValidationError(
-            f"category {taken.name!r} already exists but is archived — restore it instead of creating a second one"
-        )
-    if taken is not None:
-        raise ValidationError(f"category {taken.name!r} already exists")
-    return create_category(session, name, is_income=wants_income)
-
-
 def _chosen_for_movement(session: Session, category_id: int, wants_income: bool) -> Category:
     cat = session.get(Category, category_id)
     if cat is None:
@@ -337,7 +344,7 @@ def resolve_for_movement(
         raise ValidationError("choose an existing category or create one, not both")
     wants_income = category_is_income_for(tx_type)
     if new_category is not None:
-        return _created_for_movement(session, new_category, wants_income).id
+        return create_category(session, new_category, is_income=wants_income).id
     if category_id is None:
         direction = "income" if wants_income else "expense"
         raise ValidationError(f"category is required: every {direction} must say what it was for")

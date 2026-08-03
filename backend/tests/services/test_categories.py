@@ -167,3 +167,32 @@ def test_renaming_a_category_in_use_is_still_allowed(session):
 
     renamed = categories.update_category(session, comida.id, name="Alimentación")
     assert renamed.name == "Alimentación"
+
+
+def test_a_name_an_active_category_holds_is_refused_anywhere(session):
+    """AC-13 covers the whole app, not only the movement form."""
+    categories.create_category(session, "Vuelos")
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "vuelos")
+
+    assert "already exists" in str(refusal.value)
+    assert [c.name for c in categories.list_categories(session)] == ["Vuelos"]
+
+
+def test_a_name_an_archived_category_holds_offers_to_restore_it(session):
+    archived = categories.create_category(session, "Vuelos")
+    categories.archive_category(session, archived.id)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "Vuelos")
+
+    assert "restore" in str(refusal.value).lower()
+    assert "Vuelos" in str(refusal.value)
+
+
+def test_the_same_name_in_the_other_direction_is_still_refused(session):
+    categories.create_category(session, "Bonos")
+
+    with pytest.raises(ValidationError):
+        categories.create_category(session, "Bonos", is_income=True)

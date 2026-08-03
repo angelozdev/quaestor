@@ -65,3 +65,13 @@ def test_list_categories_direction_filter_excludes_archived_like_the_plain_list(
         categories.archive_category(s, categories.create_category(s, name="Suscripciones").id)
 
     assert client.get("/api/categories?is_income=false", headers=auth).json() == []
+
+
+def test_creating_a_category_whose_name_is_taken_is_422(client, auth):
+    client.post("/api/categories", headers=auth, json={"name": "Vuelos"})
+
+    resp = client.post("/api/categories", headers=auth, json={"name": "vuelos"})
+
+    assert resp.status_code == 422
+    assert "already exists" in resp.json()["detail"]
+    assert len(client.get("/api/categories", headers=auth).json()) == 1
