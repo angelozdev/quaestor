@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 from quaestor.domain.errors import ValidationError
-from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from quaestor.domain.models import Category, IntervalUnit, RecurringMode, TxType
 from quaestor.services import accounts, categories, recurring, transactions
 
 
@@ -220,3 +220,50 @@ def test_an_archived_match_of_the_other_direction_does_not_block(session):
 
     created = categories.create_category(session, "Ajuste", is_income=True)
     assert created.is_income is True
+
+
+def _same_name_pair(session, name="Auto Insurance"):
+    """Production's shape: one archived and one active, same name, same direction.
+
+    Built with the model rather than the service, because `create_category`
+    refuses to make this pair now — production has carried it since before the
+    rule existed (`acs.md` AC-13).
+    """
+    archived = Category(name=name, is_income=False, archived=True)
+    active = Category(name=name, is_income=False, archived=False)
+    session.add_all([archived, active])
+    session.commit()
+    session.refresh(archived)
+    session.refresh(active)
+    return archived, active
+
+
+def test_an_active_match_is_named_even_when_an_archived_one_shares_the_name(session):
+    """The archived branch must not win over an active one — its advice would be
+    to restore a category whose name is already taken by a live one."""
+    _same_name_pair(session)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "auto insurance")
+
+    assert "already exists" in str(refusal.value)
+    assert "restore" not in str(refusal.value).lower()
+
+
+def test_restoring_into_a_name_an_active_category_holds_is_refused(session):
+    archived, _active = _same_name_pair(session)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.unarchive_category(session, archived.id)
+
+    assert "Auto Insurance" in str(refusal.value)
+    active_names = [c.name for c in categories.list_categories(session, is_income=False)]
+    assert active_names.count("Auto Insurance") == 1
+
+
+def test_restoring_a_category_whose_name_is_free_still_works(session):
+    cat = categories.create_category(session, "Suscripciones")
+    categories.archive_category(session, cat.id)
+
+    restored = categories.unarchive_category(session, cat.id)
+    assert restored.archived is False

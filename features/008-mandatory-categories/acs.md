@@ -194,12 +194,19 @@ paragraph above describes.
 
 *Which names collide:* **a name is unique per direction, not across the app.**
 "Intereses" can exist twice, once for the ones paid to the bank and once for
-the ones earned from it, and no offering ever shows the two together because
-every one is already filtered by direction (AC-4). The same goes for
-"Comisiones" and "Ajuste". Refusing across directions would leave the owner
-told a category exists while the app declines to offer it — and would make the
-advice AC-15's refusal gives ("use a category of the other direction") an
-action the app then denies.
+the ones earned from it. The same goes for "Comisiones" and "Ajuste". Refusing
+across directions would leave the owner told a category exists while the app
+declines to offer it — and would make the advice AC-15's refusal gives ("use a
+category of the other direction") an action the app then denies.
+
+Every offering a movement is **recorded** from is filtered by direction (AC-4),
+so the two never compete there. Screens that list categories for other reasons
+do show both: the Categorías screen and the assistant's listing mark the
+direction, but the **filter** dropdown on the transactions list shows bare
+names, where a same-named pair is two identical entries. That is a filter, not
+a place money is filed, so it does not change the ruling — but it is the one
+surface where the pair is ambiguous, and it is logged rather than pretended
+away.
 
 ## AC-14: The rule holds on every way in, not just the form
 

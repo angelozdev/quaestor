@@ -59,14 +59,15 @@ def _by_name(session: Session, name: str, is_income: bool) -> Category | None:
     direction.
     """
     folded = name.strip().casefold()
-    return next(
-        (
-            cat
-            for cat in session.exec(select(Category).where(Category.is_income == is_income)).all()
-            if cat.name.casefold() == folded
-        ),
-        None,
-    )
+    matches = [
+        cat
+        for cat in session.exec(select(Category).where(Category.is_income == is_income)).all()
+        if cat.name.casefold() == folded
+    ]
+    # An active match wins: where production carries both (`🛡️ Auto Insurance`),
+    # naming the archived one would advise a restore into a name a live category
+    # already holds.
+    return next((cat for cat in matches if not cat.archived), None) or next(iter(matches), None)
 
 
 def _refuse_name_already_held(session: Session, name: str, is_income: bool) -> None:
@@ -295,8 +296,19 @@ def unarchive_category(session: Session, category_id: int) -> Category:
 
     Raises:
         NotFound: If the category does not exist.
+        ValidationError: An active category of the same direction already holds
+            the name. Restoring would produce the duplicate pair AC-13 exists to
+            prevent — reachable today on production's `🛡️ Auto Insurance`.
     """
     cat = get_category(session, category_id)
+    if cat.archived:
+        live = _by_name(session, cat.name, cat.is_income)
+        if live is not None and not live.archived and live.id != cat.id:
+            direction = "income" if cat.is_income else "expense"
+            raise ValidationError(
+                f"an active {direction} category is already named {cat.name!r} — "
+                f"rename one of the two before restoring this one"
+            )
     cat.archived = False
     session.add(cat)
     session.commit()

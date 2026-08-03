@@ -161,8 +161,12 @@ The offering (AC-4, AC-10, AC-12) is a filter argument on the existing read —
   *because it already exists* while declining to offer it — the two facts are
   consistent internally and unexplainable from the owner's seat — and it turned
   the advice this ADR's own direction refusal gives ("file it under a category
-  of the other direction") into something the app then denies. A direction is
-  already how every list is filtered, so it is the natural boundary for a name.
+  of the other direction") into something the app then denies. Direction is
+  already how every offering a movement is *recorded* from is filtered, so it is
+  the natural boundary for a name. It is not how every list is filtered: the
+  transactions **filter** dropdown shows bare names and would render a same-named
+  pair as two identical entries. That surface files no money, so it does not
+  change the decision; it is logged for a direction marker.
 - Bad / cost: a category's direction becomes immutable once anything is filed
   under it (`update_category` refuses the flip). Everything filed under a
   category matched its direction when written, so a flip would not break some

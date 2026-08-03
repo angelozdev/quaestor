@@ -276,3 +276,11 @@ pipeline generation → tests green. Bounded, one feature per task.
   number. Predates feature 008 and is the larger of the two envelope problems;
   `set_budget` already refuses archived and `exclude_from_budget` categories, so
   the direction check belongs beside them.
+- C15. The category **filter** dropdown on `/transactions`
+  (`app/(app)/transactions/page.tsx:87,267`) lists both directions with bare
+  names, so a per-direction name pair — "Intereses" as an expense and as an
+  income, now allowed by AC-13's amendment — renders as two identical entries
+  with nothing to tell them apart. The Categorías screen and the assistant's
+  listing both mark direction; this one does not. It files no money, so it did
+  not block the AC-13 ruling, but it is the one surface where the pair is
+  ambiguous. Fix: show the direction in the filter's labels, or group by it.
