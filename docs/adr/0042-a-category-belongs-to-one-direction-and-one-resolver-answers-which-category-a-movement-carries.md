@@ -1,6 +1,6 @@
 # 0042. A category belongs to one direction and one resolver answers which category a movement carries
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-03
 - **Deciders:** Angelo
 - **Supersedes:** —

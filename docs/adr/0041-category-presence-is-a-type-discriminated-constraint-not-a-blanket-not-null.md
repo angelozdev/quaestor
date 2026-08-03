@@ -1,6 +1,6 @@
 # 0041. Category presence is a type-discriminated constraint, not a blanket NOT NULL
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-03
 - **Deciders:** Angelo
 - **Supersedes:** —
