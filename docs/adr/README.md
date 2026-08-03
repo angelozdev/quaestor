@@ -54,3 +54,5 @@ New ADRs are created with the `adr` skill:
 | 0038 | Engine-made movements carry their own source, and deleting one closes its due date | accepted | 2026-08-02 |
 | 0039 | Existing manual repeating incomes are migrated to automatic, their movements left alone | accepted | 2026-08-02 |
 | 0040 | Strict ruff lint as a gate on the acceptance pipeline | proposed | 2026-08-02 |
+| 0041 | Category presence is a type-discriminated constraint, not a blanket NOT NULL | proposed | 2026-08-03 |
+| 0042 | A category belongs to one direction and one resolver answers which category a movement carries | proposed | 2026-08-03 |
