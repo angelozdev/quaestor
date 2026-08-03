@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from sqlalchemy import BigInteger, Column, Index, Numeric, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Numeric, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
@@ -102,9 +102,22 @@ class Category(SQLModel, table=True):
 
 class Transaction(SQLModel, table=True):
     """`amount` is positive integer cents in the account's currency; no rate
-    or converted amount is stored — COP figures are read-time (ADR-0031)."""
+    or converted amount is stored — COP figures are read-time (ADR-0031).
 
-    __table_args__ = (Index("ix_transaction_type_status_date", "type", "status", "date"),)
+    `category_id` is nullable in the column but not in practice: the CHECK
+    requires one on an expense or income and forbids one on a transfer
+    (ADR-0041). Declared here as well as in revision 0010 so the model and the
+    schema cannot drift.
+    """
+
+    __table_args__ = (
+        Index("ix_transaction_type_status_date", "type", "status", "date"),
+        CheckConstraint(
+            "(type IN ('expense', 'income') AND category_id IS NOT NULL)"
+            " OR (type = 'transfer' AND category_id IS NULL)",
+            name="ck_transaction_category_by_type",
+        ),
+    )
 
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     date: date
@@ -146,7 +159,10 @@ class Settings(SQLModel, table=True):
 
 class RecurringItem(SQLModel, table=True):
     """`type` is expense or income (service-validated; never transfer);
-    `amount` is the default occurrence amount in positive cents of `currency`."""
+    `amount` is the default occurrence amount in positive cents of `currency`.
+
+    `category_id` is required: every charge copies it, so a source that could
+    be empty would produce uncategorised charges (ADR-0041)."""
 
     __tablename__ = "recurring_item"
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
@@ -156,7 +172,7 @@ class RecurringItem(SQLModel, table=True):
     mode: RecurringMode
     amount: int
     currency: str
-    category_id: Annotated[int | None, Field(default=None, foreign_key="category.id")] = None
+    category_id: Annotated[int, Field(foreign_key="category.id")]
     account_id: Annotated[int, Field(foreign_key="account.id")]
     interval_unit: IntervalUnit
     interval_count: int = 1

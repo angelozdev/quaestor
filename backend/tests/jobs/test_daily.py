@@ -40,12 +40,19 @@ class _StubClient:
 
 
 @pytest.fixture
-def session(monkeypatch, tmp_path):
-    monkeypatch.setenv("QUAESTOR_DB", f"sqlite:///{tmp_path / 'test.db'}")
+def session(tmp_path):
+    """A database of this test's own.
+
+    `db.engine` is built at import time, so setting QUAESTOR_DB in a fixture
+    arrives too late to redirect it — these tests were reaching the developer's
+    on-disk `quaestor.db` instead of the tmp file they asked for. Build the
+    engine here, where the URL is the one we mean.
+    """
     from quaestor import db
 
-    db.init_db(db.engine)
-    with Session(db.engine) as s:
+    engine = db.make_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    db.init_db(engine)
+    with Session(engine) as s:
         yield s
 
 

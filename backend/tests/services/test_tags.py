@@ -20,6 +20,7 @@ def _make_transaction(session):
         amount=1000,
         currency="COP",
         account_id=acc.id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(tx)
     session.commit()
@@ -142,6 +143,7 @@ def test_untag_leaves_other_transactions_links(session):
         amount=500,
         currency="COP",
         account_id=first.account_id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(second)
     session.commit()
@@ -181,6 +183,7 @@ def test_tag_names_by_transaction_maps_each_id(session):
         amount=500,
         currency="COP",
         account_id=first.account_id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(second)
     session.commit()

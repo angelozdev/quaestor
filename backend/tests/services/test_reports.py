@@ -105,33 +105,6 @@ def test_category_sections_sorted_with_pct_and_ungrouped(session):
     assert sections[0].pct == pytest.approx(50.0)
 
 
-def test_uncategorized_section_survives_for_data_that_predates_the_rule(session):
-    """`Uncategorized` can no longer be produced through the app (ADR-0042).
-
-    The bucket stays because a report can still be run over data restored from
-    a dump older than the rule; this pins that it keeps working, by building
-    the row the way only a restore could.
-    """
-    acc = _acc(session)
-    old = Transaction(
-        date=date(2026, 6, 7),
-        payee="predates the rule",
-        type=TxType.expense,
-        status=TxStatus.posted,
-        amount=100_000,
-        currency="COP",
-        account_id=acc.id,
-        category_id=None,
-    )
-    session.add(old)
-    session.commit()
-    agg = load_month_aggregate(session, "2026-06", TRM)
-    expenses = agg.month_expense()
-    sections = reports._category_sections(agg, expenses, sum(agg.to_cop_cents(t) for t in expenses))
-    assert [s.category for s in sections] == ["Uncategorized"]
-    assert sections[0].group is None
-
-
 def test_group_sections_rollup(session):
     acc = _acc(session)
     essentials = categories.create_group(session, name="Essentials")
@@ -287,7 +260,7 @@ def test_pending_lines_exclude_planned_income(session):
     """Pending means what is owed — expected money in is not pending (AC-15)."""
     from decimal import Decimal
 
-    from quaestor.domain.models import Transaction, TxStatus, TxType
+    from quaestor.domain.models import TxType
 
     acc = _acc(session)
     session.add(
@@ -302,6 +275,7 @@ def test_pending_lines_exclude_planned_income(session):
             to_base=5_000_000,
             account_id=acc.id,
             source="manual",
+            category_id=a_category(session, TxType.income),
         )
     )
     session.commit()

@@ -808,6 +808,7 @@ def _planned_income(session, account_id, amount=5_000_000, due=date(2026, 6, 20)
         to_base=amount,
         account_id=account_id,
         source="manual",
+        category_id=a_category(session, TxType.income),
     )
     session.add(tx)
     session.commit()
@@ -862,6 +863,7 @@ def test_to_pay_excludes_an_overdue_planned_income(session):
             amount=5_000_000,
             currency="COP",
             account_id=acc.id,
+            category_id=a_category(session, TxType.income),
         )
     )
     session.commit()

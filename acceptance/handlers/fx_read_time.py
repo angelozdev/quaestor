@@ -203,13 +203,19 @@ def given_pre_upgrade_data(world: World) -> None:
         )
         conn.execute(
             sa_text(
+                "INSERT INTO category (name, is_income, exclude_from_budget, "
+                "exclude_from_totals, archived) VALUES ('Antes del alta', 0, 0, 0, 0)"
+            )
+        )
+        conn.execute(
+            sa_text(
                 'INSERT INTO "transaction" '
                 "(date, payee, notes, type, status, amount, currency, fx_rate, "
-                " to_base, account_id, source, created_at) VALUES "
+                " to_base, account_id, category_id, source, created_at) VALUES "
                 "('2026-05-10', 'Spotify', NULL, 'expense', 'posted', 1200, 'USD', "
-                " 4000.0, 4800000, 1, 'manual', '2026-05-10 12:00:00'), "
+                " 4000.0, 4800000, 1, 1, 'manual', '2026-05-10 12:00:00'), "
                 "('2026-05-11', 'Mercado', NULL, 'expense', 'posted', 5000000, 'COP', "
-                " 1.0, 5000000, 2, 'manual', '2026-05-11 12:00:00')"
+                " 1.0, 5000000, 2, 1, 'manual', '2026-05-11 12:00:00')"
             )
         )
         conn.execute(sa_text("INSERT INTO fx_rate (date, usd_cop) VALUES ('2026-05-10', 4000.0)"))

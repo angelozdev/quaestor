@@ -7,6 +7,7 @@ from tests.support.migrations import (
     directions_by_id,
     engine_at_revision,
     insert_account,
+    insert_category,
     insert_transaction,
 )
 
@@ -14,13 +15,14 @@ from tests.support.migrations import (
 def _seeded_engine_at_rev_0005():
     engine = engine_at_revision("0005")
     with engine.begin() as conn:
+        insert_category(conn, 1)
         insert_account(conn, 1, "Cash")
         insert_account(conn, 2, "Bank")
         insert_transaction(conn, 10, "transfer", 1, "g1")
         insert_transaction(conn, 11, "transfer", 2, "g1")
         insert_transaction(conn, 21, "transfer", 2, "g2")
         insert_transaction(conn, 20, "transfer", 1, "g2")
-        insert_transaction(conn, 30, "expense", 1, None)
+        insert_transaction(conn, 30, "expense", 1, None, category_id=1)
     return engine
 
 

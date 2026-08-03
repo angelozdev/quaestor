@@ -215,6 +215,7 @@ def given_planned_income(world: World, amount: str, currency: str, account: str,
         amount=major_to_cents(amount),
         currency=currency,
         account_id=_account_id(world, account),
+        category_id=world.background_category(TxType.income),
         source=Source.manual,
     )
     world.session.add(tx)
