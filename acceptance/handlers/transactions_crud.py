@@ -102,6 +102,7 @@ def given_recorded_tagged_expense(world: World, amount: str, currency: str, tag:
         currency,
         world.today,
         payee,
+        category_id=world.background_category(TxType.expense),
     )
     tags.tag_transaction(world.session, tx.id, [tag])
     world.last_expense_id = tx.id
@@ -120,6 +121,7 @@ def given_planned_payment(world: World, amount: str, currency: str, payee: str, 
         currency,
         Date.fromisoformat(due),
         _scenario_account_id(world, currency),
+        category_id=world.background_category(TxType.expense),
     )
 
 
@@ -156,7 +158,7 @@ def when_register_expense_detailed(
             currency,
             Date.fromisoformat(date) if date else world.today,
             payee,
-            category_id=world.categories[category] if category else None,
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
             notes=notes,
         )
         world.last_expense_id = tx.id
@@ -181,6 +183,7 @@ def when_register_income(world: World, amount: str, currency: str, account: str,
         currency,
         world.today,
         payee,
+        category_id=world.background_category(TxType.income),
     )
 
 
@@ -367,11 +370,12 @@ def when_act_on_missing_transaction(world: World, action: str) -> None:
 
 @step(
     r"the assistant records an expense of (?P<amount>" + _DEC + r") "
-    r'(?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" paying "(?P<payee>[^"]+)" '
+    r'(?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" paying "(?P<payee>[^"]+)"'
+    r'(?: in category "(?P<category>[^"]+)")? '
     r'tagged "(?P<tag>[^"]+)"'
 )
 def when_assistant_records_expense(
-    world: World, amount: str, currency: str, account: str, payee: str, tag: str
+    world: World, amount: str, currency: str, account: str, payee: str, tag: str, category: str | None
 ) -> None:
     def action():
         from quaestor.mcp.tools import core as mcp_core
@@ -383,6 +387,7 @@ def when_assistant_records_expense(
                 amount=major_to_cents(amount),
                 account=account,
                 currency=currency,
+                category=category,
                 tags=[tag],
                 date=world.today,
             ),

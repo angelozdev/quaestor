@@ -40,6 +40,7 @@ from unittest import mock
 
 from quaestor.domain import money as money_mod
 from quaestor.domain.errors import MissingRate, QuaestorError
+from quaestor.domain.models import TxType
 from quaestor.domain.money import major_to_cents
 from quaestor.jobs import daily as daily_job
 from quaestor.services import accounts, budgets, categories, fx, reports, transactions
@@ -141,7 +142,7 @@ def _record_default_expense(world: World, amount: str, currency: str, on_date, c
         currency,
         on_date,
         "Acceptance payee",
-        category_id=category_id,
+        category_id=category_id if category_id is not None else world.background_category(TxType.expense),
     )
     world.last_expense_id = tx.id
 
@@ -202,13 +203,19 @@ def given_pre_upgrade_data(world: World) -> None:
         )
         conn.execute(
             sa_text(
+                "INSERT INTO category (name, is_income, exclude_from_budget, "
+                "exclude_from_totals, archived) VALUES ('Antes del alta', 0, 0, 0, 0)"
+            )
+        )
+        conn.execute(
+            sa_text(
                 'INSERT INTO "transaction" '
                 "(date, payee, notes, type, status, amount, currency, fx_rate, "
-                " to_base, account_id, source, created_at) VALUES "
+                " to_base, account_id, category_id, source, created_at) VALUES "
                 "('2026-05-10', 'Spotify', NULL, 'expense', 'posted', 1200, 'USD', "
-                " 4000.0, 4800000, 1, 'manual', '2026-05-10 12:00:00'), "
+                " 4000.0, 4800000, 1, 1, 'manual', '2026-05-10 12:00:00'), "
                 "('2026-05-11', 'Mercado', NULL, 'expense', 'posted', 5000000, 'COP', "
-                " 1.0, 5000000, 2, 'manual', '2026-05-11 12:00:00')"
+                " 1.0, 5000000, 2, 1, 'manual', '2026-05-11 12:00:00')"
             )
         )
         conn.execute(sa_text("INSERT INTO fx_rate (date, usd_cop) VALUES ('2026-05-10', 4000.0)"))
@@ -227,8 +234,9 @@ def given_pre_upgrade_data(world: World) -> None:
 @step(
     r"the user registers an expense of (?P<amount>" + _DEC + r") "
     r'(?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)"'
+    r'(?: in category "(?P<category>[^"]+)")?'
 )
-def when_register_expense(world: World, amount: str, currency: str, account: str) -> None:
+def when_register_expense(world: World, amount: str, currency: str, account: str, category: str | None) -> None:
     def action():
         tx = transactions.record_expense(
             world.session,
@@ -237,6 +245,7 @@ def when_register_expense(world: World, amount: str, currency: str, account: str
             currency,
             world.today,
             "Acceptance payee",
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
         )
         world.last_expense_id = tx.id
 

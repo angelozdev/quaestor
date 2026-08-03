@@ -14,6 +14,8 @@ from quaestor.domain.models import (
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
+from tests.support.categories import a_category
+
 
 @pytest.fixture
 def session():
@@ -35,6 +37,7 @@ def test_create_recurring_item_and_occurrence(session):
         mode=RecurringMode.auto,
         amount=2_000_000,
         currency="COP",
+        category_id=a_category(session),
         account_id=1,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -64,6 +67,7 @@ def test_unique_recurring_due_date(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
+        category_id=a_category(session),
         account_id=1,
         interval_unit=IntervalUnit.month,
         interval_count=1,

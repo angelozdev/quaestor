@@ -157,7 +157,7 @@ def _declare(
         mode=_mode(mode),
         amount=major_to_cents(amount),
         currency=currency,
-        category_id=world.categories.get(category) if category else None,
+        category_id=world.submitted_category(category, tx_type),
         account_id=world.account_id_or_missing(account),
         interval_unit=IntervalUnit(unit) if unit else None,
         interval_count=int(count),
@@ -456,8 +456,11 @@ def when_restore_account(world: World, name: str) -> None:
 @step(
     r"the user registers an expense of (?P<amount>" + _DEC + r")"
     r' (?P<currency>[A-Z]{3}) from "(?P<account>[^"]+)" to "(?P<payee>[^"]+)"'
+    r'(?: in category "(?P<category>[^"]+)")?'
 )
-def when_register_expense_to_payee(world: World, amount: str, currency: str, account: str, payee: str) -> None:
+def when_register_expense_to_payee(
+    world: World, amount: str, currency: str, account: str, payee: str, category: str | None
+) -> None:
     def action():
         tx = transactions.record_expense(
             world.session,
@@ -466,6 +469,7 @@ def when_register_expense_to_payee(world: World, amount: str, currency: str, acc
             currency,
             world.today,
             payee,
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
         )
         world.last_expense_id = tx.id
 

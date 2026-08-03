@@ -32,13 +32,14 @@ def _seed_savings_account(engine, name="Savings"):
 # --- RecurringCreate.interval_count ---
 
 
-def test_recurring_create_interval_count_zero_is_422(client, engine, auth):
+def test_recurring_create_interval_count_zero_is_422(client, engine, auth, expense_category):
     """gt=0 boundary: interval_count=0 must be rejected."""
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "LL",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -54,13 +55,14 @@ def test_recurring_create_interval_count_zero_is_422(client, engine, auth):
     assert "interval_count" in data["fields"], r.text
 
 
-def test_recurring_create_interval_count_over_1000_is_422(client, engine, auth):
+def test_recurring_create_interval_count_over_1000_is_422(client, engine, auth, expense_category):
     """le=1000 boundary: interval_count=1001 must be rejected."""
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "LL",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -72,13 +74,14 @@ def test_recurring_create_interval_count_over_1000_is_422(client, engine, auth):
     assert r.status_code == 422, r.text
 
 
-def test_recurring_create_interval_count_negative_is_422(client, engine, auth):
+def test_recurring_create_interval_count_negative_is_422(client, engine, auth, expense_category):
     """gt=0 boundary: negative interval_count must be rejected."""
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "LL",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -93,12 +96,13 @@ def test_recurring_create_interval_count_negative_is_422(client, engine, auth):
 # --- RecurringUpdate.amount & RecurringUpdate.interval_count ---
 
 
-def _seed_recurring(client, engine, auth):
+def _seed_recurring(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "LL",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -109,16 +113,16 @@ def _seed_recurring(client, engine, auth):
     return client.post("/api/recurring", json=body, headers=auth).json()["id"]
 
 
-def test_recurring_update_amount_zero_is_422(client, engine, auth):
+def test_recurring_update_amount_zero_is_422(client, engine, auth, expense_category):
     """gt=0 boundary: RecurringUpdate.amount=0 must be rejected."""
-    rid = _seed_recurring(client, engine, auth)
+    rid = _seed_recurring(client, engine, auth, expense_category)
     r = client.patch(f"/api/recurring/{rid}", json={"amount": 0}, headers=auth)
     assert r.status_code == 422, r.text
 
 
-def test_recurring_update_interval_count_over_1000_is_422(client, engine, auth):
+def test_recurring_update_interval_count_over_1000_is_422(client, engine, auth, expense_category):
     """le=1000 boundary: RecurringUpdate.interval_count=1001 must be rejected."""
-    rid = _seed_recurring(client, engine, auth)
+    rid = _seed_recurring(client, engine, auth, expense_category)
     r = client.patch(f"/api/recurring/{rid}", json={"interval_count": 1001}, headers=auth)
     assert r.status_code == 422, r.text
 

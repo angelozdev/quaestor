@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 from quaestor.domain.dates import display_date
+from quaestor.domain.models import TxType
 from quaestor.domain.planned import OutstandingQueue
 from quaestor.mcp import format
 from quaestor.mcp.tools import temporal
@@ -18,9 +19,19 @@ from quaestor.mcp.tools.temporal import (
     UpdateRecurringInput,
 )
 from quaestor.services import accounts, fx, planned
+from quaestor.services import recurring as recurring_service
+
+from tests.support.categories import a_category, a_named_category
 
 
 def _bank(session):
+    """The account these tools write to, plus the two categories they name.
+
+    Every movement carries a category since feature 008 (ADR-0042), so the
+    assistant's own inputs name one — the tools resolve it by name.
+    """
+    a_named_category(session, "Groceries", TxType.expense)
+    a_named_category(session, "Salary", TxType.income)
     return accounts.create_account(session, "Bancolombia", "debit", "COP", balance=10_000_000)
 
 
@@ -29,6 +40,7 @@ def test_create_recurring_tool(session):
     out = temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",
@@ -47,6 +59,7 @@ def test_create_recurring_unknown_account_returns_text(session):
     out = temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",
@@ -66,6 +79,7 @@ def test_list_recurring_tool(session):
     temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",
@@ -87,10 +101,12 @@ def test_plan_confirm_to_pay_skip_flow(session):
     planned_out = temporal.plan_payment(
         session,
         PlanPaymentInput(
+            category="Groceries",
             payee="Friend",
             amount=80_000,
             account="Bancolombia",
             due_date=date(2026, 6, 20),
+            category_id=a_category(session),
         ),
     )
     assert "Friend" in planned_out and "id=" in planned_out
@@ -111,10 +127,12 @@ def test_to_pay_without_trm_returns_missing_rate_text(session):
     temporal.plan_payment(
         session,
         PlanPaymentInput(
+            category="Groceries",
             payee="Friend",
             amount=80_000,
             account="Bancolombia",
             due_date=date(2026, 6, 20),
+            category_id=a_category(session),
         ),
     )
     out = temporal.to_pay(session, ToPayInput(since=date(2026, 6, 1), until=date(2026, 6, 30)))
@@ -126,7 +144,9 @@ def test_confirm_non_planned_returns_text(session):
     _bank(session)
     from quaestor.services import transactions
 
-    tx = transactions.record_expense(session, 1, 1000, "COP", date(2026, 6, 1), "x")
+    tx = transactions.record_expense(
+        session, 1, 1000, "COP", date(2026, 6, 1), "x", category_id=a_category(session, TxType.expense)
+    )
     out = temporal.confirm_payment(session, ConfirmPaymentInput(tx_id=tx.id))
     assert "Can't do that" in out
 
@@ -136,10 +156,12 @@ def test_skip_payment_tool(session):
     temporal.plan_payment(
         session,
         PlanPaymentInput(
+            category="Groceries",
             payee="Friend",
             amount=80_000,
             account="Bancolombia",
             due_date=date(2026, 6, 20),
+            category_id=a_category(session),
         ),
     )
     from quaestor.services import transactions
@@ -154,6 +176,7 @@ def test_skip_recurring_tool(session):
     temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Water",
             payee="Utility",
             type="expense",
@@ -183,10 +206,12 @@ def test_restore_payment_tool(session):
     temporal.plan_payment(
         session,
         PlanPaymentInput(
+            category="Groceries",
             payee="Claro",
             amount=85_000,
             account="Bancolombia",
             due_date=date(2026, 6, 20),
+            category_id=a_category(session),
         ),
     )
     from quaestor.services import transactions
@@ -203,7 +228,9 @@ def test_restore_payment_confirmation_names_payee_amount_and_due_date(session):
     due date intact — the chat confirmation is where the user reads that,
     so the whole line is asserted, not just the verb."""
     a = _bank(session)
-    tx = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 7, 15), a.id)
+    tx = planned.plan_payment(
+        session, "Claro", 85_000_00, "COP", date(2026, 7, 15), a.id, category_id=a_category(session)
+    )
     planned.skip_payment(session, tx.id)
     restored = planned.restore_payment(session, tx.id)
     assert format.payment_restored(restored) == (
@@ -216,10 +243,12 @@ def test_restore_payment_tool_rejects_non_skipped(session):
     temporal.plan_payment(
         session,
         PlanPaymentInput(
+            category="Groceries",
             payee="Claro",
             amount=85_000,
             account="Bancolombia",
             due_date=date(2026, 6, 20),
+            category_id=a_category(session),
         ),
     )
     from quaestor.services import transactions
@@ -254,6 +283,7 @@ def test_mcp_update_recurring(session):
     temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",
@@ -278,6 +308,7 @@ def test_mcp_archive_recurring(session):
     temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",
@@ -305,6 +336,7 @@ def test_to_pay_table_renders_two_sections(session):
         "COP",
         date(2026, 6, 28),
         a.id,
+        category_id=a_category(session),
     )
     upcoming = planned.plan_payment(
         session,
@@ -313,6 +345,7 @@ def test_to_pay_table_renders_two_sections(session):
         "COP",
         date(2026, 7, 15),
         a.id,
+        category_id=a_category(session),
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -332,6 +365,7 @@ def test_to_pay_table_omits_empty_overdue_section(session):
         "COP",
         date(2026, 7, 15),
         a.id,
+        category_id=a_category(session),
     )
     queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -348,6 +382,7 @@ def test_to_pay_table_omits_empty_upcoming_section(session):
         "COP",
         date(2026, 6, 28),
         a.id,
+        category_id=a_category(session),
     )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[])
     out = format.to_pay_table(queue, Decimal("4000"))
@@ -362,8 +397,12 @@ def test_to_pay_table_empty_queue():
 
 def test_to_pay_table_closes_with_the_combined_total(session):
     a = _bank(session)
-    overdue = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id)
-    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    overdue = planned.plan_payment(
+        session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id, category_id=a_category(session)
+    )
+    upcoming = planned.plan_payment(
+        session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id, category_id=a_category(session)
+    )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
     out = format.to_pay_table(queue, Decimal("4000"))
     assert out.splitlines()[-1] == "**Total to pay (COP): 130000.00** · 2 item(s)"
@@ -373,7 +412,9 @@ def test_to_pay_table_closes_with_the_combined_total(session):
 
 def test_to_pay_table_single_section_has_no_combined_total(session):
     a = _bank(session)
-    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    upcoming = planned.plan_payment(
+        session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id, category_id=a_category(session)
+    )
     out = format.to_pay_table(OutstandingQueue(overdue=[], upcoming=[upcoming]), Decimal("4000"))
     assert "Total to pay" not in out
     assert out.splitlines()[-1] == "**To pay (COP): 45000.00** · 1 item(s)"
@@ -383,8 +424,12 @@ def test_to_pay_table_two_section_layout_is_exact(session):
     """The whole rendered block is the contract, blank-line separators
     included — the chat answer must not drift line by line."""
     a = _bank(session)
-    overdue = planned.plan_payment(session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id)
-    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    overdue = planned.plan_payment(
+        session, "Claro", 85_000_00, "COP", date(2026, 6, 28), a.id, category_id=a_category(session)
+    )
+    upcoming = planned.plan_payment(
+        session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id, category_id=a_category(session)
+    )
     queue = OutstandingQueue(overdue=[overdue], upcoming=[upcoming])
     assert format.to_pay_table(queue, Decimal("4000")).splitlines() == [
         "## ⚠️ Overdue",
@@ -412,7 +457,9 @@ def test_to_pay_table_single_section_layout_is_exact(session):
     blank line — and closes on its own subtotal, exactly as before the
     combined-total line existed."""
     a = _bank(session)
-    upcoming = planned.plan_payment(session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id)
+    upcoming = planned.plan_payment(
+        session, "Netflix", 45_000_00, "COP", date(2026, 7, 15), a.id, category_id=a_category(session)
+    )
     queue = OutstandingQueue(overdue=[], upcoming=[upcoming])
     assert format.to_pay_table(queue, Decimal("4000")).splitlines() == [
         "## Upcoming",
@@ -431,6 +478,7 @@ def _declared_late(session):
     temporal.create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Netflix",
             payee="Netflix",
             type="expense",
@@ -492,3 +540,64 @@ def test_asking_which_dates_are_pending_is_read_only():
 
     assert tool_tier("pending_recurring_dates") == ToolTier.READ
     assert "pending_recurring_dates" in LLM_ALLOWED_TOOLS
+
+
+def test_plan_payment_creates_its_category_in_one_call(session):
+    from quaestor.services import categories as categories_service
+
+    _bank(session)
+    out = temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Taller",
+            amount=30_000_000,
+            account="Bancolombia",
+            due_date=date(2026, 8, 22),
+            new_category="Carro",
+        ),
+    )
+    assert "Taller" in out
+    assert "Carro" in [c.name for c in categories_service.list_categories(session)]
+
+
+def test_create_recurring_creates_its_category_in_one_call(session):
+    from quaestor.services import categories as categories_service
+
+    _bank(session)
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Internet",
+            payee="Hogar",
+            type="expense",
+            mode="auto",
+            amount=8_500_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 8, 1),
+            new_category="Servicios",
+        ),
+    )
+    assert "Internet" in out
+    assert "Servicios" in [c.name for c in categories_service.list_categories(session)]
+
+
+def test_create_recurring_with_no_category_is_refused_as_text(session):
+    _bank(session)
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Netflix",
+            payee="Netflix",
+            type="expense",
+            mode="auto",
+            amount=2_590_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 8, 1),
+        ),
+    )
+    assert "category" in out
+    assert recurring_service.list_recurring(session) == []

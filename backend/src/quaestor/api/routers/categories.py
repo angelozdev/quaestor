@@ -13,8 +13,14 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 
 @router.get("", response_model=list[CategoryOut])
-def list_categories(archived: bool = False, session: Session = Depends(get_session)):
-    return categories.list_categories(session, include_archived=archived)
+def list_categories(
+    archived: bool = False,
+    is_income: bool | None = None,
+    session: Session = Depends(get_session),
+):
+    """`is_income` narrows the list to one direction — the offering a movement
+    form shows while recording money coming in or going out (ADR-0042)."""
+    return categories.list_categories(session, include_archived=archived, is_income=is_income)
 
 
 @router.get("/{category_id}", response_model=CategoryOut)

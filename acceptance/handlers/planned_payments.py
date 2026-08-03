@@ -146,7 +146,7 @@ def _plan(
         currency,
         _due_date(world, due),
         _account_id(world, account),
-        category_id=world.categories.get(category) if category else None,
+        category_id=world.submitted_category(category, TxType.expense),
         notes=notes,
     )
 
@@ -167,7 +167,7 @@ def _materialize_manual_recurring(
         mode=RecurringMode.manual,
         amount=major_to_cents(amount),
         currency=currency,
-        category_id=None,
+        category_id=world.background_category(tx_type),
         account_id=_account_id(world, account),
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -215,6 +215,7 @@ def given_planned_income(world: World, amount: str, currency: str, account: str,
         amount=major_to_cents(amount),
         currency=currency,
         account_id=_account_id(world, account),
+        category_id=world.background_category(TxType.income),
         source=Source.manual,
     )
     world.session.add(tx)
@@ -303,9 +304,10 @@ def when_user_plans_payment(
     r"the assistant plans a payment of (?P<amount>" + _DEC + r")"
     r' (?P<currency>[A-Z]{3}) to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"'
     r" (?P<due>" + _DUE + r")"
+    r'(?: in category "(?P<category>[^"]+)")?'
 )
 def when_assistant_plans_payment(
-    world: World, amount: str, currency: str, payee: str, account: str, due: str, **_
+    world: World, amount: str, currency: str, payee: str, account: str, due: str, category: str | None = None, **_
 ) -> None:
     def action():
         from quaestor.mcp.tools import temporal
@@ -316,6 +318,7 @@ def when_assistant_plans_payment(
                 payee=payee,
                 amount=major_to_cents(amount),
                 currency=currency,
+                category=category,
                 due_date=_due_date(world, due),
                 account=account,
             ),

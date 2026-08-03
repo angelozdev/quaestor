@@ -15,7 +15,7 @@ query each by design (see spec: known linearities).
 from tests.support.query_counter import count_queries
 
 
-def test_report_query_count_is_bounded(client, auth, engine):
+def test_report_query_count_is_bounded(client, auth, engine, expense_category):
     assert client.post("/api/fx", json={"usd_cop": "4000"}, headers=auth).status_code == 201
     acc = client.post(
         "/api/accounts",
@@ -49,11 +49,11 @@ def test_report_query_count_is_bounded(client, auth, engine):
             "/api/transactions",
             json={
                 "type": "expense",
+                "category_id": cats[i % 6]["id"],
                 "account_id": acc["id"],
                 "amount": 1_000,
                 "currency": "COP",
                 "date": f"{month}-{1 + (i % 27):02d}",
-                "category_id": cats[i % 6]["id"],
                 "payee": "seed",
             },
             headers=auth,

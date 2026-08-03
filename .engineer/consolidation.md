@@ -210,3 +210,100 @@ pipeline generation → tests green. Bounded, one feature per task.
   migration section removed); manifest path-override comments fixed. Note:
   README changes cover most of C1's surface too — re-check C1 scope
   (SQLite-as-default prose per ADR-0024) before working it.
+- C7. `tests/jobs/test_daily.py` set `QUAESTOR_DB` in a fixture, but `db.engine`
+  is built at import time, so the patch arrived too late — those four tests had
+  been running against the developer's on-disk `backend/quaestor.db` instead of
+  the `tmp_path` they asked for. Fixed in feature 008 (F2) by building the
+  engine from the intended URL. **The pattern may repeat**: audit every test
+  that monkeypatches `QUAESTOR_DB` or touches `db.engine` directly. Found only
+  because revision 0010's pre-flight guard counted 1383 uncategorised expenses
+  in a file no test should have been reading.
+- C8. The `Uncategorized` bucket in `services/reports._category_sections` and
+  the `category_id is None` branches in `services/budgets` are dead code since
+  ADR-0041: the CHECK refuses an uncategorised expense or income even against a
+  raw `INSERT`, so the branch cannot be reached by any database at head. Its
+  test was removed in feature 008 (F3) because it could no longer build the row.
+  Harmless, but it is an untestable branch — prune it, or keep it deliberately
+  with a comment saying why.
+- C9. Domain refusals surface in the UI in English (`category 'Servicios'
+  already exists`, `amount must be > 0`). Charter §3 says code and identifiers
+  are English and **UI copy is Spanish**. This predates feature 008 — every
+  backend error has always reached the toast untranslated — but 008 added
+  several the owner will now meet often (missing category, wrong direction,
+  duplicate name). Decide where translation belongs: the error class, the API
+  boundary, or the frontend.
+- C10. Six implementation leaks in delivered specs, found by spec-guardian
+  during feature 008's Checkpoint 3 and deliberately left alone as out of
+  scope. Listed in full in
+  `features/008-mandatory-categories/handoffs/2026-08-03T0130-atdd.md`
+  ("Left alone on purpose"): `005:195` (`## AC-13 — REST and MCP surfaces stay
+  in parity`, the clearest one), `005:202`, `007:615/622/628`, `002:331`,
+  `006:491,500`, `007:627`.
+- C11. Feature 008 built its mutation tool ad-hoc in a scratch directory and
+  feature 007 did the same, so neither is reusable. The manifest declares
+  `mutation: opt_in / changed_files / on_demand`, which implies a repeatable
+  process. Commit one small AST-based mutator (comparison, boolean, constant
+  and `not`-removal operators are what both runs used) so the next feature does
+  not rebuild it.
+
+  **It must run both streams.** 008's sweep ran only backend unit tests for
+  speed and reported four survivors; re-running them against unit **plus**
+  `./run-acceptance-tests.sh` killed some outright. A mutation score measured
+  against half the gate understates coverage and sends you writing tests for
+  behaviour that was already pinned — by a scenario rather than a unit test,
+  which is where this project's rules mostly live.
+- C12. The recurring engine mints charges under **archived** categories.
+  Reproduced by the CP7 reviewer: create an item under "Servicios", archive
+  "Servicios", run `materialize_due` — the charge is created carrying the
+  archived category, with no failure reported. AC-16 refuses an archived
+  category for a new movement and AC-10 says archiving removes it from the
+  choices offered for new movements; the engine is a new-movement path neither
+  covers, because `occurrences._create_occurrence_tx` copies `item.category_id`
+  without re-validating. The copy predates feature 008, but 008 is the feature
+  that pins AC-16. Decide whether the engine should refuse, fall back, or warn —
+  it is the one path that moves money with nobody watching.
+- C13. `chatAssistantTurn` in `frontend/lib/query.ts` excludes the categories
+  root, justified by "no chat tool mutates them in v1". `create_category` was
+  already `write_safe`, and feature 008 added `new_category` to four more
+  LLM-reachable tools, so an assistant turn can now create a category and leave
+  every list in the UI stale. Add the root, or re-check the claim.
+- C14. `services/budgets.set_budget` accepts an envelope on an **income**
+  category. Reproduced by the CP7 reviewer: `PUT /budgets {category_id: <an
+  income category>, amount_assigned: 123456}` returns 200, and safe-to-spend
+  deducts it from then on. An envelope on an income category can never accrue
+  `spent` — the direction rule forbids an expense there — so `available` is
+  frozen forever while `assigned_envelopes` permanently depresses the headline
+  number. Predates feature 008 and is the larger of the two envelope problems;
+  `set_budget` already refuses archived and `exclude_from_budget` categories, so
+  the direction check belongs beside them.
+- C15. The category **filter** dropdown on `/transactions`
+  (`app/(app)/transactions/page.tsx:87,267`) lists both directions with bare
+  names, so a per-direction name pair — "Intereses" as an expense and as an
+  income, now allowed by AC-13's amendment — renders as two identical entries
+  with nothing to tell them apart. The Categorías screen and the assistant's
+  listing both mark direction; this one does not. It files no money, so it did
+  not block the AC-13 ruling, but it is the one surface where the pair is
+  ambiguous. Fix: show the direction in the filter's labels, or group by it.
+- C16. The assistant's four category tools resolve by name with no way to say
+  which direction, so a per-direction pair makes them act on the wrong row in
+  silence. `_resolve_category_by_name` (`mcp/tools/core.py`) matches on name
+  alone, and `UpdateCategoryInput`, `ArchiveCategoryInput`,
+  `RestoreCategoryInput` and `GetCategoryInput` each carry only `category: str`.
+  Reproduced on a migrated database: with "Intereses" existing as both an
+  expense (id 1) and an income (id 2), `get_category("Intereses")` returns the
+  expense and `archive_category("Intereses")` archives it — no error, no
+  ambiguity signal, and no input the assistant could have used to mean the
+  other one. `update_category` is the sharpest of the four: it can rename or
+  re-flag the wrong direction's category.
+
+  **Latent today, and invited by this feature.** Production holds exactly one
+  duplicate name (`🛡️ Auto Insurance`, both expense, one archived) which every
+  tool resolves correctly. It goes live the first time a name exists on both
+  sides — which is precisely what AC-13's amendment was ruled to allow, and
+  what `ec25f8b` advertises for "Intereses", "Comisiones" and "Ajuste".
+
+  Refusing on ambiguity is not enough on its own: with no direction field there
+  would be no way to answer the refusal, which is the same dead end the owner
+  ruled against in N1/N2. The fix is a direction on the four inputs, plus a
+  refusal when the name still matches more than one. REST is unaffected — it
+  addresses categories by id.

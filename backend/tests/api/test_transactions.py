@@ -19,13 +19,16 @@ def test_transactions_requires_auth(client):
     assert client.get("/api/transactions").status_code == 401
 
 
-def test_create_expense_without_trm_decrements_balance_and_omits_cop_equivalent(client, auth, two_accounts):
+def test_create_expense_without_trm_decrements_balance_and_omits_cop_equivalent(
+    client, auth, two_accounts, expense_category
+):
     cash, _ = two_accounts
     resp = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1500,
             "currency": "COP",
@@ -43,13 +46,14 @@ def test_create_expense_without_trm_decrements_balance_and_omits_cop_equivalent(
     assert acc["balance"] == -1500
 
 
-def test_create_expense_ignores_legacy_fx_rate_field(client, auth, two_accounts):
+def test_create_expense_ignores_legacy_fx_rate_field(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     resp = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1500,
             "currency": "COP",
@@ -62,13 +66,14 @@ def test_create_expense_ignores_legacy_fx_rate_field(client, auth, two_accounts)
     assert "fx_rate" not in resp.json()
 
 
-def test_create_income(client, auth, two_accounts):
+def test_create_income(client, auth, two_accounts, income_category, expense_category):
     _, bank = two_accounts
     resp = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "income",
+            "category_id": income_category,
             "account_id": bank["id"],
             "amount": 5000,
             "currency": "COP",
@@ -80,7 +85,7 @@ def test_create_income(client, auth, two_accounts):
     assert client.get(f"/api/accounts/{bank['id']}", headers=auth).json()["balance"] == 5000
 
 
-def test_create_with_trm_set_returns_identity_cop_equivalent_for_cop(client, auth, two_accounts):
+def test_create_with_trm_set_returns_identity_cop_equivalent_for_cop(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     _set_trm(client, auth)
     resp = client.post(
@@ -88,6 +93,7 @@ def test_create_with_trm_set_returns_identity_cop_equivalent_for_cop(client, aut
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1500,
             "currency": "COP",
@@ -99,7 +105,7 @@ def test_create_with_trm_set_returns_identity_cop_equivalent_for_cop(client, aut
     assert resp.json()["cop_equivalent"] == 1500
 
 
-def test_post_transactions_rejects_transfer_type(client, auth, two_accounts):
+def test_post_transactions_rejects_transfer_type(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     resp = client.post(
         "/api/transactions",
@@ -111,6 +117,7 @@ def test_post_transactions_rejects_transfer_type(client, auth, two_accounts):
             "currency": "COP",
             "date": "2026-06-17",
             "payee": "x",
+            "category_id": expense_category,
         },
     )
     assert resp.status_code == 422 and resp.json()["error"] == "ValidationError"
@@ -121,13 +128,14 @@ def test_list_transactions_without_trm_is_409(client, auth, two_accounts):
     assert resp.status_code == 409 and resp.json()["error"] == "MissingRate"
 
 
-def test_get_transaction_without_trm_is_409(client, auth, two_accounts):
+def test_get_transaction_without_trm_is_409(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -139,12 +147,13 @@ def test_get_transaction_without_trm_is_409(client, auth, two_accounts):
     assert resp.status_code == 409 and resp.json()["error"] == "MissingRate"
 
 
-def test_usd_cop_equivalent_recomputes_when_trm_changes(client, auth, usd_account):
+def test_usd_cop_equivalent_recomputes_when_trm_changes(client, auth, usd_account, expense_category):
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": usd_account["id"],
             "amount": 1000,
             "currency": "USD",
@@ -277,7 +286,7 @@ def test_transfer_same_account_is_409(client, auth, two_accounts):
     assert resp.status_code == 409 and resp.json()["error"] == "TransferImbalance"
 
 
-def test_list_transactions_filters(client, auth, two_accounts):
+def test_list_transactions_filters(client, auth, two_accounts, expense_category, income_category):
     cash, bank = two_accounts
     _set_trm(client, auth)
     client.post(
@@ -285,6 +294,7 @@ def test_list_transactions_filters(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 100,
             "currency": "COP",
@@ -297,6 +307,7 @@ def test_list_transactions_filters(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "income",
+            "category_id": income_category,
             "account_id": bank["id"],
             "amount": 200,
             "currency": "COP",
@@ -326,13 +337,14 @@ def test_get_missing_transaction_is_404(client, auth):
     assert resp.status_code == 404 and resp.json()["error"] == "NotFound"
 
 
-def test_patch_transaction_edits_fields(client, auth, two_accounts):
+def test_patch_transaction_edits_fields(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -345,13 +357,14 @@ def test_patch_transaction_edits_fields(client, auth, two_accounts):
     assert patched.json()["payee"] == "Super" and patched.json()["notes"] == "x"
 
 
-def test_delete_expense_reverses_balance_via_api(client, auth, two_accounts):
+def test_delete_expense_reverses_balance_via_api(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -386,13 +399,14 @@ def test_delete_transfer_leg_via_api_deletes_pair_and_restores_balances(client, 
     assert remaining == []
 
 
-def test_create_transaction_with_tags_round_trips(client, auth, two_accounts):
+def test_create_transaction_with_tags_round_trips(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     resp = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -405,13 +419,14 @@ def test_create_transaction_with_tags_round_trips(client, auth, two_accounts):
     assert resp.json()["tags"] == ["comida", "viaje"]
 
 
-def test_create_transaction_without_tags_defaults_to_empty(client, auth, two_accounts):
+def test_create_transaction_without_tags_defaults_to_empty(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     resp = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -423,13 +438,14 @@ def test_create_transaction_without_tags_defaults_to_empty(client, auth, two_acc
     assert resp.json()["tags"] == []
 
 
-def test_patch_transaction_tags_is_a_replace_set(client, auth, two_accounts):
+def test_patch_transaction_tags_is_a_replace_set(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -447,13 +463,14 @@ def test_patch_transaction_tags_is_a_replace_set(client, auth, two_accounts):
     assert patched.json()["tags"] == ["comida", "reembolso"]
 
 
-def test_patch_without_tags_leaves_them_untouched(client, auth, two_accounts):
+def test_patch_without_tags_leaves_them_untouched(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -467,13 +484,14 @@ def test_patch_without_tags_leaves_them_untouched(client, auth, two_accounts):
     assert patched.json()["tags"] == ["viaje"]
 
 
-def test_patch_tags_to_empty_removes_them_all(client, auth, two_accounts):
+def test_patch_tags_to_empty_removes_them_all(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     tx = client.post(
         "/api/transactions",
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -487,7 +505,7 @@ def test_patch_tags_to_empty_removes_them_all(client, auth, two_accounts):
     assert patched.json()["tags"] == []
 
 
-def test_list_and_get_include_tags(client, auth, two_accounts):
+def test_list_and_get_include_tags(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     _set_trm(client, auth)
     tagged = client.post(
@@ -495,6 +513,7 @@ def test_list_and_get_include_tags(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 1000,
             "currency": "COP",
@@ -508,6 +527,7 @@ def test_list_and_get_include_tags(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 2000,
             "currency": "COP",
@@ -522,7 +542,7 @@ def test_list_and_get_include_tags(client, auth, two_accounts):
     assert got["tags"] == ["viaje"]
 
 
-def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
+def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts, expense_category):
     """Default endpoint order: newest date first, regardless of insertion order."""
     cash, _ = two_accounts
     _set_trm(client, auth)
@@ -531,6 +551,7 @@ def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 100,
             "currency": "COP",
@@ -543,6 +564,7 @@ def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 200,
             "currency": "COP",
@@ -555,6 +577,7 @@ def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 300,
             "currency": "COP",
@@ -566,7 +589,7 @@ def test_list_endpoint_default_orders_by_date_desc(client, auth, two_accounts):
     assert [t["payee"] for t in body] == ["new", "mid", "old"]
 
 
-def test_list_endpoint_sort_date_asc_orders_chronologically(client, auth, two_accounts):
+def test_list_endpoint_sort_date_asc_orders_chronologically(client, auth, two_accounts, expense_category):
     cash, _ = two_accounts
     _set_trm(client, auth)
     for payee, date in [("mid", "2026-06-15"), ("old", "2026-06-01"), ("new", "2026-07-01")]:
@@ -575,6 +598,7 @@ def test_list_endpoint_sort_date_asc_orders_chronologically(client, auth, two_ac
             headers=auth,
             json={
                 "type": "expense",
+                "category_id": expense_category,
                 "account_id": cash["id"],
                 "amount": 100,
                 "currency": "COP",
@@ -592,7 +616,7 @@ def test_list_endpoint_invalid_sort_returns_422(client, auth):
     assert "sort" in resp.text.lower()
 
 
-def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_accounts):
+def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_accounts, expense_category):
     """No status filter = both posted and planned, in date-DESC order.
 
     Planned tx with due-date 15-jun surfaces between a 1-jul posted and
@@ -605,6 +629,7 @@ def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_ac
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 100,
             "currency": "COP",
@@ -617,6 +642,7 @@ def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_ac
         headers=auth,
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": cash["id"],
             "amount": 300,
             "currency": "COP",
@@ -629,6 +655,7 @@ def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_ac
         headers=auth,
         json={
             "payee": "Rent",
+            "category_id": expense_category,
             "amount": 500_000,
             "due_date": "2026-06-15",
             "account_id": cash["id"],
@@ -637,3 +664,90 @@ def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_ac
     assert plan.status_code == 201, plan.text
     body = client.get("/api/transactions", headers=auth).json()
     assert [t["payee"] for t in body] == ["new", "Rent", "old"]
+
+
+def test_create_expense_creating_its_category_in_one_request(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "new_category": "4x1000",
+            "account_id": cash["id"],
+            "amount": 1_200_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Banco",
+            "notes": "gravamen",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    created = next(c for c in client.get("/api/categories", headers=auth).json() if c["name"] == "4x1000")
+    assert created["is_income"] is False
+    body = resp.json()
+    assert body["category_id"] == created["id"]
+    assert body["payee"] == "Banco" and body["notes"] == "gravamen"
+
+
+def test_create_income_creating_its_category_makes_an_income_category(client, auth, two_accounts):
+    _, bank = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "income",
+            "new_category": "Rendimientos",
+            "account_id": bank["id"],
+            "amount": 30_000_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Banco",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    created = client.get("/api/categories?is_income=true", headers=auth).json()
+    assert [c["name"] for c in created] == ["Rendimientos"]
+
+
+def test_create_expense_with_no_category_at_all_is_422(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "account_id": cash["id"],
+            "amount": 1500,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Store",
+        },
+    )
+    assert resp.status_code == 422
+    assert "category" in resp.json()["detail"]
+    assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0
+
+
+def test_transfer_carrying_a_category_is_refused_at_the_door(client, auth, two_accounts, expense_category):
+    """AC-3 through the API, not through the services layer a client cannot reach."""
+    cash, bank = two_accounts
+    before = client.get("/api/transactions?type=transfer", headers=auth).json()
+
+    resp = client.post(
+        "/api/transactions/transfer",
+        headers=auth,
+        json={
+            "from_account_id": cash["id"],
+            "to_account_id": bank["id"],
+            "amount": 100_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "category_id": expense_category,
+        },
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert "categor" in resp.json()["detail"]
+    after = client.get("/api/transactions?type=transfer", headers=auth).json()
+    assert len(after) == len(before)

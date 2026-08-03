@@ -287,6 +287,7 @@ export interface TransactionCreate {
   date: string
   payee?: string
   category_id?: number | null
+  new_category?: string | null
   notes?: string | null
   tags?: string[]
 }
@@ -313,6 +314,7 @@ export interface PlanPaymentCreate {
   account_id: number
   currency?: string
   category_id?: number | null
+  new_category?: string | null
   notes?: string | null
 }
 export interface ConfirmPaymentBody {
@@ -330,6 +332,7 @@ export interface RecurringCreate {
   payee?: string
   currency?: string
   category_id?: number | null
+  new_category?: string | null
   interval_count?: number
   end_date?: string | null
 }

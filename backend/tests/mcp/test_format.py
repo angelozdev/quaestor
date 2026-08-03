@@ -39,6 +39,7 @@ def _expense(currency="COP", amount=4_000_000):
         amount=amount,
         currency=currency,
         account_id=1,
+        category_id=1,
     )
 
 
@@ -200,6 +201,7 @@ def test_transaction_card():
         amount=5_000_000,
         currency="COP",
         account_id=1,
+        category_id=1,
     )
     text = format.transaction_card(tx, Decimal("4000"))
     assert "Lunch" in text and "50000.00 COP" in text
@@ -216,6 +218,7 @@ def test_transaction_card_usd_shows_read_time_cop_equivalent():
         amount=1_000,
         currency="USD",
         account_id=1,
+        category_id=1,
     )
     text = format.transaction_card(tx, Decimal("4000"))
     assert "10.00 USD" in text
@@ -333,7 +336,7 @@ def test_recurring_restored():
         mode=RecurringMode.auto,
         amount=2_000_000,
         currency="COP",
-        category_id=None,
+        category_id=1,
         account_id=1,
         interval_unit=IntervalUnit.month,
         interval_count=1,

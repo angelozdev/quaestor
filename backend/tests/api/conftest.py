@@ -4,7 +4,10 @@ from quaestor.api import create_app
 from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.api.deps import get_session
 from quaestor.db import init_db, make_engine
+from quaestor.domain.models import TxType
 from sqlmodel import Session
+
+from tests.support.categories import a_category
 
 _STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -67,3 +70,21 @@ def client(engine, monkeypatch):
 @pytest.fixture
 def auth():
     return {"Authorization": "Bearer test-token"}
+
+
+@pytest.fixture
+def expense_category(engine):
+    """Id of the category an API test files its outgoing money under.
+
+    Mandatory since feature 008 (ADR-0042); a test about routing, auth or
+    balances still has to say what its money was for.
+    """
+    with Session(engine) as session:
+        return a_category(session, TxType.expense)
+
+
+@pytest.fixture
+def income_category(engine):
+    """Id of the category an API test files its incoming money under."""
+    with Session(engine) as session:
+        return a_category(session, TxType.income)

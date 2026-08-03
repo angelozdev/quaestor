@@ -37,6 +37,7 @@ def create_recurring(body: RecurringCreate, session: Session = Depends(get_sessi
         amount=body.amount,
         currency=body.currency,
         category_id=body.category_id,
+        new_category=body.new_category,
         account_id=body.account_id,
         interval_unit=body.interval_unit,
         interval_count=body.interval_count,

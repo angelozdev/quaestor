@@ -5,6 +5,8 @@ from quaestor.domain.errors import NotFound
 from quaestor.domain.models import Account, AccountType, Transaction, TxType
 from quaestor.services import tags
 
+from tests.support.categories import a_category
+
 
 def _make_transaction(session):
     acc = Account(name="A", type=AccountType.debit, currency="COP")
@@ -18,6 +20,7 @@ def _make_transaction(session):
         amount=1000,
         currency="COP",
         account_id=acc.id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(tx)
     session.commit()
@@ -74,7 +77,9 @@ def test_delete_tag_removes_links(session):
     from quaestor.services import accounts, transactions
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
-    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Shop")
+    tx = transactions.record_expense(
+        session, acc.id, 1000, "COP", date(2026, 6, 17), "Shop", category_id=a_category(session, TxType.expense)
+    )
     tags.tag_transaction(session, tx.id, ["trip"])
     t = tags.list_tags(session)[0]
     tags.delete_tag(session, t.id)
@@ -138,6 +143,7 @@ def test_untag_leaves_other_transactions_links(session):
         amount=500,
         currency="COP",
         account_id=first.account_id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(second)
     session.commit()
@@ -177,6 +183,7 @@ def test_tag_names_by_transaction_maps_each_id(session):
         amount=500,
         currency="COP",
         account_id=first.account_id,
+        category_id=a_category(session, TxType.expense),
     )
     session.add(second)
     session.commit()

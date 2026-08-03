@@ -34,3 +34,21 @@ export const requiredString = z.string().trim().min(1, messages.required).max(12
 
 /** Optional free-form string, trimmed, capped. */
 export const optionalString = z.string().trim().max(500, messages.max500).optional()
+
+/** A movement says what it was for: an existing category, or a name to create.
+ *
+ * Exactly one of the two — mandatory since feature 008 (ADR-0042). Apply with
+ * `.superRefine(categoryChosen)` on any form that records money.
+ */
+export const categoryChosen = (
+  value: { categoryId: number | null; newCategory?: string },
+  ctx: z.RefinementCtx,
+): void => {
+  const named = (value.newCategory ?? "").trim().length > 0
+  if (value.categoryId === null && !named) {
+    ctx.addIssue({ code: "custom", message: messages.required, path: ["categoryId"] })
+  }
+  if (value.categoryId !== null && named) {
+    ctx.addIssue({ code: "custom", message: messages.categoriaAmbigua, path: ["categoryId"] })
+  }
+}

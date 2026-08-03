@@ -4,6 +4,7 @@ import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CategoryField } from "@/components/category-field"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
@@ -14,7 +15,6 @@ import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import { listAccounts } from "@/lib/api/accounts"
-import { listCategories } from "@/lib/api/categories"
 import {
   createRecurring,
   deleteRecurring,
@@ -84,6 +84,7 @@ export default function RecurringPage() {
       amount: Number.NaN,
       currency: "COP",
       categoryId: null,
+      newCategory: "",
       accountId: null,
       type: "expense",
       mode: "manual",
@@ -109,6 +110,7 @@ export default function RecurringPage() {
       amount: Number.NaN,
       currency: "COP",
       categoryId: null,
+      newCategory: "",
       accountId: null,
       type: "expense",
       mode: "manual",
@@ -146,6 +148,7 @@ export default function RecurringPage() {
         end_date: values.endDate ? values.endDate : null,
         currency: values.currency,
         category_id: values.categoryId,
+        new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
       })
     },
@@ -158,6 +161,7 @@ export default function RecurringPage() {
         amount: Number.NaN,
         currency: "COP",
         categoryId: null,
+        newCategory: "",
         accountId: null,
         type: "expense",
         mode: "manual",
@@ -300,6 +304,7 @@ export default function RecurringPage() {
                               amount: r.amount,
                               currency: r.currency as "COP" | "USD",
                               categoryId: r.category_id,
+                              newCategory: "",
                               accountId: r.account_id,
                               type: r.type,
                               mode: r.mode,
@@ -359,10 +364,16 @@ export default function RecurringPage() {
               <createForm.Field name="type">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Tipo *</Label>
+                    <Label htmlFor="recurring-create-type">Tipo *</Label>
                     <Select
+                      id="recurring-create-type"
                       value={field.state.value as string}
-                      onValueChange={(v) => v && field.handleChange(v as never)}
+                      onValueChange={(v) => {
+                        if (!v) return
+                        field.handleChange(v as never)
+                        createForm.setFieldValue("categoryId", null)
+                        createForm.setFieldValue("newCategory", "")
+                      }}
                       items={TYPE_ITEMS}
                     />
                   </div>
@@ -463,16 +474,19 @@ export default function RecurringPage() {
             </div>
             <createForm.Field name="categoryId">
               {(field) => (
-                <div className="space-y-1.5">
-                  <Label>Categoría</Label>
-                  <EntitySelect
-                    value={field.state.value as number | null}
-                    onChange={(v) => field.handleChange(v as never)}
-                    queryKey={qk.categories(false)}
-                    queryFn={() => listCategories(false)}
-                    allowNullLabel="Sin categoría"
-                  />
-                </div>
+                <CategoryField
+                  id="recurring-create-category"
+                  isIncome={createForm.getFieldValue("type") === "income"}
+                  value={{
+                    categoryId: field.state.value as number | null,
+                    newCategory: createForm.getFieldValue("newCategory"),
+                  }}
+                  onChange={(choice) => {
+                    field.handleChange(choice.categoryId as never)
+                    createForm.setFieldValue("newCategory", choice.newCategory)
+                  }}
+                  error={(field.state.meta.errors[0] as { message?: string } | undefined)?.message}
+                />
               )}
             </createForm.Field>
             <createForm.Field name="payee">
@@ -614,16 +628,20 @@ export default function RecurringPage() {
             </div>
             <editForm.Field name="categoryId">
               {(field) => (
-                <div className="space-y-1.5">
-                  <Label>Categoría</Label>
-                  <EntitySelect
-                    value={field.state.value as number | null}
-                    onChange={(v) => field.handleChange(v as never)}
-                    queryKey={qk.categories(false)}
-                    queryFn={() => listCategories(false)}
-                    allowNullLabel="Sin categoría"
-                  />
-                </div>
+                <CategoryField
+                  id="recurring-edit-category"
+                  allowCreate={false}
+                  isIncome={editForm.getFieldValue("type") === "income"}
+                  value={{
+                    categoryId: field.state.value as number | null,
+                    newCategory: editForm.getFieldValue("newCategory"),
+                  }}
+                  onChange={(choice) => {
+                    field.handleChange(choice.categoryId as never)
+                    editForm.setFieldValue("newCategory", choice.newCategory)
+                  }}
+                  error={(field.state.meta.errors[0] as { message?: string } | undefined)?.message}
+                />
               )}
             </editForm.Field>
             <editForm.Field name="payee">

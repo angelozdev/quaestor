@@ -10,14 +10,17 @@ unbudgeted posted tx. Both far exceed the bounds below before the refactor.
 from tests.support.query_counter import count_queries
 
 
-def _seed(client, auth, n_categories=15):
+def _seed(client, auth, expense_category, income_category, n_categories=15):
     assert client.post("/api/fx", json={"usd_cop": "4000"}, headers=auth).status_code == 201
     acc = client.post(
         "/api/accounts",
         json={"name": "Bank", "type": "debit", "currency": "COP"},
         headers=auth,
     ).json()
-    for name, tx_type, amount in [("Salary", "income", 2_000_000), ("Rent", "expense", 800_000)]:
+    for name, tx_type, amount, category in [
+        ("Salary", "income", 2_000_000, income_category),
+        ("Rent", "expense", 800_000, expense_category),
+    ]:
         client.post(
             "/api/recurring",
             json={
@@ -26,6 +29,7 @@ def _seed(client, auth, n_categories=15):
                 "mode": "manual",
                 "amount": amount,
                 "currency": "COP",
+                "category_id": category,
                 "account_id": acc["id"],
                 "interval_unit": "month",
                 "interval_count": 1,
@@ -45,27 +49,27 @@ def _seed(client, auth, n_categories=15):
                 "/api/transactions",
                 json={
                     "type": "expense",
+                    "category_id": cat["id"],
                     "account_id": acc["id"],
                     "amount": 5_000,
                     "currency": "COP",
                     "date": f"{m}-10",
-                    "category_id": cat["id"],
                     "payee": "seed",
                 },
                 headers=auth,
             )
 
 
-def test_list_budgets_query_count_is_bounded(client, auth, engine):
-    _seed(client, auth, n_categories=15)
+def test_list_budgets_query_count_is_bounded(client, auth, engine, expense_category, income_category):
+    _seed(client, auth, expense_category, income_category, n_categories=15)
     with count_queries(engine) as c:
         r = client.get("/api/budgets", params={"month": "2026-06"}, headers=auth)
     assert r.status_code == 200
     assert c.count <= 15, f"list_budgets issued {c.count} queries"
 
 
-def test_safe_to_spend_query_count_is_bounded(client, auth, engine):
-    _seed(client, auth, n_categories=15)
+def test_safe_to_spend_query_count_is_bounded(client, auth, engine, expense_category, income_category):
+    _seed(client, auth, expense_category, income_category, n_categories=15)
     with count_queries(engine) as c:
         r = client.get("/api/budgets/safe-to-spend", params={"month": "2026-06"}, headers=auth)
     assert r.status_code == 200

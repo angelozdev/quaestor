@@ -1,7 +1,7 @@
 from tests.support.fx import set_trm as _set_trm
 
 
-def test_reports_endpoint(client, auth):
+def test_reports_endpoint(client, auth, expense_category):
     _set_trm(client, auth)
     acc = client.post(
         "/api/accounts",
@@ -12,6 +12,7 @@ def test_reports_endpoint(client, auth):
         "/api/transactions",
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": acc["id"],
             "amount": 50_000,
             "currency": "COP",

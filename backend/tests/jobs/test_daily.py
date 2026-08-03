@@ -9,6 +9,7 @@ from quaestor.domain.models import Account, AccountType, IntervalUnit, Recurring
 from quaestor.jobs import daily
 from sqlmodel import Session
 
+from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
 
 
@@ -39,12 +40,19 @@ class _StubClient:
 
 
 @pytest.fixture
-def session(monkeypatch, tmp_path):
-    monkeypatch.setenv("QUAESTOR_DB", f"sqlite:///{tmp_path / 'test.db'}")
+def session(tmp_path):
+    """A database of this test's own.
+
+    `db.engine` is built at import time, so setting QUAESTOR_DB in a fixture
+    arrives too late to redirect it — these tests were reaching the developer's
+    on-disk `quaestor.db` instead of the tmp file they asked for. Build the
+    engine here, where the URL is the one we mean.
+    """
     from quaestor import db
 
-    db.init_db(db.engine)
-    with Session(db.engine) as s:
+    engine = db.make_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    db.init_db(engine)
+    with Session(engine) as s:
         yield s
 
 
@@ -64,7 +72,7 @@ def _make_recurring(session: Session, account: Account) -> RecurringItem:
         mode=RecurringMode.manual,
         amount=100000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=account.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -160,7 +168,7 @@ def test_run_daily_reports_the_obligations_that_need_attention(session):
         mode=RecurringMode.auto,
         amount=15_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=bad.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,

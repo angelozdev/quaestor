@@ -28,7 +28,10 @@ class UpdateTransactionInput(BaseModel):
     payee: str | None = Field(default=None, description="New payee")
     notes: str | None = Field(default=None, description="New notes")
     clear_notes: bool = Field(default=False, description="Set notes to None")
-    category: str | None = Field(default=None, description="New category name (empty string clears)")
+    category: str | None = Field(
+        default=None,
+        description="New category name. A movement cannot be left uncategorised, so it cannot be cleared.",
+    )
     date: Date | None = Field(default=None, description="New date")
     add_tags: list[str] = Field(default_factory=list, description="Tag names to add (auto-created by name)")
     remove_tags: list[str] = Field(default_factory=list, description="Tag names to remove (absent tags are ignored)")

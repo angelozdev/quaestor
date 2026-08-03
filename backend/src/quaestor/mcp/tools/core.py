@@ -30,7 +30,10 @@ class RecordExpenseInput(BaseModel):
     amount: int = Field(gt=0, description="Amount in cents, original currency (40000 COP = 4000000)")
     account: str = Field(description="Account name, e.g. 'Bancolombia'")
     currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
-    category: str | None = Field(default=None, description="Category name (optional)")
+    category: str | None = Field(default=None, description="Name of an existing expense category")
+    new_category: str | None = Field(
+        default=None, description="Name of an expense category to create and file this under"
+    )
     date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
     tags: list[str] = Field(default_factory=list, description="Tag names")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
@@ -41,7 +44,10 @@ class RecordIncomeInput(BaseModel):
     amount: int = Field(gt=0, description="Amount in cents, original currency")
     account: str = Field(description="Destination account name")
     currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
-    category: str | None = Field(default=None, description="Category name (optional)")
+    category: str | None = Field(default=None, description="Name of an existing income category")
+    new_category: str | None = Field(
+        default=None, description="Name of an income category to create and file this under"
+    )
     date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
     tags: list[str] = Field(default_factory=list, description="Tag names")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
@@ -66,6 +72,10 @@ class TransferInput(BaseModel):
     )
     date: Date | None = Field(default=None, description="Date YYYY-MM-DD; defaults to today")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
+    category: str | None = Field(
+        default=None,
+        description="Not accepted — a transfer between your own accounts carries no category",
+    )
 
 
 class SetFxRateInput(BaseModel):
@@ -120,12 +130,33 @@ def _resolve_account_by_name(session: Session, name: str, *, allow_archived: boo
     raise NotFound(f"Account '{name}' not found. Available: {available}.")
 
 
-def _resolve_category_by_name(session: Session, name: str) -> Category:
+def _resolve_category_by_name(session: Session, name: str, *, allow_archived: bool = False) -> Category:
+    """The category the agent named.
+
+    Args:
+        session: Database session.
+        name: Category name, matched case-insensitively.
+        allow_archived: What `restore_category` needs — an archived category is
+            invisible otherwise, so the one tool whose whole job is an archived
+            category could never find one. An archived match then wins over an
+            active namesake, because it is the row being restored; production
+            carries both for `🛡️ Auto Insurance` (AC-13).
+
+    Raises:
+        NotFound: No category of that name is visible.
+    """
     target = name.strip().lower()
-    for category in categories.list_categories(session):
-        if category.name.lower() == target:
-            return category
-    raise NotFound(f"Category '{name}' not found. You can create it or record without a category.")
+    matches = [
+        category
+        for category in categories.list_categories(session, include_archived=allow_archived)
+        if category.name.lower() == target
+    ]
+    if matches:
+        return next((category for category in matches if category.archived), matches[0])
+    raise NotFound(
+        f"Category '{name}' not found. Pass it as new_category to create it while recording, "
+        f"or pick one from list_categories."
+    )
 
 
 def _resolve_category_group_by_name(session: Session, name: str) -> CategoryGroup:
@@ -198,6 +229,7 @@ def record_expense(session: Session, inp: RecordExpenseInput) -> str:
         category_id=category.id if category else None,
         notes=inp.notes,
         source="agent",
+        new_category=inp.new_category,
     )
     if inp.tags:
         tags.tag_transaction(session, tx.id, inp.tags)
@@ -219,6 +251,7 @@ def record_income(session: Session, inp: RecordIncomeInput) -> str:
         category_id=category.id if category else None,
         notes=inp.notes,
         source="agent",
+        new_category=inp.new_category,
     )
     if inp.tags:
         tags.tag_transaction(session, tx.id, inp.tags)
@@ -230,6 +263,10 @@ def record_income(session: Session, inp: RecordIncomeInput) -> str:
 def transfer(session: Session, inp: TransferInput) -> str:
     src = _resolve_account(session, inp.from_account)
     dst = _resolve_account(session, inp.to_account)
+    if inp.category:
+        raise ValidationError(
+            "a transfer carries no category — moving money between your own accounts is neither spending nor income"
+        )
     _, leg_to = transactions.transfer(
         session,
         from_account_id=src.id,

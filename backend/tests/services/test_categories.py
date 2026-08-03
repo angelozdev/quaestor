@@ -1,6 +1,9 @@
+from datetime import date
+
 import pytest
 from quaestor.domain.errors import ValidationError
-from quaestor.services import categories
+from quaestor.domain.models import Category, IntervalUnit, RecurringMode, TxType
+from quaestor.services import accounts, categories, recurring, transactions
 
 
 def test_create_group_and_linked_category(session):
@@ -113,3 +116,176 @@ def test_unarchive_group_clears_flag(session):
     g = categories.create_group(session, name="Bills")
     categories.archive_group(session, g.id)
     assert categories.unarchive_group(session, g.id).archived is False
+
+
+def test_a_category_in_use_cannot_change_direction(session):
+    """Flipping is_income would make every movement filed under it contradict
+    its own type — the condition ADR-0042 exists to remove."""
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=100_000)
+    comida = categories.create_category(session, "Comida")
+    transactions.record_expense(session, acc.id, 20_000, "COP", date(2026, 8, 3), "Exito", category_id=comida.id)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.update_category(session, comida.id, is_income=True)
+
+    assert "Comida" in str(refusal.value)
+    assert categories.get_category(session, comida.id).is_income is False
+
+
+def test_a_category_no_movement_uses_can_still_change_direction(session):
+    unused = categories.create_category(session, "Rendimientos")
+    flipped = categories.update_category(session, unused.id, is_income=True)
+    assert flipped.is_income is True
+
+
+def test_a_recurring_item_also_pins_its_category_direction(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=0)
+    servicios = categories.create_category(session, "Servicios")
+    recurring.create_recurring(
+        session,
+        name="Internet",
+        payee="Hogar",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=85_000,
+        currency="COP",
+        category_id=servicios.id,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 8, 1),
+    )
+
+    with pytest.raises(ValidationError):
+        categories.update_category(session, servicios.id, is_income=True)
+
+
+def test_renaming_a_category_in_use_is_still_allowed(session):
+    acc = accounts.create_account(session, "Bank", "debit", "COP", balance=100_000)
+    comida = categories.create_category(session, "Comida")
+    transactions.record_expense(session, acc.id, 20_000, "COP", date(2026, 8, 3), "Exito", category_id=comida.id)
+
+    renamed = categories.update_category(session, comida.id, name="Alimentación")
+    assert renamed.name == "Alimentación"
+
+
+def test_a_name_an_active_category_holds_is_refused_anywhere(session):
+    """AC-13 covers the whole app, not only the movement form."""
+    categories.create_category(session, "Vuelos")
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "vuelos")
+
+    assert "already exists" in str(refusal.value)
+    assert [c.name for c in categories.list_categories(session)] == ["Vuelos"]
+
+
+def test_a_name_an_archived_category_holds_offers_to_restore_it(session):
+    archived = categories.create_category(session, "Vuelos")
+    categories.archive_category(session, archived.id)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "Vuelos")
+
+    assert "restore" in str(refusal.value).lower()
+    assert "Vuelos" in str(refusal.value)
+
+
+def test_the_same_name_in_the_other_direction_is_allowed(session):
+    """A name is unique per direction, not across the app (AC-13).
+
+    "Intereses" is both what the bank charges and what it pays; no offering
+    ever shows the two together, because every one is filtered by direction.
+    """
+    paid = categories.create_category(session, "Intereses")
+    earned = categories.create_category(session, "Intereses", is_income=True)
+
+    assert paid.id != earned.id
+    assert [c.name for c in categories.list_categories(session, is_income=False)] == ["Intereses"]
+    assert [c.name for c in categories.list_categories(session, is_income=True)] == ["Intereses"]
+
+
+def test_the_same_name_in_the_same_direction_is_still_refused(session):
+    categories.create_category(session, "Bonos", is_income=True)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "bonos", is_income=True)
+
+    assert "income category" in str(refusal.value)
+
+
+def test_an_archived_match_of_the_other_direction_does_not_block(session):
+    archived = categories.create_category(session, "Ajuste")
+    categories.archive_category(session, archived.id)
+
+    created = categories.create_category(session, "Ajuste", is_income=True)
+    assert created.is_income is True
+
+
+def _same_name_pair(session, name="Auto Insurance"):
+    """Production's shape: one archived and one active, same name, same direction.
+
+    Built with the model rather than the service, because `create_category`
+    refuses to make this pair now — production has carried it since before the
+    rule existed (`acs.md` AC-13).
+    """
+    archived = Category(name=name, is_income=False, archived=True)
+    active = Category(name=name, is_income=False, archived=False)
+    session.add_all([archived, active])
+    session.commit()
+    session.refresh(archived)
+    session.refresh(active)
+    return archived, active
+
+
+def test_an_active_match_is_named_even_when_an_archived_one_shares_the_name(session):
+    """The archived branch must not win over an active one — its advice would be
+    to restore a category whose name is already taken by a live one."""
+    _same_name_pair(session)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.create_category(session, "auto insurance")
+
+    assert "already exists" in str(refusal.value)
+    assert "restore" not in str(refusal.value).lower()
+
+
+def test_restoring_into_a_name_an_active_category_holds_is_refused(session):
+    archived, _active = _same_name_pair(session)
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.unarchive_category(session, archived.id)
+
+    assert "Auto Insurance" in str(refusal.value)
+    active_names = [c.name for c in categories.list_categories(session, is_income=False)]
+    assert active_names.count("Auto Insurance") == 1
+
+
+def test_restoring_a_category_whose_name_is_free_still_works(session):
+    cat = categories.create_category(session, "Suscripciones")
+    categories.archive_category(session, cat.id)
+
+    restored = categories.unarchive_category(session, cat.id)
+    assert restored.archived is False
+
+
+def test_the_refusal_names_the_category_that_actually_holds_the_name(session):
+    """Matching folds case, so the archived row's spelling is not the live one's.
+
+    Naming the archived spelling tells the owner to go rename a category no
+    list will show them under that name.
+    """
+    session.add_all(
+        [
+            Category(name="AUTO INSURANCE", is_income=False, archived=True),
+            Category(name="Auto Insurance", is_income=False, archived=False),
+        ]
+    )
+    session.commit()
+    archived = categories.list_categories(session, include_archived=True)[0]
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.unarchive_category(session, archived.id)
+
+    assert "'Auto Insurance'" in str(refusal.value)
+    assert "AUTO INSURANCE" not in str(refusal.value)

@@ -25,19 +25,37 @@ def insert_account(conn, account_id, name):
     )
 
 
-def insert_transaction(conn, tx_id, tx_type, account_id, group, created_at=DEFAULT_CREATED_AT):
+def insert_category(conn, category_id, name="Seeded", is_income=False):
+    conn.execute(
+        sa.text(
+            "INSERT INTO category (id, name, is_income, exclude_from_budget, "
+            "exclude_from_totals, archived) "
+            "VALUES (:id, :name, :is_income, false, false, false)"
+        ),
+        {"id": category_id, "name": name, "is_income": is_income},
+    )
+
+
+def insert_transaction(conn, tx_id, tx_type, account_id, group, created_at=DEFAULT_CREATED_AT, category_id=None):
+    """Seed one movement.
+
+    `category_id` follows the rule the schema enforces from revision 0010 on:
+    an expense or income carries one, a transfer carries none. A seed that
+    breaks it cannot be migrated to head, which is the guard working.
+    """
     conn.execute(
         sa.text(
             'INSERT INTO "transaction" '
             "(id, date, payee, type, status, amount, currency, account_id, "
-            "transfer_group_id, source, created_at) "
+            "category_id, transfer_group_id, source, created_at) "
             "VALUES (:id, '2026-06-01', 'p', :type, 'posted', 1000, 'COP', "
-            ":account_id, :grp, 'manual', :created_at)"
+            ":account_id, :category_id, :grp, 'manual', :created_at)"
         ),
         {
             "id": tx_id,
             "type": tx_type,
             "account_id": account_id,
+            "category_id": None if tx_type == "transfer" else category_id,
             "grp": group,
             "created_at": created_at,
         },

@@ -29,7 +29,8 @@ export const qk = {
   pendingDates: (id: number) => [ROOTS.recurring, "pending-dates", id] as const,
   accounts: (archived = false) => [ROOTS.accounts, archived] as const,
   account: (id: number) => [ROOTS.accounts, DETAIL, id] as const,
-  categories: (archived = false) => [ROOTS.categories, archived] as const,
+  categories: (archived = false, isIncome?: boolean) =>
+    [ROOTS.categories, archived, isIncome ?? "all"] as const,
   categoryGroups: (archived = false) => [ROOTS.categoryGroups, archived] as const,
   tags: () => [ROOTS.tags] as const,
   settings: () => [ROOTS.settings] as const,
@@ -45,14 +46,24 @@ export const qk = {
 // (balances, dashboard, reports) refresh instantly. Roots reference ROOTS so a
 // rename forces tsc to flag every invalidation group that needs updating.
 export const INVALIDATION = {
+  // `categories` is in all three because a movement can create the category it
+  // is filed under, in the same request (ADR-0042) — a list that still holds
+  // the old set renders the new one as a bare id.
   transactionWrite: [
     [ROOTS.transactions],
     [ROOTS.reports],
     [ROOTS.accounts],
     [ROOTS.budgets],
     [ROOTS.planned],
+    [ROOTS.categories],
   ],
-  plannedWrite: [[ROOTS.planned], [ROOTS.reports], [ROOTS.accounts], [ROOTS.budgets]],
+  plannedWrite: [
+    [ROOTS.planned],
+    [ROOTS.reports],
+    [ROOTS.accounts],
+    [ROOTS.budgets],
+    [ROOTS.categories],
+  ],
   recurringWrite: [
     [ROOTS.recurring],
     [ROOTS.planned],
@@ -60,6 +71,7 @@ export const INVALIDATION = {
     [ROOTS.budgets],
     [ROOTS.transactions],
     [ROOTS.accounts],
+    [ROOTS.categories],
   ],
   accountWrite: [[ROOTS.accounts], [ROOTS.settings], [ROOTS.reports], [ROOTS.budgets]],
   categoryWrite: [[ROOTS.categories], [ROOTS.reports], [ROOTS.budgets]],

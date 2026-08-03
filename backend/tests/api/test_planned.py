@@ -10,12 +10,13 @@ def _seed_account(engine, balance=1_000_000, currency="COP", name="Bank"):
         return acc.id
 
 
-def test_plan_without_trm_then_to_pay_confirm_flow(client, engine, auth):
+def test_plan_without_trm_then_to_pay_confirm_flow(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     plan = client.post(
         "/api/planned",
         json={
             "payee": "Friend",
+            "category_id": expense_category,
             "amount": 80_000,
             "due_date": "2026-12-15",
             "account_id": acc_id,
@@ -43,13 +44,14 @@ def test_to_pay_without_trm_is_409(client, auth):
     assert resp.status_code == 409 and resp.json()["error"] == "MissingRate"
 
 
-def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, auth):
+def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, auth, expense_category):
     cop_acc = _seed_account(engine, name="Bank COP")
     usd_acc = _seed_account(engine, currency="USD", name="Bank USD")
     client.post(
         "/api/planned",
         json={
             "payee": "Rent",
+            "category_id": expense_category,
             "amount": 500_000,
             "due_date": "2026-12-10",
             "account_id": cop_acc,
@@ -60,6 +62,7 @@ def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, aut
         "/api/planned",
         json={
             "payee": "SaaS",
+            "category_id": expense_category,
             "amount": 1_000,
             "currency": "USD",
             "due_date": "2026-12-20",
@@ -81,12 +84,13 @@ def test_to_pay_total_base_converts_usd_items_at_current_trm(client, engine, aut
     assert second["total_base"] == 500_000 + 4_500_000
 
 
-def test_confirm_non_planned_is_409(client, engine, auth):
+def test_confirm_non_planned_is_409(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     plan = client.post(
         "/api/planned",
         json={
             "payee": "Friend",
+            "category_id": expense_category,
             "amount": 80_000,
             "due_date": "2026-06-20",
             "account_id": acc_id,
@@ -99,12 +103,13 @@ def test_confirm_non_planned_is_409(client, engine, auth):
     assert again.status_code == 409
 
 
-def test_skip_planned_payment_works_without_trm(client, engine, auth):
+def test_skip_planned_payment_works_without_trm(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     tx_id = client.post(
         "/api/planned",
         json={
             "payee": "Friend",
+            "category_id": expense_category,
             "amount": 80_000,
             "due_date": "2026-06-20",
             "account_id": acc_id,
@@ -115,12 +120,13 @@ def test_skip_planned_payment_works_without_trm(client, engine, auth):
     assert r.status_code == 200 and r.json()["status"] == "skipped"
 
 
-def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth):
+def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     tx_id = client.post(
         "/api/planned",
         json={
             "payee": "Claro",
+            "category_id": expense_category,
             "amount": 85_000,
             "due_date": "2026-06-20",
             "account_id": acc_id,
@@ -133,12 +139,13 @@ def test_restore_skipped_payment_returns_it_to_planned(client, engine, auth):
     assert r.json()["amount"] == 85_000
 
 
-def test_restore_non_skipped_payment_is_409(client, engine, auth):
+def test_restore_non_skipped_payment_is_409(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     tx_id = client.post(
         "/api/planned",
         json={
             "payee": "Claro",
+            "category_id": expense_category,
             "amount": 85_000,
             "due_date": "2026-06-20",
             "account_id": acc_id,
@@ -155,7 +162,7 @@ def test_rollover_admin_endpoint_runs(client, auth):
     assert r.json()["period"] == "2026-06"
 
 
-def test_to_pay_response_includes_overdue_before_since(client, auth):
+def test_to_pay_response_includes_overdue_before_since(client, auth, expense_category):
     """Bug reproduction at the HTTP layer: an overdue item with
     date < since appears in `overdue` (not silently dropped)."""
     from datetime import date as Date
@@ -174,6 +181,7 @@ def test_to_pay_response_includes_overdue_before_since(client, auth):
         headers=auth,
         json={
             "payee": "Tigo",
+            "category_id": expense_category,
             "amount": 8_500_00,
             "account_id": account_id,
             "currency": "COP",

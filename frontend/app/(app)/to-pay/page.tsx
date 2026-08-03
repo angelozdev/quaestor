@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CategoryField } from "@/components/category-field"
 import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
@@ -13,7 +14,6 @@ import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { listAccounts } from "@/lib/api/accounts"
-import { listCategories } from "@/lib/api/categories"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate } from "@/lib/date"
@@ -43,6 +43,7 @@ const PLAN_DEFAULTS: PlanPaymentValues = {
   amount: Number.NaN,
   dueDate: "",
   categoryId: null,
+  newCategory: "",
   notes: undefined,
 }
 
@@ -104,6 +105,7 @@ export default function ToPayPage() {
         due_date: values.dueDate,
         account_id: values.accountId as number,
         category_id: values.categoryId,
+        new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
       })
     },
@@ -329,17 +331,19 @@ export default function ToPayPage() {
               {(field) => {
                 const error = field.state.meta.errors[0] as { message?: string } | undefined
                 return (
-                  <div className="space-y-1.5">
-                    <Label>Categoría</Label>
-                    <EntitySelect
-                      value={field.state.value as number | null}
-                      onChange={(v) => field.handleChange(v as never)}
-                      queryKey={qk.categories(false)}
-                      queryFn={() => listCategories(false)}
-                      allowNullLabel="Sin categoría"
-                    />
-                    {error?.message && <p className="text-xs text-destructive">{error.message}</p>}
-                  </div>
+                  <CategoryField
+                    id="plan-category"
+                    isIncome={false}
+                    value={{
+                      categoryId: field.state.value as number | null,
+                      newCategory: planForm.getFieldValue("newCategory"),
+                    }}
+                    onChange={(choice) => {
+                      field.handleChange(choice.categoryId as never)
+                      planForm.setFieldValue("newCategory", choice.newCategory)
+                    }}
+                    error={error?.message}
+                  />
                 )
               }}
             </planForm.Field>

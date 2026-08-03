@@ -362,7 +362,7 @@ The card account stays a normal account with a **negative balance = debt**; the 
 
 ## ADR-024 — Masters and v1 scope: optional category, minimal settings, importer with no UI (confirmations)
 
-**Status:** accepted (case C5, minor closures) · confirms the spec's assumptions
+**Status:** accepted (case C5, minor closures) · confirms the spec's assumptions · **the "optional category" clause is superseded by ADR-036** (feature 008, 2026-08-03); the settings and importer clauses stand
 
 **Context.** A final sweep of masters/scope: three points the spec already assumed but that weren't recorded as a decision.
 
@@ -546,3 +546,41 @@ The card account stays a normal account with a **negative balance = debt**; the 
 **Alternatives rejected.** (A) **Show the origin only in the detail view**: the question "why did this move?" is asked while scanning a list, not while reading one row. (B) **Infer it from the payee matching the obligation's name**: breaks the moment the user renames either one.
 
 **Consequences.** Origin becomes a displayed property, not merely a stored one. Charges made by the engine, by import, by the agent and by hand are told apart at a glance — which is also what makes ADR-034's deletion path safe to reach for.
+
+---
+
+## ADR-036 — Every peso that moves in or out says what it was for
+
+**Status:** accepted (feature 008, 2026-08-03) · **Supersedes** ADR-024's "optional category when recording" clause · Technical detail in `docs/adr/0041` and `docs/adr/0042`
+
+**Context.** ADR-024 kept the category optional on purpose: "you can record *I spent 30 thousand* with no category… Forcing a category always (friction)". Low friction with the agent, and the report would show how much was left uncategorised.
+
+Measured against production on 2026-08-02, that is what it cost:
+
+| | Rows | Uncategorised |
+|---|---|---|
+| expense (posted) | 477 | 28 |
+| expense (planned / skipped) | 71 | 68 |
+| income (posted) | 22 | 7 |
+| income (skipped) | 28 | 28 |
+| recurring items | 14 | **10** |
+
+Money invisible to every report, posted and confirmed: **$2.072.854 COP + US$7.486,68 in expenses, $7.003.101 COP + US$10.495,55 in income.** Ten of the fourteen recurring obligations carried no category — including all three salaries, despite 💼 Salary existing — and those ten alone had produced 101 of the 131 uncategorised movements.
+
+"The report shows how much was left uncategorised" turned out to be true and useless: seeing the number does not tell you which restaurant meal it was. The gap surfaced when feature 003's funding-rule proposal could derive only 3 envelopes from recurring items instead of 8, and Internet resolved to a $149.585 three-month average — inflated by uncategorised rows — instead of its exact $85.000.
+
+**Decision.** **A category is mandatory on every expense and every income.** The app refuses to record one without it, and so do the records themselves.
+
+- **Transfers carry none, by rule.** Moving money between the owner's own accounts is not spending: net worth does not change. Categorising a transfer counts the same money twice — once moving into the emergency fund, again when it is finally spent out of it. All 39 existing transfers are correctly uncategorised and stay that way.
+- **A category belongs to one direction.** Recording money coming in offers only income categories, money going out only expense categories. A salary cannot be filed under 🍽️ Restaurantes because 🍽️ Restaurantes is not among the options.
+- **The friction ADR-024 feared is answered, not accepted.** When nothing fits, the category is created from the same screen where the movement is being recorded, in one action, without losing what was typed. The case that forced it: four `4x1000` charges (Colombia's financial transaction tax) matched none of the owner's 34 categories.
+- **Skipped charges carry a category too.** Owner's position: *"cualquier cosa que yo haga debe entrar en una categoría, debe."*
+- **A recurring item's category is copied onto each charge at birth, not linked.** Re-classifying an obligation applies forward; closed months never rewrite themselves.
+
+**Alternatives rejected.** (A) **Keep it optional and add an in-app "to fix" queue**: postpones the same decision to a screen the owner would visit as rarely as the categories screen — the 131 rows accumulated over months of exactly that. (B) **Force a category but leave it untyped**: closes the hole and leaves a salary filable as a restaurant meal, which is the specific failure feature 003 cannot survive. (C) **Give transfers a category too** (Monarch and Lunch Money both do, and the owner improvised `🔄 Payment / Transfer` by hand): a real design question, deliberately **parked as a separate discuss** rather than absorbed here.
+
+**Consequences.**
+
+- Uncategorised is no longer a state the data can reach, so per-category reports, monthly averages and any future envelope see every peso. `unbudgeted_spending` (ADR-016) is untouched and keeps its meaning — a category **without an envelope** is still unbudgeted; what disappears is money with **no category at all**. The two were never the same thing.
+- The historical 131 rows were resolved by hand before the rule turned on, after a fresh backup (`quaestor-local-2026-08-02.dump`, ADR-0030): 101 by setting the 10 recurring items that lacked a category, 30 individually, with seven new categories created (🎁 Bonos, 💰 Rendimientos, 💳 Cashback, 🏦 Comisiones bancarias, 💸 Impuestos, 🔧 Mantenimiento Carro, 🧽 Lavado Carro).
+- **Out of scope, and stated so it is not mistaken for an oversight:** re-categorising movements that already carry a category. Notably the 24 rows in `🔄 Payment / Transfer` that are typed as expenses but are not spending (`Ubidots (salario) -$6.223.101`, `Tyba -$29.084.436`, loans, Bitcoin) — the owner's workaround for the missing transfer category, which alternative (C) will decide.

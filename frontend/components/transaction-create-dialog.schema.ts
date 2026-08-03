@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { messages } from "@/lib/schemas/messages"
-import { isoDate, optionalString, positiveCents } from "@/lib/schemas/primitives"
+import { categoryChosen, isoDate, optionalString, positiveCents } from "@/lib/schemas/primitives"
 
 export const txNormalSchema = z
   .object({
@@ -8,6 +8,7 @@ export const txNormalSchema = z
     accountId: z.number().nullable(),
     amount: positiveCents,
     categoryId: z.number().nullable(),
+    newCategory: z.string().trim().max(120, messages.max120),
     date: isoDate,
     payee: z.string().trim().max(500, messages.max500).optional().or(z.literal("")),
     notes: optionalString,
@@ -17,6 +18,7 @@ export const txNormalSchema = z
     message: messages.required,
     path: ["accountId"],
   })
+  .superRefine(categoryChosen)
 
 export type TxNormalValues = z.infer<typeof txNormalSchema>
 
