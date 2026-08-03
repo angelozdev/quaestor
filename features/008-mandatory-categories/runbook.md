@@ -19,8 +19,8 @@ steps:
     description: "Confirm production still holds zero uncategorised expenses and incomes — the precondition revision 0010 refuses without"
     owner: human
     command: "QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db psql -U \"${POSTGRES_USER:-quaestor}\" -d \"${POSTGRES_DB:-quaestor}\" -c \"select type, count(*) filter (where category_id is null) as uncategorised, count(*) as total from \\\"transaction\\\" group by type order by type;\""
-    evidence: null
-    completed: false
+    evidence: "Run 2026-08-03 by the agent, read-only, at Angelo's request. expense 549 total / 0 uncategorised; income 50 / 0; transfer 39 / 39 uncategorised, which is AC-3 working. Identical to the AC-19 figures of 2026-08-02, so nothing was recorded uncategorised in between. Also checked in the same pass: alembic_version is 0009 (the pre-feature head 0010 expects) and 0 direction contradictions (no movement filed under a category of the opposite direction), so the AC-15 rule lands on clean data too."
+    completed: true
     blocking_acs:
       - AC-18
       - AC-19
@@ -29,8 +29,8 @@ steps:
     description: "Confirm every recurring item carries a category — the precondition for the NOT NULL half of revision 0010"
     owner: human
     command: "QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db psql -U \"${POSTGRES_USER:-quaestor}\" -d \"${POSTGRES_DB:-quaestor}\" -c \"select id, name, type, active from recurring_item where category_id is null order by id;\""
-    evidence: null
-    completed: false
+    evidence: "Run 2026-08-03 by the agent, read-only, at Angelo's request. 0 rows — every recurring item carries a category, so the NOT NULL half of 0010 applies without touching data."
+    completed: true
     blocking_acs:
       - AC-6
 
