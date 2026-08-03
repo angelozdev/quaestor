@@ -414,3 +414,135 @@ The card account stays a normal account with a **negative balance = debt**; the 
 **Alternatives rejected.** (A) **Refuse a start date in the past outright**, as Firefly III does and as Actual Budget and YNAB effectively do by keeping schedules forward-only: simplest and the majority precedent, but it removes a capability the user asked for — declaring an obligation you have been paying for months and pulling that history in — and the workaround is entering months of movements by hand. GnuCash is the precedent for the chosen option, through its *Since Last Run* assistant, which lists every missed date and lets the user mark each Create / Postpone / Ignore. (B) **Keep the batch atomic and add a validation pass** before materializing: catches the predictable failures only, and duplicates the write path's rules in a second place that can drift.
 
 **Consequences.** The every-N engine, the `(recurring_id, due_date)` key and due-driven daily materialization all stand exactly as ADR-020 states them. What changes is that a due date now has a fourth outcome — offered, awaiting the user's answer — and that the daily run reports per-obligation failures instead of failing whole. Feature 007's AC-12, AC-22 and AC-24 are the executable form of this decision.
+
+---
+
+## ADR-027 — The outstanding queue holds debt only, and expected money in is not planned
+
+**Status:** accepted (feature 006, 2026-08-01)
+
+**Context.** The queue that answers "what do I still owe" was populated by every pending transaction, income included. A manually-repeating salary materialized a pending income that landed among the bills: a planned salary of 5.000.000 beside an 85.000 phone bill rendered **"Por pagar 5.085.000"** — a number that is neither what is owed nor anything else, and one that hides the 85.000 bill behind the salary. Removing incomes then raises its own question: should the user be able to plan a *one-off* income — money expected but not yet received?
+
+**Decision.** Two halves of one rule.
+
+- **The queue carries obligations only** — expenses and transfers. Expected incoming money never appears there and never inflates the amount owed. The same example now shows one item and 85.000 owed.
+- **Planning a one-off income stays out of scope.** Money coming in is recorded when it arrives; money that repeats is already covered by a recurring item. Forecasting individual inflows is a separate conversation, not a gap to patch here.
+
+**Alternatives rejected.** (A) **Keep incomes in the queue but subtract them from the total** — turns "what I owe" into a net position, a different and less useful number, and still buries the 85.000 bill under the salary. (B) **A second queue for incoming money** in the same screen — a real shape, but the product had no confirmed need for planned one-off inflows; building the screen first and discovering the need later is the wrong order.
+
+**Consequences.** `to_pay` filters to expenses and transfers. A repeating income can no longer usefully wait for confirmation, which forces ADR-031. The gap this leaves is real and deliberate: a repeating income whose money has not been recorded has **no screen** that can resolve it, and is currently reachable only through the agent. A **"Por cobrar"** view is the parked follow-up that would close it.
+
+---
+
+## ADR-028 — Skipping is reversible
+
+**Status:** accepted (feature 006, 2026-08-01) · Technical detail in `docs/adr/0034`
+
+**Context.** Skipping a pending payment was terminal. An 85.000 phone bill skipped by accident could not be brought back: the only recovery was to plan it again by hand, retyping payee, amount, due date and account, producing a new item with no memory of the old one. This is a one-click action used dozens of times a month.
+
+**Decision.** A skipped payment can be returned to the queue with its payee, amount, due date and account intact, and can then be confirmed or skipped again like any other. **Undoing a skip moves no money on its own** — it restores the obligation, not a balance.
+
+**Alternatives rejected.** (A) **Leave skipping terminal** and tell the user to re-plan: cheap, but it makes a high-frequency one-click action unforgiving. (B) **A confirmation dialog before skipping**: adds friction to the common correct case in order to protect against the rare mistake, and the mistake is cheap to undo once undo exists.
+
+**Consequences.** `skipped → planned` becomes a legal transition, and the engine's record of that due date follows the movement rather than diverging from it.
+
+---
+
+## ADR-029 — Resolving something twice is refused, not silently absorbed
+
+**Status:** accepted (feature 006, 2026-08-01)
+
+**Context.** Two surfaces can resolve the same payment — the screen and the agent — and a screen can be stale. Confirming an already-confirmed 85.000 bill has two wrong answers: applying it moves the balance 85.000 twice, and silently succeeding leaves the user believing they just did something they did not.
+
+**Decision.** Confirming or skipping something already confirmed, already skipped, or never owed in the first place is **refused with a message saying it is no longer pending**. The balance never moves a second time. The refusal *is* the feedback — it is how the user learns their screen was out of date.
+
+**Alternatives rejected.** (A) **Idempotent absorb** (silently succeed, change nothing): protects the balance but withholds the one fact the user needs. (B) **Apply it again**: the defect itself.
+
+**Consequences.** Every resolve path validates current status before acting. REST and MCP surface the same refusal, so the agent and the screen tell the user the same thing.
+
+---
+
+## ADR-030 — Without an exchange rate the app refuses to guess, even when it could
+
+**Status:** accepted (feature 006, 2026-08-01) · **Upholds** feature 005's AC-9; does not supersede it
+
+**Context.** Quaestor holds money in COP and USD. Feature 005 decided the app never assumes a rate: a report with no rate fails loudly rather than showing a wrong total. Feature 006 had to decide whether the outstanding queue inherits that rule or earns an exception, since a queue whose items happen to be all in pesos does not strictly need a rate to be correct.
+
+**Decision.** Reading the outstanding queue with no rate ever set **fails with a clear message telling the user to set one — even when everything owed is already in pesos**. Planning and skipping keep working without a rate, so a user who has not set one is not locked out of recording.
+
+**Alternatives rejected.** (A) **Require the rate only when a non-COP item is present**: correct in the moment, but it makes the rule conditional on today's data, so the user meets it only when it bites — adding a single USD item silently changes how the app behaves. (B) **Fall back to a stale or default rate**: exactly what feature 005 ruled out.
+
+**Consequences.** One rule to remember instead of two. The rate is a genuine prerequisite of the reading surfaces and a non-issue for the writing ones.
+
+---
+
+## ADR-031 — Repeating income is always automatic
+
+**Status:** accepted (feature 007, 2026-08-02) · **Consequence of** ADR-027 · Technical detail in `docs/adr/0039`
+
+**Context.** A repeating item could be declared *manual*, meaning the engine created it as pending and waited for the user to confirm. For an expense that works — it lands in the outstanding queue and is resolved there. For an income it does not, because ADR-027 took incomes out of that queue. A manual repeating salary therefore produced a pending movement that **no screen could resolve**, accumulating one invisible row per month.
+
+**Decision.** A repeating income is **always automatic**. On its due date it is recorded and the balance rises. A salary of 4.500.000 on the 30th adds 4.500.000 on the 30th; **if the real deposit was 4.480.000 the user corrects that movement**. Declaring an income that waits for confirmation is refused at the moment of declaring, with the reason.
+
+**Alternatives rejected.** (A) **Build the "Por cobrar" screen** so manual income becomes resolvable: the complete answer, and still the right long-term shape, but it is a feature of its own, and 007's job was to stop the engine producing state nobody can act on. (B) **Accept the manual flag and quietly treat it as automatic**: the behaviour would be right and the record would lie.
+
+**Consequences.** Existing manual repeating incomes were converted by a data migration. **The movements those items had already produced were deliberately not converted**: registering them would move balances the user never confirmed, and cancelling them would erase the record that the money was expected. Which one applies changes row by row, so it is a human decision, not a migration's. Until a "Por cobrar" view exists, the agent is the only surface that can resolve them. The month's forecast is unaffected either way — the recurring item is what tells safe-to-spend the money is coming, whatever state a past movement is in.
+
+---
+
+## ADR-032 — An obligation that reaches its end date switches itself off
+
+**Status:** accepted (feature 007, 2026-08-02) · Technical detail in `docs/adr/0037`
+
+**Context.** An obligation with an end date stayed listed as live forever after that date, producing nothing. The list of active obligations therefore mixed what is still going to be charged with what has already finished, and the only way to tell them apart was to open each one and read its end date.
+
+**Decision.** Once the last due date on or before the end date has passed, the obligation **stops being live**: it leaves the active list and joins the switched-off ones, so that list only ever holds what is still going to be charged. **Extending the end date brings it back**, with no separate reactivation step.
+
+**Alternatives rejected.** (A) **Keep it listed with a badge**: the list stays something to read rather than something to trust. (B) **Delete it at the end date**: destroys history the user may want to consult or extend.
+
+**Consequences.** Being live is *derived* from the end date rather than stored, so there is no second piece of state that can drift out of agreement with the dates. Extending is an ordinary edit.
+
+---
+
+## ADR-033 — Resuming a paused obligation never charges the pause unattended
+
+**Status:** accepted (feature 007, 2026-08-02) · Technical detail in `docs/adr/0037` (amended)
+
+**Context.** A gym at 120.000 paused in March and resumed in August: the shipped engine charged all four paused dates at once on the first run after the resume — **480.000 in one go** — which turns pausing into deferring. The obvious opposite, discarding those four dates, is also wrong in a case the engine cannot distinguish: switching an obligation off and on again is *exactly* what a machine outage plus a manual restart looks like, and in that case the four dates are real money owed.
+
+**Decision.** Resuming **never charges the paused stretch unattended**. The obligation charges next on its next due date from today. The dates that fell inside the pause are **offered** — presented for the user to accept or decline, one by one — because only the user knows whether those months were a deliberate pause or an interruption. Accepting none is the normal case and leaves the obligation live from its next future date.
+
+**Alternatives rejected.** (A) **Charge the whole stretch** (the shipped behaviour): 480.000 unannounced. (B) **Discard the stretch silently**, which is what feature 007's AC-17 originally asked for: correct whenever the pause was deliberate, wrong and unrecoverable whenever it was an outage, and the user is never told which case they were in. Raised during independent review as defect D1 and decided by the user in favour of offering.
+
+**Consequences.** Pausing keeps a predictable cost of exactly zero. Resuming may present a list of dates to decide, which is the same surface ADR-026 introduced for dates already in the past at declaration time — one mechanism, two entry points.
+
+---
+
+## ADR-034 — A charged date is not un-charged by skipping; deleting the movement is the correction
+
+**Status:** accepted (feature 007, 2026-08-02) · Technical detail in `docs/adr/0038`
+
+**Context.** Two halves of the same hole. Skipping a date whose money had already moved marked the date *skipped* while leaving the money out of the account: Netflix at 25.900 charged on 5 August and then skipped left the balance 25.900 lower while the record claimed nothing had happened — the obligation said unpaid, the account said paid. And deleting the movement the engine created returned the money but left the date recorded as charged, pointing at a movement that no longer existed, **consuming that date forever**: no run brought it back and no screen showed anything was wrong.
+
+**Decision.** One correction path, in two parts.
+
+- **Skipping a date whose money already moved is refused**, with a message saying it was already charged and pointing at the movement itself. Nothing changes. Skipping exists for what has not happened yet.
+- **Deleting the movement the engine created returns the money *and* closes that due date**: it counts as skipped from then on and no later run charges it again. Deleting the 25.900 Netflix charge of 5 August puts 25.900 back in the account and leaves 5 August settled for good; 5 September arrives normally.
+
+**Alternatives rejected.** (A) **Allow the skip and reverse the balance as a side effect**: a skip that silently moves money is a different action wearing the wrong name. (B) **Refuse the skip and stop there**: leaves the user holding a charge they want undone with no route out — the deletion path is what makes the refusal actionable rather than merely obstructive.
+
+**Consequences.** The obligation and the account always agree. Deleting the movement becomes the single documented way to correct an engine charge made in error, and the refusal message names it.
+
+---
+
+## ADR-035 — Every engine charge is recognisable as one, without opening it
+
+**Status:** accepted (feature 007, 2026-08-02) · Technical detail in `docs/adr/0038`
+
+**Context.** The engine is the only surface in Quaestor that moves a balance with no user action. A movement it created recorded its origin internally but presented itself as hand-entered: nothing in the list of movements distinguished a 25.900 Netflix charge the engine posted overnight from one the user typed. Reconciling a balance that moved while the user was not looking meant guessing.
+
+**Decision.** A movement created by the engine is **recognisable as such in the list of movements, without opening anything**, and identifies which obligation produced it.
+
+**Alternatives rejected.** (A) **Show the origin only in the detail view**: the question "why did this move?" is asked while scanning a list, not while reading one row. (B) **Infer it from the payee matching the obligation's name**: breaks the moment the user renames either one.
+
+**Consequences.** Origin becomes a displayed property, not merely a stored one. Charges made by the engine, by import, by the agent and by hand are told apart at a glance — which is also what makes ADR-034's deletion path safe to reach for.
