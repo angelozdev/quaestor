@@ -8,12 +8,13 @@ def _seed_account(engine):
         return acc.id
 
 
-def test_create_and_list_recurring(client, engine, auth):
+def test_create_and_list_recurring(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "Landlord",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -47,12 +48,13 @@ def test_create_recurring_transfer_type_is_422(client, engine, auth):
     assert r.status_code == 422
 
 
-def test_skip_recurring_occurrence(client, engine, auth):
+def test_skip_recurring_occurrence(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     body = {
         "name": "Water",
         "payee": "Utility",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "manual",
         "amount": 50_000,
         "account_id": acc_id,
@@ -70,12 +72,13 @@ def test_recurring_requires_auth(client):
     assert client.get("/api/recurring").status_code == 401
 
 
-def _seed_recurring(client, engine, auth):
+def _seed_recurring(client, engine, auth, expense_category):
     acc_id = _seed_account(engine)
     body = {
         "name": "Rent",
         "payee": "LL",
         "type": "expense",
+        "category_id": expense_category,
         "mode": "auto",
         "amount": 2_000_000,
         "account_id": acc_id,
@@ -86,15 +89,15 @@ def _seed_recurring(client, engine, auth):
     return client.post("/api/recurring", json=body, headers=auth).json()["id"]
 
 
-def test_patch_recurring(client, engine, auth):
-    rid = _seed_recurring(client, engine, auth)
+def test_patch_recurring(client, engine, auth, expense_category):
+    rid = _seed_recurring(client, engine, auth, expense_category)
     r = client.patch(f"/api/recurring/{rid}", json={"amount": 2_500_000, "payee": "New"}, headers=auth)
     assert r.status_code == 200, r.text
     assert r.json()["amount"] == 2_500_000 and r.json()["payee"] == "New"
 
 
-def test_delete_recurring_is_soft(client, engine, auth):
-    rid = _seed_recurring(client, engine, auth)
+def test_delete_recurring_is_soft(client, engine, auth, expense_category):
+    rid = _seed_recurring(client, engine, auth, expense_category)
     assert client.delete(f"/api/recurring/{rid}", headers=auth).status_code == 204
     # gone from active list, present when listing inactive
     assert client.get("/api/recurring?active=true", headers=auth).json() == []
@@ -102,8 +105,8 @@ def test_delete_recurring_is_soft(client, engine, auth):
     assert [i["id"] for i in inactive] == [rid]
 
 
-def test_restore_recurring(client, engine, auth):
-    rid = _seed_recurring(client, engine, auth)
+def test_restore_recurring(client, engine, auth, expense_category):
+    rid = _seed_recurring(client, engine, auth, expense_category)
     client.delete(f"/api/recurring/{rid}", headers=auth)
     r = client.post(f"/api/recurring/{rid}/restore", headers=auth)
     assert r.status_code == 200 and r.json()["active"] is True

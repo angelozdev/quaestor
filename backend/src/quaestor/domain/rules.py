@@ -22,6 +22,21 @@ def delta_balance(tx_type: TxType, amount: int) -> int:
     raise ValueError("delta_balance only applies to expense/income; transfer uses transfer_deltas")
 
 
+def category_is_income_for(tx_type: TxType) -> bool:
+    """Whether this movement must carry an income category (ADR-0042).
+
+    Raises:
+        ValueError: transfer carries no category at all, so it has no
+            direction; `services.categories.resolve_for_movement` refuses it
+            before reaching here.
+    """
+    if tx_type == TxType.income:
+        return True
+    if tx_type == TxType.expense:
+        return False
+    raise ValueError("a transfer carries no category, so it has no direction")
+
+
 def transfer_deltas(amount: int) -> tuple[int, int]:
     """(delta_from, delta_to) for an internal transfer."""
     return (-amount, amount)

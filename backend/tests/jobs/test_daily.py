@@ -9,6 +9,7 @@ from quaestor.domain.models import Account, AccountType, IntervalUnit, Recurring
 from quaestor.jobs import daily
 from sqlmodel import Session
 
+from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
 
 
@@ -64,7 +65,7 @@ def _make_recurring(session: Session, account: Account) -> RecurringItem:
         mode=RecurringMode.manual,
         amount=100000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=account.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -160,7 +161,7 @@ def test_run_daily_reports_the_obligations_that_need_attention(session):
         mode=RecurringMode.auto,
         amount=15_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=bad.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,

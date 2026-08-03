@@ -3,10 +3,12 @@ from decimal import Decimal
 
 import pytest
 from quaestor.domain.errors import ValidationError
-from quaestor.domain.models import AccountType
+from quaestor.domain.models import AccountType, Transaction, TxStatus, TxType
 from quaestor.domain.rules import month_bounds
 from quaestor.services import accounts, categories, fx, reports, transactions
 from quaestor.services.month_aggregate import load_month_aggregate
+
+from tests.support.categories import a_category
 
 TRM = Decimal("4000")
 
@@ -34,7 +36,9 @@ def test_totals_posted_only_excludes_planned_and_transfer(session):
     acc2 = _acc(session, currency="COP")
     cat = _cat(session)
     transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 6, 5), "groceries", category_id=cat.id)
-    transactions.record_income(session, acc.id, 80_000, "COP", date(2026, 6, 1), "salary", category_id=cat.id)
+    transactions.record_income(
+        session, acc.id, 80_000, "COP", date(2026, 6, 1), "salary", category_id=a_category(session, TxType.income)
+    )
     transactions.transfer(session, acc.id, acc2.id, 10_000, "COP", date(2026, 6, 6))  # excluded
     planned.plan_payment(
         session,
@@ -81,23 +85,51 @@ def test_usd_share_zero_when_no_expense(session):
     assert reports._usd_share(agg, [], 0) == 0.0
 
 
-def test_category_sections_sorted_with_pct_and_uncategorized(session):
+def test_category_sections_sorted_with_pct_and_ungrouped(session):
     acc = _acc(session)
     grp = categories.create_group(session, name="Essentials")
     food = _cat(session, name="Food", group_id=grp.id)
     fun = _cat(session, name="Fun", group_id=grp.id)
+    loose = _cat(session, name="Zapatos")
     transactions.record_expense(session, acc.id, 200_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
     transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)
-    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 7), "none")  # uncategorized
+    transactions.record_expense(session, acc.id, 100_000, "COP", date(2026, 6, 7), "z", category_id=loose.id)
     agg = load_month_aggregate(session, "2026-06", TRM)
     expenses = agg.month_expense()
     total = sum(agg.to_cop_cents(t) for t in expenses)
     sections = reports._category_sections(agg, expenses, total)
-    assert [s.category for s in sections] == ["Food", "Fun", "Uncategorized"]
+    assert [s.category for s in sections] == ["Food", "Fun", "Zapatos"]
     assert sections[0].group == "Essentials"
     assert sections[-1].group is None
     assert sections[0].total == 200_000
     assert sections[0].pct == pytest.approx(50.0)
+
+
+def test_uncategorized_section_survives_for_data_that_predates_the_rule(session):
+    """`Uncategorized` can no longer be produced through the app (ADR-0042).
+
+    The bucket stays because a report can still be run over data restored from
+    a dump older than the rule; this pins that it keeps working, by building
+    the row the way only a restore could.
+    """
+    acc = _acc(session)
+    old = Transaction(
+        date=date(2026, 6, 7),
+        payee="predates the rule",
+        type=TxType.expense,
+        status=TxStatus.posted,
+        amount=100_000,
+        currency="COP",
+        account_id=acc.id,
+        category_id=None,
+    )
+    session.add(old)
+    session.commit()
+    agg = load_month_aggregate(session, "2026-06", TRM)
+    expenses = agg.month_expense()
+    sections = reports._category_sections(agg, expenses, sum(agg.to_cop_cents(t) for t in expenses))
+    assert [s.category for s in sections] == ["Uncategorized"]
+    assert sections[0].group is None
 
 
 def test_group_sections_rollup(session):
@@ -133,10 +165,14 @@ def test_drift_abs_and_pct(session):
     acc = _acc(session)
     cat = _cat(session)
     # May: income 100_000, expense 40_000, net 60_000
-    transactions.record_income(session, acc.id, 100_000, "COP", date(2026, 5, 10), "s", category_id=cat.id)
+    transactions.record_income(
+        session, acc.id, 100_000, "COP", date(2026, 5, 10), "s", category_id=a_category(session, TxType.income)
+    )
     transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 5, 11), "x", category_id=cat.id)
     # June: income 150_000, expense 60_000, net 90_000
-    transactions.record_income(session, acc.id, 150_000, "COP", date(2026, 6, 10), "s", category_id=cat.id)
+    transactions.record_income(
+        session, acc.id, 150_000, "COP", date(2026, 6, 10), "s", category_id=a_category(session, TxType.income)
+    )
     transactions.record_expense(session, acc.id, 60_000, "COP", date(2026, 6, 11), "x", category_id=cat.id)
     agg = load_month_aggregate(session, "2026-06", TRM)
     income, expense, net = agg.totals_for("2026-06")
@@ -152,7 +188,9 @@ def test_drift_pct_none_when_previous_zero(session):
     cat = _cat(session)
     # May has expense only (income 0); June has income
     transactions.record_expense(session, acc.id, 10_000, "COP", date(2026, 5, 5), "x", category_id=cat.id)
-    transactions.record_income(session, acc.id, 50_000, "COP", date(2026, 6, 5), "s", category_id=cat.id)
+    transactions.record_income(
+        session, acc.id, 50_000, "COP", date(2026, 6, 5), "s", category_id=a_category(session, TxType.income)
+    )
     transactions.record_expense(session, acc.id, 10_000, "COP", date(2026, 6, 6), "x", category_id=cat.id)
     agg = load_month_aggregate(session, "2026-06", TRM)
     income, expense, net = agg.totals_for("2026-06")
@@ -287,6 +325,7 @@ def test_monthly_report_pending_lines_exclude_prior_overdue(session):
         currency="COP",
         account_id=a.id,
         due_date=Date(2026, 5, 15),
+        category_id=a_category(session),
     )
     planned.plan_payment(
         session,
@@ -295,6 +334,7 @@ def test_monthly_report_pending_lines_exclude_prior_overdue(session):
         currency="COP",
         account_id=a.id,
         due_date=Date(2026, 7, 5),
+        category_id=a_category(session),
     )
     rep = monthly_report(session, "2026-07", today=Date(2026, 7, 15))
     pending_text = "\n".join(rep.pending)
@@ -311,7 +351,9 @@ def test_monthly_report_end_to_end(session):
     food = _cat(session, name="Food")
     budgets.set_budget(session, food.id, "2026-06", 100_000)
     goals.create_goal(session, name="Buffer", monthly_amount=50_000, savings_account_id=sav.id)
-    transactions.record_income(session, acc.id, 500_000, "COP", date(2026, 6, 1), "salary", category_id=food.id)
+    transactions.record_income(
+        session, acc.id, 500_000, "COP", date(2026, 6, 1), "salary", category_id=a_category(session, TxType.income)
+    )
     transactions.record_expense(session, acc.id, 80_000, "COP", date(2026, 6, 5), "groceries", category_id=food.id)
 
     report = reports.monthly_report(session, "2026-06", today=date(2026, 6, 15))

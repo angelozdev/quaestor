@@ -15,10 +15,12 @@ from datetime import date
 
 import pytest
 from quaestor.domain.errors import ValidationError
-from quaestor.domain.models import AccountType, Transaction
+from quaestor.domain.models import AccountType, Transaction, TxType
 from quaestor.domain.sort import SortSpec
 from quaestor.services import accounts, transactions
 from sqlmodel import select
+
+from tests.support.categories import a_category
 
 
 def _sortable() -> dict[str, object]:
@@ -27,9 +29,15 @@ def _sortable() -> dict[str, object]:
 
 def _seed(session):
     a = accounts.create_account(session, "A", AccountType.debit, "COP", balance=100_000)
-    t1 = transactions.record_expense(session, a.id, 100, "COP", date(2026, 6, 1), "first")
-    t2 = transactions.record_expense(session, a.id, 200, "COP", date(2026, 6, 2), "second")
-    t3 = transactions.record_expense(session, a.id, 300, "COP", date(2026, 6, 3), "third")
+    t1 = transactions.record_expense(
+        session, a.id, 100, "COP", date(2026, 6, 1), "first", category_id=a_category(session, TxType.expense)
+    )
+    t2 = transactions.record_expense(
+        session, a.id, 200, "COP", date(2026, 6, 2), "second", category_id=a_category(session, TxType.expense)
+    )
+    t3 = transactions.record_expense(
+        session, a.id, 300, "COP", date(2026, 6, 3), "third", category_id=a_category(session, TxType.expense)
+    )
     return t1, t2, t3
 
 

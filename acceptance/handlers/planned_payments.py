@@ -146,7 +146,7 @@ def _plan(
         currency,
         _due_date(world, due),
         _account_id(world, account),
-        category_id=world.categories.get(category) if category else None,
+        category_id=world.submitted_category(category, TxType.expense),
         notes=notes,
     )
 
@@ -167,7 +167,7 @@ def _materialize_manual_recurring(
         mode=RecurringMode.manual,
         amount=major_to_cents(amount),
         currency=currency,
-        category_id=None,
+        category_id=world.background_category(tx_type),
         account_id=_account_id(world, account),
         interval_unit=IntervalUnit.month,
         interval_count=1,

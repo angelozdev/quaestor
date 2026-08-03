@@ -1,8 +1,11 @@
 from datetime import date
 
+from quaestor.domain.models import TxType
 from quaestor.mcp.tools import core
 from quaestor.mcp.tools.core import GetFxRateInput, ListTransactionsInput
 from quaestor.services import accounts, fx, tags
+
+from tests.support.categories import a_category
 
 
 def test_list_accounts(session, seeded):
@@ -49,8 +52,12 @@ def test_list_transactions_lists_and_totals(session, seeded):
 
     fx.set_trm(session, "4000")
     acc = seeded["account"]
-    tx_service.record_expense(session, acc.id, 5_000_000, "COP", date(2026, 6, 18), "Lunch")
-    tx_service.record_expense(session, acc.id, 3_000_000, "COP", date(2026, 6, 18), "Coffee")
+    tx_service.record_expense(
+        session, acc.id, 5_000_000, "COP", date(2026, 6, 18), "Lunch", category_id=a_category(session, TxType.expense)
+    )
+    tx_service.record_expense(
+        session, acc.id, 3_000_000, "COP", date(2026, 6, 18), "Coffee", category_id=a_category(session, TxType.expense)
+    )
     out = core.list_transactions(session, ListTransactionsInput(type="expense"))
     assert "Lunch" in out and "Coffee" in out
     assert "Total (COP): 80000.00" in out
@@ -61,7 +68,15 @@ def test_list_transactions_filters_by_account_name(session, seeded):
 
     fx.set_trm(session, "4000")
     other = accounts.create_account(session, "Savings", "savings", "COP", balance=0)
-    tx_service.record_expense(session, seeded["account"].id, 1_000_000, "COP", date(2026, 6, 18), "Here")
+    tx_service.record_expense(
+        session,
+        seeded["account"].id,
+        1_000_000,
+        "COP",
+        date(2026, 6, 18),
+        "Here",
+        category_id=a_category(session, TxType.expense),
+    )
     out = core.list_transactions(session, ListTransactionsInput(account="Savings"))
     assert "Here" not in out  # filtered to the empty account
     assert other.id is not None
@@ -91,9 +106,15 @@ def test_mcp_list_transactions_default_orders_by_date_desc(session, seeded):
 
     fx.set_trm(session, "4000")
     acc = seeded["account"]
-    tx_service.record_expense(session, acc.id, 100, "COP", date(2026, 6, 15), "mid")
-    tx_service.record_expense(session, acc.id, 200, "COP", date(2026, 6, 1), "old")
-    tx_service.record_expense(session, acc.id, 300, "COP", date(2026, 7, 1), "new")
+    tx_service.record_expense(
+        session, acc.id, 100, "COP", date(2026, 6, 15), "mid", category_id=a_category(session, TxType.expense)
+    )
+    tx_service.record_expense(
+        session, acc.id, 200, "COP", date(2026, 6, 1), "old", category_id=a_category(session, TxType.expense)
+    )
+    tx_service.record_expense(
+        session, acc.id, 300, "COP", date(2026, 7, 1), "new", category_id=a_category(session, TxType.expense)
+    )
     out = core.list_transactions(session, ListTransactionsInput())
     # Default = date DESC. Newest date ("new" 1-jul) above "mid" 15-jun above "old" 1-jun.
     new_row = _row_of(out, "new")
@@ -109,9 +130,15 @@ def test_mcp_list_transactions_explicit_sort_date_asc(session, seeded):
 
     fx.set_trm(session, "4000")
     acc = seeded["account"]
-    tx_service.record_expense(session, acc.id, 100, "COP", date(2026, 6, 15), "mid")
-    tx_service.record_expense(session, acc.id, 200, "COP", date(2026, 6, 1), "old")
-    tx_service.record_expense(session, acc.id, 300, "COP", date(2026, 7, 1), "new")
+    tx_service.record_expense(
+        session, acc.id, 100, "COP", date(2026, 6, 15), "mid", category_id=a_category(session, TxType.expense)
+    )
+    tx_service.record_expense(
+        session, acc.id, 200, "COP", date(2026, 6, 1), "old", category_id=a_category(session, TxType.expense)
+    )
+    tx_service.record_expense(
+        session, acc.id, 300, "COP", date(2026, 7, 1), "new", category_id=a_category(session, TxType.expense)
+    )
     out = core.list_transactions(session, ListTransactionsInput(sort="date", order="asc"))
     old_row = _row_of(out, "old")
     mid_row = _row_of(out, "mid")

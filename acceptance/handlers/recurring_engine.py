@@ -157,7 +157,7 @@ def _declare(
         mode=_mode(mode),
         amount=major_to_cents(amount),
         currency=currency,
-        category_id=world.categories.get(category) if category else None,
+        category_id=world.submitted_category(category, tx_type),
         account_id=world.account_id_or_missing(account),
         interval_unit=IntervalUnit(unit) if unit else None,
         interval_count=int(count),
@@ -469,7 +469,7 @@ def when_register_expense_to_payee(
             currency,
             world.today,
             payee,
-            category_id=world.categories[category] if category else None,
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
         )
         world.last_expense_id = tx.id
 

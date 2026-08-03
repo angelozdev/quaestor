@@ -12,6 +12,7 @@ from quaestor.domain.models import (
 )
 from quaestor.services import accounts, occurrences, recurring, transactions
 
+from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
 
 
@@ -33,7 +34,7 @@ def test_materialize_auto_posts_on_each_due_date(session):
         mode=RecurringMode.auto,
         amount=2_000_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -57,7 +58,7 @@ def test_materialize_submonthly_generates_several_in_a_month(session):
         mode=RecurringMode.auto,
         amount=10_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.week,
         interval_count=2,
@@ -77,7 +78,7 @@ def test_materialize_manual_leaves_planned_without_balance(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -100,7 +101,7 @@ def test_materialize_is_idempotent(session):
         mode=RecurringMode.auto,
         amount=2_000_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -123,7 +124,7 @@ def test_materialize_missed_day_self_heals(session):
         mode=RecurringMode.auto,
         amount=1_000_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -144,7 +145,7 @@ def test_materialize_skips_inactive_items(session):
         mode=RecurringMode.auto,
         amount=1000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -166,7 +167,7 @@ def test_skip_recurring_before_materialization_blocks_it(session):
         mode=RecurringMode.auto,
         amount=1_000_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -188,7 +189,7 @@ def test_skip_recurring_after_manual_materialization_skips_the_planned_tx(sessio
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -216,7 +217,7 @@ def _recurring(session, name, account_id, amount, mode=RecurringMode.auto):
         mode=mode,
         amount=amount,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=account_id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -296,7 +297,7 @@ def test_an_auto_charge_records_the_engine_as_its_source(session):
         mode=RecurringMode.auto,
         amount=1_000_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -317,7 +318,7 @@ def test_a_manual_charge_records_the_engine_as_its_source(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -330,7 +331,9 @@ def test_a_manual_charge_records_the_engine_as_its_source(session):
 
 def test_a_hand_entered_movement_is_not_the_engines(session):
     acc = _acc(session)
-    tx = transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 1, 5), "Tienda")
+    tx = transactions.record_expense(
+        session, acc.id, 30_000, "COP", date(2026, 1, 5), "Tienda", category_id=a_category(session, TxType.expense)
+    )
     assert tx.source == Source.manual
 
 
@@ -343,7 +346,7 @@ def _weekly(session, acc_id, start):
         mode=RecurringMode.auto,
         amount=8_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc_id,
         interval_unit=IntervalUnit.week,
         interval_count=1,
@@ -414,7 +417,7 @@ def test_an_ended_obligation_still_gets_the_date_the_engine_missed(session):
         mode=RecurringMode.auto,
         amount=8_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.week,
         interval_count=1,
@@ -483,7 +486,7 @@ def test_a_turn_waiting_for_approval_can_still_be_skipped(session):
         mode=RecurringMode.manual,
         amount=1_800_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -566,7 +569,9 @@ def test_deleting_a_hand_entered_movement_touches_no_occurrence(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
     item = _weekly(session, acc.id, date(2026, 1, 1))
     occurrences.materialize_due(session, date(2026, 1, 1))
-    loose = transactions.record_expense(session, acc.id, 30_000, "COP", date(2026, 1, 3), "Tienda")
+    loose = transactions.record_expense(
+        session, acc.id, 30_000, "COP", date(2026, 1, 3), "Tienda", category_id=a_category(session, TxType.expense)
+    )
 
     transactions.delete_transaction(session, loose.id)
 
@@ -583,7 +588,7 @@ def _declared_late(session, acc_id, declared_on):
         mode=RecurringMode.auto,
         amount=25_900,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc_id,
         interval_unit=IntervalUnit.week,
         interval_count=1,
@@ -681,7 +686,7 @@ def test_moving_the_start_date_back_offers_the_dates_it_opens(session):
         mode=RecurringMode.auto,
         amount=25_900,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.week,
         interval_count=1,
@@ -712,7 +717,7 @@ def test_skipping_an_already_skipped_date_changes_nothing(session):
         mode=RecurringMode.manual,
         amount=1_800_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -846,7 +851,7 @@ def test_a_start_date_far_enough_back_to_flood_the_dialog_is_refused(session):
             mode=RecurringMode.auto,
             amount=8_000,
             currency="COP",
-            category_id=None,
+            category_id=a_category(session),
             account_id=acc.id,
             interval_unit=IntervalUnit.day,
             interval_count=1,
@@ -871,7 +876,7 @@ def test_the_refused_declaration_leaves_nothing_behind(session):
             mode=RecurringMode.auto,
             amount=8_000,
             currency="COP",
-            category_id=None,
+            category_id=a_category(session),
             account_id=acc.id,
             interval_unit=IntervalUnit.day,
             interval_count=1,
@@ -894,7 +899,7 @@ def test_a_long_but_answerable_history_is_still_allowed(session):
         mode=RecurringMode.auto,
         amount=25_900,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -915,7 +920,7 @@ def test_moving_the_start_back_too_far_is_refused_too(session):
         mode=RecurringMode.auto,
         amount=8_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.day,
         interval_count=1,

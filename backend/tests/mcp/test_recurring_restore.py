@@ -1,5 +1,6 @@
 from datetime import date
 
+from quaestor.domain.models import TxType
 from quaestor.mcp.tools import recurring_restore
 from quaestor.mcp.tools.temporal import (
     ArchiveRecurringInput,
@@ -7,14 +8,18 @@ from quaestor.mcp.tools.temporal import (
 )
 from quaestor.services import accounts, recurring
 
+from tests.support.categories import a_named_category
+
 
 def _seed(session):
+    a_named_category(session, "Groceries", TxType.expense)
     accounts.create_account(session, "Bancolombia", "debit", "COP", balance=10_000_000)
     from quaestor.mcp.tools.temporal import create_recurring
 
     create_recurring(
         session,
         CreateRecurringInput(
+            category="Groceries",
             name="Rent",
             payee="Landlord",
             type="expense",

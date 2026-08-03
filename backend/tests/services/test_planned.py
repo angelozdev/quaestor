@@ -7,6 +7,7 @@ from quaestor.domain.errors import IllegalTransition, NotFound, ValidationError
 from quaestor.domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, TxStatus, TxType
 from quaestor.services import accounts, occurrences, planned, recurring, transactions
 
+from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
 
 
@@ -23,6 +24,7 @@ def test_plan_payment_creates_planned_without_balance(session):
         currency="COP",
         due_date=date(2026, 6, 20),
         account_id=acc.id,
+        category_id=a_category(session),
     )
     assert tx.status == TxStatus.planned and tx.type == TxType.expense
     assert tx.recurring_id is None
@@ -39,6 +41,7 @@ def test_plan_payment_rejects_bad_amount(session):
             currency="COP",
             due_date=date(2026, 6, 20),
             account_id=acc.id,
+            category_id=a_category(session),
         )
 
 
@@ -51,6 +54,7 @@ def test_plan_payment_unknown_account(session):
             currency="COP",
             due_date=date(2026, 6, 20),
             account_id=999,
+            category_id=a_category(session),
         )
 
 
@@ -64,6 +68,7 @@ def test_plan_payment_currency_mismatch_raises(session):
             currency="COP",
             due_date=date(2026, 6, 20),
             account_id=acc.id,
+            category_id=a_category(session),
         )
 
 
@@ -81,6 +86,7 @@ def test_to_pay_includes_overdue_before_since(session):
         currency="COP",
         due_date=past,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -102,6 +108,7 @@ def test_to_pay_overdue_excludes_items_on_or_after_today(session):
         currency="COP",
         due_date=today,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(session, since=today, until=today + timedelta(days=30))
     assert queue.overdue == []
@@ -120,6 +127,7 @@ def test_to_pay_overdue_excludes_items_after_until(session):
         currency="COP",
         due_date=future,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -143,6 +151,7 @@ def test_to_pay_upcoming_respects_since_floor(session):
         currency="COP",
         due_date=three_days_ago,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -166,6 +175,7 @@ def test_to_pay_retrospective_true_omits_overdue_bucket(session):
         currency="COP",
         due_date=far_past,
         account_id=a.id,
+        category_id=a_category(session),
     )
     planned.plan_payment(
         session,
@@ -174,6 +184,7 @@ def test_to_pay_retrospective_true_omits_overdue_bucket(session):
         currency="COP",
         due_date=in_window,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -197,6 +208,7 @@ def test_to_pay_today_param_is_respected_for_determinism(session):
         currency="COP",
         due_date=Date(2026, 7, 14),
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -220,6 +232,7 @@ def test_to_pay_window_entirely_historical_with_retrospective_returns_empty(sess
         currency="COP",
         due_date=past,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -250,6 +263,7 @@ def test_to_pay_accepts_a_single_day_window(session):
         currency="COP",
         due_date=day,
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(session, since=day, until=day, today=day)
     assert queue.overdue == []
@@ -268,6 +282,7 @@ def test_to_pay_overdue_is_capped_by_until_on_a_past_window(session):
         currency="COP",
         due_date=Date(2026, 7, 5),
         account_id=a.id,
+        category_id=a_category(session),
     )
     planned.plan_payment(
         session,
@@ -276,6 +291,7 @@ def test_to_pay_overdue_is_capped_by_until_on_a_past_window(session):
         currency="COP",
         due_date=Date(2026, 7, 15),
         account_id=a.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(
         session,
@@ -299,6 +315,7 @@ def test_to_pay_excludes_posted_from_both_buckets(session):
         currency="COP",
         due_date=past,
         account_id=a.id,
+        category_id=a_category(session),
     )
     planned.confirm_payment(session, tx.id)
     queue = planned.to_pay(
@@ -330,6 +347,7 @@ def test_to_pay_excludes_skipped_from_both_buckets(session):
         currency="COP",
         due_date=past,
         account_id=a.id,
+        category_id=a_category(session),
     )
     planned.skip_payment(session, tx.id)
     queue = planned.to_pay(
@@ -344,7 +362,13 @@ def test_to_pay_excludes_skipped_from_both_buckets(session):
 def test_confirm_posts_and_moves_balance(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Friend", amount=80_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Friend",
+        amount=80_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     confirmed = planned.confirm_payment(session, tx.id)
     assert confirmed.status == TxStatus.posted
@@ -354,7 +378,13 @@ def test_confirm_posts_and_moves_balance(session):
 def test_confirm_with_adjusted_amount_moves_balance(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Electric", amount=80_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Electric",
+        amount=80_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     confirmed = planned.confirm_payment(session, tx.id, amount=95_000, date=date(2026, 6, 22))
     assert confirmed.amount == 95_000 and confirmed.date == date(2026, 6, 22)
@@ -371,7 +401,7 @@ def test_confirm_syncs_manual_occurrence_to_posted(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -391,7 +421,9 @@ def test_confirm_syncs_manual_occurrence_to_posted(session):
 
 def test_confirm_non_planned_raises_illegal_transition(session):
     acc = _acc(session, balance=500_000)
-    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
+    tx = transactions.record_expense(
+        session, acc.id, 1000, "COP", date(2026, 6, 1), "x", category_id=a_category(session, TxType.expense)
+    )
     with pytest.raises(IllegalTransition):
         planned.confirm_payment(session, tx.id)
 
@@ -404,7 +436,13 @@ def test_confirm_unknown_tx_raises_not_found(session):
 def test_post_confirm_hook_runs_in_same_transaction_and_failure_rolls_back(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Goal", amount=100_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Goal",
+        amount=100_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
 
     def boom(t, s):
@@ -425,7 +463,13 @@ def test_post_confirm_hook_runs_in_same_transaction_and_failure_rolls_back(sessi
 def test_post_confirm_hook_sees_posted_tx(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Goal", amount=100_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Goal",
+        amount=100_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     seen = {}
 
@@ -558,7 +602,13 @@ def test_confirm_planned_transfer_without_default_source_raises(session):
 def test_skip_payment_cancels_standalone_planned(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Friend", amount=80_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Friend",
+        amount=80_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     skipped = planned.skip_payment(session, tx.id)
     assert skipped.status == TxStatus.skipped
@@ -577,7 +627,7 @@ def test_skip_payment_marks_occurrence_skipped(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -595,7 +645,9 @@ def test_skip_payment_marks_occurrence_skipped(session):
 
 def test_skip_payment_non_planned_raises(session):
     acc = _acc(session, balance=500_000)
-    tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
+    tx = transactions.record_expense(
+        session, acc.id, 1000, "COP", date(2026, 6, 1), "x", category_id=a_category(session, TxType.expense)
+    )
     with pytest.raises(IllegalTransition):
         planned.skip_payment(session, tx.id)
 
@@ -603,7 +655,13 @@ def test_skip_payment_non_planned_raises(session):
 def test_restore_payment_returns_skipped_to_the_queue(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     planned.skip_payment(session, tx.id)
     restored = planned.restore_payment(session, tx.id)
@@ -616,7 +674,13 @@ def test_restore_payment_returns_skipped_to_the_queue(session):
 def test_restore_payment_moves_no_balance(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     planned.skip_payment(session, tx.id)
     planned.restore_payment(session, tx.id)
@@ -647,7 +711,7 @@ def test_restore_payment_returns_occurrence_to_planned(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -670,7 +734,7 @@ def test_restore_payment_then_materialize_does_not_duplicate(session):
         mode=RecurringMode.manual,
         amount=50_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -688,7 +752,13 @@ def test_restore_payment_then_materialize_does_not_duplicate(session):
 def test_restored_payment_can_be_confirmed(session):
     acc = _acc(session, balance=500_000)
     tx = planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     planned.skip_payment(session, tx.id)
     planned.restore_payment(session, tx.id)
@@ -702,10 +772,18 @@ def test_restore_payment_non_skipped_raises(session, status):
     acc = _acc(session, balance=500_000)
     if status == "planned":
         tx = planned.plan_payment(
-            session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+            session,
+            payee="Claro",
+            amount=85_000,
+            currency="COP",
+            due_date=date(2026, 6, 20),
+            account_id=acc.id,
+            category_id=a_category(session),
         )
     else:
-        tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 1), "x")
+        tx = transactions.record_expense(
+            session, acc.id, 1000, "COP", date(2026, 6, 1), "x", category_id=a_category(session, TxType.expense)
+        )
     with pytest.raises(IllegalTransition):
         planned.restore_payment(session, tx.id)
 
@@ -741,7 +819,13 @@ def test_to_pay_excludes_upcoming_planned_income(session):
     acc = _acc(session, balance=500_000)
     _planned_income(session, acc.id, due=date(2026, 6, 20))
     planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 21), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 21),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30), today=date(2026, 6, 1))
     assert [t.payee for t in queue.all_items()] == ["Claro"]
@@ -752,7 +836,13 @@ def test_to_pay_excludes_overdue_planned_income(session):
     acc = _acc(session, balance=500_000)
     _planned_income(session, acc.id, due=date(2026, 6, 5))
     planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 6), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 6),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     queue = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30), today=date(2026, 6, 10))
     assert [t.payee for t in queue.overdue] == ["Claro"]
@@ -785,7 +875,13 @@ def test_to_pay_keeps_expenses_and_transfers(session):
     acc = _acc(session, balance=500_000)
     dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     planned.plan_payment(
-        session, payee="Claro", amount=85_000, currency="COP", due_date=date(2026, 6, 20), account_id=acc.id
+        session,
+        payee="Claro",
+        amount=85_000,
+        currency="COP",
+        due_date=date(2026, 6, 20),
+        account_id=acc.id,
+        category_id=a_category(session),
     )
     _planned_transfer(session, dst.id, amount=200_000, due=date(2026, 6, 21))
     queue = planned.to_pay(session, date(2026, 6, 1), date(2026, 6, 30), today=date(2026, 6, 1))

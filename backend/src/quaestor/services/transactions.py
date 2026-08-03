@@ -17,7 +17,6 @@ from sqlmodel import Session, select
 from ..domain.errors import NotFound, TransferImbalance, ValidationError
 from ..domain.models import (
     Account,
-    Category,
     Source,
     Tag,
     Transaction,
@@ -29,6 +28,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortableColumns, SortField, SortSpec
+from . import categories
 
 PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
 
@@ -64,6 +64,7 @@ def _record(
     category_id: int | None,
     notes: str | None,
     source: str,
+    new_category: str | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     if amount <= 0:
@@ -73,12 +74,7 @@ def _record(
     acc = _require_account(session, account_id)
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
-    if category_id is not None:
-        cat = session.get(Category, category_id)
-        if cat is None:
-            raise ValidationError(f"category {category_id} not found")
-        if cat.archived:
-            raise ValidationError(f"category {category_id} is archived")
+    category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -109,6 +105,7 @@ def record_expense(
     category_id: int | None = None,
     notes: str | None = None,
     source: str = "manual",
+    new_category: str | None = None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
 
@@ -121,15 +118,21 @@ def record_expense(
         currency: Must match the account's currency.
         date: Transaction date.
         payee: Name of the payee.
-        category_id: Optional category.
+        category_id: An existing expense category. Required unless
+            `new_category` is given (ADR-0042).
         notes: Optional free-text notes.
         source: Origin of the transaction ("manual", "agent", or "import").
+        new_category: Name of an expense category to create and file this
+            expense under, in the same action.
 
     Returns:
         The persisted Transaction.
 
     Raises:
-        ValidationError: Invalid amount, currency mismatch, or unknown category.
+        ValidationError: Invalid amount, currency mismatch, or any refusal from
+            `categories.resolve_for_movement` — no category, both categories,
+            a name already taken, or a category missing, archived or of the
+            wrong direction.
         NotFound: Account does not exist.
     """
     return _record(
@@ -143,6 +146,7 @@ def record_expense(
         category_id,
         notes,
         source,
+        new_category,
     )
 
 
@@ -156,6 +160,7 @@ def record_income(
     category_id: int | None = None,
     notes: str | None = None,
     source: str = "manual",
+    new_category: str | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -168,15 +173,21 @@ def record_income(
         currency: Must match the account's currency.
         date: Transaction date.
         payee: Name of the income source.
-        category_id: Optional category.
+        category_id: An existing income category. Required unless
+            `new_category` is given (ADR-0042).
         notes: Optional free-text notes.
         source: Origin of the transaction ("manual", "agent", or "import").
+        new_category: Name of an income category to create and file this
+            income under, in the same action.
 
     Returns:
         The persisted Transaction.
 
     Raises:
-        ValidationError: Invalid amount, currency mismatch, or unknown category.
+        ValidationError: Invalid amount, currency mismatch, or any refusal from
+            `categories.resolve_for_movement` — no category, both categories,
+            a name already taken, or a category missing, archived or of the
+            wrong direction.
         NotFound: Account does not exist.
     """
     return _record(
@@ -190,6 +201,7 @@ def record_income(
         category_id,
         notes,
         source,
+        new_category,
     )
 
 
@@ -222,6 +234,7 @@ def transfer(
     notes: str | None = None,
     source: str = "manual",
     amount_received: int | None = None,
+    category_id: int | None = None,
 ) -> tuple[Transaction, Transaction]:
     """Create a transfer between two accounts as two linked Transaction rows.
 
@@ -244,16 +257,20 @@ def transfer(
         amount_received: Positive integer cents RECEIVED, in the destination
             account's currency. Required when the two accounts' currencies
             differ; defaults to `amount` when they match.
+        category_id: Accepted only as `None`. A transfer carries no category
+            (ADR-0042); the parameter exists so attaching one is refused here
+            rather than silently ignored.
 
     Returns:
         Tuple (leg_from, leg_to) — the two persisted Transaction rows.
 
     Raises:
-        ValidationError: Non-positive amount, currency mismatch, or a
-            cross-currency transfer missing the received amount.
+        ValidationError: Non-positive amount, currency mismatch, a
+            cross-currency transfer missing the received amount, or a category.
         TransferImbalance: from_account_id == to_account_id.
         NotFound: Either account does not exist.
     """
+    categories.resolve_for_movement(session, TxType.transfer, category_id)
     if amount <= 0:
         raise ValidationError("amount must be > 0")
     if amount_received is not None and amount_received <= 0:
@@ -398,11 +415,16 @@ def update_transaction(
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
     Amount/account/currency/type are immutable here, so no balance ever moves.
-    `notes`/`category_id` use the _UNSET sentinel to allow setting them to None.
+    `notes` uses the _UNSET sentinel to allow setting it to None; `category_id`
+    keeps the sentinel to mean "leave it alone", but passing None no longer
+    clears it — the rule holds for the life of the movement, not only at the
+    moment it is created (ADR-0042).
 
     Raises:
         NotFound: If the transaction does not exist.
-        ValidationError: A non-None category_id that is missing or archived.
+        ValidationError: Any refusal from `categories.resolve_for_movement` —
+            clearing an expense's or income's category, giving one to a
+            transfer, or a category missing, archived or of the wrong direction.
     """
     tx = get_transaction(session, tx_id)
     if payee is not None:
@@ -412,13 +434,7 @@ def update_transaction(
     if date is not None:
         tx.date = date
     if category_id is not _UNSET:
-        if category_id is not None:
-            cat = session.get(Category, category_id)
-            if cat is None:
-                raise ValidationError(f"category {category_id} not found")
-            if cat.archived:
-                raise ValidationError(f"category {category_id} is archived")
-        tx.category_id = category_id
+        tx.category_id = categories.resolve_for_movement(session, tx.type, category_id)
     session.add(tx)
     session.commit()
     session.refresh(tx)

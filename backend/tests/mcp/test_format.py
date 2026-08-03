@@ -333,7 +333,7 @@ def test_recurring_restored():
         mode=RecurringMode.auto,
         amount=2_000_000,
         currency="COP",
-        category_id=None,
+        category_id=1,
         account_id=1,
         interval_unit=IntervalUnit.month,
         interval_count=1,

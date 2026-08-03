@@ -102,6 +102,7 @@ def given_recorded_tagged_expense(world: World, amount: str, currency: str, tag:
         currency,
         world.today,
         payee,
+        category_id=world.background_category(TxType.expense),
     )
     tags.tag_transaction(world.session, tx.id, [tag])
     world.last_expense_id = tx.id
@@ -120,6 +121,7 @@ def given_planned_payment(world: World, amount: str, currency: str, payee: str, 
         currency,
         Date.fromisoformat(due),
         _scenario_account_id(world, currency),
+        category_id=world.background_category(TxType.expense),
     )
 
 
@@ -156,7 +158,7 @@ def when_register_expense_detailed(
             currency,
             Date.fromisoformat(date) if date else world.today,
             payee,
-            category_id=world.categories[category] if category else None,
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
             notes=notes,
         )
         world.last_expense_id = tx.id
@@ -181,6 +183,7 @@ def when_register_income(world: World, amount: str, currency: str, account: str,
         currency,
         world.today,
         payee,
+        category_id=world.background_category(TxType.income),
     )
 
 

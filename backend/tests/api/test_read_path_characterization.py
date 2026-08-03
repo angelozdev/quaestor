@@ -5,7 +5,7 @@ including rollover across months (May available rolls into June)."""
 from tests.support.fx import set_trm as _set_trm
 
 
-def _seed(client, auth):
+def _seed(client, auth, expense_category, income_category):
     _set_trm(client, auth)
     acc = client.post(
         "/api/accounts",
@@ -44,11 +44,11 @@ def _seed(client, auth):
             "/api/transactions",
             json={
                 "type": "expense",
+                "category_id": cat_id,
                 "account_id": acc["id"],
                 "amount": amount,
                 "currency": "COP",
                 "date": f"2026-06-{day}",
-                "category_id": cat_id,
                 "payee": "seed",
             },
             headers=auth,
@@ -57,6 +57,7 @@ def _seed(client, auth):
         "/api/transactions",
         json={
             "type": "income",
+            "category_id": income_category,
             "account_id": acc["id"],
             "amount": 2_000_000,
             "currency": "COP",
@@ -73,8 +74,8 @@ def _seed(client, auth):
     return {"food": food["id"], "rent": rent["id"]}
 
 
-def test_report_totals_and_sections_are_stable(client, auth):
-    _seed(client, auth)
+def test_report_totals_and_sections_are_stable(client, auth, expense_category, income_category):
+    _seed(client, auth, expense_category, income_category)
     body = client.get("/api/reports", params={"month": "2026-06"}, headers=auth).json()
     assert body["income"] == 2_000_000
     assert body["expense"] == 880_000
@@ -85,15 +86,15 @@ def test_report_totals_and_sections_are_stable(client, auth):
     assert by_group == {"Living": 880_000}
 
 
-def test_safe_to_spend_is_stable(client, auth):
-    _seed(client, auth)
+def test_safe_to_spend_is_stable(client, auth, expense_category, income_category):
+    _seed(client, auth, expense_category, income_category)
     sts = client.get("/api/budgets/safe-to-spend", params={"month": "2026-06"}, headers=auth).json()
     assert sts["year_month"] == "2026-06"
     assert sts["assigned_envelopes"] == 100_000
 
 
-def test_list_budgets_pins_rollover(client, auth):
-    ids = _seed(client, auth)
+def test_list_budgets_pins_rollover(client, auth, expense_category, income_category):
+    ids = _seed(client, auth, expense_category, income_category)
     lines = client.get("/api/budgets", params={"month": "2026-06"}, headers=auth).json()
     food = next(row for row in lines if row["category_id"] == ids["food"])
     assert food["assigned"] == 100_000
@@ -103,7 +104,7 @@ def test_list_budgets_pins_rollover(client, auth):
     assert food["status"] == "under"
 
 
-def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(client, auth):
+def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(client, auth, expense_category):
     _set_trm(client, auth)
     acc = client.post(
         "/api/accounts",
@@ -114,6 +115,7 @@ def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(
         "/api/transactions",
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": acc["id"],
             "amount": 60_000,
             "currency": "COP",
@@ -144,7 +146,7 @@ def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(
     assert row["cop_equivalent"] == 60_000
 
 
-def test_report_totals_convert_usd_at_the_current_trm_not_a_frozen_rate(client, auth):
+def test_report_totals_convert_usd_at_the_current_trm_not_a_frozen_rate(client, auth, expense_category):
     _set_trm(client, auth, "4000")
     acc = client.post(
         "/api/accounts",
@@ -155,6 +157,7 @@ def test_report_totals_convert_usd_at_the_current_trm_not_a_frozen_rate(client, 
         "/api/transactions",
         json={
             "type": "expense",
+            "category_id": expense_category,
             "account_id": acc["id"],
             "amount": 1_000,
             "currency": "USD",

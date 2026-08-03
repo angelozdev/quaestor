@@ -15,7 +15,6 @@ from sqlmodel import Session
 from ..domain.errors import IllegalTransition, NotFound, ValidationError
 from ..domain.models import (
     Account,
-    Category,
     OccurrenceStatus,
     Settings,
     Source,
@@ -27,6 +26,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.planned import OutstandingQueue
 from ..domain.rules import delta_balance, transfer_deltas
+from . import categories as _categories
 from . import occurrences as _occ
 from . import transactions as _tx
 
@@ -56,11 +56,17 @@ def plan_payment(
     account_id: int,
     category_id: int | None = None,
     notes: str | None = None,
+    new_category: str | None = None,
 ) -> Transaction:
     """Create a standalone `planned` expense due on `due_date`. No balance change.
 
+    Money that is owed already says what it is for: the category is required
+    from the moment the payment is planned, not from the moment it is confirmed
+    (ADR-0042).
+
     Raises:
-        ValidationError: amount <= 0, unsupported currency, unknown/archived category.
+        ValidationError: amount <= 0, unsupported currency, or any refusal from
+            `categories.resolve_for_movement`.
         NotFound: account does not exist.
     """
     if amount <= 0:
@@ -70,12 +76,7 @@ def plan_payment(
     acc = _require_account(session, account_id)
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
-    if category_id is not None:
-        cat = session.get(Category, category_id)
-        if cat is None:
-            raise ValidationError(f"category {category_id} not found")
-        if cat.archived:
-            raise ValidationError(f"category {category_id} is archived")
+    category_id = _categories.resolve_for_movement(session, TxType.expense, category_id, new_category)
     tx = Transaction(
         date=due_date,
         payee=payee or "",

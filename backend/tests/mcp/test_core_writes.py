@@ -1,5 +1,6 @@
 from datetime import date
 
+from quaestor.domain.models import TxType
 from quaestor.mcp.tools import core
 from quaestor.mcp.tools.core import (
     GetFxRateInput,
@@ -9,6 +10,8 @@ from quaestor.mcp.tools.core import (
     TransferInput,
 )
 from quaestor.services import accounts, fx
+
+from tests.support.categories import a_named_category
 
 
 def test_record_expense_confirms_and_moves_balance(session, seeded):
@@ -33,7 +36,7 @@ def test_record_expense_confirms_and_moves_balance(session, seeded):
 def test_record_expense_resolves_account_case_insensitively(session, seeded):
     out = core.record_expense(
         session,
-        RecordExpenseInput(payee="Coffee", amount=800_000, account="bancolombia"),
+        RecordExpenseInput(payee="Coffee", amount=800_000, account="bancolombia", category="Groceries"),
     )
     assert "Expense recorded" in out
 
@@ -41,7 +44,7 @@ def test_record_expense_resolves_account_case_insensitively(session, seeded):
 def test_record_expense_unknown_account_returns_guidance(session, seeded):
     out = core.record_expense(
         session,
-        RecordExpenseInput(payee="X", amount=1000, account="Nequi"),
+        RecordExpenseInput(payee="X", amount=1000, account="Nequi", category="Groceries"),
     )
     assert "Account 'Nequi' not found" in out
     assert "Bancolombia" in out  # lists what exists
@@ -50,7 +53,9 @@ def test_record_expense_unknown_account_returns_guidance(session, seeded):
 def test_record_expense_applies_tags(session, seeded):
     core.record_expense(
         session,
-        RecordExpenseInput(payee="Trip", amount=2_000_000, account="Bancolombia", tags=["trip", "june"]),
+        RecordExpenseInput(
+            payee="Trip", amount=2_000_000, account="Bancolombia", tags=["trip", "june"], category="Groceries"
+        ),
     )
     # tag filter through the read service proves the link was created
     from quaestor.services import transactions as tx_service
@@ -59,9 +64,12 @@ def test_record_expense_applies_tags(session, seeded):
 
 
 def test_record_income_increments_balance(session, seeded):
+    a_named_category(session, "Salary", TxType.income)
     out = core.record_income(
         session,
-        RecordIncomeInput(payee="Salary", amount=3_200_000, account="Bancolombia", date=date(2026, 6, 18)),
+        RecordIncomeInput(
+            payee="Salary", amount=3_200_000, account="Bancolombia", date=date(2026, 6, 18), category="Salary"
+        ),
     )
     assert "Income recorded" in out
     assert accounts.get_account(session, seeded["account"].id).balance == 13_200_000
@@ -108,10 +116,12 @@ def test_record_expense_unknown_category_returns_guidance(session, seeded):
 
 
 def test_usd_expense_without_trm_records_and_omits_equivalent_line(session):
+    a_named_category(session, "Groceries", TxType.expense)
     accounts.create_account(session, "Amex", "credit", "USD", balance=0)
     out = core.record_expense(
         session,
         RecordExpenseInput(
+            category="Groceries",
             payee="Spotify",
             amount=1200,
             account="Amex",
@@ -125,11 +135,13 @@ def test_usd_expense_without_trm_records_and_omits_equivalent_line(session):
 
 
 def test_usd_expense_with_trm_shows_cop_equivalent(session):
+    a_named_category(session, "Groceries", TxType.expense)
     accounts.create_account(session, "Amex", "credit", "USD", balance=0)
     fx.set_trm(session, "4000")
     out = core.record_expense(
         session,
         RecordExpenseInput(
+            category="Groceries",
             payee="Spotify",
             amount=1200,
             account="Amex",

@@ -40,6 +40,7 @@ from unittest import mock
 
 from quaestor.domain import money as money_mod
 from quaestor.domain.errors import MissingRate, QuaestorError
+from quaestor.domain.models import TxType
 from quaestor.domain.money import major_to_cents
 from quaestor.jobs import daily as daily_job
 from quaestor.services import accounts, budgets, categories, fx, reports, transactions
@@ -141,7 +142,7 @@ def _record_default_expense(world: World, amount: str, currency: str, on_date, c
         currency,
         on_date,
         "Acceptance payee",
-        category_id=category_id,
+        category_id=category_id if category_id is not None else world.background_category(TxType.expense),
     )
     world.last_expense_id = tx.id
 
@@ -238,7 +239,7 @@ def when_register_expense(world: World, amount: str, currency: str, account: str
             currency,
             world.today,
             "Acceptance payee",
-            category_id=world.categories[category] if category else None,
+            category_id=world.categories[category] if category else world.background_category(TxType.expense),
         )
         world.last_expense_id = tx.id
 

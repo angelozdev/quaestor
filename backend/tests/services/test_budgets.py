@@ -6,6 +6,7 @@ from quaestor.domain.models import AccountType, IntervalUnit, RecurringMode, TxT
 from quaestor.services import accounts, budgets, categories, fx, occurrences, planned, transactions
 from quaestor.services.budgets import budget_status as budget_status_for
 
+from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
 
 
@@ -61,7 +62,8 @@ def test_budget_status_sums_only_expense_posted_in_month_category(session):
     transactions.record_expense(session, acc.id, 20_000, "COP", date(2026, 6, 10), "x", category_id=cat.id)
     transactions.record_expense(session, acc.id, 5_000, "COP", date(2026, 7, 1), "next month", category_id=cat.id)
     transactions.record_expense(session, acc.id, 9_000, "COP", date(2026, 6, 12), "other cat", category_id=other.id)
-    transactions.record_income(session, acc.id, 50_000, "COP", date(2026, 6, 12), "salary", category_id=cat.id)
+    salary = a_category(session, TxType.income)
+    transactions.record_income(session, acc.id, 50_000, "COP", date(2026, 6, 12), "salary", category_id=salary)
     s = budget_status_for(session, cat.id, "2026-06")
     assert s.spent == 20_000
     assert s.assigned == 100_000
@@ -131,7 +133,7 @@ def _income(session, acc, amount=1_000_000, start=date(2026, 6, 1)):
         mode=RecurringMode.auto,
         amount=amount,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session, TxType.income),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -146,8 +148,14 @@ def test_safe_to_spend_basic_cascade(session):
     _income(session, acc)  # 1,000,000 forecast
     budgets.set_budget(session, cat.id, "2026-06", 300_000)
     planned.plan_payment(
-        session, payee="Rent", amount=200_000, currency="COP", due_date=date(2026, 6, 15), account_id=acc.id
-    )  # no category -> committed
+        session,
+        payee="Rent",
+        amount=200_000,
+        currency="COP",
+        due_date=date(2026, 6, 15),
+        account_id=acc.id,
+        category_id=a_category(session),
+    )
     sts = budgets.safe_to_spend(session, "2026-06")
     assert sts.income_forecast == 1_000_000
     assert sts.committed == 200_000
@@ -182,7 +190,7 @@ def test_safe_to_spend_double_count_guard_auto_recurring(session):
         mode=RecurringMode.auto,
         amount=250_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -206,7 +214,7 @@ def test_safe_to_spend_due_driven_stability_manual(session):
         mode=RecurringMode.manual,
         amount=80_000,
         currency="COP",
-        category_id=None,
+        category_id=a_category(session),
         account_id=acc.id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
@@ -225,8 +233,14 @@ def test_safe_to_spend_confirm_planned_does_not_move_it(session):
     acc = _acc(session)
     _income(session, acc)
     tx = planned.plan_payment(
-        session, payee="Vet", amount=120_000, currency="COP", due_date=date(2026, 6, 15), account_id=acc.id
-    )  # no category
+        session,
+        payee="Vet",
+        amount=120_000,
+        currency="COP",
+        due_date=date(2026, 6, 15),
+        account_id=acc.id,
+        category_id=a_category(session),
+    )
     free_before = budgets.safe_to_spend(session, "2026-06").free
     planned.confirm_payment(session, tx.id)  # planned expense -> posted unbudgeted
     free_after = budgets.safe_to_spend(session, "2026-06").free

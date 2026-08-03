@@ -15,13 +15,17 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from quaestor.domain.models import AccountType, Transaction
+from quaestor.domain.models import AccountType, Transaction, TxType
 from quaestor.domain.planned import OutstandingQueue
 from quaestor.services import accounts, transactions
 
+from tests.support.categories import a_category
+
 
 def _tx(session, account_id: int, payee: str, amount: int, due: date) -> Transaction:
-    return transactions.record_expense(session, account_id, amount, "COP", due, payee)
+    return transactions.record_expense(
+        session, account_id, amount, "COP", due, payee, category_id=a_category(session, TxType.expense)
+    )
 
 
 def test_outstanding_queue_is_empty_when_both_buckets_empty():
@@ -44,7 +48,9 @@ def test_outstanding_queue_total_is_read_time_sum_of_both_buckets(session):
 
 def test_outstanding_queue_total_converts_usd_at_the_given_trm(session):
     a = accounts.create_account(session, "Wise", AccountType.debit, "USD", balance=10_000_000)
-    usd = transactions.record_expense(session, a.id, 1_000, "USD", date(2026, 7, 1), "Sub")
+    usd = transactions.record_expense(
+        session, a.id, 1_000, "USD", date(2026, 7, 1), "Sub", category_id=a_category(session, TxType.expense)
+    )
     q = OutstandingQueue(upcoming=[usd])
     assert q.total_cop_cents(Decimal("4000")) == 4_000_000
     assert q.total_cop_cents(Decimal("4100")) == 4_100_000

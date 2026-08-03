@@ -59,7 +59,7 @@ from .fx_read_time import _DEC
 from .planned_payments import _DUE, _payment, _plan
 from .recurring_engine import _WHEN, _declare, _item, _linked_tx, _when
 from .transactions_crud import _last_expense
-from .world import MISSING_ID, World
+from .world import MISSING_ID, NO_CATEGORY, World
 
 # The Alembic head before this feature. The migration that installs the
 # mandatory-category rule is the revision after it (AC-18/19).
@@ -552,7 +552,7 @@ def when_record_income_creating_category(
     r' (?P<currency>[A-Z]{3}) to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"' + _NO_CATEGORY_DECLARATION
 )
 def when_declare_uncategorised_payment(world: World, payee: str, **kw) -> None:
-    _declare(world, name=payee, payee=payee, tx_type=TxType.expense, end=None, category=None, **kw)
+    _declare(world, name=payee, payee=payee, tx_type=TxType.expense, end=None, category=NO_CATEGORY, **kw)
 
 
 @step(
@@ -563,7 +563,7 @@ def when_declare_uncategorised_payment(world: World, payee: str, **kw) -> None:
 def when_try_plan_uncategorised(
     world: World, amount: str, currency: str, payee: str, account: str, due: str, **_
 ) -> None:
-    _plan(world, amount, currency, payee, account, due)
+    _plan(world, amount, currency, payee, account, due, category=NO_CATEGORY)
 
 
 @step(r'the user moves the repeating payment to "(?P<name>[^"]+)" to category "(?P<category>[^"]+)"')

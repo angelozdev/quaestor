@@ -12,9 +12,21 @@ from datetime import date, timedelta
 from typing import Any
 
 from quaestor.db import init_db, make_engine
+from quaestor.domain.models import TxType
+from quaestor.domain.rules import category_is_income_for
+from quaestor.services.categories import create_category
 from sqlmodel import Session
 
 MISSING_ID = 999_999_321
+
+NO_CATEGORY = object()
+"""What a step submits when the scenario says *with no category* on purpose.
+
+Distinct from `None`, which means the scenario simply did not mention one — a
+background movement, which `World.background_category` files under a category
+it never names. Collapsing the two would hand a category to the very steps
+that exist to be refused without one.
+"""
 
 
 class World:
@@ -35,6 +47,8 @@ class World:
         self.default_accounts: dict[str, int] = {}
         # category name -> id
         self.categories: dict[str, int] = {}
+        # direction -> id (implicit categories for background movements)
+        self.background_categories: dict[bool, int] = {}
 
         self.last_expense_id: int | None = None
         self.viewed_cop_cents: int | None = None
@@ -80,6 +94,41 @@ class World:
     def account_id_or_missing(self, name: str) -> int:
         """Id of a named account, or a nonexistent id when it was never created."""
         return self.accounts.get(name, MISSING_ID)
+
+    def submitted_category(self, name, tx_type: TxType) -> int | None:
+        """The category id a step submits for a movement.
+
+        The one it named; nothing when the scenario said *with no category*;
+        the background one when the scenario never mentioned a category at all.
+        """
+        if name is NO_CATEGORY:
+            return None
+        if name is None:
+            return self.background_category(tx_type)
+        return self.categories.get(name, MISSING_ID)
+
+    def background_category(self, tx_type: TxType) -> int | None:
+        """The category a background movement is filed under.
+
+        Every amended spec header says the same thing: a `Given` movement *is*
+        filed under a category the scenario does not name — it exists, it is
+        just irrelevant to what the scenario pins. This is that category, one
+        per direction, created on first use so a scenario that asserts the
+        whole offering never sees one it did not ask for.
+
+        A transfer carries none, so it gets none: the step that declares a
+        repeating transfer must still reach the service and be refused there.
+        """
+        if tx_type == TxType.transfer:
+            return None
+        is_income = category_is_income_for(tx_type)
+        known = self.background_categories.get(is_income)
+        if known is not None:
+            return known
+        direction = "income" if is_income else "expense"
+        cat = create_category(self.session, f"unnamed {direction}", is_income=is_income)
+        self.background_categories[is_income] = cat.id
+        return cat.id
 
     # ------------------------------------------------------------- errors
 

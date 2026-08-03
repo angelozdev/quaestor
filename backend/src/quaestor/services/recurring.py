@@ -13,7 +13,6 @@ from sqlmodel import Session, select
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import (
     Account,
-    Category,
     IntervalUnit,
     RecurringItem,
     RecurringMode,
@@ -22,7 +21,7 @@ from ..domain.models import (
 )
 from ..domain.money import is_supported
 from ..domain.recurrence import due_dates, has_ended
-from . import occurrences
+from . import categories, occurrences
 
 _UNSET = object()
 
@@ -74,6 +73,7 @@ def create_recurring(
     start_date: Date,
     end_date: Date | None = None,
     declared_on: Date | None = None,
+    new_category: str | None = None,
 ) -> RecurringItem:
     """Create a recurring item. Validates frequency, money, and references.
 
@@ -84,9 +84,14 @@ def create_recurring(
     start date has nothing pending and the engine charges it normally, which is
     what keeps the catch-up after downtime working.
 
+    Every charge the engine produces from this item is born carrying its
+    category (`occurrences._create_occurrence_tx` copies it), so the obligation
+    itself cannot be declared without one (ADR-0042).
+
     Raises:
         ValidationError: amount <= 0, unsupported currency, transfer type,
-            interval_count < 1, end_date < start_date, unknown/archived category.
+            interval_count < 1, end_date < start_date, or any refusal from
+            `categories.resolve_for_movement`.
         NotFound: account does not exist.
     """
     type = TxType(type)
@@ -119,12 +124,7 @@ def create_recurring(
                 as_of,
             ),
         )
-    if category_id is not None:
-        cat = session.get(Category, category_id)
-        if cat is None:
-            raise ValidationError(f"category {category_id} not found")
-        if cat.archived:
-            raise ValidationError(f"category {category_id} is archived")
+    category_id = categories.resolve_for_movement(session, type, category_id, new_category)
     item = RecurringItem(
         name=name,
         payee=payee or "",
@@ -196,12 +196,15 @@ def update_recurring(
     """Edit a recurring item. type and currency are immutable. Changes affect only
     future un-materialized occurrences (materialize_due reads current fields).
 
-    `category_id=_UNSET`/`end_date=_UNSET` leave unchanged; `=None` clears them.
+    `category_id=_UNSET`/`end_date=_UNSET` leave unchanged; `end_date=None`
+    clears it. `category_id=None` does not clear the category — an obligation
+    cannot be left uncategorised any more than a movement can (ADR-0042).
 
     Raises:
         NotFound: the item or a new account does not exist.
         ValidationError: amount <= 0, interval_count < 1, end_date < start_date,
-            account currency mismatch, unknown/archived category.
+            account currency mismatch, or any refusal from
+            `categories.resolve_for_movement`.
     """
     item = session.get(RecurringItem, recurring_id)
     if item is None:
@@ -254,13 +257,7 @@ def update_recurring(
             raise ValidationError(f"currency {item.currency} does not match account currency {acc.currency}")
         item.account_id = account_id
     if category_id is not _UNSET:
-        if category_id is not None:
-            cat = session.get(Category, category_id)
-            if cat is None:
-                raise ValidationError(f"category {category_id} not found")
-            if cat.archived:
-                raise ValidationError(f"category {category_id} is archived")
-        item.category_id = category_id
+        item.category_id = categories.resolve_for_movement(session, item.type, category_id)
     session.add(item)
     session.commit()
     session.refresh(item)

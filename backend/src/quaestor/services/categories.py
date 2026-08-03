@@ -5,7 +5,8 @@ from __future__ import annotations
 from sqlmodel import Session, select
 
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Category, CategoryGroup
+from ..domain.models import Category, CategoryGroup, TxType
+from ..domain.rules import category_is_income_for
 
 
 def create_group(session: Session, name: str, sort_order: int = 0) -> CategoryGroup:
@@ -88,12 +89,19 @@ def create_category(
     return cat
 
 
-def list_categories(session: Session, include_archived: bool = False) -> list[Category]:
+def list_categories(
+    session: Session,
+    include_archived: bool = False,
+    is_income: bool | None = None,
+) -> list[Category]:
     """List all categories.
 
     Args:
         session: Database session.
         include_archived: Whether to include archived categories (default: False).
+        is_income: Keep only categories of one direction. `None` (default)
+            returns both; `True`/`False` is the offering shown while recording
+            money coming in / going out (ADR-0042).
 
     Returns:
         List of Category objects.
@@ -101,6 +109,8 @@ def list_categories(session: Session, include_archived: bool = False) -> list[Ca
     stmt = select(Category)
     if not include_archived:
         stmt = stmt.where(Category.archived == False)  # noqa: E712
+    if is_income is not None:
+        stmt = stmt.where(Category.is_income == is_income)
     return list(session.exec(stmt).all())
 
 
@@ -216,6 +226,89 @@ def unarchive_category(session: Session, category_id: int) -> Category:
     session.commit()
     session.refresh(cat)
     return cat
+
+
+def _by_name(session: Session, name: str) -> Category | None:
+    """The category holding this name, archived or not, ignoring case."""
+    folded = name.strip().casefold()
+    return next(
+        (cat for cat in session.exec(select(Category)).all() if cat.name.casefold() == folded),
+        None,
+    )
+
+
+def _created_for_movement(session: Session, name: str, wants_income: bool) -> Category:
+    if not name or not name.strip():
+        raise ValidationError("category name is required")
+    taken = _by_name(session, name)
+    if taken is not None and taken.archived:
+        raise ValidationError(
+            f"category {taken.name!r} already exists but is archived — restore it instead of creating a second one"
+        )
+    if taken is not None:
+        raise ValidationError(f"category {taken.name!r} already exists")
+    return create_category(session, name, is_income=wants_income)
+
+
+def _chosen_for_movement(session: Session, category_id: int, wants_income: bool) -> Category:
+    cat = session.get(Category, category_id)
+    if cat is None:
+        raise ValidationError(f"category {category_id} not found")
+    if cat.archived:
+        raise ValidationError(f"category {category_id} is archived")
+    if cat.is_income != wants_income:
+        held = "income" if cat.is_income else "expense"
+        needed = "income" if wants_income else "expense"
+        raise ValidationError(
+            f"category {cat.name!r} is an {held} category, so it does not match the "
+            f"direction of the money — this movement needs an {needed} category"
+        )
+    return cat
+
+
+def resolve_for_movement(
+    session: Session,
+    tx_type: TxType,
+    category_id: int | None = None,
+    new_category: str | None = None,
+) -> int | None:
+    """The category a movement carries, or the refusal that stops it (ADR-0042).
+
+    The single answer to "which category does this movement carry?", called by
+    every write path so the rule has one definition instead of five copies.
+
+    Args:
+        session: Database session.
+        tx_type: What kind of movement this is. A transfer carries no category.
+        category_id: An existing category chosen by the user.
+        new_category: A name to create and file this movement under, in the
+            same action — mutually exclusive with `category_id`.
+
+    Returns:
+        The category id to store; `None` for a transfer.
+
+    Raises:
+        ValidationError: A transfer given a category; neither or both of the
+            two arguments on an expense or income; a name an active category
+            already holds (or an archived one, offering to restore it); a
+            category that is missing, archived, or of the wrong direction.
+    """
+    tx_type = TxType(tx_type)
+    if tx_type == TxType.transfer:
+        if category_id is not None or new_category is not None:
+            raise ValidationError(
+                "a transfer carries no category — moving money between your own accounts is neither spending nor income"
+            )
+        return None
+    if category_id is not None and new_category is not None:
+        raise ValidationError("choose an existing category or create one, not both")
+    wants_income = category_is_income_for(tx_type)
+    if new_category is not None:
+        return _created_for_movement(session, new_category, wants_income).id
+    if category_id is None:
+        direction = "income" if wants_income else "expense"
+        raise ValidationError(f"category is required: every {direction} must say what it was for")
+    return _chosen_for_movement(session, category_id, wants_income).id
 
 
 def unarchive_group(session: Session, group_id: int) -> CategoryGroup:
