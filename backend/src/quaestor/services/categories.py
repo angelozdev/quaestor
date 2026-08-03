@@ -54,9 +54,13 @@ def _by_name(session: Session, name: str, is_income: bool) -> Category | None:
 
     Scoped to one direction on purpose (AC-13, owner's decision 2026-08-03): a
     name is unique per direction, not across the app. "Intereses" can be both
-    the ones paid to the bank and the ones earned from it, and no list ever
-    shows the two together because every offering is already filtered by
-    direction.
+    the ones paid to the bank and the ones earned from it. Every offering a
+    movement is recorded from is filtered by direction, so the two never compete
+    there; the transactions filter dropdown does show both (C15).
+
+    An active match wins over an archived one: where production carries both
+    (`🛡️ Auto Insurance`), naming the archived one would advise a restore into a
+    name a live category already holds.
     """
     folded = name.strip().casefold()
     matches = [
@@ -64,9 +68,6 @@ def _by_name(session: Session, name: str, is_income: bool) -> Category | None:
         for cat in session.exec(select(Category).where(Category.is_income == is_income)).all()
         if cat.name.casefold() == folded
     ]
-    # An active match wins: where production carries both (`🛡️ Auto Insurance`),
-    # naming the archived one would advise a restore into a name a live category
-    # already holds.
     return next((cat for cat in matches if not cat.archived), None) or next(iter(matches), None)
 
 
@@ -306,7 +307,7 @@ def unarchive_category(session: Session, category_id: int) -> Category:
         if live is not None and not live.archived and live.id != cat.id:
             direction = "income" if cat.is_income else "expense"
             raise ValidationError(
-                f"an active {direction} category is already named {cat.name!r} — "
+                f"an active {direction} category is already named {live.name!r} — "
                 f"rename one of the two before restoring this one"
             )
     cat.archived = False

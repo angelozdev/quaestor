@@ -284,3 +284,26 @@ pipeline generation → tests green. Bounded, one feature per task.
   listing both mark direction; this one does not. It files no money, so it did
   not block the AC-13 ruling, but it is the one surface where the pair is
   ambiguous. Fix: show the direction in the filter's labels, or group by it.
+- C16. The assistant's four category tools resolve by name with no way to say
+  which direction, so a per-direction pair makes them act on the wrong row in
+  silence. `_resolve_category_by_name` (`mcp/tools/core.py`) matches on name
+  alone, and `UpdateCategoryInput`, `ArchiveCategoryInput`,
+  `RestoreCategoryInput` and `GetCategoryInput` each carry only `category: str`.
+  Reproduced on a migrated database: with "Intereses" existing as both an
+  expense (id 1) and an income (id 2), `get_category("Intereses")` returns the
+  expense and `archive_category("Intereses")` archives it — no error, no
+  ambiguity signal, and no input the assistant could have used to mean the
+  other one. `update_category` is the sharpest of the four: it can rename or
+  re-flag the wrong direction's category.
+
+  **Latent today, and invited by this feature.** Production holds exactly one
+  duplicate name (`🛡️ Auto Insurance`, both expense, one archived) which every
+  tool resolves correctly. It goes live the first time a name exists on both
+  sides — which is precisely what AC-13's amendment was ruled to allow, and
+  what `ec25f8b` advertises for "Intereses", "Comisiones" and "Ajuste".
+
+  Refusing on ambiguity is not enough on its own: with no direction field there
+  would be no way to answer the refusal, which is the same dead end the owner
+  ruled against in N1/N2. The fix is a direction on the four inputs, plus a
+  refusal when the name still matches more than one. REST is unaffected — it
+  addresses categories by id.

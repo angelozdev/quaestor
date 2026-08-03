@@ -130,11 +130,29 @@ def _resolve_account_by_name(session: Session, name: str, *, allow_archived: boo
     raise NotFound(f"Account '{name}' not found. Available: {available}.")
 
 
-def _resolve_category_by_name(session: Session, name: str) -> Category:
+def _resolve_category_by_name(session: Session, name: str, *, allow_archived: bool = False) -> Category:
+    """The category the agent named.
+
+    Args:
+        session: Database session.
+        name: Category name, matched case-insensitively.
+        allow_archived: What `restore_category` needs — an archived category is
+            invisible otherwise, so the one tool whose whole job is an archived
+            category could never find one. An archived match then wins over an
+            active namesake, because it is the row being restored; production
+            carries both for `🛡️ Auto Insurance` (AC-13).
+
+    Raises:
+        NotFound: No category of that name is visible.
+    """
     target = name.strip().lower()
-    for category in categories.list_categories(session):
-        if category.name.lower() == target:
-            return category
+    matches = [
+        category
+        for category in categories.list_categories(session, include_archived=allow_archived)
+        if category.name.lower() == target
+    ]
+    if matches:
+        return next((category for category in matches if category.archived), matches[0])
     raise NotFound(
         f"Category '{name}' not found. Pass it as new_category to create it while recording, "
         f"or pick one from list_categories."

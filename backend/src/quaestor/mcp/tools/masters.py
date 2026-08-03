@@ -182,7 +182,7 @@ def archive_category(session: Session, inp: ArchiveCategoryInput) -> str:
 
 @_as_text
 def restore_category(session: Session, inp: RestoreCategoryInput) -> str:
-    cat = _resolve_category_by_name(session, inp.category)
+    cat = _resolve_category_by_name(session, inp.category, allow_archived=True)
     restored = categories.unarchive_category(session, cat.id)
     group = _category_group_by_id(session, restored.group_id)
     return format.category_card(restored, group)

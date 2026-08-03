@@ -267,3 +267,25 @@ def test_restoring_a_category_whose_name_is_free_still_works(session):
 
     restored = categories.unarchive_category(session, cat.id)
     assert restored.archived is False
+
+
+def test_the_refusal_names_the_category_that_actually_holds_the_name(session):
+    """Matching folds case, so the archived row's spelling is not the live one's.
+
+    Naming the archived spelling tells the owner to go rename a category no
+    list will show them under that name.
+    """
+    session.add_all(
+        [
+            Category(name="AUTO INSURANCE", is_income=False, archived=True),
+            Category(name="Auto Insurance", is_income=False, archived=False),
+        ]
+    )
+    session.commit()
+    archived = categories.list_categories(session, include_archived=True)[0]
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.unarchive_category(session, archived.id)
+
+    assert "'Auto Insurance'" in str(refusal.value)
+    assert "AUTO INSURANCE" not in str(refusal.value)
