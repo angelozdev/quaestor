@@ -76,15 +76,15 @@ def run_scenario(
                 f"[{spec_path}] scenario {scenario_name!r} failed at step "
                 f"'{keyword} {text}': {exc}"
             ) from exc
-        except Exception as exc:  # noqa: BLE001 — surfaced with traceability
+        except Exception as exc:
             raise AssertionError(
                 f"[{spec_path}] scenario {scenario_name!r} errored at step "
                 f"'{keyword} {text}': {type(exc).__name__}: {exc}"
             ) from exc
 
 
-# Import feature handler modules so their @step registrations run.
-from . import fx_read_time  # noqa: E402,F401
-from . import planned_payments  # noqa: E402,F401
-from . import recurring_engine  # noqa: E402,F401
-from . import transactions_crud  # noqa: E402,F401
+def _register_feature_step_handlers() -> None:
+    from . import fx_read_time, planned_payments, recurring_engine, transactions_crud
+
+
+_register_feature_step_handlers()

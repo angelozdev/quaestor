@@ -180,7 +180,7 @@ def _run(world: World, until: Date) -> None:
     world.run_failures = []
     try:
         result = occurrences.materialize_due(world.session, until)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         world.run_failures = [str(exc)]
         world.reopen_session()
         return

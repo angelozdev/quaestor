@@ -166,7 +166,7 @@ def test_safe_to_spend_double_count_guard_auto_recurring(session):
         interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 5),
     )
     free_before = budgets.safe_to_spend(session, "2026-06").free
-    occurrences.materialize_due(session, date(2026, 6, 30))  # posts the recurring tx
+    occurrences.materialize_due(session, date(2026, 6, 30))
     free_after = budgets.safe_to_spend(session, "2026-06").free
     assert free_before == 750_000 == free_after  # posting doesn't move it
 
@@ -180,11 +180,12 @@ def test_safe_to_spend_due_driven_stability_manual(session):
         amount=80_000, currency="COP", category_id=None, account_id=acc.id,
         interval_unit=IntervalUnit.month, interval_count=1, start_date=date(2026, 6, 20),
     )
-    occurrences.materialize_due(session, date(2026, 6, 5))  # nothing due yet
-    free_day5 = budgets.safe_to_spend(session, "2026-06").free
-    occurrences.materialize_due(session, date(2026, 6, 25))  # now a planned occurrence exists
-    free_day25 = budgets.safe_to_spend(session, "2026-06").free
-    assert free_day5 == 920_000 == free_day25  # committed projects the month regardless
+    before_first_due, after_first_due = date(2026, 6, 5), date(2026, 6, 25)
+    occurrences.materialize_due(session, before_first_due)
+    free_before_due = budgets.safe_to_spend(session, "2026-06").free
+    occurrences.materialize_due(session, after_first_due)
+    free_after_due = budgets.safe_to_spend(session, "2026-06").free
+    assert free_before_due == 920_000 == free_after_due
 
 
 def test_safe_to_spend_confirm_planned_does_not_move_it(session):
