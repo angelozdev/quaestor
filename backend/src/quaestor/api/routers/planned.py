@@ -36,6 +36,7 @@ def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
         account_id=body.account_id,
         category_id=body.category_id,
         notes=body.notes,
+        new_category=body.new_category,
     )
     return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 

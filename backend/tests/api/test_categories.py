@@ -43,3 +43,25 @@ def test_restore_category_endpoint(client, engine, auth):
     r = client.post(f"/api/categories/{cat_id}/restore", headers=auth)
     assert r.status_code == 200, r.text
     assert r.json()["archived"] is False
+
+
+def test_list_categories_filters_by_direction(client, auth):
+    client.post("/api/categories", headers=auth, json={"name": "Restaurantes"})
+    client.post("/api/categories", headers=auth, json={"name": "Salario", "is_income": True})
+
+    offered_for_income = client.get("/api/categories?is_income=true", headers=auth).json()
+    offered_for_expense = client.get("/api/categories?is_income=false", headers=auth).json()
+
+    assert [c["name"] for c in offered_for_income] == ["Salario"]
+    assert [c["name"] for c in offered_for_expense] == ["Restaurantes"]
+    assert len(client.get("/api/categories", headers=auth).json()) == 2
+
+
+def test_list_categories_direction_filter_excludes_archived_like_the_plain_list(client, engine, auth):
+    from quaestor.services import categories
+    from sqlmodel import Session
+
+    with Session(engine) as s:
+        categories.archive_category(s, categories.create_category(s, name="Suscripciones").id)
+
+    assert client.get("/api/categories?is_income=false", headers=auth).json() == []

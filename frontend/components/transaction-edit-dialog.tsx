@@ -65,10 +65,12 @@ function TransferPairInfo({ tx }: { tx: Transaction }) {
 function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => void }) {
   const qc = useQueryClient()
   const tagSuggestions = useTagNames()
+  const isTransfer = tx.type === "transfer"
+  const isIncome = tx.type === "income"
 
   const form = useTanStackForm({
     defaultValues: valuesFromTx(tx),
-    validators: { onChange: txEditSchema },
+    validators: { onChange: txEditSchema(isTransfer) },
     onSubmit: async ({ value }) => {
       update.mutate(value)
     },
@@ -119,20 +121,27 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
       <form.Field name="date">
         {(field) => <FormField field={field} label="Fecha" type="date" />}
       </form.Field>
-      <form.Field name="categoryId">
-        {(field) => (
-          <div className="space-y-1.5">
-            <Label>Categoría</Label>
-            <EntitySelect
-              value={field.state.value as number | null}
-              onChange={(v) => field.handleChange(v as never)}
-              queryKey={qk.categories(false)}
-              queryFn={() => listCategories(false)}
-              allowNullLabel="Sin categoría"
-            />
-          </div>
-        )}
-      </form.Field>
+      {!isTransfer && (
+        <form.Field name="categoryId">
+          {(field) => (
+            <div className="space-y-1.5">
+              <Label htmlFor="tx-edit-category">Categoría *</Label>
+              <EntitySelect
+                id="tx-edit-category"
+                value={field.state.value as number | null}
+                onChange={(v) => field.handleChange(v as never)}
+                queryKey={qk.categories(false, isIncome)}
+                queryFn={() => listCategories(false, isIncome)}
+              />
+              {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                <p className="text-xs text-destructive">
+                  {(field.state.meta.errors[0] as { message?: string }).message}
+                </p>
+              )}
+            </div>
+          )}
+        </form.Field>
+      )}
       <form.Field name="tags">
         {(field) => (
           <TagChipsInput

@@ -1,6 +1,12 @@
 import { z } from "zod"
 import { messages } from "@/lib/schemas/messages"
-import { intervalCount, isoDate, positiveCents, requiredString } from "@/lib/schemas/primitives"
+import {
+  categoryChosen,
+  intervalCount,
+  isoDate,
+  positiveCents,
+  requiredString,
+} from "@/lib/schemas/primitives"
 
 export const recurringCreateSchema = z
   .object({
@@ -9,6 +15,7 @@ export const recurringCreateSchema = z
     amount: positiveCents,
     currency: z.enum(["COP", "USD"], { message: messages.opcionInvalida }),
     categoryId: z.number().nullable(),
+    newCategory: z.string().trim().max(120, messages.max120),
     accountId: z.number().nullable(),
     type: z.enum(["expense", "income"], { message: messages.opcionInvalida }),
     mode: z.enum(["auto", "manual"], { message: messages.opcionInvalida }),
@@ -25,5 +32,6 @@ export const recurringCreateSchema = z
     message: messages.required,
     path: ["accountId"],
   })
+  .superRefine(categoryChosen)
 
 export type RecurringCreateValues = z.infer<typeof recurringCreateSchema>

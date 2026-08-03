@@ -1,15 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { TransactionCreateDialog } from "./transaction-create-dialog"
 
-vi.mock("@/lib/api/transactions", () => ({
+const { createTransaction, listAccounts, listCategories } = vi.hoisted(() => ({
   createTransaction: vi.fn(),
-  createTransfer: vi.fn(),
+  listAccounts: vi.fn().mockResolvedValue([]),
+  listCategories: vi.fn().mockResolvedValue([]),
 }))
-vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
-vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
+vi.mock("@/lib/api/transactions", () => ({ createTransaction, createTransfer: vi.fn() }))
+vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
+vi.mock("@/lib/api/categories", () => ({ listCategories }))
+
+const ACCOUNT = {
+  id: 1,
+  name: "Bancolombia",
+  type: "debit",
+  currency: "COP",
+  balance: 0,
+  archived: false,
+}
+const EXPENSE_CATEGORY = { id: 1, name: "Restaurantes", is_income: false }
+const INCOME_CATEGORY = { id: 2, name: "Salario", is_income: true }
 vi.mock("@/lib/api/tags", () => ({
   listTags: vi.fn().mockResolvedValue([{ id: 1, name: "viaje" }]),
 }))
@@ -38,5 +51,53 @@ describe("TransactionCreateDialog tags", () => {
     render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
     await user.type(screen.getByLabelText("Etiquetas"), "via")
     expect(await screen.findByRole("button", { name: "viaje" })).toBeInTheDocument()
+  })
+})
+
+describe("TransactionCreateDialog category", () => {
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME_CATEGORY] : [EXPENSE_CATEGORY]),
+      )
+    listAccounts.mockReset().mockResolvedValue([ACCOUNT])
+    createTransaction.mockReset().mockResolvedValue(undefined)
+  })
+
+  it("does not offer to record without a category", async () => {
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await waitFor(() => expect(listCategories).toHaveBeenCalled())
+    expect(screen.queryByText("Sin categoría")).not.toBeInTheDocument()
+  })
+
+  it("offers only expense categories for a gasto, and only income ones for an ingreso", async () => {
+    const user = userEvent.setup()
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await waitFor(() => expect(listCategories).toHaveBeenCalledWith(false, false))
+
+    await user.click(screen.getByRole("combobox", { name: "Tipo *" }))
+    await user.click(screen.getByRole("option", { name: "Ingreso" }))
+
+    await waitFor(() => expect(listCategories).toHaveBeenCalledWith(false, true))
+  })
+
+  it("sends the typed name as new_category so the movement saves in one action", async () => {
+    const user = userEvent.setup()
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await waitFor(() => expect(listCategories).toHaveBeenCalled())
+
+    await user.click(screen.getByRole("button", { name: "Crear categoría" }))
+    await user.type(screen.getByPlaceholderText("Nombre de la categoría de gasto"), "4x1000")
+    await user.click(screen.getByRole("combobox", { name: "Cuenta *" }))
+    await user.click(screen.getByRole("option", { name: "Bancolombia" }))
+    await user.type(screen.getByLabelText("Monto * (COP)"), "12000")
+    await user.type(screen.getByLabelText(/Beneficiario/), "Banco")
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ new_category: "4x1000", category_id: null, payee: "Banco" }),
+    )
   })
 })

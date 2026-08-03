@@ -82,6 +82,7 @@ def create_transaction(body: TransactionCreate, session: Session = Depends(get_s
         category_id=body.category_id,
         notes=body.notes,
         source=body.source,
+        new_category=body.new_category,
     )
     names = tags_service.set_transaction_tags(session, tx.id, body.tags) if body.tags is not None else []
     return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)

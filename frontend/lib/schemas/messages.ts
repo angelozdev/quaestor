@@ -22,6 +22,8 @@ export const messages = {
   demasiadoGrande: "Valor demasiado grande",
   finDebeSerMayorOIgual: "Fin debe ser ≥ inicio",
   mesInvalido: "Mes inválido",
+  categoriaAmbigua: "Elegí una categoría o creá una, no las dos",
+  transferenciaSinCategoria: "Una transferencia no lleva categoría",
 } as const
 
 /** `Debe ser ≥ N` — use with zod `.min(n, ...)`. */

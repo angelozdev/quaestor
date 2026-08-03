@@ -138,6 +138,7 @@ class TransactionCreate(BaseModel):
     date: Date
     payee: str = ""
     category_id: int | None = None
+    new_category: str | None = None
     notes: str | None = None
     source: str = "manual"
     tags: list[str] | None = None
@@ -232,6 +233,7 @@ class RecurringCreate(BaseModel):
     amount: int
     currency: str = "COP"
     category_id: int | None = None
+    new_category: str | None = None
     account_id: int
     interval_unit: IntervalUnit
     interval_count: int = Field(default=1, gt=0, le=1000)
@@ -298,6 +300,7 @@ class PlanPaymentIn(BaseModel):
     due_date: Date
     account_id: int
     category_id: int | None = None
+    new_category: str | None = None
     notes: str | None = None
 
 

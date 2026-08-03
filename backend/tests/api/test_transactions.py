@@ -664,3 +664,66 @@ def test_list_endpoint_default_includes_planned_at_due_date(client, auth, two_ac
     assert plan.status_code == 201, plan.text
     body = client.get("/api/transactions", headers=auth).json()
     assert [t["payee"] for t in body] == ["new", "Rent", "old"]
+
+
+def test_create_expense_creating_its_category_in_one_request(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "new_category": "4x1000",
+            "account_id": cash["id"],
+            "amount": 1_200_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Banco",
+            "notes": "gravamen",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    created = next(c for c in client.get("/api/categories", headers=auth).json() if c["name"] == "4x1000")
+    assert created["is_income"] is False
+    body = resp.json()
+    assert body["category_id"] == created["id"]
+    assert body["payee"] == "Banco" and body["notes"] == "gravamen"
+
+
+def test_create_income_creating_its_category_makes_an_income_category(client, auth, two_accounts):
+    _, bank = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "income",
+            "new_category": "Rendimientos",
+            "account_id": bank["id"],
+            "amount": 30_000_000,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Banco",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    created = client.get("/api/categories?is_income=true", headers=auth).json()
+    assert [c["name"] for c in created] == ["Rendimientos"]
+
+
+def test_create_expense_with_no_category_at_all_is_422(client, auth, two_accounts):
+    cash, _ = two_accounts
+    resp = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "account_id": cash["id"],
+            "amount": 1500,
+            "currency": "COP",
+            "date": "2026-08-03",
+            "payee": "Store",
+        },
+    )
+    assert resp.status_code == 422
+    assert "category" in resp.json()["detail"]
+    assert client.get(f"/api/accounts/{cash['id']}", headers=auth).json()["balance"] == 0

@@ -3,6 +3,7 @@
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { CategoryField } from "@/components/category-field"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
 import { MoneyInput } from "@/components/money-input"
@@ -15,7 +16,6 @@ import {
 } from "@/components/transaction-create-dialog.schema"
 import { TransferReceivedField } from "@/components/transfer-received-field"
 import { listAccounts } from "@/lib/api/accounts"
-import { listCategories } from "@/lib/api/categories"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
 import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { finiteOrNull } from "@/lib/money"
@@ -44,6 +44,7 @@ const NORMAL_DEFAULTS: TxNormalValues = {
   accountId: null,
   amount: Number.NaN,
   categoryId: null,
+  newCategory: "",
   date: new Date().toISOString().slice(0, 10),
   payee: "",
   notes: "",
@@ -139,6 +140,7 @@ export function TransactionCreateDialog({
         date: values.date,
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         category_id: values.categoryId,
+        new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
         tags: values.tags.length > 0 ? values.tags : undefined,
       })
@@ -199,10 +201,16 @@ export function TransactionCreateDialog({
               <normalForm.Field name="type">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Tipo *</Label>
+                    <Label htmlFor="tx-create-type">Tipo *</Label>
                     <Select
+                      id="tx-create-type"
                       value={field.state.value as string}
-                      onValueChange={(v) => v && field.handleChange(v as never)}
+                      onValueChange={(v) => {
+                        if (!v) return
+                        field.handleChange(v as never)
+                        normalForm.setFieldValue("categoryId", null)
+                        normalForm.setFieldValue("newCategory", "")
+                      }}
                       items={TYPE_ITEMS}
                     />
                   </div>
@@ -211,8 +219,9 @@ export function TransactionCreateDialog({
               <normalForm.Field name="accountId">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Cuenta *</Label>
+                    <Label htmlFor="tx-create-account">Cuenta *</Label>
                     <EntitySelect
+                      id="tx-create-account"
                       value={field.state.value as number | null}
                       onChange={(v) => field.handleChange(v as never)}
                       queryKey={qk.accounts(false)}
@@ -225,8 +234,9 @@ export function TransactionCreateDialog({
               <normalForm.Field name="amount">
                 {(field) => (
                   <div className="space-y-1.5">
-                    <Label>Monto * ({normalCurrency})</Label>
+                    <Label htmlFor="tx-create-amount">Monto * ({normalCurrency})</Label>
                     <MoneyInput
+                      id="tx-create-amount"
                       currency={normalCurrency}
                       value={finiteOrNull(field.state.value)}
                       onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
@@ -243,16 +253,19 @@ export function TransactionCreateDialog({
               </normalForm.Field>
               <normalForm.Field name="categoryId">
                 {(field) => (
-                  <div className="space-y-1.5">
-                    <Label>Categoría</Label>
-                    <EntitySelect
-                      value={field.state.value as number | null}
-                      onChange={(v) => field.handleChange(v as never)}
-                      queryKey={qk.categories(false)}
-                      queryFn={() => listCategories(false)}
-                      allowNullLabel="Sin categoría"
-                    />
-                  </div>
+                  <CategoryField
+                    id="tx-create-category"
+                    isIncome={normalForm.getFieldValue("type") === "income"}
+                    value={{
+                      categoryId: field.state.value as number | null,
+                      newCategory: normalForm.getFieldValue("newCategory"),
+                    }}
+                    onChange={(choice) => {
+                      field.handleChange(choice.categoryId as never)
+                      normalForm.setFieldValue("newCategory", choice.newCategory)
+                    }}
+                    error={fieldError(field)}
+                  />
                 )}
               </normalForm.Field>
               <normalForm.Field name="tags">

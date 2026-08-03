@@ -29,7 +29,8 @@ export const qk = {
   pendingDates: (id: number) => [ROOTS.recurring, "pending-dates", id] as const,
   accounts: (archived = false) => [ROOTS.accounts, archived] as const,
   account: (id: number) => [ROOTS.accounts, DETAIL, id] as const,
-  categories: (archived = false) => [ROOTS.categories, archived] as const,
+  categories: (archived = false, isIncome?: boolean) =>
+    [ROOTS.categories, archived, isIncome ?? "all"] as const,
   categoryGroups: (archived = false) => [ROOTS.categoryGroups, archived] as const,
   tags: () => [ROOTS.tags] as const,
   settings: () => [ROOTS.settings] as const,

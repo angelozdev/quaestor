@@ -19,6 +19,7 @@ from quaestor.mcp.tools.temporal import (
     UpdateRecurringInput,
 )
 from quaestor.services import accounts, fx, planned
+from quaestor.services import recurring as recurring_service
 
 from tests.support.categories import a_category, a_named_category
 
@@ -539,3 +540,64 @@ def test_asking_which_dates_are_pending_is_read_only():
 
     assert tool_tier("pending_recurring_dates") == ToolTier.READ
     assert "pending_recurring_dates" in LLM_ALLOWED_TOOLS
+
+
+def test_plan_payment_creates_its_category_in_one_call(session):
+    from quaestor.services import categories as categories_service
+
+    _bank(session)
+    out = temporal.plan_payment(
+        session,
+        PlanPaymentInput(
+            payee="Taller",
+            amount=30_000_000,
+            account="Bancolombia",
+            due_date=date(2026, 8, 22),
+            new_category="Carro",
+        ),
+    )
+    assert "Taller" in out
+    assert "Carro" in [c.name for c in categories_service.list_categories(session)]
+
+
+def test_create_recurring_creates_its_category_in_one_call(session):
+    from quaestor.services import categories as categories_service
+
+    _bank(session)
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Internet",
+            payee="Hogar",
+            type="expense",
+            mode="auto",
+            amount=8_500_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 8, 1),
+            new_category="Servicios",
+        ),
+    )
+    assert "Internet" in out
+    assert "Servicios" in [c.name for c in categories_service.list_categories(session)]
+
+
+def test_create_recurring_with_no_category_is_refused_as_text(session):
+    _bank(session)
+    out = temporal.create_recurring(
+        session,
+        CreateRecurringInput(
+            name="Netflix",
+            payee="Netflix",
+            type="expense",
+            mode="auto",
+            amount=2_590_000,
+            account="Bancolombia",
+            interval_unit="month",
+            interval_count=1,
+            start_date=date(2026, 8, 1),
+        ),
+    )
+    assert "category" in out
+    assert recurring_service.list_recurring(session) == []

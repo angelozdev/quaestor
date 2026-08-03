@@ -179,3 +179,45 @@ def test_cross_currency_transfer_without_amount_received_returns_text(session, s
     )
     assert "Invalid input" in out
     assert "amount_received" in out
+
+
+def test_record_expense_creates_its_category_in_one_call(session, seeded):
+    from quaestor.services import categories as categories_service
+
+    out = core.record_expense(
+        session,
+        RecordExpenseInput(payee="Banco", amount=1_200_000, account="Bancolombia", new_category="4x1000"),
+    )
+    assert "Expense recorded" in out
+    created = next(c for c in categories_service.list_categories(session) if c.name == "4x1000")
+    assert created.is_income is False
+
+
+def test_record_income_creating_its_category_makes_an_income_category(session, seeded):
+    from quaestor.services import categories as categories_service
+
+    out = core.record_income(
+        session,
+        RecordIncomeInput(payee="Banco", amount=30_000_000, account="Bancolombia", new_category="Rendimientos"),
+    )
+    assert "Income recorded" in out
+    assert [c.name for c in categories_service.list_categories(session, is_income=True)] == ["Rendimientos"]
+
+
+def test_record_expense_with_no_category_is_refused_as_text(session, seeded):
+    out = core.record_expense(
+        session,
+        RecordExpenseInput(payee="Exito", amount=2_000_000, account="Bancolombia"),
+    )
+    assert "category" in out
+    assert accounts.get_account(session, seeded["account"].id).balance == 10_000_000
+
+
+def test_record_expense_under_an_income_category_is_refused_as_text(session, seeded):
+    a_named_category(session, "Salary", TxType.income)
+    out = core.record_expense(
+        session,
+        RecordExpenseInput(payee="Exito", amount=2_000_000, account="Bancolombia", category="Salary"),
+    )
+    assert "direction" in out
+    assert accounts.get_account(session, seeded["account"].id).balance == 10_000_000

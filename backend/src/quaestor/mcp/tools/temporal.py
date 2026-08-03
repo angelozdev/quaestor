@@ -31,7 +31,10 @@ class CreateRecurringInput(BaseModel):
     amount: int = Field(gt=0, description="Default amount in cents, original currency")
     account: str = Field(description="Account name")
     currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
-    category: str | None = Field(default=None, description="Category name (optional)")
+    category: str | None = Field(default=None, description="Name of an existing category of the same direction")
+    new_category: str | None = Field(
+        default=None, description="Name of a category to create and file this obligation under"
+    )
     interval_unit: Literal["day", "week", "month", "year"] = Field(
         description="Interval unit; combine with interval_count (e.g. 2 week = biweekly)"
     )
@@ -49,7 +52,10 @@ class PlanPaymentInput(BaseModel):
     amount: int = Field(gt=0, description="Amount in cents, original currency")
     account: str = Field(description="Account the payment will come from")
     currency: str = Field(default="COP", description="ISO currency code; defaults to COP")
-    category: str | None = Field(default=None, description="Category name (optional)")
+    category: str | None = Field(default=None, description="Name of an existing expense category")
+    new_category: str | None = Field(
+        default=None, description="Name of an expense category to create and file this payment under"
+    )
     due_date: Date = Field(description="When it is due, YYYY-MM-DD")
     notes: str | None = Field(default=None, description="Free-form notes (optional)")
 
@@ -119,6 +125,7 @@ def create_recurring(session: Session, inp: CreateRecurringInput) -> str:
         amount=inp.amount,
         currency=inp.currency,
         category_id=category.id if category else None,
+        new_category=inp.new_category,
         account_id=account.id,
         interval_unit=inp.interval_unit,
         interval_count=inp.interval_count,
@@ -146,6 +153,7 @@ def plan_payment(session: Session, inp: PlanPaymentInput) -> str:
         account_id=account.id,
         category_id=category.id if category else None,
         notes=inp.notes,
+        new_category=inp.new_category,
     )
     return format.payment_planned(tx)
 

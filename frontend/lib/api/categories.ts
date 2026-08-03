@@ -1,8 +1,8 @@
 import { del, get, patch, post, qs } from "./client"
 import type { Category, CategoryCreate, CategoryUpdate } from "./types"
 
-export const listCategories = (archived = false) =>
-  get<Category[]>(`/categories${qs({ archived })}`)
+export const listCategories = (archived = false, isIncome?: boolean) =>
+  get<Category[]>(`/categories${qs({ archived, is_income: isIncome })}`)
 
 export const createCategory = (body: CategoryCreate) => post<Category>("/categories", body)
 
