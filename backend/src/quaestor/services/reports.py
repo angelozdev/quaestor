@@ -7,7 +7,8 @@ fetched once per report.
 from __future__ import annotations
 
 import re
-from datetime import date as Date, timedelta
+from datetime import date as Date
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlmodel import Session
@@ -31,7 +32,8 @@ from . import accounts as _accounts
 from . import fx as _fx
 from . import goals as _goals
 from . import planned as _planned
-from .budgets import _safe_to_spend, _status as _budget_status_from_agg
+from .budgets import _safe_to_spend
+from .budgets import _status as _budget_status_from_agg
 from .month_aggregate import MonthAggregate, load_month_aggregate
 
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")

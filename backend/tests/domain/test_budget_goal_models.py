@@ -1,9 +1,6 @@
 from datetime import date
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
-
 from quaestor.db import init_db, make_engine
 from quaestor.domain.models import (
     Account,
@@ -16,6 +13,8 @@ from quaestor.domain.models import (
     Transaction,
     TxType,
 )
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
 
 @pytest.fixture
@@ -70,7 +69,6 @@ def test_transaction_has_goal_id_column(session):
     goal = Goal(name="Trip", monthly_amount=200_000, savings_account_id=acc.id)
     session.add(goal)
     session.commit()
-    from decimal import Decimal
     tx = Transaction(
         date=date(2026, 6, 30), type=TxType.transfer, amount=200_000, currency="COP",
         account_id=acc.id, goal_id=goal.id,

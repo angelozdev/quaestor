@@ -7,9 +7,7 @@ Login is exempt (no cookie to forge yet); safe HTTP methods are exempt
 """
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
-
 from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 
 

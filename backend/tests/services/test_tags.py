@@ -1,8 +1,6 @@
 from datetime import date
-from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.errors import NotFound
 from quaestor.domain.models import Account, AccountType, Transaction, TxType
 from quaestor.services import tags
@@ -54,7 +52,6 @@ def test_update_tag_to_existing_name_rejected(session):
     tags.create_tag(session, "trip")
     other = tags.create_tag(session, "food")
     import pytest
-
     from quaestor.domain.errors import ValidationError
 
     with pytest.raises(ValidationError):
@@ -68,10 +65,10 @@ def test_update_tag_to_its_own_current_name_is_allowed(session):
 
 
 def test_delete_tag_removes_links(session):
-    from quaestor.domain.models import TransactionTag
-    from quaestor.services import accounts, transactions
-    from quaestor.domain.models import AccountType
     from datetime import date
+
+    from quaestor.domain.models import AccountType, TransactionTag
+    from quaestor.services import accounts, transactions
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Shop")
@@ -84,7 +81,6 @@ def test_delete_tag_removes_links(session):
 
 def test_delete_tag_missing_raises(session):
     import pytest
-
     from quaestor.domain.errors import NotFound
 
     with pytest.raises(NotFound):
@@ -92,9 +88,8 @@ def test_delete_tag_missing_raises(session):
 
 
 def _names(session, tx_id):
-    from sqlmodel import select
-
     from quaestor.domain.models import Tag, TransactionTag
+    from sqlmodel import select
 
     rows = session.exec(
         select(Tag.name)

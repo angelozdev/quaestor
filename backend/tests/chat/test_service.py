@@ -11,7 +11,6 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
-
 from quaestor.chat.llm.provider import (
     LLMEvent,
     LLMEventType,
@@ -19,9 +18,8 @@ from quaestor.chat.llm.provider import (
     ToolNotFoundError,
     UpstreamLLMError,
 )
-from quaestor.chat.mcp.client import CallToolResult, MCPClient
+from quaestor.chat.mcp.client import CallToolResult
 from quaestor.chat.service import ChatService
-
 
 # --- fakes -----------------------------------------------------------------
 
@@ -49,7 +47,7 @@ class FakeMCPClient:
         self._results = results
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    async def __aenter__(self) -> "FakeMCPClient":
+    async def __aenter__(self) -> FakeMCPClient:
         return self
 
     async def __aexit__(self, *exc) -> None:

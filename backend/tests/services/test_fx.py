@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.errors import MissingRate, ValidationError
 from quaestor.services import fx
 

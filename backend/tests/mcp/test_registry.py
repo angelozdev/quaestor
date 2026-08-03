@@ -1,7 +1,6 @@
 import asyncio
 
 from mcp.server.fastmcp import FastMCP
-
 from quaestor import db
 from quaestor.mcp import builder
 from quaestor.mcp.registry import (

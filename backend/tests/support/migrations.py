@@ -2,7 +2,6 @@
 import sqlalchemy as sa
 from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
-
 from quaestor.db import _ALEMBIC_INI, make_engine
 
 DEFAULT_CREATED_AT = "2026-06-01 00:00:00"

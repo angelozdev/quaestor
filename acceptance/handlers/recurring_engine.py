@@ -29,8 +29,6 @@ import re as _re
 from datetime import date as Date
 from datetime import timedelta
 
-from sqlmodel import select
-
 from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
 from quaestor.domain.models import (
     IntervalUnit,
@@ -44,6 +42,7 @@ from quaestor.domain.models import (
 from quaestor.domain.money import major_to_cents
 from quaestor.mcp.tools import temporal
 from quaestor.services import accounts, occurrences, recurring, transactions
+from sqlmodel import select
 
 from . import step
 from .fx_read_time import _DEC
@@ -727,7 +726,7 @@ def then_assistant_shows_amount(
 ) -> None:
     world.require_clean("asking the assistant about the repeating obligations")
     answer = world.assistant_answer or ""
-    digits = amount.split(".")[0]
+    digits = amount.split(".", maxsplit=1)[0]
     grouped = f"{int(digits):,}".replace(",", ".")
     assert digits in answer or grouped in answer, (
         f"the assistant's answer does not state {amount} for {name!r}: {answer!r}"

@@ -6,12 +6,12 @@ handlers read/write only through this object.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, timedelta
-from typing import Any, Callable
-
-from sqlmodel import Session
+from typing import Any
 
 from quaestor.db import init_db, make_engine
+from sqlmodel import Session
 
 MISSING_ID = 999_999_321
 
@@ -89,7 +89,7 @@ class World:
         self.last_error = None
         try:
             return fn(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001 — inspected by Then-steps
+        except Exception as exc:
             self.errors.append(exc)
             self.last_error = exc
             return None

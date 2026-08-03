@@ -1,9 +1,7 @@
 import sqlalchemy as sa
 from alembic import command as alembic_command
-from sqlmodel import Session
-
 from quaestor.domain.models import Transaction, TransferDirection
-
+from sqlmodel import Session
 from tests.support.migrations import (
     config_for,
     directions_by_id,

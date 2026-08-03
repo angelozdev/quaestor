@@ -1,8 +1,7 @@
 import pytest
-from sqlmodel import Session, select
-
 from quaestor.db import atomic, init_db, make_engine
 from quaestor.domain.models import Account, AccountType, Settings
+from sqlmodel import Session, select
 
 
 def test_init_db_creates_settings_singleton():
@@ -23,8 +22,7 @@ def test_init_db_is_idempotent_for_settings():
 
 
 def test_atomic_rolls_back_on_error(session):
-    with pytest.raises(RuntimeError):
-        with atomic(session):
-            session.add(Account(name="x", type=AccountType.debit, currency="COP"))
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), atomic(session):
+        session.add(Account(name="x", type=AccountType.debit, currency="COP"))
+        raise RuntimeError("boom")
     assert session.exec(select(Account)).all() == []

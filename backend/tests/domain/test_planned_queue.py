@@ -14,7 +14,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.models import AccountType, Transaction
 from quaestor.domain.planned import OutstandingQueue
 from quaestor.services import accounts, transactions

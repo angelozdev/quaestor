@@ -1,4 +1,3 @@
-from datetime import date
 
 from quaestor.domain.report_types import (
     AccountBalance,

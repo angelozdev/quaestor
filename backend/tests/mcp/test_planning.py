@@ -1,8 +1,7 @@
-from sqlmodel import Session
-
 from quaestor.mcp.tools import planning
 from quaestor.mcp.tools.planning import AssignBudgetInput
 from quaestor.services import budgets, categories, fx
+from sqlmodel import Session
 
 
 def test_mcp_assign_budget(engine):
@@ -17,9 +16,9 @@ def test_mcp_assign_budget(engine):
 
 
 def test_mcp_create_goal(engine):
+    from quaestor.domain.models import AccountType
     from quaestor.mcp.tools.planning import CreateGoalInput
     from quaestor.services import accounts
-    from quaestor.domain.models import AccountType
     with Session(engine) as s:
         accounts.create_account(s, "Savings", AccountType.savings, "COP", balance=0)
         out = planning.create_goal(s, CreateGoalInput(name="Trip", monthly_amount=200_000, savings_account="Savings"))
@@ -45,7 +44,8 @@ def test_mcp_update_goal(session):
 def test_mcp_pause_restore_goal(session):
     from quaestor.mcp.tools import planning
     from quaestor.mcp.tools.planning import CreateGoalInput, GoalIdInput
-    from quaestor.services import accounts as _acc, goals as _goals
+    from quaestor.services import accounts as _acc
+    from quaestor.services import goals as _goals
     _acc.create_account(session, "Ahorro", "savings", "COP", balance=0)
     planning.create_goal(session, CreateGoalInput(
         name="Moto", monthly_amount=300_000, savings_account="Ahorro",
@@ -59,8 +59,10 @@ def test_mcp_pause_restore_goal(session):
 
 def test_mcp_contribute_goal(session):
     from quaestor.mcp.tools import planning
-    from quaestor.mcp.tools.planning import CreateGoalInput, ContributeGoalInput
-    from quaestor.services import accounts as _acc, goals as _goals, settings as _settings
+    from quaestor.mcp.tools.planning import ContributeGoalInput, CreateGoalInput
+    from quaestor.services import accounts as _acc
+    from quaestor.services import goals as _goals
+    from quaestor.services import settings as _settings
     src = _acc.create_account(session, "Corriente", "debit", "COP", balance=1_000_000)
     _acc.create_account(session, "Ahorro", "savings", "COP", balance=0)
     _settings.update_settings(session, default_source_account_id=src.id)

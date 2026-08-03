@@ -13,12 +13,11 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
-from sqlmodel import select
-
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import AccountType, Transaction
 from quaestor.domain.sort import SortSpec
 from quaestor.services import accounts, transactions
+from sqlmodel import select
 
 
 def _sortable() -> dict[str, object]:

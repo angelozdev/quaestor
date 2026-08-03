@@ -1,7 +1,9 @@
 from quaestor.mcp.tools import masters
 from quaestor.mcp.tools.masters import (
-    CreateCategoryGroupInput, UpdateCategoryGroupInput,
-    ArchiveCategoryGroupInput, RestoreCategoryGroupInput,
+    ArchiveCategoryGroupInput,
+    CreateCategoryGroupInput,
+    RestoreCategoryGroupInput,
+    UpdateCategoryGroupInput,
 )
 from quaestor.services import categories
 

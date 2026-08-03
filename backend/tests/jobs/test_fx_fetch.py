@@ -5,7 +5,6 @@ from decimal import Decimal
 
 import httpx
 import pytest
-
 from quaestor.jobs.fx_fetch import fetch_usd_cop
 
 

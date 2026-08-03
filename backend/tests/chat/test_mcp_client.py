@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pytest
-
 from quaestor.chat.mcp.client import MCPClient, ToolNotFoundError
 from quaestor.mcp.builder import build_mcp
 

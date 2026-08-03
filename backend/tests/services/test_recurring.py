@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import (
     AccountType,
@@ -11,6 +10,7 @@ from quaestor.domain.models import (
     TxType,
 )
 from quaestor.services import accounts, recurring
+
 from tests.support.recurring import declare_existing
 
 

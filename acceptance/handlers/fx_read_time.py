@@ -37,13 +37,13 @@ from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
-from sqlalchemy import inspect as sa_inspect, text as sa_text
-
 from quaestor.domain import money as money_mod
 from quaestor.domain.errors import MissingRate, QuaestorError
 from quaestor.domain.money import major_to_cents
 from quaestor.jobs import daily as daily_job
 from quaestor.services import accounts, budgets, categories, fx, reports, transactions
+from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import text as sa_text
 
 from . import step
 from .world import World
@@ -186,10 +186,9 @@ def given_pre_upgrade_data(world: World) -> None:
     have ``to_base``/``fx_rate`` — but the historical schema at revision
     0004 is frozen forever, so these statements stay valid.
     """
+    import quaestor
     from alembic import command as alembic_command
     from alembic.config import Config as AlembicConfig
-
-    import quaestor
     from quaestor.db import make_engine
 
     backend_root = Path(quaestor.__file__).resolve().parents[2]
@@ -370,7 +369,7 @@ def when_prepare_transfer(
         world.implied_rate = _implied_rate(
             major_to_cents(sent), major_to_cents(received)
         )
-    except Exception as exc:  # noqa: BLE001 — reported by the Then step
+    except Exception as exc:
         world.implied_rate_error = exc
 
 
@@ -399,10 +398,9 @@ def _rest_client(world: World):
     os.environ.pop("COOKIE_SECURE", None)
 
     from fastapi.testclient import TestClient
-    from sqlmodel import Session
-
     from quaestor.api import create_app
     from quaestor.api.deps import get_session
+    from sqlmodel import Session
 
     app = create_app()
 
@@ -445,6 +443,8 @@ def when_assistant_lists_expense(world: World) -> None:
     def action():
         from quaestor.mcp.tools.transactions import (
             GetTransactionInput,
+        )
+        from quaestor.mcp.tools.transactions import (
             get_transaction as mcp_get_transaction,
         )
 

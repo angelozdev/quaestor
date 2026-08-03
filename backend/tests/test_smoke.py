@@ -1,5 +1,4 @@
 import pytest
-
 from quaestor.domain import errors
 
 

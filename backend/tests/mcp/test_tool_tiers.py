@@ -10,15 +10,12 @@ from __future__ import annotations
 
 from collections import Counter
 
-import pytest
-
 from quaestor.chat.mcp.schema import filter_for_llm
 from quaestor.mcp.registry import (
     LLM_ALLOWED_TOOLS,
     ToolTier,
     tool_tier,
 )
-
 
 _KNOWN_TOOL_NAMES: list[str] = (
     [
@@ -178,8 +175,8 @@ def test_filter_for_llm_handles_malformed_entries_safely():
 def test_tier_sets_are_disjoint():
     from quaestor.mcp.registry import (
         _READ_ONLY_TOOLS,
-        _WRITE_SAFE_TOOLS,
         _WRITE_DESTRUCTIVE_TOOLS,
+        _WRITE_SAFE_TOOLS,
     )
 
     assert _READ_ONLY_TOOLS.isdisjoint(_WRITE_SAFE_TOOLS)
@@ -193,8 +190,8 @@ def test_every_known_tool_is_in_some_tier_set():
     from the tier sets, silently leaving it unreachable)."""
     from quaestor.mcp.registry import (
         _READ_ONLY_TOOLS,
-        _WRITE_SAFE_TOOLS,
         _WRITE_DESTRUCTIVE_TOOLS,
+        _WRITE_SAFE_TOOLS,
     )
 
     union = _READ_ONLY_TOOLS | _WRITE_SAFE_TOOLS | _WRITE_DESTRUCTIVE_TOOLS

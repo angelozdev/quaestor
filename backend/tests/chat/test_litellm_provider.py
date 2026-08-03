@@ -8,11 +8,10 @@ Mock `litellm.acompletion` (not the LLM API). Cover:
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import litellm
 import pytest
-
 from quaestor.chat.llm.litellm_provider import LiteLLMProvider
 from quaestor.chat.llm.provider import (
     LLMEventType,

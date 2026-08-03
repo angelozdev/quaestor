@@ -11,10 +11,9 @@ Constraints under test (see src/quaestor/api/schemas.py):
   - GoalContributeIn.amount: gt=0
   - FxIn.usd_cop: gt=0, le=100000
 """
-from sqlmodel import Session
-
 from quaestor.domain.models import AccountType
-from quaestor.services import accounts, goals as goals_svc
+from quaestor.services import accounts
+from sqlmodel import Session
 
 
 def _seed_account(engine, name="Bank", type_="debit", balance=1_000_000):

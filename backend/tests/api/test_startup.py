@@ -1,7 +1,6 @@
 """Behavior: a freshly-built app initializes its own schema on startup, so
 `uvicorn quaestor.api:app` serves a fresh DB without a manual init_db step."""
 from fastapi.testclient import TestClient
-
 from quaestor import db
 from quaestor.api import create_app
 from quaestor.db import make_engine

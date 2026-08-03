@@ -1,5 +1,4 @@
 from alembic import command as alembic_command
-
 from tests.support.migrations import (
     config_for,
     engine_at_revision,

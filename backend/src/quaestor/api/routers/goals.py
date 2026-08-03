@@ -49,7 +49,7 @@ def update_goal(goal_id: int, body: GoalUpdate, session: Session = Depends(get_s
 @router.delete("/{goal_id}", status_code=204)
 def pause_goal(goal_id: int, session: Session = Depends(get_session)):
     goals.pause_goal(session, goal_id)
-    return None
+    return
 
 
 @router.post("/{goal_id}/contribute", response_model=GoalContributionOut, status_code=201)

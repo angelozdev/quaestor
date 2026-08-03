@@ -1,5 +1,6 @@
 from quaestor.services import accounts
 from sqlmodel import Session
+
 from tests.support.fx import set_trm as _set_trm
 
 
@@ -110,7 +111,8 @@ def test_rollover_admin_endpoint_runs(client, auth):
 def test_to_pay_response_includes_overdue_before_since(client, auth):
     """Bug reproduction at the HTTP layer: an overdue item with
     date < since appears in `overdue` (not silently dropped)."""
-    from datetime import date as Date, timedelta
+    from datetime import date as Date
+    from datetime import timedelta
 
     _set_trm(client, auth)
     resp = client.post(

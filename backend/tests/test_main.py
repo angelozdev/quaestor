@@ -4,13 +4,10 @@ Verifies: DB probing, wait_for_db retry logic, migration runner, and async uvico
 """
 from __future__ import annotations
 
-import subprocess
 import sys
-from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -59,11 +56,10 @@ def test_probe_postgres_failure() -> None:
 def test_wait_for_db_immediate_success_sqlite() -> None:
     """first attempt succeeds for SQLite URL → returns without sleeping."""
     from quaestor.__main__ import wait_for_db
-    with patch("quaestor.__main__._probe_sqlite") as mock_probe:
-        with patch("time.sleep") as mock_sleep:
-            wait_for_db("sqlite:///:memory:")
-            mock_probe.assert_called_once_with("sqlite:///:memory:")
-            mock_sleep.assert_not_called()
+    with patch("quaestor.__main__._probe_sqlite") as mock_probe, patch("time.sleep") as mock_sleep:
+        wait_for_db("sqlite:///:memory:")
+        mock_probe.assert_called_once_with("sqlite:///:memory:")
+        mock_sleep.assert_not_called()
 
 
 def test_wait_for_db_eventual_success_postgres() -> None:
@@ -72,25 +68,23 @@ def test_wait_for_db_eventual_success_postgres() -> None:
     mock_probe = MagicMock(
         side_effect=[FakeExc("fail 1"), FakeExc("fail 2"), FakeExc("fail 3"), None]
     )
-    with patch.object(sys, "exit") as mock_exit:
-        with patch("time.sleep") as mock_sleep:
-            with patch("quaestor.__main__._probe_postgres", mock_probe):
-                wait_for_db("postgresql://user:pass@localhost/db")
-                assert mock_probe.call_count == 4
-                assert mock_sleep.call_count == 3
-                mock_exit.assert_not_called()
+    with patch.object(sys, "exit") as mock_exit, patch("time.sleep") as mock_sleep:
+        with patch("quaestor.__main__._probe_postgres", mock_probe):
+            wait_for_db("postgresql://user:pass@localhost/db")
+            assert mock_probe.call_count == 4
+            assert mock_sleep.call_count == 3
+            mock_exit.assert_not_called()
 
 
 def test_wait_for_db_max_attempts_exits_1(capsys: pytest.CaptureFixture[str]) -> None:
     """every attempt fails → calls sys.exit(1); last exception logged."""
     from quaestor.__main__ import DB_WAIT_MAX_ATTEMPTS, wait_for_db
     mock_probe = MagicMock(side_effect=FakeExc("always fails"))
-    with patch.object(sys, "exit") as mock_exit:
-        with patch("time.sleep"):
-            with patch("quaestor.__main__._probe_postgres", mock_probe):
-                wait_for_db("postgresql://user:pass@localhost/db")
-                mock_exit.assert_called_once_with(1)
-                assert mock_probe.call_count == DB_WAIT_MAX_ATTEMPTS
+    with patch.object(sys, "exit") as mock_exit, patch("time.sleep"):
+        with patch("quaestor.__main__._probe_postgres", mock_probe):
+            wait_for_db("postgresql://user:pass@localhost/db")
+            mock_exit.assert_called_once_with(1)
+            assert mock_probe.call_count == DB_WAIT_MAX_ATTEMPTS
     # last exception is printed to stdout
     captured = capsys.readouterr()
     assert "FakeExc" in captured.out or "always fails" in captured.out
@@ -192,9 +186,10 @@ def test_alembic_version_empty_when_table_absent() -> None:
 
 def test_alembic_version_empty_when_table_present_no_rows() -> None:
     """alembic_version table exists but has zero rows → helper returns True."""
-    from quaestor.__main__ import _alembic_version_empty
     import sqlite3
     import tempfile
+
+    from quaestor.__main__ import _alembic_version_empty
     # File-backed URL is required: SQLAlchemy's ``sqlite:///:memory:`` gives a
     # per-connection in-memory DB that doesn't share schema across connections.
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -212,9 +207,10 @@ def test_alembic_version_empty_when_table_present_no_rows() -> None:
 
 def test_alembic_version_empty_when_row_present() -> None:
     """alembic_version table has a row → helper returns False."""
-    from quaestor.__main__ import _alembic_version_empty
     import sqlite3
     import tempfile
+
+    from quaestor.__main__ import _alembic_version_empty
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = f.name
     try:

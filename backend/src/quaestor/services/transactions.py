@@ -7,8 +7,8 @@ at read time from the current TRM.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import date as Date
-from typing import Callable
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -17,17 +17,17 @@ from ..domain.errors import NotFound, TransferImbalance, ValidationError
 from ..domain.models import (
     Account,
     Category,
+    Source,
     Tag,
     Transaction,
     TransactionTag,
     TransferDirection,
     TxStatus,
     TxType,
-    Source,
 )
 from ..domain.money import is_supported
 from ..domain.rules import delta_balance, leg_delta_balance
-from ..domain.sort import Order, SortField, SortSpec, SortableColumns
+from ..domain.sort import Order, SortableColumns, SortField, SortSpec
 
 PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
 

@@ -1,10 +1,9 @@
-from datetime import date
 
-from sqlmodel import select
-
-from quaestor.domain.models import AccountType, GoalContribution, TxStatus, TxType
-from quaestor.services import accounts, goals, planned, rollover, settings as settings_svc, transactions
+from quaestor.domain.models import AccountType, GoalContribution, TxType
+from quaestor.services import accounts, goals, planned, rollover, transactions
+from quaestor.services import settings as settings_svc
 from quaestor.services.bootstrap import register_goal_hooks
+from sqlmodel import select
 
 
 def _funded(session):

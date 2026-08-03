@@ -7,7 +7,6 @@ secret makes cookie forgery trivial. We refuse to start without a
 from __future__ import annotations
 
 import pytest
-
 from quaestor.api import _resolve_session_secret
 
 

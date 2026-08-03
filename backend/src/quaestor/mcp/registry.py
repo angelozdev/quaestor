@@ -14,16 +14,28 @@ registered on the MCP server (curl/MCP-direct + frontend HTTP UI can use
 them) but are dropped from the OpenAI-shaped tool list passed to the
 LLM, removing the indirect-prompt-injection blast radius.
 """
-from enum import Enum
+from enum import Enum, StrEnum
 
 from sqlmodel import Session
 
 from .. import db
 from .tools import (
-    budgets_reads, goals_reads, masters, recurring_restore, reports,
-    settings as settings_tools, transactions as tx_tools,
+    budgets_reads,
+    core,
+    goals_reads,
+    masters,
+    planning,
+    recurring_restore,
+    reports,
+    temporal,
 )
-from .tools import core, planning, temporal
+from .tools import (
+    settings as settings_tools,
+)
+from .tools import (
+    transactions as tx_tools,
+)
+from .tools.budgets_reads import ListBudgetsInput, SafeToSpendInput
 from .tools.core import (
     GetFxRateInput,
     ListTransactionsInput,
@@ -32,25 +44,7 @@ from .tools.core import (
     SetFxRateInput,
     TransferInput,
 )
-from .tools.planning import (
-    AssignBudgetInput,
-    ContributeGoalInput,
-    CreateGoalInput,
-    GoalIdInput,
-    UpdateGoalInput,
-)
-from .tools.temporal import (
-    ArchiveRecurringInput,
-    ConfirmPaymentInput,
-    CreateRecurringInput,
-    ListRecurringInput,
-    PlanPaymentInput,
-    RestorePaymentInput,
-    SkipPaymentInput,
-    SkipRecurringInput,
-    ToPayInput,
-    UpdateRecurringInput,
-)
+from .tools.goals_reads import GoalsProgressInput, ListGoalsInput
 from .tools.masters import (
     ArchiveAccountInput,
     ArchiveCategoryGroupInput,
@@ -70,19 +64,36 @@ from .tools.masters import (
     UpdateCategoryInput,
     UpdateTagInput,
 )
+from .tools.planning import (
+    AssignBudgetInput,
+    ContributeGoalInput,
+    CreateGoalInput,
+    GoalIdInput,
+    UpdateGoalInput,
+)
+from .tools.recurring_restore import RestoreRecurringInput
+from .tools.reports import MonthlyReportInput
+from .tools.settings import GetSettingsInput, UpdateSettingsInput
+from .tools.temporal import (
+    ArchiveRecurringInput,
+    ConfirmPaymentInput,
+    CreateRecurringInput,
+    ListRecurringInput,
+    PlanPaymentInput,
+    RestorePaymentInput,
+    SkipPaymentInput,
+    SkipRecurringInput,
+    ToPayInput,
+    UpdateRecurringInput,
+)
 from .tools.transactions import (
     DeleteTransactionInput,
     GetTransactionInput,
     UpdateTransactionInput,
 )
-from .tools.settings import GetSettingsInput, UpdateSettingsInput
-from .tools.budgets_reads import ListBudgetsInput, SafeToSpendInput
-from .tools.goals_reads import GoalsProgressInput, ListGoalsInput
-from .tools.reports import MonthlyReportInput
-from .tools.recurring_restore import RestoreRecurringInput
 
 
-class ToolTier(str, Enum):
+class ToolTier(StrEnum):
     """How dangerous it is to invoke a tool without explicit human intent.
 
     The chat pipeline hides `WRITE_DESTRUCTIVE` tools from the LLM; the

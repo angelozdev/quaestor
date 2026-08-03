@@ -1,6 +1,8 @@
 from quaestor.mcp.tools import masters
 from quaestor.mcp.tools.masters import (
-    CreateTagInput, UpdateTagInput, DeleteTagInput,
+    CreateTagInput,
+    DeleteTagInput,
+    UpdateTagInput,
 )
 
 

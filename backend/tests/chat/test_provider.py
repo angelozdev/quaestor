@@ -1,8 +1,6 @@
 from collections.abc import AsyncIterator
 from typing import Any
 
-import pytest
-
 from quaestor.chat.llm.provider import (
     LLMEvent,
     LLMEventType,

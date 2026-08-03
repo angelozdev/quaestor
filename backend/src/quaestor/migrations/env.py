@@ -19,12 +19,10 @@ import os
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
-from sqlmodel import SQLModel
-
 from quaestor import db as _db
 from quaestor.domain import models  # noqa: F401
-
+from sqlalchemy import engine_from_config, pool
+from sqlmodel import SQLModel
 
 _DEFAULT_DB_URL: str = "sqlite:///quaestor.db"
 

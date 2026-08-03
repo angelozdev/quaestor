@@ -11,11 +11,11 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 
-class LLMEventType(str, Enum):
+class LLMEventType(StrEnum):
     """Discriminator for LLMEvent. Mirrors Vercel AI SDK UI Message Stream."""
 
     MESSAGE_START = "start"               # → Vercel `start`

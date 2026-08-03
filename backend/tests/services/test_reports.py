@@ -2,7 +2,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import AccountType
 from quaestor.domain.rules import month_bounds
@@ -198,7 +197,7 @@ def test_goal_lines_defined_and_open_ended(session):
 
 
 def test_balance_lines_exclude_archived_sorted(session):
-    a = accounts.create_account(session, "Zeta", AccountType.debit, "COP", balance=500)
+    accounts.create_account(session, "Zeta", AccountType.debit, "COP", balance=500)
     accounts.create_account(session, "Alpha", AccountType.debit, "USD", balance=999)
     archived = accounts.create_account(session, "Old", AccountType.debit, "COP", balance=1)
     accounts.archive_account(session, archived.id)
@@ -240,6 +239,7 @@ def test_pending_lines_exclude_planned_income(session):
 def test_monthly_report_pending_lines_exclude_prior_overdue(session):
     """Retrospective monthly report excludes items overdue from a prior month."""
     from datetime import date as Date
+
     from quaestor.domain.models import AccountType
     from quaestor.services import accounts, planned
     from quaestor.services.reports import monthly_report

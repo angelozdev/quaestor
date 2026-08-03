@@ -16,6 +16,7 @@ The service:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -74,7 +75,7 @@ class ChatService:
                     await get_cached_tools(mcp_client), LLM_ALLOWED_TOOLS
                 )
 
-                for iteration in range(1, self._max_iterations + 1):
+                for _iteration in range(1, self._max_iterations + 1):
                     tool_calls_this_iter: list[dict[str, Any]] = []
 
                     try:
@@ -110,7 +111,7 @@ class ChatService:
                         )
                         yield done_bytes()
                         return
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         yield serialize_event(
                             LLMEvent(
                                 type=LLMEventType.ERROR,
@@ -178,7 +179,7 @@ class ChatService:
                                 }
                             )
                             continue
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             yield serialize_event(
                                 LLMEvent(
                                     type=LLMEventType.TOOL_OUTPUT_ERROR,
@@ -288,8 +289,6 @@ class ChatService:
 
 
 def _json_dumps(obj: Any) -> str:
-    import json
-
     return json.dumps(obj, ensure_ascii=False)
 
 

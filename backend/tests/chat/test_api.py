@@ -5,7 +5,7 @@ from quaestor.chat.llm.provider import LLMEvent, LLMEventType
 
 
 def test_happy_path_streams_text_and_done(app, auth_headers, client):
-    test_app, stub = app
+    _test_app, stub = app
     stub.events = [
         LLMEvent(type=LLMEventType.MESSAGE_START, message_id="m1", model="MiniMax-M3"),
         LLMEvent(type=LLMEventType.TEXT_START, content_index=0),

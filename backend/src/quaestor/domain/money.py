@@ -65,7 +65,7 @@ class Money:
             raise ValueError(f"unsupported currency: {self.currency}")
 
     @classmethod
-    def from_major(cls, value, currency: str) -> "Money":
+    def from_major(cls, value, currency: str) -> Money:
         return cls(major_to_cents(value), currency)
 
     def format(self) -> str:

@@ -1,14 +1,11 @@
-import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from quaestor.api import create_app
 from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.api.deps import get_session
 from quaestor.db import init_db, make_engine
-
+from sqlmodel import Session
 
 _STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 

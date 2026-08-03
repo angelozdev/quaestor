@@ -3,10 +3,10 @@ from datetime import date as Date
 from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.errors import IllegalTransition, NotFound, ValidationError
 from quaestor.domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, TxStatus, TxType
 from quaestor.services import accounts, occurrences, planned, recurring, transactions
+
 from tests.support.recurring import declare_existing
 
 
@@ -297,9 +297,9 @@ def test_confirm_syncs_manual_occurrence_to_posted(session):
     occurrences.materialize_due(session, date(2026, 6, 30))
     planned_tx = transactions.list_transactions(session, status="planned")[0]
     planned.confirm_payment(session, planned_tx.id, amount=53_000)
-    occ = recurring.list_recurring(session)  # sanity: item still there
-    from sqlmodel import select
+    recurring.list_recurring(session)  # sanity: item still there
     from quaestor.domain.models import RecurringOccurrence
+    from sqlmodel import select
     occ_row = session.exec(
         select(RecurringOccurrence).where(RecurringOccurrence.recurring_id == item.id)
     ).first()
@@ -358,8 +358,9 @@ def test_post_confirm_hook_sees_posted_tx(session):
 
 def _planned_transfer(session, dst_account_id, amount=100_000, due=date(2026, 6, 20)):
     """Construct a planned transfer row directly (P4 normally creates these)."""
-    from quaestor.domain.models import Transaction
     from decimal import Decimal
+
+    from quaestor.domain.models import Transaction
     tx = Transaction(
         date=due, payee="Savings goal", type=TxType.transfer, status=TxStatus.planned,
         amount=amount, currency="COP", fx_rate=Decimal("1"), to_base=amount,
@@ -440,13 +441,13 @@ def test_confirm_planned_transfer_rejects_a_zero_amount(session):
 
 
 def test_confirm_planned_transfer_rejects_a_source_currency_mismatch(session):
-    src, dst, tx = _confirmable_transfer(session, src_currency="USD")
+    _src, _dst, tx = _confirmable_transfer(session, src_currency="USD")
     with pytest.raises(ValidationError):
         planned.confirm_payment(session, tx.id)
 
 
 def test_confirm_planned_transfer_rejects_a_destination_currency_mismatch(session):
-    src, dst, tx = _confirmable_transfer(session, dst_currency="USD")
+    _src, _dst, tx = _confirmable_transfer(session, dst_currency="USD")
     with pytest.raises(ValidationError):
         planned.confirm_payment(session, tx.id)
 
@@ -479,8 +480,8 @@ def test_skip_payment_marks_occurrence_skipped(session):
     occurrences.materialize_due(session, date(2026, 6, 30))
     planned_tx = transactions.list_transactions(session, status="planned")[0]
     planned.skip_payment(session, planned_tx.id)
-    from sqlmodel import select
     from quaestor.domain.models import RecurringOccurrence
+    from sqlmodel import select
     occ = session.exec(
         select(RecurringOccurrence).where(RecurringOccurrence.recurring_id == item.id)
     ).first()
@@ -516,18 +517,16 @@ def test_restore_payment_moves_no_balance(session):
 
 
 def _occurrence_for_recurring(session, recurring_id):
-    from sqlmodel import select
-
     from quaestor.domain.models import RecurringOccurrence
+    from sqlmodel import select
     return session.exec(
         select(RecurringOccurrence).where(RecurringOccurrence.recurring_id == recurring_id)
     ).first()
 
 
 def _occurrence_count(session, recurring_id) -> int:
-    from sqlmodel import select
-
     from quaestor.domain.models import RecurringOccurrence
+    from sqlmodel import select
     return len(session.exec(
         select(RecurringOccurrence).where(RecurringOccurrence.recurring_id == recurring_id)
     ).all())

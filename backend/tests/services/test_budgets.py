@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import AccountType
 from quaestor.services import accounts, budgets, categories, fx, occurrences, transactions
@@ -113,8 +112,9 @@ def test_budget_status_negative_rollover_resets_to_zero(session):
     assert s.rollover_in == 0  # max(-50k, 0)
 
 
-from quaestor.services import planned, recurring
 from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from quaestor.services import planned
+
 from tests.support.recurring import declare_existing
 
 
@@ -230,13 +230,14 @@ def test_safe_to_spend_rollover_protects_against_false_overspend(session):
 
 
 def test_safe_to_spend_goal_proposals_not_counted_as_committed(session):
-    from quaestor.services import accounts as accs, goals as goals_svc
-    from quaestor.domain.models import AccountType, GoalStatus
+    from quaestor.domain.models import AccountType
+    from quaestor.services import accounts as accs
+    from quaestor.services import goals as goals_svc
     fx.set_trm(session, "4000")
     acc = _acc(session)
     sav = accs.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     _income(session, acc)  # 1,000,000 forecast
-    g = goals_svc.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
+    goals_svc.create_goal(session, name="Trip", monthly_amount=200_000, savings_account_id=sav.id)
     goals_svc.propose_goal_contributions("2026-06", session)
     session.commit()
     sts = budgets.safe_to_spend(session, "2026-06")

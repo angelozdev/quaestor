@@ -1,0 +1,19 @@
+line-length = 120
+target-version = "py312"
+extend-exclude = ["**/.build/**", "**/node_modules/**"]
+
+[lint]
+select = [
+    "F", "E", "W", "I", "UP", "B", "C4", "T20", "PIE", "RET", "SIM",
+    "PTH", "PERF", "LOG", "RUF", "ISC", "INT", "PGH", "ERA",
+    "S", "ASYNC", "BLE", "SLF", "TRY", "PLE", "PLW", "PLC",
+]
+ignore = ["B008", "TRY003", "RUF012", "UP042"]
+
+[lint.per-file-ignores]
+"backend/tests/**" = ["S101", "S105", "S106", "SLF001", "ERA001", "PLW", "PLC0415"]
+"acceptance/**" = ["S101", "S105", "S106", "SLF001", "ERA001", "PLW", "BLE001", "PLC0415"]
+"backend/src/quaestor/services/bootstrap.py" = ["PLC0415"]
+"backend/src/quaestor/migrations/**" = ["ERA001", "T201"]
+"backend/src/quaestor/__main__.py" = ["T201"]
+"backend/src/quaestor/jobs/daily.py" = ["T201"]

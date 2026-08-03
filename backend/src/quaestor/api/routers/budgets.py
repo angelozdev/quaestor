@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from ...domain.dtos import BudgetLine
+from ...domain.errors import NotFound
 from ...domain.models import Category
 from ...services import budgets
 from ..deps import get_session
-from ...domain.errors import NotFound
 from ..schemas import BudgetAssignIn, BudgetLineOut, SafeToSpendOut
 
 router = APIRouter(prefix="/budgets", tags=["budgets"])

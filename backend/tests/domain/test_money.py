@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 import pytest
-
 from quaestor.domain import money
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.money import Money

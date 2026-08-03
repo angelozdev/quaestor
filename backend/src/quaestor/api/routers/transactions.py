@@ -14,7 +14,8 @@ from sqlmodel import Session
 from ...domain.errors import ValidationError
 from ...domain.models import TxType
 from ...domain.sort import Order, SortField
-from ...services import fx, tags as tags_service, transactions
+from ...services import fx, transactions
+from ...services import tags as tags_service
 from ..deps import get_session
 from ..schemas import (
     TransactionCreate,
@@ -125,4 +126,4 @@ def update_transaction(
 @router.delete("/{tx_id}", status_code=204)
 def delete_transaction(tx_id: int, session: Session = Depends(get_session)):
     transactions.delete_transaction(session, tx_id)
-    return None
+    return

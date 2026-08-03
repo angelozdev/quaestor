@@ -24,7 +24,7 @@ def test_update_settings_rejects_unsupported_currency(session):
 
 
 def test_update_settings_default_source_account(session):
-    acc = accounts.create_account(session, "Bancolombia", "debit", "COP", balance=0)
+    accounts.create_account(session, "Bancolombia", "debit", "COP", balance=0)
     out = settings_tools.update_settings(
         session, UpdateSettingsInput(default_source_account="Bancolombia")
     )

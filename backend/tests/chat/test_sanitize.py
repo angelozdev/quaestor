@@ -9,7 +9,6 @@ have role-prefix lines stripped, and must be length-capped.
 from __future__ import annotations
 
 import pytest
-
 from quaestor.chat.sanitize import sanitize_tool_output
 
 

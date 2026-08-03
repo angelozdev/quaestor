@@ -1,4 +1,3 @@
-import pytest
 
 
 def _oversize_content(n_chars: int) -> dict:

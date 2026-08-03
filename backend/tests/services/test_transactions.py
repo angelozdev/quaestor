@@ -1,8 +1,6 @@
 from datetime import date
-from decimal import Decimal
 
 import pytest
-
 from quaestor.domain.errors import NotFound, TransferImbalance, ValidationError
 from quaestor.domain.models import AccountType, TransferDirection, TxStatus, TxType
 from quaestor.domain.money import to_cop_cents
@@ -250,7 +248,7 @@ def test_transfer_notes_become_the_leg_payee(session):
 
 
 def test_list_filters_to_the_legs_of_one_transfer(session):
-    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    a, _b, (leg_from, leg_to) = _same_currency_transfer(session)
     transactions.record_expense(session, a.id, 1_000, "COP", date(2026, 6, 1), "Store")
     _, _, (other_from, _) = _same_currency_transfer(session)
     rows = transactions.list_transactions(
@@ -351,10 +349,10 @@ def test_update_transaction_edits_safe_fields(session):
 def test_delete_expense_reverses_balance(session):
     from datetime import date
 
+    import pytest
     from quaestor.domain.errors import NotFound
     from quaestor.domain.models import AccountType
     from quaestor.services import accounts, transactions
-    import pytest
 
     acc = accounts.create_account(session, "Cash", AccountType.cash, "COP")
     tx = transactions.record_expense(session, acc.id, 1000, "COP", date(2026, 6, 17), "Store")
@@ -424,7 +422,7 @@ def test_delete_cross_currency_pair_restores_each_physical_amount(session):
 def test_delete_transfer_pair_removes_only_its_tag_links(session):
     from quaestor.services import tags
 
-    a, b, (leg_from, leg_to) = _same_currency_transfer(session)
+    a, _b, (leg_from, leg_to) = _same_currency_transfer(session)
     other = transactions.record_expense(
         session, a.id, 1_000, "COP", date(2026, 6, 1), "Store"
     )

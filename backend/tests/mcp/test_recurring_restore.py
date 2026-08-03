@@ -2,7 +2,8 @@ from datetime import date
 
 from quaestor.mcp.tools import recurring_restore
 from quaestor.mcp.tools.temporal import (
-    CreateRecurringInput, ArchiveRecurringInput,
+    ArchiveRecurringInput,
+    CreateRecurringInput,
 )
 from quaestor.services import accounts, recurring
 

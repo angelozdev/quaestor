@@ -18,22 +18,20 @@ from __future__ import annotations
 import json
 
 import pytest
-
-from quaestor.chat.mcp.client import CallToolResult, MCPClient
-from quaestor.chat.sse_schema import (
-    ToolOutputAvailableChunk,
-    ToolOutputErrorChunk,
-    UIMessageChunk,
-)
-from quaestor.chat.service import ChatService
+from fastmcp.exceptions import ToolError
 from quaestor.chat.llm.provider import (
     LLMEvent,
     LLMEventType,
     LLMProvider,
     ToolNotFoundError,
 )
-from fastmcp.exceptions import ToolError
-
+from quaestor.chat.mcp.client import CallToolResult
+from quaestor.chat.service import ChatService
+from quaestor.chat.sse_schema import (
+    ToolOutputAvailableChunk,
+    ToolOutputErrorChunk,
+    UIMessageChunk,
+)
 
 # --- helpers (test-local; do NOT export) -----------------------------------
 

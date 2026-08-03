@@ -31,7 +31,7 @@ class MCPClient:
         self._mcp = mcp
         self._client: FastMCPClient | None = None
 
-    async def __aenter__(self) -> "MCPClient":
+    async def __aenter__(self) -> MCPClient:
         self._client = FastMCPClient(self._mcp)
         await self._client.__aenter__()
         return self
@@ -41,19 +41,26 @@ class MCPClient:
             await self._client.__aexit__(exc_type, exc, tb)
             self._client = None
 
+    def _require_open(self) -> FastMCPClient:
+        """The live client, or a refusal naming how to open one.
+
+        Raises:
+            RuntimeError: used outside `async with MCPClient(...)`.
+        """
+        if self._client is None:
+            raise RuntimeError("use `async with MCPClient(...)`")
+        return self._client
+
     async def list_tools(self) -> list[Any]:
-        assert self._client is not None, "use `async with MCPClient(...)`"
-        return await self._client.list_tools()
+        return await self._require_open().list_tools()
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> CallToolResult:
-        assert self._client is not None, "use `async with MCPClient(...)`"
-        # list_tools is cached inside fastmcp.Client for the in-memory
-        # transport, so this `hasattr` probe is cheap.
-        known = {t.name for t in await self._client.list_tools()}
+        client = self._require_open()
+        known = {t.name for t in await client.list_tools()}
         if name not in known:
             raise ToolNotFoundError(name)
 
-        result = await self._client.call_tool(name, arguments)
+        result = await client.call_tool(name, arguments)
         # fastmcp returns structured content; coerce to a single text blob.
         is_error = bool(getattr(result, "is_error", False))
         chunks: list[str] = []

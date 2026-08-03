@@ -1,7 +1,6 @@
 import pytest
-from sqlmodel import Session
-
 from quaestor.db import init_db, make_engine
+from sqlmodel import Session
 
 
 @pytest.fixture

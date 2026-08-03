@@ -1,6 +1,5 @@
-from sqlmodel import SQLModel
-
 from quaestor.domain import models
+from sqlmodel import SQLModel
 
 
 def test_all_tables_registered():

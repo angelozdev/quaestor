@@ -23,8 +23,6 @@ import re as _re
 from datetime import date as Date
 from datetime import timedelta
 
-from sqlmodel import select
-
 from quaestor.domain.errors import QuaestorError, ValidationError
 from quaestor.domain.models import (
     IntervalUnit,
@@ -45,9 +43,12 @@ from quaestor.services import (
     planned,
     recurring,
     reports,
-    settings as settings_svc,
     transactions,
 )
+from quaestor.services import (
+    settings as settings_svc,
+)
+from sqlmodel import select
 
 from . import step
 from .fx_read_time import _DEC

@@ -1,8 +1,7 @@
 from datetime import date
 
-from sqlmodel import Session
-
 from quaestor.services import accounts, goals
+from sqlmodel import Session
 
 
 def test_goals_progress_empty(client, auth):
@@ -34,8 +33,8 @@ def test_goals_progress_requires_auth(client):
 
 
 def _seed_savings(engine):
-    from quaestor.services import accounts
     from quaestor.domain.models import AccountType
+    from quaestor.services import accounts
     from sqlmodel import Session
     with Session(engine) as s:
         return accounts.create_account(s, "Savings", AccountType.savings, "COP", balance=0).id
@@ -73,8 +72,8 @@ def test_contribute_requires_default_source_is_422(client, engine, auth):
 
 
 def test_contribute_succeeds_with_default_source(client, engine, auth):
-    from quaestor.services import accounts, settings
     from quaestor.domain.models import AccountType
+    from quaestor.services import accounts, settings
     from sqlmodel import Session
     with Session(engine) as s:
         src = accounts.create_account(s, "Checking", AccountType.savings, "COP", balance=1_000_000)

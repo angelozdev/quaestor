@@ -11,10 +11,8 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-
 from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.chat.llm.provider import LLMEvent, LLMEventType, LLMProvider
-
 
 _STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 

@@ -10,10 +10,10 @@ day self-heals on the next run.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date as Date
-from decimal import Decimal
 
 from sqlmodel import Session
 
@@ -75,8 +75,6 @@ def main() -> None:
     not the api container's CMD): configures root logging — idempotent with
     the api container's setup (see api/__init__.py) — runs the daily jobs,
     and prints the report as JSON with the Decimal rate stringified."""
-    import json as _json
-
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -87,7 +85,7 @@ def main() -> None:
     with db.get_session() as session:
         report = run_daily(session, today, fx_url, fx_key)
     printable = {**report, "fx_rate": str(report["fx_rate"]) if report["fx_rate"] is not None else None}
-    print(_json.dumps(printable, sort_keys=True))
+    print(json.dumps(printable, sort_keys=True))
 
 
 if __name__ == "__main__":

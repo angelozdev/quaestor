@@ -1,7 +1,10 @@
 from quaestor.mcp.tools import masters
 from quaestor.mcp.tools.masters import (
-    CreateCategoryInput, UpdateCategoryInput, ArchiveCategoryInput,
-    RestoreCategoryInput, GetCategoryInput,
+    ArchiveCategoryInput,
+    CreateCategoryInput,
+    GetCategoryInput,
+    RestoreCategoryInput,
+    UpdateCategoryInput,
 )
 from quaestor.services import categories
 
@@ -11,7 +14,7 @@ def _seed_group(session):
 
 
 def test_create_category_with_group_returns_card(session):
-    g = _seed_group(session)
+    _seed_group(session)
     out = masters.create_category(
         session, CreateCategoryInput(name="Groceries", group="Essentials")
     )
@@ -35,7 +38,7 @@ def test_create_category_unknown_group_returns_text(session):
 
 def test_update_category_renames_and_regroups(session):
     _seed_group(session)
-    g2 = categories.create_group(session, "Discretionary")
+    categories.create_group(session, "Discretionary")
     categories.create_category(session, "Fun")
     out = masters.update_category(
         session, UpdateCategoryInput(category="Fun", name="Entertainment", group="Discretionary")

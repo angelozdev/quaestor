@@ -1,12 +1,10 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
-
 from quaestor.api import create_app
 from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
 from quaestor.db import init_db, make_engine
 from quaestor.services import accounts, categories
-
+from sqlmodel import Session
 
 _STATE_CHANGING = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -65,7 +63,7 @@ def app(monkeypatch, engine):
     from typing import Any
 
     from quaestor.api.deps import require_auth
-    from quaestor.chat.llm.provider import LLMEvent, LLMEventType, LLMProvider
+    from quaestor.chat.llm.provider import LLMEvent, LLMProvider
 
     class StubProvider(LLMProvider):
         def __init__(self) -> None:

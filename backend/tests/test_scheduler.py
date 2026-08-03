@@ -6,8 +6,6 @@ import logging
 
 import pytest
 
-from quaestor.jobs import daily as daily_module
-
 
 class TestRunOnce:
     @pytest.mark.asyncio

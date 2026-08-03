@@ -23,12 +23,11 @@ from alembic import command as alembic_command
 from alembic.config import Config as AlembicConfig
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session
 
 from .domain.models import Settings
-
+from .services.bootstrap import register_goal_hooks, register_recurring_hooks
 
 _BACKEND_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI: Final[Path] = _BACKEND_ROOT / "alembic.ini"
@@ -133,7 +132,6 @@ def init_db(target_engine: Engine = engine) -> None:
     """
     _apply_migrations(target_engine)
     _seed_default_settings(target_engine)
-    from .services.bootstrap import register_goal_hooks, register_recurring_hooks
     register_goal_hooks()
     register_recurring_hooks()
 

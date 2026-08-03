@@ -1,6 +1,11 @@
 from datetime import date
 from decimal import Decimal
 
+from quaestor.domain.dtos import (
+    BudgetLine,
+    GoalProgress,
+    SafeToSpend,
+)
 from quaestor.domain.errors import (
     MissingRate,
     NotFound,
@@ -10,7 +15,6 @@ from quaestor.domain.errors import (
 from quaestor.domain.models import (
     Account,
     AccountType,
-    Budget,
     Category,
     CategoryGroup,
     Goal,
@@ -23,12 +27,6 @@ from quaestor.domain.models import (
     Transaction,
     TxStatus,
     TxType,
-)
-from quaestor.domain.dtos import (
-    BudgetLine,
-    BudgetStatus,
-    GoalProgress,
-    SafeToSpend,
 )
 from quaestor.mcp import format
 

@@ -29,4 +29,4 @@ def update_tag(tag_id: int, body: TagUpdate, session: Session = Depends(get_sess
 @router.delete("/{tag_id}", status_code=204)
 def delete_tag(tag_id: int, session: Session = Depends(get_session)):
     tags.delete_tag(session, tag_id)
-    return None
+    return

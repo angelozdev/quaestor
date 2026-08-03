@@ -4,6 +4,8 @@ Mirrors temporal.py: parse input, resolve names, call ONE service, format output
 """
 from __future__ import annotations
 
+from datetime import date
+
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
@@ -52,9 +54,8 @@ class GoalIdInput(BaseModel):
 
 @_as_text
 def create_goal(session: Session, inp: CreateGoalInput) -> str:
-    from datetime import date as _date
     account = _resolve_account(session, inp.savings_account)
-    deadline = _date.fromisoformat(inp.deadline) if inp.deadline else None
+    deadline = date.fromisoformat(inp.deadline) if inp.deadline else None
     goal = goals.create_goal(
         session, name=inp.name, monthly_amount=inp.monthly_amount,
         savings_account_id=account.id, target_amount=inp.target_amount, deadline=deadline,
@@ -71,8 +72,7 @@ def update_goal(session: Session, inp: UpdateGoalInput) -> str:
 
 @_as_text
 def contribute_goal(session: Session, inp: ContributeGoalInput) -> str:
-    from datetime import date as _date
-    contribution = goals.goal_contribution(session, inp.goal_id, inp.amount, _date.fromisoformat(inp.date))
+    contribution = goals.goal_contribution(session, inp.goal_id, inp.amount, date.fromisoformat(inp.date))
     return format.goal_contribution_recorded(contribution)
 
 

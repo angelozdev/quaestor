@@ -17,7 +17,6 @@ from ...services import fx, occurrences, planned, recurring
 from .. import format
 from .core import _as_text, _resolve_account, _resolve_category
 
-
 # ----- input models -----
 
 

@@ -16,8 +16,8 @@ from mcp.server.fastmcp import FastMCP
 from .registry import (
     register_accounts_tools,
     register_budgets_reads_tools,
-    register_category_groups_tools,
     register_categories_tools,
+    register_category_groups_tools,
     register_core_tools,
     register_goals_reads_tools,
     register_planning_tools,

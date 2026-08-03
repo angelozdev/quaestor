@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 from datetime import date as Date
-from decimal import Decimal
 
 import pytest
+from quaestor.domain.models import Account, AccountType, IntervalUnit, RecurringItem, RecurringMode, TxType
+from quaestor.jobs import daily
 from sqlmodel import Session
 
-from quaestor.domain.models import Account, AccountType, Category, RecurringItem, RecurringMode, IntervalUnit, TxType
-from quaestor.jobs import daily
 from tests.support.recurring import declare_existing
 
 

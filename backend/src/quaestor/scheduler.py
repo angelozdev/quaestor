@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Final
 
 from quaestor.jobs import daily as daily_module
@@ -25,7 +25,7 @@ INTERVAL_S: Final = 24 * 60 * 60  # 24 hours
 
 
 async def _run_once() -> None:
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     log.info("scheduler: starting daily job at %s", started.isoformat())
     try:
         await asyncio.to_thread(daily_module.main)

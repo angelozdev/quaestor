@@ -1,9 +1,6 @@
 from datetime import date
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session
-
 from quaestor.db import init_db, make_engine
 from quaestor.domain.models import (
     IntervalUnit,
@@ -14,6 +11,8 @@ from quaestor.domain.models import (
     TxStatus,
     TxType,
 )
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
 
 
 @pytest.fixture

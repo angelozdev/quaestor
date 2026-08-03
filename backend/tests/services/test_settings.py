@@ -1,5 +1,4 @@
 import pytest
-
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import AccountType
 from quaestor.services import accounts, settings

@@ -1,5 +1,4 @@
 import pytest
-
 from quaestor.chat.llm.factory import build_llm_provider
 from quaestor.chat.llm.litellm_provider import LiteLLMProvider
 from quaestor.chat.llm.provider import LLMProvider

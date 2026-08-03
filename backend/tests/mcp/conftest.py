@@ -1,8 +1,7 @@
 import pytest
-from sqlmodel import Session
-
 from quaestor.db import init_db, make_engine
 from quaestor.services import accounts, categories
+from sqlmodel import Session
 
 
 @pytest.fixture

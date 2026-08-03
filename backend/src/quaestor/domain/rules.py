@@ -116,10 +116,7 @@ def goal_progress_calc(
         months_left = 1
     monthly_required = -(-remaining // months_left)  # ceil division
     on_track = monthly_amount >= monthly_required
-    if remaining == 0:
-        eta = today
-    else:
-        eta = add_months(today, -(-remaining // monthly_amount))
+    eta = today if remaining == 0 else add_months(today, -(-remaining // monthly_amount))
     return GoalProgress(
         goal_id=goal_id, name=name, type="defined", monthly_amount=monthly_amount,
         saved=saved, target_amount=target_amount, deadline=deadline,

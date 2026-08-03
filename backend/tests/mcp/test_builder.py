@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
-
 from quaestor.mcp.builder import build_mcp
 
 

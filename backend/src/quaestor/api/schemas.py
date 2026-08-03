@@ -179,7 +179,7 @@ class TransactionOut(BaseModel):
         tx: Transaction,
         trm: Decimal | None,
         tag_names: list[str],
-    ) -> "TransactionOut":
+    ) -> TransactionOut:
         """Serialize a Transaction, computing `cop_equivalent` at read time
         when a TRM is available (ADR-0031) and attaching its tag names."""
         out = cls.model_validate(tx)
@@ -194,7 +194,7 @@ class TransactionOut(BaseModel):
         session: Session,
         txs: list[Transaction],
         trm: Decimal | None,
-    ) -> list["TransactionOut"]:
+    ) -> list[TransactionOut]:
         """Serialize transactions, loading every tag name in one query."""
         names = tags.tag_names_by_transaction(session, [tx.id for tx in txs])
         return [cls.from_tx(tx, trm, names[tx.id]) for tx in txs]
@@ -205,7 +205,7 @@ class TransactionOut(BaseModel):
         session: Session,
         tx: Transaction,
         trm: Decimal | None,
-    ) -> "TransactionOut":
+    ) -> TransactionOut:
         """Serialize a single transaction with its tag names loaded."""
         return cls.from_txs(session, [tx], trm)[0]
 

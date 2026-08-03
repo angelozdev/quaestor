@@ -163,6 +163,7 @@ def test_restore_payment_is_write_destructive_and_hidden_from_llm():
 
 def test_register_temporal_tools_matches_the_registry_list():
     import asyncio
+
     from mcp.server.fastmcp import FastMCP
     from quaestor.mcp.registry import TEMPORAL_TOOL_NAMES, register_temporal_tools
 

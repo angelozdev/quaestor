@@ -1,14 +1,15 @@
 from datetime import date
 
 import pytest
-
 from quaestor.services import rollover
 
 
 def test_close_month_runs_hooks_in_registration_order(session):
     calls = []
-    h1 = lambda period, s: calls.append(("h1", period))
-    h2 = lambda period, s: calls.append(("h2", period))
+    def h1(period, s):
+        return calls.append(("h1", period))
+    def h2(period, s):
+        return calls.append(("h2", period))
     rollover.register_rollover_hook(h1)
     rollover.register_rollover_hook(h2)
     try:
@@ -26,8 +27,8 @@ def test_close_month_with_no_hooks_is_a_noop(session):
 def test_close_month_atomicity_rolls_back_on_hook_failure(session):
     # Hooks must write DIRECTLY to the session (never call committing services),
     # so a later hook's failure rolls back the whole close.
-    from quaestor.services import accounts
     from quaestor.domain.models import Account, AccountType
+    from quaestor.services import accounts
 
     def good(period, s):
         s.add(Account(name="Created by hook", type=AccountType.debit, currency="COP", balance=0))

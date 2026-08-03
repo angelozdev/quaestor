@@ -55,7 +55,7 @@ def update_recurring(
 @router.delete("/{recurring_id}", status_code=204)
 def deactivate_recurring(recurring_id: int, session: Session = Depends(get_session)):
     recurring.deactivate_recurring(session, recurring_id)
-    return None
+    return
 
 
 @router.post("/{recurring_id}/restore", response_model=RecurringOut)

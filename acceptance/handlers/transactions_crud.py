@@ -23,8 +23,6 @@ from __future__ import annotations
 import re as _re
 from datetime import date as Date
 
-from sqlmodel import select
-
 from quaestor.domain import money as money_mod
 from quaestor.domain.errors import MissingRate, NotFound, QuaestorError
 from quaestor.domain.models import Source, Transaction, TxType
@@ -38,6 +36,7 @@ from quaestor.services import (
     tags,
     transactions,
 )
+from sqlmodel import select
 
 from . import step
 from .fx_read_time import _DEC, _default_account_id, _month_str, _rest_client

@@ -24,7 +24,7 @@ def _pct(value: float) -> str:
     return f"{value:.1f}%"
 
 
-def render_markdown(report: "MonthlyReport") -> str:
+def render_markdown(report: MonthlyReport) -> str:
     lines: list[str] = []
 
     # 1. Headline — net + envelope performance (ADR-019)

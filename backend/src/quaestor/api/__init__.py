@@ -6,14 +6,32 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
 from .. import db
 from ..scheduler import run_forever
+from . import auth
+from . import chat as chat_module
 from .csrf import CSRFMiddleware
+from .deps import require_auth
 from .errors import register_exception_handlers
+from .routers import (
+    accounts,
+    budgets,
+    categories,
+    category_groups,
+    fx,
+    goals,
+    planned,
+    recurring,
+    reports,
+    rollover,
+    settings,
+    tags,
+    transactions,
+)
 
 log = logging.getLogger(__name__)
 
@@ -89,26 +107,6 @@ def _configure_middleware(app: FastAPI) -> None:
 
 def _include_routers(app: FastAPI) -> None:
     """Register routers. Resource routers are protected by require_auth."""
-    from fastapi import Depends
-
-    from . import auth, chat as chat_module
-    from .deps import require_auth
-    from .routers import (
-        accounts,
-        budgets,
-        categories,
-        category_groups,
-        fx,
-        goals,
-        planned,
-        recurring,
-        reports,
-        rollover,
-        settings,
-        tags,
-        transactions,
-    )
-
     app.include_router(auth.router, prefix="/api")
 
     protected = [Depends(require_auth)]

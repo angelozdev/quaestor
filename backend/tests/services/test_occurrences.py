@@ -1,7 +1,6 @@
 from datetime import date
 
 import pytest
-
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import (
     AccountType,
@@ -12,6 +11,7 @@ from quaestor.domain.models import (
     TxType,
 )
 from quaestor.services import accounts, occurrences, recurring, transactions
+
 from tests.support.recurring import declare_existing
 
 
@@ -302,7 +302,7 @@ def test_restoring_something_already_live_closes_nothing(session):
 
 def test_an_ended_obligation_still_gets_the_date_the_engine_missed(session):
     acc = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=500_000)
-    item = declare_existing(
+    declare_existing(
         session, name="Gimnasio", payee="Gimnasio", type=TxType.expense,
         mode=RecurringMode.auto, amount=8_000, currency="COP", category_id=None,
         account_id=acc.id, interval_unit=IntervalUnit.week, interval_count=1,
@@ -318,9 +318,8 @@ def test_an_ended_obligation_still_gets_the_date_the_engine_missed(session):
 
 
 def _all_occurrences(session, recurring_id):
-    from sqlmodel import select
-
     from quaestor.domain.models import RecurringOccurrence
+    from sqlmodel import select
 
     return list(
         session.exec(

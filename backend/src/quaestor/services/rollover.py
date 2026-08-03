@@ -8,8 +8,8 @@ its own, and a failure in any hook aborts the whole close.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date as Date
-from typing import Callable
 
 from sqlmodel import Session
 

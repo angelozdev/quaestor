@@ -6,8 +6,8 @@ post-confirm hooks (the seam P4 uses to record goal contributions).
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import date as Date
-from typing import Callable
 
 from sqlmodel import Session
 
@@ -28,7 +28,6 @@ from ..domain.planned import OutstandingQueue
 from ..domain.rules import delta_balance, transfer_deltas
 from . import occurrences as _occ
 from . import transactions as _tx
-
 
 POST_CONFIRM_HOOKS: list[Callable[[Transaction, Session], None]] = []
 

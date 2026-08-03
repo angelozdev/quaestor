@@ -11,7 +11,6 @@ If the engine factory ever stops branching on URL scheme, these tests fail.
 from __future__ import annotations
 
 import pytest
-
 from quaestor.db import make_engine
 
 

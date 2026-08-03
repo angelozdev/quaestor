@@ -10,9 +10,9 @@ buckets is preserved at the call site, not enforced at the VO.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Iterable
 
 from .models import Transaction
 from .money import to_cop_cents
@@ -49,6 +49,6 @@ class OutstandingQueue:
     @classmethod
     def from_lists(
         cls, overdue: Iterable[Transaction], upcoming: Iterable[Transaction]
-    ) -> "OutstandingQueue":
+    ) -> OutstandingQueue:
         """Construct with eager evaluation; both iterables are consumed once."""
         return cls(overdue=list(overdue), upcoming=list(upcoming))

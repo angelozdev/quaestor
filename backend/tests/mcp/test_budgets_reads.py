@@ -1,10 +1,9 @@
-from datetime import date
 
 import pytest
-
 from quaestor.mcp.tools import budgets_reads
 from quaestor.mcp.tools.budgets_reads import (
-    ListBudgetsInput, SafeToSpendInput,
+    ListBudgetsInput,
+    SafeToSpendInput,
 )
 from quaestor.services import accounts, budgets, categories, fx
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from ..domain.dates import display_date
+from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
 from ..domain.errors import (
     IllegalTransition,
     MissingRate,
@@ -22,13 +23,11 @@ from ..domain.models import (
     CategoryGroup,
     RecurringItem,
     RecurringOccurrence,
-    Settings,
     Tag,
     Transaction,
 )
-from ..domain.planned import OutstandingQueue
-from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
 from ..domain.money import cents_to_major, to_cop_cents
+from ..domain.planned import OutstandingQueue
 
 
 def money(cents: int, currency: str) -> str:

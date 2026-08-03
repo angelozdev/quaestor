@@ -19,7 +19,7 @@ future chunks are added when we emit them — YAGNI.
 """
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -124,25 +124,12 @@ class _UIMessageChunkAdapter:
     def __init__(self) -> None:
         self._adapter: TypeAdapter = TypeAdapter(
             Annotated[
-                Union[
-                    StartChunk,
-                    TextStartChunk,
-                    TextDeltaChunk,
-                    TextEndChunk,
-                    ToolInputStartChunk,
-                    ToolInputDeltaChunk,
-                    ToolInputAvailableChunk,
-                    ToolOutputAvailableChunk,
-                    ToolOutputErrorChunk,
-                    FinishStepChunk,
-                    FinishChunk,
-                    ErrorChunk,
-                ],
+                StartChunk | TextStartChunk | TextDeltaChunk | TextEndChunk | ToolInputStartChunk | ToolInputDeltaChunk | ToolInputAvailableChunk | ToolOutputAvailableChunk | ToolOutputErrorChunk | FinishStepChunk | FinishChunk | ErrorChunk,
                 Field(discriminator="type"),
             ]
         )
 
-    def model_validate(self, data: Any) -> Any:  # noqa: ANN401 — mirror of BaseModel API
+    def model_validate(self, data: Any) -> Any:
         return self._adapter.validate_python(data)
 
 

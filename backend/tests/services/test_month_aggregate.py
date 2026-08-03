@@ -1,15 +1,21 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
 from quaestor.db import init_db, make_engine
 from quaestor.domain.models import (
-    Account, AccountType, Budget, Category, Transaction, TxStatus, TxType,
+    Account,
+    AccountType,
+    Budget,
+    Category,
+    Transaction,
+    TxStatus,
+    TxType,
 )
 from quaestor.services.month_aggregate import load_month_aggregate
-from tests.support.query_counter import count_queries
-
-import pytest
 from sqlmodel import Session
+
+from tests.support.query_counter import count_queries
 
 
 @pytest.fixture

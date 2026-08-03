@@ -22,7 +22,13 @@ from sqlalchemy import extract, func
 from sqlmodel import Session, select
 
 from ..domain.models import (
-    Budget, Category, CategoryGroup, RecurringItem, Transaction, TxStatus, TxType,
+    Budget,
+    Category,
+    CategoryGroup,
+    RecurringItem,
+    Transaction,
+    TxStatus,
+    TxType,
 )
 from ..domain.money import to_cop_cents
 from ..domain.rules import month_bounds, prev_year_month
@@ -99,10 +105,7 @@ class MonthAggregate:
         while True:
             assigned = self.assigned(category_id, ym)
             spent = self.spent_for_budget(category_id, ym)
-            if assigned == 0 and spent == 0:
-                avail = 0
-            else:
-                avail = max(prev_avail, 0) + assigned - spent
+            avail = 0 if assigned == 0 and spent == 0 else max(prev_avail, 0) + assigned - spent
             cache[ym] = avail
             if ym == year_month:
                 return avail

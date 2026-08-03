@@ -18,6 +18,7 @@ Per-call timeout:
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Literal
 
@@ -85,8 +86,6 @@ def _resolve_system_prompt() -> str | None:
       - Set to anything else → use that string verbatim, truncated to
         `_SYSTEM_PROMPT_MAX_CHARS` with a warning log if exceeded.
     """
-    import logging
-
     raw = os.environ.get("CHAT_SYSTEM_PROMPT", "").strip()
     if not raw or raw.lower() == _DISABLE_SENTINEL:
         return None

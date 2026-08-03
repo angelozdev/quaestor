@@ -221,10 +221,7 @@ def goals_progress(
     if today is None:
         today = Date.today()
     stmt = select(Goal)
-    if goal_ids is not None:
-        stmt = stmt.where(Goal.id.in_(goal_ids))
-    else:
-        stmt = stmt.where(Goal.status == GoalStatus.active)
+    stmt = stmt.where(Goal.id.in_(goal_ids)) if goal_ids is not None else stmt.where(Goal.status == GoalStatus.active)
     goals_ = session.exec(stmt.order_by(Goal.id)).all()
     return [
         goal_progress_calc(

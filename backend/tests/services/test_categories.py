@@ -1,5 +1,4 @@
 import pytest
-
 from quaestor.domain.errors import ValidationError
 from quaestor.services import categories
 
@@ -45,7 +44,6 @@ def test_update_group_renames_and_reorders(session):
 
 def test_update_group_missing_raises(session):
     import pytest
-
     from quaestor.domain.errors import NotFound
 
     with pytest.raises(NotFound):
@@ -61,7 +59,6 @@ def test_archive_group_hides_from_default_list(session):
 
 def test_get_category_missing_raises(session):
     import pytest
-
     from quaestor.domain.errors import NotFound
 
     with pytest.raises(NotFound):
@@ -89,7 +86,6 @@ def test_update_category_can_unassign_group(session):
 def test_update_category_bad_group_rejected(session):
     cat = categories.create_category(session, "Groceries")
     import pytest
-
     from quaestor.domain.errors import ValidationError
 
     with pytest.raises(ValidationError):

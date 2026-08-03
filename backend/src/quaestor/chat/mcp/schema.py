@@ -79,4 +79,4 @@ def filter_for_llm(
     (transfer, delete_*, archive_*, update_settings, delete_tag) never
     appear in the tool list the LLM sees — closing QUA-LLM06-01.
     """
-    return [t for t in tools if t.get("function", {}).get("name") in allowed]  # noqa: E501
+    return [t for t in tools if t.get("function", {}).get("name") in allowed]

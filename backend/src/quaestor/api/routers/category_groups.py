@@ -33,7 +33,7 @@ def update_group(
 @router.delete("/{group_id}", status_code=204)
 def archive_group(group_id: int, session: Session = Depends(get_session)):
     categories.archive_group(session, group_id)
-    return None
+    return
 
 
 @router.post("/{group_id}/restore", response_model=CategoryGroupOut)
