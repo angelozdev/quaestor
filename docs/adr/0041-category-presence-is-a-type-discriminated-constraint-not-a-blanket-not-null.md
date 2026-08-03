@@ -67,9 +67,13 @@ Three things follow from it:
 **Declared twice, on purpose.** The constraint lives in
 `Transaction.__table_args__` *and* in Alembic revision `0010`. Alembic is the
 source of truth for the schema (`db.py`), but a constraint only Alembic knows
-about is invisible to whoever reads the model. Both must be present, and a
-mismatch is caught by the acceptance suite, which builds its schema through
-migrations and then exercises it through the models.
+about is invisible to whoever reads the model. Both must be present, and that
+they agree is checked by `backend/tests/db/test_model_schema_drift.py`, which
+reflects the CHECK from a migrated database and compares it to the model's.
+The acceptance suite does **not** catch this: it builds its schema through
+migrations and exercises it through the models, but never compares the two
+definitions — an edit to either one alone passed every gate until that test
+existed.
 
 **Installed via `op.batch_alter_table`.** On Postgres this emits a plain
 `ALTER TABLE ... ADD CONSTRAINT`; on SQLite it rebuilds the table. Without it,

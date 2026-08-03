@@ -233,3 +233,15 @@ def test_transfer_carrying_a_category_is_refused_as_text(session, seeded):
     )
     assert "categor" in out
     assert tx_service.list_transactions(session, type="transfer") == []
+
+
+def test_transfer_with_an_unknown_category_name_blames_the_rule_not_the_name(session, seeded):
+    """The refusal must be about transfers, not about a category that is missing
+    — and must not point at new_category, which TransferInput does not have."""
+    accounts.create_account(session, "Savings", "savings", "COP", balance=0)
+    out = core.transfer(
+        session,
+        TransferInput(from_account="Bancolombia", to_account="Savings", amount=1_000_000, category="Inventada"),
+    )
+    assert "a transfer carries no category" in out
+    assert "new_category" not in out

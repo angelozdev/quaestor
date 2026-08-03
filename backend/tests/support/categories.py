@@ -23,9 +23,17 @@ def a_category(session, tx_type: TxType = TxType.expense) -> int:
 
 
 def a_named_category(session, name: str, tx_type: TxType = TxType.expense) -> int:
-    """Id of a category with this exact name, created once per session."""
-    is_income = category_is_income_for(tx_type)
-    existing = next((cat for cat in list_categories(session) if cat.name == name), None)
+    """Id of a category with this name, created once per session.
+
+    Matched the way `create_category` refuses duplicates (AC-13): ignoring case
+    and including archived ones. A stricter lookup here would miss a match the
+    guard then rejects, and the helper would raise instead of returning an id.
+    """
+    folded = name.casefold()
+    existing = next(
+        (cat for cat in list_categories(session, include_archived=True) if cat.name.casefold() == folded),
+        None,
+    )
     if existing is not None:
         return existing.id
-    return create_category(session, name, is_income=is_income).id
+    return create_category(session, name, is_income=category_is_income_for(tx_type)).id

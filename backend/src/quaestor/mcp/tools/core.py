@@ -245,7 +245,10 @@ def record_income(session: Session, inp: RecordIncomeInput) -> str:
 def transfer(session: Session, inp: TransferInput) -> str:
     src = _resolve_account(session, inp.from_account)
     dst = _resolve_account(session, inp.to_account)
-    category = _resolve_category(session, inp.category) if inp.category else None
+    if inp.category:
+        raise ValidationError(
+            "a transfer carries no category — moving money between your own accounts is neither spending nor income"
+        )
     _, leg_to = transactions.transfer(
         session,
         from_account_id=src.id,
@@ -256,7 +259,6 @@ def transfer(session: Session, inp: TransferInput) -> str:
         notes=inp.notes,
         source="agent",
         amount_received=inp.amount_received,
-        category_id=category.id if category else None,
     )
     src = accounts.get_account(session, src.id)
     dst = accounts.get_account(session, dst.id)

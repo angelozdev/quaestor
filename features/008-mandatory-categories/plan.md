@@ -100,9 +100,11 @@ transferencias en la misma sentencia. **AC-17.**
 
 Declarado dos veces a propósito: Alembic es la fuente de verdad del esquema
 (`db.py`), pero un constraint que solo conoce Alembic es invisible para quien
-lee el modelo. La suite de aceptación construye su esquema por migraciones y
-después lo ejercita por los modelos, así que una divergencia entre los dos se
-cae sola.
+lee el modelo. Que las dos declaraciones digan lo mismo lo verifica
+`backend/tests/db/test_model_schema_drift.py`, que refleja el CHECK desde una
+base migrada y lo compara contra `Transaction.__table_args__` — la suite de
+aceptación **no** lo hace: ejercita el esquema migrado a través de los modelos,
+pero nunca compara las dos definiciones.
 
 Se instala con `op.batch_alter_table`: en Postgres emite un `ALTER TABLE …
 ADD CONSTRAINT` normal, en SQLite reconstruye la tabla. Sin eso la revisión

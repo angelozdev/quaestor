@@ -267,3 +267,12 @@ pipeline generation → tests green. Bounded, one feature per task.
   already `write_safe`, and feature 008 added `new_category` to four more
   LLM-reachable tools, so an assistant turn can now create a category and leave
   every list in the UI stale. Add the root, or re-check the claim.
+- C14. `services/budgets.set_budget` accepts an envelope on an **income**
+  category. Reproduced by the CP7 reviewer: `PUT /budgets {category_id: <an
+  income category>, amount_assigned: 123456}` returns 200, and safe-to-spend
+  deducts it from then on. An envelope on an income category can never accrue
+  `spent` — the direction rule forbids an expense there — so `available` is
+  frozen forever while `assigned_envelopes` permanently depresses the headline
+  number. Predates feature 008 and is the larger of the two envelope problems;
+  `set_budget` already refuses archived and `exclude_from_budget` categories, so
+  the direction check belongs beside them.

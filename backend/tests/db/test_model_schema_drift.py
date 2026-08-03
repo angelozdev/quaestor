@@ -20,8 +20,14 @@ CONSTRAINT_NAME = "ck_transaction_category_by_type"
 
 
 def _normalised(expression: str) -> str:
-    """Compare the rule, not the whitespace or the engine's rendering."""
-    return re.sub(r"[\s()]+", " ", expression).strip().lower()
+    """Compare the rule, not the whitespace or the engine's rendering.
+
+    Parentheses are kept: they carry the precedence that makes the constraint
+    correct. `(A AND B) OR (C AND D)` and `A AND (B OR C) AND D` hold the same
+    tokens and mean opposite things — under the second, no expense could ever
+    be stored.
+    """
+    return re.sub(r"\s+", " ", expression).strip().lower()
 
 
 def _declared_on_the_model() -> str:
@@ -44,5 +50,5 @@ def test_the_model_declares_the_constraint_the_migration_installs():
 
 def test_the_constraint_states_the_rule_ADR_0041_describes():
     rule = _declared_on_the_model()
-    assert "type in 'expense', 'income' and category_id is not null" in rule
-    assert "type = 'transfer' and category_id is null" in rule
+    assert "(type in ('expense', 'income') and category_id is not null)" in rule
+    assert "(type = 'transfer' and category_id is null)" in rule
