@@ -4,7 +4,7 @@
 - **Date:** 2026-06-21
 - **Deciders:** Angelo
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** [0043 — A fund replaces the envelope and the goal, and its balance is derived](./0043-a-fund-replaces-the-envelope-and-the-goal-and-its-balance-is-derived.md) (both halves — the goals write API and the budget envelope write API; REST↔MCP parity itself is untouched and is re-satisfied by the fund tools)
 
 ## Context and problem statement
 

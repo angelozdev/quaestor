@@ -4,7 +4,7 @@
 - **Date:** 2026-06-21
 - **Deciders:** Angelo
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** [0043 — A fund replaces the envelope and the goal, and its balance is derived](./0043-a-fund-replaces-the-envelope-and-the-goal-and-its-balance-is-derived.md) (the goal clause only — goals no longer exist and a fund is hard-deleted; soft-delete and restore for recurring items, accounts, categories, tags and groups remain in force)
 
 ## Context and problem statement
 

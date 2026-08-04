@@ -5,7 +5,7 @@ created: 2026-08-04
 status: open
 steps:
   - id: backup-before-migration
-    description: "Dump the local production Postgres to iCloud before revision 0011 drops three tables and one column"
+    description: "Dump the local production Postgres to iCloud before revision 0012 drops three tables and one column"
     owner: human
     command: "just backup"
     evidence: ""
@@ -15,7 +15,7 @@ steps:
       - AC-27
 
   - id: count-goals-and-budgets-live
-    description: "Confirm production still holds exactly one goal, zero contributions, three unconfirmed proposals and zero budgets — the shape revision 0011 expects to delete"
+    description: "Confirm production still holds exactly one goal, zero contributions, three unconfirmed proposals and zero budgets — the shape revision 0012 expects to delete"
     owner: human
     command: "QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db psql -U \"${POSTGRES_USER:-quaestor}\" -d \"${POSTGRES_DB:-quaestor}\" -c \"select 'goal' as t, count(*) from goal union all select 'goal_contribution', count(*) from goal_contribution union all select 'budget', count(*) from budget union all select 'goal_tx', count(*) from \\\"transaction\\\" where goal_id is not null;\""
     evidence: ""
@@ -32,8 +32,8 @@ steps:
     blocking_acs:
       - AC-27
 
-  - id: apply-migration-0011
-    description: "Apply revision 0011 (pre-flight guard, delete unconfirmed goal proposals, drop goal / goal_contribution / budget and transaction.goal_id) to the local production Postgres"
+  - id: apply-migration-0012
+    description: "Apply revision 0012 (pre-flight guard, delete unconfirmed goal proposals, drop goal / goal_contribution / budget and transaction.goal_id) to the local production Postgres"
     owner: human
     command: "just migrate"
     evidence: ""
@@ -61,13 +61,35 @@ fuerza autonomía `low` en `migrations/**`. Producción es el contenedor Postgre
 local (ADR-0030); Render es standby congelado y no se toca.
 
 **Esta migración es destructiva de una forma que la `0010` no era.** La `0010`
-agregaba constraints y su `downgrade()` los tiraba sin perder nada. La `0011`
+agregaba constraints y su `downgrade()` los tiraba sin perder nada. La `0012`
 **elimina tres tablas y una columna**. Revertirla recupera el esquema, no los
 datos. El respaldo del paso 1 no es ceremonia: es la única vuelta atrás.
 
 Se corre entero **al abrir F2**, después de que F0 y F1 hayan aterrizado — la
 app tiene que saber calcular con fondos antes de que se le quiten las metas y
 los sobres.
+
+## Peligro: arrancar el stack aplica migraciones sin gate
+
+`backend/src/quaestor/__main__.py` corre `alembic upgrade head` **cada vez que
+arranca el contenedor `api`**. El gate de respaldo vive en `just migrate`
+(`justfile:37`, exige un dump con la fecha de hoy) — **no** en el entrypoint.
+
+Consecuencia directa: **`just dev-prod` en la rama `sinking-funds` aplica la
+`0012` a los datos reales sin pedir respaldo y sin pasar por este runbook.**
+
+Hasta que los pasos 1–3 estén tildados, **no levantes el stack de producción en
+esta rama.** Si necesitás la app, usá `just dev-local` (SQLite sandbox en
+`.dev-data/`, sin datos reales).
+
+No es un defecto que introduzca esta feature: la `0010` corrió con el mismo
+hueco y sólo se salvó porque el dueño usó `just migrate` a propósito. Queda
+anotado acá porque esta es la primera migración del proyecto donde el hueco
+cuesta datos.
+
+**La revisión aditiva `0011` (crea la tabla `fund`, F0) no necesita gate:**
+crea una tabla vacía, no lee ni escribe ninguna fila existente, y su
+`downgrade()` la tira sin pérdida. Que se aplique sola al arrancar es correcto.
 
 ## 1. Respaldo
 
@@ -80,7 +102,8 @@ fecha de hoy. Este paso lo hace explícito en vez de dejar que el gate falle.
 
 Verificá que el dump sea un punto de restauración real y no un archivo que
 simplemente satisface el gate de fecha — lo mismo que se hizo en la 008:
-`pg_restore` de su `alembic_version` tiene que dar `0010`, y su sección de
+`pg_restore` de su `alembic_version` tiene que dar `0011` —no `0010`: la
+aditiva de F0 ya habrá corrido sola al arrancar el stack— y su sección de
 esquema tiene que **contener** todavía `goal` y `budget`.
 
 **Evidencia:** ruta del dump en `QuaestorBackups/quaestor-local-<fecha>.dump`, y
@@ -122,19 +145,19 @@ Borrarla desharía un hecho.
 **Lo que tiene que salir:** tres filas, todas con `status` en `planned` o
 `skipped`. **Ninguna en `posted`.**
 
-**Si aparece alguna `posted`:** parar. La revisión `0011` tiene que dejarla viva
+**Si aparece alguna `posted`:** parar. La revisión `0012` tiene que dejarla viva
 y sólo soltarle el `goal_id` — sigue siendo una transferencia legítima entre dos
 cuentas del dueño. Eso es un cambio al plan, no una decisión de la corrida.
 
 **Evidencia:** la salida del `psql`, con las tres filas y sus estados.
 
-## 4. Aplicar la revisión 0011
+## 4. Aplicar la revisión 0012
 
 ```
 just migrate
 ```
 
-Hace cuatro cosas, en este orden:
+Hace cinco cosas, en este orden:
 
 1. **Guarda previa** — cuenta transferencias `posted` con `goal_id`. Si hay
    alguna, se niega nombrando cuántas y no toca el esquema. Es la red por si el
@@ -142,20 +165,32 @@ Hace cuatro cosas, en este orden:
    sobre las filas sin categoría.
 2. **Borra las propuestas sin confirmar** — las transferencias con `goal_id` en
    `planned` o `skipped`. AC-27.
-3. **`DROP TABLE`** `goal_contribution`, `goal`, `budget`, en ese orden (la
-   llave foránea manda).
+3. **`DROP TABLE goal_contribution`**, que apunta a `goal` y a `transaction`,
+   así que se va antes que cualquiera de las dos.
 4. **`DROP COLUMN`** `transaction.goal_id`.
+5. **`DROP TABLE`** `goal` y `budget`, y en Postgres sus tipos enum
+   (`goalstatus`, `contributionsource`).
+
+**El orden de los pasos 4 y 5 cambió respecto a la primera redacción de este
+runbook, y por una razón medida:** en Postgres la llave foránea de
+`transaction.goal_id` hace que `DROP TABLE goal` falle
+(*cannot drop table goal because other objects depend on it*). SQLite tolera el
+orden contrario y la base del dueño no. La columna se suelta primero para que
+la única corrida que importa —la de Postgres— no encuentre el error.
 
 **Gotcha:** el paso 4 usa `op.batch_alter_table` porque SQLite no sabe
 `DROP COLUMN` sobre una tabla con constraints — reconstruye la tabla. En
 Postgres emite un `ALTER` normal. Si algo falla aquí y no en la suite, mirar ahí
-primero. Es el mismo mecanismo que la `0010`, por el mismo motivo.
+primero. Es el mismo mecanismo que la `0010`, por el mismo motivo. La
+reconstrucción conserva el CHECK `ck_transaction_category_by_type` que dejó la
+008; hay un test que lo fija
+(`backend/tests/db/test_migration_0012.py::test_the_movement_rule_of_revision_0010_survives_the_table_rebuild`).
 
 **`downgrade()` recrea las tablas vacías y la columna nula.** No recupera la
 meta ni las propuestas. Está escrito así a propósito y dicho en voz alta acá: la
 vuelta atrás real es el dump del paso 1.
 
-**Evidencia:** `select version_num from alembic_version;` → `0011`.
+**Evidencia:** `select version_num from alembic_version;` → `0012`.
 
 ## 5. Verificar en vivo
 
@@ -166,7 +201,7 @@ Comando en el frontmatter (`verify-drop-live`). Tres cosas:
   transferencias. AC-27 exige que todo lo demás sobreviva: cada gasto e ingreso
   con su categoría, cada transferencia sin ninguna. El CHECK de la 008 sigue
   vigente y lo respalda.
-- `alembic_version` en `0011`.
+- `alembic_version` en `0012`.
 
 **Evidencia:** salida del `psql`, con los conteos antes y después lado a lado.
 

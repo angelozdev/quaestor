@@ -466,7 +466,7 @@ The card account stays a normal account with a **negative balance = debt**; the 
 
 ## ADR-030 — Without an exchange rate the app refuses to guess, even when it could
 
-**Status:** accepted (feature 006, 2026-08-01) · **Upholds** feature 005's AC-9; does not supersede it
+**Status:** accepted (feature 006, 2026-08-01) · **Upholds** feature 005's AC-9; does not supersede it · **generalised to every read path by ADR-038** (feature 003, 2026-08-04)
 
 **Context.** Quaestor holds money in COP and USD. Feature 005 decided the app never assumes a rate: a report with no rate fails loudly rather than showing a wrong total. Feature 006 had to decide whether the outstanding queue inherits that rule or earns an exception, since a queue whose items happen to be all in pesos does not strictly need a rate to be correct.
 
@@ -652,3 +652,28 @@ The rates are the other question, and there smoothing is correct: the quarterly 
 - **ADR-015** (global source account for goal contributions) becomes moot with the goal transfers it existed for.
 - **Nothing is frozen.** Asking for August's available money after switching off an income in October gives August's figure *without* that income. This is where Quaestor departs from both YNAB and Actual, where an assignment is a stored fact. The cost, chosen knowingly: a screenshot of August's number will not always match the app later.
 - **A destructive migration on real data** — three tables and one column dropped, three unconfirmed proposals deleted. It runs behind a fresh backup and explicit human authorisation (charter §7, ADR-0030).
+
+---
+
+## ADR-038 — The rate is asked for on the way in, not when a dollar shows up
+
+**Status:** accepted (feature 003, 2026-08-04) · **Upholds** ADR-030 and feature 005's AC-9; **withdraws** the amendment `docs/adr/0044` had proposed to technical ADR-0031 · **Expires** with the daily-TRM job on the roadmap
+
+**Context.** Quaestor holds money in COP and USD, and every COP figure it shows is computed at read time from one USD→COP rate (the TRM). ADR-030 already settled the general rule for feature 006: without a rate the app refuses to guess, **even when everything owed is already in pesos**.
+
+Feature 003 reopened it from the other side. Its new reading surfaces — the money available, the earning and cost rates, each fund's status — were built to fetch the rate **only on contact with a non-COP amount**, so a month recorded entirely in pesos would read without one. The argument was a measurement: 85 of the 92 approved scenarios of feature 003 never mention a rate.
+
+**Decision.** **The rate is demanded on entry to every read path, always, and a rate must always be set.** The owner: *"La tasa se aplica al entrar en la app. Siempre debe estar (mientras creamos un feature que obtenga la TRM por debajo día a día)."*
+
+Recording keeps working without a rate — an expense in dollars is registered whether or not a rate exists (feature 005's AC-1). It is *reading a COP figure* that requires one.
+
+The friction is accepted because it **names its own expiry**: a job that fetches the TRM day by day is on the roadmap, and once it runs the rate is never missing in practice. Until then, setting it is a one-time act on a fresh install, not a daily chore.
+
+**Alternatives rejected.** (A) **Ask for the rate only when a foreign amount is actually met** — the proposal this decision withdraws. It is correct in the moment and wrong as a rule: the app's behaviour would depend on today's data, so the user meets the requirement only when it bites, and adding one US$30 gym membership silently changes what the app will show. Exactly the alternative ADR-030 rejected for the outstanding queue, arriving again under a different name. (B) **Fall back to a default or stale rate** — what feature 005 ruled out; a wrong total is worse than no total.
+
+**Consequences.**
+
+- **One rule, no exceptions.** Technical ADR-0031's "reads fail loud" stays uniform, and ADR-030 stays the whole story rather than one case of two.
+- **The accepted cost:** a month recorded entirely in pesos cannot be read until a rate is set. The owner knows this and chose it.
+- **The 92 approved scenarios stand untouched.** They were silent about the rate, not dependent on its absence — every scenario whose subject *is* the missing rate says so explicitly. The acceptance suite seeds a rate as background state, exactly as a running app carries one.
+- **The expiry is a roadmap item**, not a promise in prose: `daily-trm-fetch`. When it ships, this decision's friction disappears without the rule changing.

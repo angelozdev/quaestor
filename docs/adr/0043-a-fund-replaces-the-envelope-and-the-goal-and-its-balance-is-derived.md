@@ -1,7 +1,11 @@
 # 0043. A fund replaces the envelope and the goal, and its balance is derived
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-04
+- **Accepted:** 2026-08-04 (feature 003 Checkpoint 7. Two amendments below are
+  marked `proposed` — the anchor's month, and the undated rules not reading
+  what the fund holds. Neither is covered by this acceptance; both await the
+  owner)
 - **Deciders:** Angelo
 - **Supersedes:** 0006 (both halves — its goals write API and its budget
   envelope write API), 0005 in part (the goal clause of the uniform
@@ -105,12 +109,73 @@ Two consequences fall out rather than being coded:
 - **An obligation due this month asks for its full amount.** Zero months remain,
   the floor makes it one, and the fund needs the money now. Same formula.
 
+#### Amendment, 2026-08-04 (proposed): the undated rules do not read what the fund holds
+
+*"What is still missing"* is not the same quantity for all four rules, and the
+difference is load-bearing. The dated rules subtract what the fund already
+holds — that is what makes AC-7 work, where a drained fund raises its ask. The
+undated ones do not: `fixed` asks the amount the owner named and `average` asks
+the window's average, whatever the fund holds and whatever was spent. The
+plan's D3 table states this rule by rule; the sentence above does not, and
+reading its *"missing"* as *target minus held* is wrong for half of them.
+
+One behaviour follows that nothing in the contract pins. A fund reports whether
+it is **on track** or **behind**, and that verdict compares what it asks now
+against what it asked before this month's spending. For the undated rules those
+two figures are identical by construction, so a `fixed` or `average` fund can
+**never** report behind: one asking `$200.000` with `$900.000` already spent in
+its category still reports on track, and the monthly report's count of funds
+behind can never include either rule.
+
+The contract does not catch it. `spec.md` asserts the verdict exactly twice —
+AC-6 s2 (on track) and AC-7 s2 (behind) — and **both are `from-recurring`
+funds**. No scenario asks an undated fund how it is doing, and there is no AC
+either: *fund health* is a `feature.md` scope bullet that Checkpoint 2 never
+turned into an acceptance criterion.
+
+What *on track* should mean for a rule with no date is a **product** question,
+not a repair. The predicate already exists elsewhere in the code as
+`spent ≤ opening + asks`, but adopting it changes a badge the owner reads, so
+it needs an acceptance criterion and a scenario before any code moves — and a
+new scenario means editing an approved `spec.md`. Recorded here so the green
+badge is a **known** boundary rather than assumed correctness. `proposed`, not
+accepted: it goes to the owner alongside the anchor amendment.
+
 ### The anchor, and why it is not a snapshot
 
 One stored pair — `(anchor_month, anchor_amount)` — states what the fund held at
 the start of a month. It is written at creation (AC-19: *"the owner may type
 what the fund already holds"*) and rewritten when the owner corrects it. The
 fold starts from it instead of from zero.
+
+#### Amendment, 2026-08-04 (proposed): the anchor's month may be absent
+
+Implementing F0 showed the pair cannot always be written whole. `set_fund`,
+the call that records *"the fund already holds $149.100"*, receives no date:
+the services layer has no clock of its own, and the acceptance harness pins a
+scenario clock the app has no way to be handed. Anchoring such a statement to
+the fund's **start** month is arithmetically wrong — AC-5 s2 states $149.100 in
+January 2027 for a fund that started in November 2026 and expects the ask to be
+$74.550; folding the anchor forward from November yields $49.700.
+
+So `anchor_month` becomes **nullable**, and `NULL` means *"stated for whichever
+month is being looked at"*. The fold starts at `max(anchor_month, start_month)`,
+or at the month under view when the anchor carries no month.
+`create_fund(opening_balance=…)` still writes a dated anchor, because creation
+does name a month.
+
+**The cost, stated plainly:** a monthless anchor is not pinned in time, so
+asking about a different month re-reads the same figure rather than folding to
+it. A fund whose balance was stated once and then viewed across several months
+reports that same balance as each month's opening, less that month's spending.
+It is right for the statement the owner just made and progressively less right
+the further the question moves from it.
+
+The way out already exists and is not taken here: the screen (F3) does know
+which month the owner is looking at, so it can date the anchor at the point of
+writing, and a dated anchor folds correctly. This amendment is deliberately
+`proposed` rather than accepted — it is on the agenda of the owner's F1 gate,
+where the number this feeds is reviewed against production.
 
 This is a **statement by the owner**, not a computed figure, which is why it does
 not contradict AC-16. Nothing in the app ever writes it; nothing reads it from

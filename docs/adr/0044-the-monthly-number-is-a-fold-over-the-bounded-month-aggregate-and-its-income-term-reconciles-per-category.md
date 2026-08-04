@@ -2,8 +2,13 @@
 
 - **Status:** proposed
 - **Date:** 2026-08-04
+- **Acceptance withheld:** 2026-08-04 (feature 003 Checkpoint 7). The withdrawn
+  lazy-TRM amendment below is sound and agrees with product ADR-038, but the
+  `uncovered` term does not describe what was built — see *A gap on the expense
+  side*, below. Closing that is the condition of acceptance.
 - **Deciders:** Angelo
-- **Supersedes:** — (extends 0028; amends 0031's fail-loud read clause)
+- **Supersedes:** — (extends 0028; **0031 stands unamended** — see the
+  withdrawn amendment below)
 - **Superseded by:** —
 
 ## Context and problem statement
@@ -146,6 +151,39 @@ fund's holdings (AC-13 — only the excess leaves the money available, never the
 whole amount). One term, because the breakdown must add up exactly:
 `income − Σ asks − uncovered = free` is asserted by AC-10.
 
+#### A gap on the expense side, found 2026-08-04 at Checkpoint 7
+
+The income term above stops guessing the moment money lands. **The expense term
+does not, and the asymmetry was never declared.**
+
+As built, `uncovered` skips every posted movement that carries a recurring
+link, on the assumption that the obligations term already accounts for it — but
+that term sums what each obligation **promises**, never what actually posted.
+Two consequences, both in the direction that gets spent:
+
+- an obligation promising `$200.000` whose charge posts at `$250.000` leaves
+  `$50.000` out of the headline entirely;
+- switch that obligation off *after* its charge has posted and the whole
+  `$200.000` leaves with it, so the money available reads `$200.000` **too
+  high**.
+
+This contradicts AC-9 in its own words — *"minus spending in categories no fund
+covers"* — and it contradicts this ADR's own second decision driver, that the
+money available must never count money that has not arrived, *because an error
+here is spent before it can be corrected*. AC-16 justifies dropping an
+obligation's **promise** when the owner switches it off; it does not justify
+dropping a **posted movement**.
+
+The suite is green over it because no approved scenario records a recurring
+charge, in a category with **no fund**, posting at anything other than the
+amount promised.
+
+**This is why this ADR is not accepted at Checkpoint 7.** Either the expense
+term reconciles the way the income term does, or the asymmetry is written here
+as a chosen boundary the way the per-category one above is. Both move the
+number the owner reads every day, so the choice is the owner's, and it needs an
+acceptance criterion and a scenario before any code moves.
+
 Separately, and never mixed in:
 
 ```
@@ -158,25 +196,83 @@ A quarterly `$3.000.000` bonus contributes `$1.000.000` to the earning rate in
 every month of its cycle, and `$0` to the money available until the month it is
 due. The gap between the two numbers carries information rather than noise.
 
-### The TRM is fetched lazily, amending ADR-0031's read clause
+#### A gap on the expense side, found at Checkpoint 7
+
+**The paragraph above describes what `uncovered(M)` should be. It is not what
+`services/funds._uncovered` computes, and that is why this ADR is not accepted
+yet.**
+
+Two asymmetries, both on the expense side, both against the income rule this
+same ADR states one section earlier — *once money lands in an income category,
+that category stops guessing*:
+
+- A **posted** expense carrying a `recurring_id` is skipped from the spending
+  term on the assumption that the obligations term covers it. That term sums
+  what each obligation **promised**, never what actually posted. An obligation
+  promising `200.000` whose charge posts at `250.000` leaves `50.000` off the
+  headline.
+- Switch that obligation off after its charge has posted and the promise
+  disappears with it, taking the whole `200.000` — money that really left the
+  account — out of `uncovered`. The money available then reads `200.000` too
+  high.
+
+AC-16 justifies dropping a **promise** when an obligation is switched off. It
+does not justify dropping a **posted movement**. The fix is the income rule
+applied to expenses — actual-if-any-else-expected — but which figure the
+headline should carry is a product decision with no approved scenario behind
+it, so it is not taken here.
+
+**Condition of acceptance:** a scenario covering a recurring expense in a
+category with no fund posting at something other than its promise, and the
+`uncovered` paragraph above rewritten to match whatever that scenario decides.
+Until then this ADR describes an intention rather than the code.
+
+### Withdrawn: the lazy TRM. ADR-0031 stands unamended
+
+**This section proposed an amendment to ADR-0031 and the owner rejected it. It
+is kept as the record of what was proposed, on what evidence, and why the
+answer was no.**
 
 ADR-0031 established that read paths producing COP figures call `get_trm` and
 **fail loud** when no rate is set; writes use `get_trm_or_none` and succeed
 without one. `safe_to_spend`, `list_budgets` and `budget_status` all fail loud
 today.
 
-Their replacements — `available`, `rates`, `fund_status`, `list_funds` — fetch
-the rate **only when a non-COP amount is actually encountered**. A COP-only
-month needs no rate; a month holding a US$30 obligation still fails loud without
-one.
+**What was proposed.** That their replacements — `available`, `rates`,
+`fund_status`, `list_funds` — fetch the rate **only when a non-COP amount is
+actually encountered**. A COP-only month would need no rate; a month holding a
+US$30 obligation would still fail loud without one.
 
-This is not a convenience: **85 of the 92 approved scenarios set no TRM.** Only
-AC-18's three do, because it is the AC about currency. Under the fail-loud rule
-the approved contract cannot pass. The rule was right for a read path where
-every figure crossed the converter; it is wrong for one where most do not.
+**The measurement behind it.** 85 of the 92 approved scenarios of feature 003
+set no TRM. Only AC-18's three do, because it is the AC about currency. Read
+literally, under fail-loud, the approved contract could not pass.
 
-Fail-loud is preserved exactly where it protects a number: the moment a dollar
-amount has to become a COP amount.
+**The owner's ruling, 2026-08-04.** *"La tasa se aplica al entrar en la app.
+Siempre debe estar (mientras creamos un feature que obtenga la TRM por debajo
+día a día)."* The rate is demanded **on entry**, on every read path, always —
+and a rate must always be set. The friction is accepted because it has a named
+expiry: a future job that fetches the TRM day by day, after which the rate is
+never missing in practice. Recorded as product decision **ADR-038**.
+
+**Why the measurement did not force the amendment.** It measured the specs, not
+the app. A running Quaestor always has a rate; the 85 scenarios were silent
+about it, not dependent on its absence — every scenario that makes the missing
+rate its subject says `Given no TRM has been set` explicitly, nine times across
+002, 005 and 006. The specs are therefore satisfied by **seeding the rate as
+background state** in the acceptance `World` (`SEEDED_TRM`, a value that appears
+in no spec so an accidental dependency comes out wrong rather than
+coincidentally right), and `Given no TRM has been set` now clears it. No spec
+was touched and no read rule was relaxed.
+
+That also removes a collision the amendment had created: 005's AC-9 asserts a
+report with no rate is refused, while 003's AC-12 reads a pure-COP month's
+report — two specs, one global step registry, and under the lazy rule they
+contradicted each other. Under the entry rule and a seeded World, both hold.
+
+**The accepted cost.** A month recorded entirely in pesos still cannot be read
+until a USD→COP rate is set. The owner knows this and accepts it: one rule to
+remember instead of two, consistent with product ADR-030, which already made
+the same call for the outstanding queue.
 
 ## Consequences
 
@@ -186,11 +282,13 @@ amount has to become a COP amount.
   history query — the fold rides data ADR-0028 already made available.
 - **Good:** the headline's breakdown adds up by construction, so nothing in it
   is unattributable (AC-10).
+- **Good:** ADR-0031's "reads fail loud" stays uniform. There is one rule, not
+  two, and no reader has to know which figures crossed the converter.
 - **Bad / cost:** the per-category reconciliation boundary, above.
-- **Bad / cost:** ADR-0031's uniform "reads fail loud" is no longer uniform.
-  A reader now has to know that the rate is demanded on contact with a foreign
-  amount, not on entry. Mitigated by the failure staying loud and by naming it
-  here.
+- **Bad / cost (accepted by the owner):** **a month recorded entirely in pesos
+  still cannot be read until a USD→COP rate is set.** This is the price of the
+  withdrawn amendment and it is paid on entry to every read path. It expires
+  with the daily-TRM job on the roadmap.
 - **Bad / cost:** the fold's growth over years, carried from ADR-0043.
 
 ## Confirmation
@@ -203,6 +301,8 @@ amount has to become a COP amount.
   money available` (AC-10).
 - Read-path cost: `backend/tests/api/test_reports_query_count.py` already pins
   the statement count for the report path and is the place the +2 is recorded.
-- The lazy TRM is asserted by the suite as a whole — 85 scenarios that set no
-  rate and expect an answer, and AC-18's three that set one and expect the ask
-  to move with it.
+- The entry-time TRM is asserted from both sides: the nine scenarios across
+  002, 005 and 006 that say `Given no TRM has been set` and expect a refusal,
+  and AC-18's three that set a rate and expect the ask to move with it. The 85
+  silent scenarios assert nothing about the rate — the acceptance `World` seeds
+  one as background state, as a running app has.

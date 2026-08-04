@@ -176,24 +176,46 @@ su ciclo, y $0 al disponible hasta el mes en que vence. AC-14b afirma las dos en
 el mismo escenario y espera que difieran: ganancia $6.000.000 contra disponible
 $5.000.000. La brecha lleva información, no ruido.
 
-### D7 — El TRM se pide sólo cuando hay dólares
+### D7 — El TRM se pide al entrar, siempre — **revertida por el dueño 2026-08-04**
 
-Hoy `safe_to_spend`, `list_budgets` y `budget_status` llaman `get_trm` y
-explotan con `MissingRate` si no hay tasa (ADR-0031: las lecturas fallan
-fuerte). **85 de los 92 escenarios aprobados no fijan TRM** — sólo los tres de
-AC-18, que es el AC sobre moneda. Bajo la regla de hoy el contrato aprobado no
-puede pasar.
+`available`, `rates`, `fund_status` y `list_funds` llaman `get_trm` al entrar y
+fallan fuerte con `MissingRate` si no hay tasa, igual que `safe_to_spend`,
+`list_budgets` y `budget_status` antes que ellas. **ADR-0031 queda intacta: una
+sola regla, sin excepciones.**
 
-Sus reemplazos —`available`, `rates`, `fund_status`, `list_funds`— piden la tasa
-**sólo al toparse con un monto que no es COP**. Un mes en puro COP no la
-necesita; un mes con una obligación de US$30 sigue fallando fuerte sin ella.
+El dueño lo decidió así: *"La tasa se aplica al entrar en la app. Siempre debe
+estar (mientras creamos un feature que obtenga la TRM por debajo día a día)."*
+La fricción se acepta porque tiene fecha de vencimiento — el job diario de TRM
+ya está en el roadmap. Registrada como decisión de producto **ADR-038**.
 
-La regla era correcta para un camino donde toda cifra cruzaba el conversor; es
-incorrecta para uno donde la mayoría no. Enmienda declarada en ADR-0044.
+**Costo aceptado:** un mes registrado enteramente en pesos tampoco se puede leer
+hasta que haya tasa.
+
+Los 92 escenarios pasan igual, sin tocar ni un `spec.md`: el `World` de
+aceptación **siembra** una tasa como estado de fondo de una app corriendo
+(`SEEDED_TRM`, un valor que no aparece en ningún spec), y `Given no TRM has been
+set` ahora la borra en vez de suponer su ausencia. Los nueve escenarios de 002,
+005 y 006 cuyo sujeto *es* la tasa faltante la declaran explícitamente; ninguno
+dependía del silencio.
+
+Eso además disuelve el choque que la regla perezosa había creado: AC-9 de la 005
+afirma que un reporte sin tasa se niega, y AC-12 de la 003 lee el reporte de un
+mes en puro COP — dos specs, un solo registro global de steps. Con la regla de
+entrada y el `World` sembrado, las dos se cumplen.
+
+> **Superseded — razonamiento original (2026-08-04, revertido el mismo día).**
+> Los reemplazos pedían la tasa **sólo al toparse con un monto que no es COP**:
+> un mes en puro COP no la necesitaba; uno con una obligación de US$30 seguía
+> fallando fuerte. La medición que lo motivaba: **85 de los 92 escenarios
+> aprobados no fijan TRM** — sólo los tres de AC-18, el AC sobre moneda —, de
+> donde se concluyó que bajo la regla de hoy el contrato aprobado no podía
+> pasar. El error fue de lectura: la medición describía los specs, no la app.
+> Los 85 escenarios callaban sobre la tasa, no dependían de su ausencia. La
+> enmienda queda **retirada** en ADR-0044.
 
 ### D8 — Las metas mueren en una migración; el fondo se borra duro
 
-Revisión `0011`: `DROP` de `goal`, `goal_contribution`, `budget` y de
+Revisión `0012`: `DROP` de `goal`, `goal_contribution`, `budget` y de
 `transaction.goal_id`; borrado de las tres transferencias propuestas que nunca
 se confirmaron. Se van `services/goals.py`, su router, `goals_reads`, el hook
 `propose_goal_contributions` y la pantalla.
@@ -211,13 +233,25 @@ ADR-0043.
 
 Los handlers de CP3 llaman
 `registry.funds.create_fund(session, category="X", rule="fixed", …)` con
-kwargs planos y nombres de categoría. La casa usa `(session, inp: PydanticModel)`
-con ids, y `_as_text` como envoltorio (`mcp/tools/planning.py`).
+kwargs planos. La casa usa `(session, inp: PydanticModel)` y `_as_text` como
+envoltorio (`mcp/tools/planning.py`).
 
 **Gana la casa.** El handler se ajusta en la fase que construye las puertas. El
 `spec.md` **no se toca**; sólo el binding, que es fuente editable y cuyo propio
 docstring dice *"Checkpoint 4 owns its shape"*. Los mensajes de rojo que hacen
 legible la salida se conservan.
+
+**Corrección, 2026-08-04 (F3).** Este párrafo decía además que la casa
+identifica *"con ids"*, y eso era una generalización mía a partir de
+`planning.py` solo. La casa tiene **dos** convenciones: las entidades con
+nombre propio se resuelven por nombre —`_resolve_account_by_name` y
+`_resolve_category_by_name` en `mcp/tools/core.py:123,133`, y `name: str` en
+todo `mcp/tools/masters.py`— y las filas sin nombre propio van por id. Un fondo
+no tiene nombre propio pero su categoría sí, y el asistente habla en nombres de
+categoría, no en números de fila. Las herramientas de fondos toman el nombre de
+la categoría y le pasan el id al servicio, que es exactamente la forma que
+tenía `assign_budget`, la herramienta que reemplazan. La convención no cambia:
+cambia mi descripción de ella.
 
 Paridad REST↔MCP es regla del charter §2 (ADR-0006/0009) y **AC-28 sale casi
 gratis**: las reglas viven en `services/`, así que las herramientas heredan cada
@@ -253,13 +287,13 @@ necesitara nada.
 |---|---|---|
 | §1 DAE + ATDD: la feature avanza por el pipeline de aceptación | ✅ | spec de 92 escenarios aprobado 2026-08-03; baseline 0 verde / 92 rojo deliberado, con 246 verdes de otras features como candado |
 | §1 Decisiones arquitectónicas como ADR | ✅ | ADR-0043 (forma del dato) y ADR-0044 (camino de lectura) escritas en este checkpoint, en `proposed` |
-| §1 ADRs respetadas, nunca contradichas en silencio | ⚠️ | Ver Amendments — ADR-0006 queda superseded entera, ADR-0005 en su cláusula de metas, ADR-0031 enmendada en su cláusula de fallo fuerte. Las tres están escritas. ADR-0028 se **extiende** (+2 sentencias), no se contradice |
+| §1 ADRs respetadas, nunca contradichas en silencio | ⚠️ | Ver Amendments — ADR-0006 queda superseded entera y ADR-0005 en su cláusula de metas. Las dos están escritas. ADR-0028 se **extiende** (+2 sentencias), no se contradice. **ADR-0031 queda intacta** — la enmienda a su cláusula de fallo fuerte fue retirada por el dueño (D7) |
 | §1 Decisiones de producto separadas de las ADR técnicas | ⚠️ | Ver Amendments — ADR-003 y ADR-006 superseded, ADR-002 y ADR-016 enmendadas, ADR-004 construida por primera vez. `product-decisions.md` § ADR-037 ya está escrita |
 | §2 Postura local-only (ADR-0026/0030) | ✅ | Sin infraestructura nueva; la migración corre contra el Postgres local, nunca contra Render |
 | §2 Layering api → services → domain → db | ✅ | `domain/rules.py` puro y sin sesión; `services/funds.py` y `month_aggregate` en servicios; routers y tools delgados |
 | §2 Paridad REST ↔ MCP (ADR-0006/0009) + tiers (ADR-0020) | ✅ | Las siete herramientas de metas y `assign_budget` se borran; entran las de fondos en las dos superficies. Tiers: lecturas `read`, `create_fund`/`set_fund` `write-safe`, `delete_fund` `write-destructive` |
 | §3 Código/identificadores en inglés (ADR-0001); UI copy español | ✅ | `fund`, `asks`, `holds`, `earning_rate`; copy en español. Los rechazos en español dependen de la C9 — ver Deuda arrastrada |
-| §3 Python ≥3.12, uv, pytest host-side con SQLite en memoria | ✅ | La revisión `0011` usa `batch_alter_table` por lo mismo que la `0010`: el `DROP COLUMN` de `transaction.goal_id` reconstruye la tabla en SQLite |
+| §3 Python ≥3.12, uv, pytest host-side con SQLite en memoria | ✅ | La revisión `0012` usa `batch_alter_table` por lo mismo que la `0010`: el `DROP COLUMN` de `transaction.goal_id` reconstruye la tabla en SQLite |
 | §3 pnpm only / Biome / vitest colocado | ✅ | Sin dependencias nuevas en frontend |
 | §3 Soft-delete uniforme (ADR-0005) | ⚠️ | Ver Amendments — un fondo se borra duro. Frontera declarada en ADR-0043; maestros sin cambio |
 | §4 Alcance: finanzas personales, un usuario, local | ⚠️ | Ver Amendments — §4 **nombra** "sobres + safe-to-spend (ADR-002/003)" como el diferenciador, y esta feature lo reemplaza. La enmienda al charter ya está escrita y firmada |
@@ -272,8 +306,11 @@ necesitara nada.
 
 ### Amendments
 
-Cinco desviaciones ⚠️. Las cinco tienen su enmienda **escrita en este
-checkpoint**, no prometida.
+**Cuatro** desviaciones ⚠️, no cinco: A5 fue retirada el 2026-08-04 y ADR-0031
+queda sin tocar. El plan es **estrictamente más conforme al charter** que cuando
+se firmó — cuatro enmiendas en vez de cinco, y una ADR técnica menos alterada.
+Las cuatro que quedan tienen su enmienda **escrita en este checkpoint**, no
+prometida.
 
 **A1 — Charter §4: el diferenciador cambia de nombre.** `CHARTER.md` §4 decía
 que el diferenciador es *"hybrid budget — per-category envelopes with rollover +
@@ -316,10 +353,10 @@ declara la frontera: un fondo es una regla pegada a una categoría, sin historia
 propia y con saldo derivado. Cuentas, categorías, tags y recurrentes conservan
 soft-delete sin cambio.
 
-**A5 — ADR-0031, cláusula de "las lecturas fallan fuerte".** El TRM se pide al
-toparse con un monto extranjero, no al entrar. Registrado en ADR-0044 con la
-medición que lo fuerza: 85 de 92 escenarios aprobados no fijan tasa. El fallo
-sigue siendo fuerte exactamente donde protege una cifra.
+**A5 — retirada.** Enmendaba la cláusula de "las lecturas fallan fuerte" de
+ADR-0031 para pedir el TRM al toparse con un monto extranjero en vez de al
+entrar. El dueño revirtió la decisión el 2026-08-04: la tasa se pide al entrar,
+siempre. **ADR-0031 no se toca.** Ver D7 y la sección retirada de ADR-0044.
 
 Ninguna otra fila queda en ⚠️.
 
@@ -363,11 +400,11 @@ Es una rama, no `main`; es aceptable y es explícito.
 
 - **F1 — El número.** `funds.available` y `funds.rates` reemplazan
   `safe_to_spend`; el término de ingreso reconcilia por categoría (AC-14c, la
-  C17); el desglose cuadra (AC-10); el TRM se pide perezosamente (D7).
+  C17); el desglose cuadra (AC-10); el TRM se pide al entrar (D7).
   `services/reports.py` cambia sus líneas de sobre por líneas de fondo.
   **Cierra ≈32 rojos → 80/92.**
 
-- **F2 — Mueren las metas y los sobres.** Revisión `0011`: `DROP` de `goal`,
+- **F2 — Mueren las metas y los sobres.** Revisión `0012`: `DROP` de `goal`,
   `goal_contribution`, `budget` y de `transaction.goal_id`; borrado de las tres
   propuestas sin confirmar. Se borran `services/goals.py`, su router,
   `goals_reads`, las seis herramientas MCP de metas, `assign_budget`,
@@ -478,7 +515,7 @@ su docstring **es** el contrato de implementación de F0/F1.
 sin sesión) con sus tres casos de borde —acumula, reinicia, sobregira—; la
 fórmula de "lo que falta ÷ meses que quedan" en las cuatro reglas; la
 normalización de intervalos (mes, año, semana, día); la reconciliación de
-ingreso por categoría; y la revisión `0011` en las dos direcciones.
+ingreso por categoría; y las revisiones `0011` y `0012` en las dos direcciones.
 
 Los ~20 archivos de test backend que hoy tocan metas se borran con el módulo, no
 se enhebran. Los de `budgets` se reescriben contra fondos. Ese es el barrido
@@ -503,6 +540,6 @@ hice yo, inline, porque la instrucción de esa sesión era no despachar agentes
 sin pedido. Una pasada independiente sobre las 92 escenarios vale una corrida y
 está agendada en F4.
 
-**6 — Lo que no cubre ningún test.** La revisión `0011` sobre los datos reales
+**6 — Lo que no cubre ningún test.** La revisión `0012` sobre los datos reales
 del dueño: 1 meta, 0 aportes, 3 propuestas, 0 sobres. Eso es el `runbook.md`,
 con backup previo y conteo confirmado a mano.
