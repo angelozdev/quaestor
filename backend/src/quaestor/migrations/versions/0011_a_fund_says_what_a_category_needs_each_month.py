@@ -64,15 +64,11 @@ def _rule_enum() -> sa.Enum:
 
 
 def upgrade() -> None:
-    rule = _rule_enum()
-    bind = op.get_bind()
-    if bind.dialect.name != "sqlite":
-        rule.create(bind, checkfirst=True)
     op.create_table(
         "fund",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("category_id", sa.Integer(), nullable=False),
-        sa.Column("rule", rule, nullable=False),
+        sa.Column("rule", _rule_enum(), nullable=False),
         sa.Column("start_month", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("accumulates", sa.Boolean(), nullable=False),
         sa.Column("amount", sa.BigInteger(), nullable=True),
