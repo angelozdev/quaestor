@@ -1,6 +1,8 @@
-"""Golden outputs for the monthly read-path. These must not change through the
-MonthAggregate refactor — they pin observable behavior at the API contract,
-including rollover across months (May available rolls into June)."""
+"""Golden outputs for the monthly read-path, pinned at the API contract.
+
+The envelope goldens they opened with are gone with the envelope; what a
+category carries forward is now a fund's fold, characterised in
+`tests/services/test_funds.py`."""
 
 from tests.support.fx import set_trm as _set_trm
 
@@ -15,12 +17,7 @@ def _seed(client, auth, expense_category, income_category):
     grp = client.post("/api/category-groups", json={"name": "Living"}, headers=auth).json()
     food = client.post("/api/categories", json={"name": "Food", "group_id": grp["id"]}, headers=auth).json()
     rent = client.post("/api/categories", json={"name": "Rent", "group_id": grp["id"]}, headers=auth).json()
-    # May: assign 100k to Food, spend 60k -> May available 40k rolls into June.
-    client.put(
-        "/api/budgets",
-        json={"category_id": food["id"], "year_month": "2026-05", "amount_assigned": 100_000},
-        headers=auth,
-    )
+    # May: spend 60k on Food, so the month before the report is not empty.
     client.post(
         "/api/transactions",
         json={
@@ -34,7 +31,7 @@ def _seed(client, auth, expense_category, income_category):
         },
         headers=auth,
     )
-    # June: expenses + income + Food budget.
+    # June: expenses + income.
     for cat_id, amount, day in [
         (food["id"], 50_000, "05"),
         (food["id"], 30_000, "12"),
@@ -66,11 +63,6 @@ def _seed(client, auth, expense_category, income_category):
         },
         headers=auth,
     )
-    client.put(
-        "/api/budgets",
-        json={"category_id": food["id"], "year_month": "2026-06", "amount_assigned": 100_000},
-        headers=auth,
-    )
     return {"food": food["id"], "rent": rent["id"]}
 
 
@@ -86,22 +78,15 @@ def test_report_totals_and_sections_are_stable(client, auth, expense_category, i
     assert by_group == {"Living": 880_000}
 
 
-def test_safe_to_spend_is_stable(client, auth, expense_category, income_category):
+def test_the_closing_line_is_stable(client, auth, expense_category, income_category):
     _seed(client, auth, expense_category, income_category)
-    sts = client.get("/api/budgets/safe-to-spend", params={"month": "2026-06"}, headers=auth).json()
-    assert sts["year_month"] == "2026-06"
-    assert sts["assigned_envelopes"] == 100_000
-
-
-def test_list_budgets_pins_rollover(client, auth, expense_category, income_category):
-    ids = _seed(client, auth, expense_category, income_category)
-    lines = client.get("/api/budgets", params={"month": "2026-06"}, headers=auth).json()
-    food = next(row for row in lines if row["category_id"] == ids["food"])
-    assert food["assigned"] == 100_000
-    assert food["spent"] == 80_000
-    assert food["rollover_in"] == 40_000  # May: 100k assigned - 60k spent
-    assert food["available"] == 60_000  # 40k rollover + 100k - 80k
-    assert food["status"] == "under"
+    body = client.get("/api/reports", params={"month": "2026-06"}, headers=auth).json()
+    available = body["available"]
+    assert available["year_month"] == "2026-06"
+    assert available["income"] == 2_000_000
+    assert available["funds"] == []
+    assert available["uncovered"] == 880_000  # no fund covers any of it
+    assert available["free"] == 1_120_000
 
 
 def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(client, auth, expense_category):

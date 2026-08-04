@@ -26,10 +26,7 @@ const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   },
   {
     title: "Planeación",
-    items: [
-      { href: "/goals", label: "Metas" },
-      { href: "/budgets", label: "Presupuestos" },
-    ],
+    items: [{ href: "/funds", label: "Fondos" }],
   },
   {
     title: "Configuración",

@@ -6,7 +6,6 @@ from quaestor.db import init_db, make_engine
 from quaestor.domain.models import (
     Account,
     AccountType,
-    Budget,
     Category,
     Transaction,
     TxStatus,
@@ -53,38 +52,39 @@ def _setup(session):
     return acc, cat
 
 
-def test_rollover_folds_forward_without_recursion_queries(session):
+def test_spending_is_summed_per_category_and_month(session):
     acc, cat = _setup(session)
-    # May: assign 100k, spend 60k -> available 40k
-    session.add(Budget(category_id=cat.id, year_month="2026-05", amount_assigned=100_000))
     session.add(_expense(acc.id, cat.id, date(2026, 5, 10), 60_000))
-    # Jun: assign 100k, spend 30k, rollover_in 40k -> available 110k
-    session.add(Budget(category_id=cat.id, year_month="2026-06", amount_assigned=100_000))
     session.add(_expense(acc.id, cat.id, date(2026, 6, 10), 30_000))
+    session.add(_expense(acc.id, cat.id, date(2026, 6, 20), 5_000))
     session.commit()
 
     agg = load_month_aggregate(session, "2026-06", TRM)
-    assert agg.assigned(cat.id, "2026-06") == 100_000
-    assert agg.spent_for_budget(cat.id, "2026-06") == 30_000
-    assert agg.available(cat.id, "2026-05") == 40_000
-    assert agg.available(cat.id, "2026-06") == 110_000
+    assert agg.spent_in(cat.id, "2026-05") == 60_000
+    assert agg.spent_in(cat.id, "2026-06") == 35_000
 
 
-def test_gap_month_resets_rollover(session):
-    """A month with no assignment and no spending yields 0 and does NOT pass
-    rollover forward — identical to the current recursion's base case."""
-    acc, cat = _setup(session)
-    session.add(Budget(category_id=cat.id, year_month="2026-04", amount_assigned=100_000))
-    session.add(_expense(acc.id, cat.id, date(2026, 4, 10), 60_000))
-    # 2026-05: gap (no budget, no spending)
-    session.add(Budget(category_id=cat.id, year_month="2026-06", amount_assigned=50_000))
-    session.add(_expense(acc.id, cat.id, date(2026, 6, 10), 10_000))
-    session.commit()
-
+def test_a_month_the_category_never_spent_in_is_zero(session):
+    _, cat = _setup(session)
     agg = load_month_aggregate(session, "2026-06", TRM)
-    assert agg.available(cat.id, "2026-04") == 40_000
-    assert agg.available(cat.id, "2026-05") == 0
-    assert agg.available(cat.id, "2026-06") == 40_000  # gap reset: 0 + 50k - 10k
+    assert agg.spent_in(cat.id, "2026-06") == 0
+
+
+BOUNDED_LOADS = 10
+"""The ceiling one month load is held under (ADR-0028), asserted with `<=`.
+
+The ceiling was already ten before feature 003 and has not moved. What moved
+is the measured count: eight before, ten now — three statements added and one
+dropped with the `budget` table, the +2 the plan budgeted. So there is no
+headroom left, and the next query added to `load_month_aggregate` fails this
+test on purpose. Raising the number is a decision about the read path, not a
+repair to the test.
+
+The ten: the categories, the groups, the per-category-and-month spending
+sums, the expense and income windows, the active recurring items, the month's
+planned expenses, the funds, the first posted movement (AC-3 needs to know
+which months the app has data for) and the skipped turns (AC-17).
+"""
 
 
 def test_load_issues_bounded_query_count(session):
@@ -96,13 +96,13 @@ def test_load_issues_bounded_query_count(session):
         agg = load_month_aggregate(session, "2026-06", TRM)
         # Force full in-memory computation:
         agg.totals_for("2026-06")
-        agg.available(cat.id, "2026-06")
-    assert c.count <= 10, f"expected bounded loads, got {c.count}"
+        agg.spent_in(cat.id, "2026-06")
+    assert c.count <= BOUNDED_LOADS, f"expected bounded loads, got {c.count}"
 
 
-def test_excluded_category_has_zero_budget_spend(session):
+def test_a_category_excluded_from_totals_does_not_reach_the_month(session):
     acc = Account(name="Bank", type=AccountType.debit, currency="COP")
-    cat = Category(name="Transfers", exclude_from_budget=True)
+    cat = Category(name="Transfers", exclude_from_totals=True)
     session.add(acc)
     session.add(cat)
     session.commit()
@@ -111,4 +111,4 @@ def test_excluded_category_has_zero_budget_spend(session):
     session.add(_expense(acc.id, cat.id, date(2026, 6, 3), 500_000))
     session.commit()
     agg = load_month_aggregate(session, "2026-06", TRM)
-    assert agg.spent_for_budget(cat.id, "2026-06") == 0
+    assert agg.month_expense() == []

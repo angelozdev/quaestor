@@ -307,3 +307,95 @@ pipeline generation → tests green. Bounded, one feature per task.
   ruled against in N1/N2. The fix is a direction on the four inputs, plus a
   refusal when the name still matches more than one. REST is unaffected — it
   addresses categories by id.
+- C17. **Product ADR-004's reconciliation clause has never been built.** The ADR
+  states the month's forecast income *"is corrected to actual as transactions
+  post, counting each income exactly once (ADR-014)"*, and it also says an
+  atypical income "counts when posted". Neither happens.
+  `services/budgets._income_forecast` iterates the active recurring items,
+  recomputes their due dates inside the month and multiplies by the declared
+  amount. It reads no `Transaction` at all, and `safe_to_spend_calc` receives
+  that figure and never compares it to anything.
+
+  **Measured 2026-08-03 against the live Postgres.** The forecast reports a flat
+  $18.128.501 every month (Ubidots Salary $6.223.101 + Keystone US$3.800 at TRM
+  3.133). The record reports $0 in April, $8.366.187 in May and $45.176.653 in
+  July. Both describe the same two salaries; nothing in the app has ever
+  compared them. A posted income carrying no `recurring_id` — 20 of the 22 in
+  production — is invisible to the headline entirely.
+
+  Two caveats against over-reading those figures: the history is a Lunch Money
+  import, so the monthly spread reflects when rows were recorded rather than
+  when money arrived, and the app itself is roughly a month old. The unread
+  transaction table is the finding; the spread is only what makes it visible.
+
+  Feature 003 owns the fix as **AC-14c**, because it replaces the headline
+  outright. Filed here anyway: the defect is live today, on the shipped number,
+  independent of whether 003 ships.
+- C18. **The money available reads too high when a recurring expense posts off
+  its promise.** `services/funds._uncovered` skips posted rows carrying a
+  `recurring_id`, on the assumption that the obligations term beside it already
+  counts them. That term sums `_promised` — the *declared* amount — so the two
+  only agree when the charge posts for exactly what it said.
+
+  **Probed on 2026-08-04**, unfunded category, obligation declaring $200.000:
+  posts at $200.000 → available $4.800.000 ✓; the owner lowers the declaration
+  to $150.000 → **$4.850.000, high by $50.000**; the owner switches the
+  obligation off → **$5.000.000, high by $200.000**, with `uncovered` reporting
+  **$0,00 for a month that really spent $200.000**.
+
+  It is the exact asymmetry ADR-0044 fixed on the income side (decision D5,
+  actual-if-any-else-expected) and never declared for the expense side, and it
+  moves the headline **upward** — the direction the owner cannot recover from,
+  because money is spent before the error can be noticed. No compensating
+  surface exists: the breakdown still reconciles *exactly* with a wrong term,
+  and a number that agrees with itself and lies is worse than one that visibly
+  does not.
+
+  **It is why ADR-0044's acceptance is withheld** — the ADR's own
+  `uncovered(M)` paragraph describes behaviour the code does not implement.
+  One product answer unblocks both: when an obligation declares one amount and
+  posts another, does the month count the declared, the posted, or the greater?
+
+- C19. **"En camino" is structurally true whenever a fund opens the month
+  holding nothing.** `funds._walk` computes the reference figure as
+  `_ask(..., max(opening, 0))`; when opening is zero that is the same call as
+  the real ask, so the two always coincide and `on_track` can only be `True`.
+  Reported first as affecting the two undated rules, it is wider: it also hits
+  **every dated fund in its first month and every resetting fund every month**.
+
+  **Seen in the browser on 2026-08-04**, not only in code: a fund needing
+  $10.000.000 by the following month, holding $0, renders the green **"En
+  camino"** badge. `FundsSummary.n_behind` returned 0 for a fund overspent 350%.
+
+  `on_track` has **zero ACs, zero ADR mentions**, and one one-directional
+  assertion in `spec.md` (line 227, on a `from-recurring` fund). It was a
+  `feature.md` scope bullet CP2 never converted, so the threshold was the
+  implementer's to invent. Not a fix — there is no correct behaviour to
+  restore. It needs, in order: a product decision on what "on track" means at
+  zero opening, an AC, then scenarios for all four rules.
+
+  **AC-7 belongs to this same hole from the spec side and should be repaired in
+  the same unit.** Titled *"A fund that gets drained raises its ask to still
+  arrive"*, both its scenarios assert `1200000.00 COP` — exactly what an
+  *undrained* fund asks ($7.200.000 ÷ 6). An implementation that ignores
+  draining entirely passes both, so the AC cannot fail. Moving its clock to
+  2027-02-10 makes the recomputation visible ($2.400.000).
+
+- C20. **AC-24's warning is off by one month, and the browser is what found
+  it.** `services/funds._implausible_warning` returns `None` when
+  `months_between(start_month, target_month) >= 1`, but the ask divides by the
+  months from the start *through the month before the target*. A fund starting
+  2026-08 with target 2026-09 therefore asks its whole target in August while
+  the warning stays silent — the very case the warning exists to announce, and
+  the code's own message ("leaves no month to save in, so the whole target
+  falls on …") describes it.
+
+  **Reproduced in the app on 2026-08-04**: a $10.000.000 target for 2026-09
+  starting 2026-08 was created with no warning and immediately asked
+  $10.000.000, against a declared monthly income of $3.000.000.
+
+  Invisible to every gate this feature ran — 338 acceptance scenarios, 952
+  backend tests, 92.3% mutation, zero CRAP findings — because AC-24's three
+  scenarios only cover target = start and target = start + 12. Nothing tests
+  target = start + 1. It is the same class feature 008 recorded when the
+  browser found two defects its tests did not.

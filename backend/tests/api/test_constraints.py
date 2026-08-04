@@ -12,7 +12,6 @@ Constraints under test (see src/quaestor/api/schemas.py):
   - FxIn.usd_cop: gt=0, le=100000
 """
 
-from quaestor.domain.models import AccountType
 from quaestor.services import accounts
 from sqlmodel import Session
 
@@ -20,12 +19,6 @@ from sqlmodel import Session
 def _seed_account(engine, name="Bank", type_="debit", balance=1_000_000):
     with Session(engine) as s:
         acc = accounts.create_account(s, name, type_, "COP", balance=balance)
-        return acc.id
-
-
-def _seed_savings_account(engine, name="Savings"):
-    with Session(engine) as s:
-        acc = accounts.create_account(s, name, AccountType.savings, "COP", balance=0)
         return acc.id
 
 
@@ -153,77 +146,6 @@ def test_plan_payment_amount_negative_is_422(client, engine, auth):
         "account_id": acc_id,
     }
     r = client.post("/api/planned", json=body, headers=auth)
-    assert r.status_code == 422, r.text
-
-
-# --- GoalCreate ---
-
-
-def test_goal_create_monthly_amount_zero_is_422(client, engine, auth):
-    """gt=0 boundary: GoalCreate.monthly_amount=0 must be rejected."""
-    sid = _seed_savings_account(engine)
-    body = {"name": "Trip", "monthly_amount": 0, "savings_account_id": sid}
-    r = client.post("/api/goals", json=body, headers=auth)
-    assert r.status_code == 422, r.text
-
-
-def test_goal_create_target_amount_negative_is_422(client, engine, auth):
-    """Optional gt=0: GoalCreate.target_amount=-1 must be rejected."""
-    sid = _seed_savings_account(engine)
-    body = {
-        "name": "Trip",
-        "monthly_amount": 100_000,
-        "savings_account_id": sid,
-        "target_amount": -1,
-    }
-    r = client.post("/api/goals", json=body, headers=auth)
-    assert r.status_code == 422, r.text
-
-
-# --- GoalUpdate ---
-
-
-def _seed_goal(client, engine, auth):
-    sid = _seed_savings_account(engine)
-    return client.post(
-        "/api/goals",
-        json={"name": "A", "monthly_amount": 100_000, "savings_account_id": sid},
-        headers=auth,
-    ).json()["id"]
-
-
-def test_goal_update_monthly_amount_zero_is_422(client, engine, auth):
-    """gt=0 boundary: GoalUpdate.monthly_amount=0 must be rejected."""
-    gid = _seed_goal(client, engine, auth)
-    r = client.patch(f"/api/goals/{gid}", json={"monthly_amount": 0}, headers=auth)
-    assert r.status_code == 422, r.text
-
-
-# --- GoalContributeIn ---
-
-
-def test_goal_contribute_amount_zero_is_422(client, engine, auth):
-    """gt=0 boundary: GoalContributeIn.amount=0 must be rejected.
-
-    The contribute endpoint also requires a configured default source account;
-    pre-seed it so the request reaches schema validation (not service-level 422).
-    """
-    sid = _seed_savings_account(engine)
-    with Session(engine) as s:
-        src = accounts.create_account(s, "Source", AccountType.savings, "COP", balance=1_000_000)
-        from quaestor.services import settings
-
-        settings.update_settings(s, default_source_account_id=src.id)
-    gid = client.post(
-        "/api/goals",
-        json={"name": "A", "monthly_amount": 100_000, "savings_account_id": sid},
-        headers=auth,
-    ).json()["id"]
-    r = client.post(
-        f"/api/goals/{gid}/contribute",
-        json={"amount": 0, "date": "2026-06-01"},
-        headers=auth,
-    )
     assert r.status_code == 422, r.text
 
 

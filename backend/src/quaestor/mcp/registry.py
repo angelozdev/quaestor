@@ -21,11 +21,9 @@ from sqlmodel import Session
 
 from .. import db
 from .tools import (
-    budgets_reads,
     core,
-    goals_reads,
+    funds,
     masters,
-    planning,
     recurring_restore,
     reports,
     temporal,
@@ -36,7 +34,6 @@ from .tools import (
 from .tools import (
     transactions as tx_tools,
 )
-from .tools.budgets_reads import ListBudgetsInput, SafeToSpendInput
 from .tools.core import (
     GetFxRateInput,
     ListTransactionsInput,
@@ -45,7 +42,14 @@ from .tools.core import (
     SetFxRateInput,
     TransferInput,
 )
-from .tools.goals_reads import GoalsProgressInput, ListGoalsInput
+from .tools.funds import (
+    CreateFundInput,
+    FundInput,
+    FundStatusInput,
+    MonthInput,
+    PreviewFundInput,
+    SetFundInput,
+)
 from .tools.masters import (
     ArchiveAccountInput,
     ArchiveCategoryGroupInput,
@@ -64,13 +68,6 @@ from .tools.masters import (
     UpdateCategoryGroupInput,
     UpdateCategoryInput,
     UpdateTagInput,
-)
-from .tools.planning import (
-    AssignBudgetInput,
-    ContributeGoalInput,
-    CreateGoalInput,
-    GoalIdInput,
-    UpdateGoalInput,
 )
 from .tools.recurring_restore import RestoreRecurringInput
 from .tools.reports import MonthlyReportInput
@@ -114,10 +111,6 @@ _READ_ONLY_TOOLS: frozenset[str] = frozenset(
         "list_categories",
         "list_tags",
         "get_fx_rate",
-        "list_budgets",
-        "safe_to_spend",
-        "list_goals",
-        "goals_progress",
         "monthly_report",
         "get_transaction",
         "get_account",
@@ -126,6 +119,11 @@ _READ_ONLY_TOOLS: frozenset[str] = frozenset(
         "pending_recurring_dates",
         "to_pay",
         "get_settings",
+        "list_funds",
+        "fund_status",
+        "preview_fund",
+        "money_available",
+        "money_rates",
     }
 )
 
@@ -138,11 +136,10 @@ _WRITE_SAFE_TOOLS: frozenset[str] = frozenset(
         "create_category_group",
         "create_tag",
         "create_recurring",
-        "create_goal",
-        "assign_budget",
-        "contribute_goal",
         "set_fx_rate",
         "plan_payment",
+        "create_fund",
+        "set_fund",
     }
 )
 
@@ -171,10 +168,8 @@ _WRITE_DESTRUCTIVE_TOOLS: frozenset[str] = frozenset(
         "accept_recurring_dates",
         "decline_recurring_dates",
         "confirm_payment",
-        "update_goal",
-        "pause_goal",
-        "restore_goal",
         "update_settings",
+        "delete_fund",
     }
 )
 
@@ -206,15 +201,6 @@ TEMPORAL_TOOL_NAMES = (
     "to_pay",
     "update_recurring",
     "archive_recurring",
-)
-
-PLANNING_TOOL_NAMES = (
-    "assign_budget",
-    "create_goal",
-    "update_goal",
-    "contribute_goal",
-    "pause_goal",
-    "restore_goal",
 )
 
 CORE_TOOL_NAMES = (
@@ -269,14 +255,15 @@ SETTINGS_TOOL_NAMES = (
     "update_settings",
 )
 
-BUDGETS_READS_TOOL_NAMES = (
-    "list_budgets",
-    "safe_to_spend",
-)
-
-GOALS_READS_TOOL_NAMES = (
-    "list_goals",
-    "goals_progress",
+FUNDS_TOOL_NAMES = (
+    "create_fund",
+    "preview_fund",
+    "list_funds",
+    "fund_status",
+    "set_fund",
+    "delete_fund",
+    "money_available",
+    "money_rates",
 )
 
 REPORTS_TOOL_NAMES = ("monthly_report",)
@@ -414,40 +401,6 @@ def register_temporal_tools(mcp) -> None:
             return temporal.archive_recurring(session, item)
 
 
-def register_planning_tools(mcp) -> None:
-    """Register the P4 planning tools (budgets + goals) on the FastMCP instance."""
-
-    @mcp.tool(name="assign_budget", description="Assign (set) a category envelope for a month.")
-    def assign_budget(item: AssignBudgetInput) -> str:
-        with Session(db.engine) as session:
-            return planning.assign_budget(session, item)
-
-    @mcp.tool(name="create_goal", description="Create a savings goal (defined or open-ended).")
-    def create_goal(item: CreateGoalInput) -> str:
-        with Session(db.engine) as session:
-            return planning.create_goal(session, item)
-
-    @mcp.tool(name="update_goal", description="Edit a goal's name or monthly amount.")
-    def update_goal(item: UpdateGoalInput) -> str:
-        with Session(db.engine) as session:
-            return planning.update_goal(session, item)
-
-    @mcp.tool(name="contribute_goal", description="Record a manual contribution to a goal.")
-    def contribute_goal(item: ContributeGoalInput) -> str:
-        with Session(db.engine) as session:
-            return planning.contribute_goal(session, item)
-
-    @mcp.tool(name="pause_goal", description="Pause a goal (soft-delete, reversible).")
-    def pause_goal(item: GoalIdInput) -> str:
-        with Session(db.engine) as session:
-            return planning.pause_goal(session, item)
-
-    @mcp.tool(name="restore_goal", description="Restore a paused goal.")
-    def restore_goal(item: GoalIdInput) -> str:
-        with Session(db.engine) as session:
-            return planning.restore_goal(session, item)
-
-
 def register_accounts_tools(mcp) -> None:
     @mcp.tool(name="create_account", description="Create a new account.")
     def create_account(inp: CreateAccountInput) -> str:
@@ -572,35 +525,55 @@ def register_settings_tools(mcp) -> None:
             return settings_tools.update_settings(session, inp)
 
 
-def register_budgets_reads_tools(mcp) -> None:
-    @mcp.tool(name="list_budgets", description="List budget envelopes for a month.")
-    def list_budgets(inp: ListBudgetsInput) -> str:
-        with Session(db.engine) as session:
-            return budgets_reads.list_budgets(session, inp)
-
-    @mcp.tool(name="safe_to_spend", description="Get the safe-to-spend headline for a month.")
-    def safe_to_spend(inp: SafeToSpendInput) -> str:
-        with Session(db.engine) as session:
-            return budgets_reads.safe_to_spend(session, inp)
-
-
-def register_goals_reads_tools(mcp) -> None:
-    @mcp.tool(name="list_goals", description="List all savings goals.")
-    def list_goals(inp: ListGoalsInput = ListGoalsInput()) -> str:
-        with Session(db.engine) as session:
-            return goals_reads.list_goals(session, inp)
-
-    @mcp.tool(name="goals_progress", description="Show progress for active goals.")
-    def goals_progress(inp: GoalsProgressInput = GoalsProgressInput()) -> str:
-        with Session(db.engine) as session:
-            return goals_reads.goals_progress(session, inp)
-
-
 def register_reports_tools(mcp) -> None:
     @mcp.tool(name="monthly_report", description="Build the retrospective monthly report.")
     def monthly_report(inp: MonthlyReportInput) -> str:
         with Session(db.engine) as session:
             return reports.monthly_report(session, inp)
+
+
+def register_funds_tools(mcp) -> None:
+    """Register the fund tools — the assistant half of feature 003's parity (AC-28)."""
+
+    @mcp.tool(name="create_fund", description="Create the one fund a spending category may carry.")
+    def create_fund(inp: CreateFundInput) -> str:
+        with Session(db.engine) as session:
+            return funds.create_fund(session, inp)
+
+    @mcp.tool(name="preview_fund", description="What a fund would ask its first month, before creating it.")
+    def preview_fund(inp: PreviewFundInput) -> str:
+        with Session(db.engine) as session:
+            return funds.preview_fund(session, inp)
+
+    @mcp.tool(name="list_funds", description="List every fund and the rule it follows.")
+    def list_funds() -> str:
+        with Session(db.engine) as session:
+            return funds.list_funds(session)
+
+    @mcp.tool(name="fund_status", description="What one fund asks and holds in a month.")
+    def fund_status(inp: FundStatusInput) -> str:
+        with Session(db.engine) as session:
+            return funds.fund_status(session, inp)
+
+    @mcp.tool(name="set_fund", description="Change a fund's rule, its parameters, or what it holds.")
+    def set_fund(inp: SetFundInput) -> str:
+        with Session(db.engine) as session:
+            return funds.set_fund(session, inp)
+
+    @mcp.tool(name="delete_fund", description="Remove a fund outright.")
+    def delete_fund(inp: FundInput) -> str:
+        with Session(db.engine) as session:
+            return funds.delete_fund(session, inp)
+
+    @mcp.tool(name="money_available", description="The money available for a month, with its breakdown.")
+    def money_available(inp: MonthInput) -> str:
+        with Session(db.engine) as session:
+            return funds.money_available(session, inp)
+
+    @mcp.tool(name="money_rates", description="What the owner earns and costs a month, and the margin.")
+    def money_rates(inp: MonthInput) -> str:
+        with Session(db.engine) as session:
+            return funds.money_rates(session, inp)
 
 
 def register_recurring_restore_tools(mcp) -> None:

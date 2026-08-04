@@ -173,54 +173,42 @@ def test_drift_pct_none_when_previous_zero(session):
     assert d.expense_pct == pytest.approx(0.0)  # 10_000 -> 10_000
 
 
-def test_envelope_lines_and_summary(session):
-    from quaestor.services import budgets
+def test_fund_lines_and_summary(session):
+    from quaestor.services import funds
 
     acc = _acc(session)
     food = _cat(session, name="Food")
     fun = _cat(session, name="Fun")
-    budgets.set_budget(session, food.id, "2026-06", 100_000)
-    budgets.set_budget(session, fun.id, "2026-06", 50_000)
-    transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
-    transactions.record_expense(session, acc.id, 70_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)  # over
-    agg = load_month_aggregate(session, "2026-06", TRM)
-    lines, summary = reports._envelope_lines(agg)
-    assert [row.category for row in lines] == ["Food", "Fun"]
-    food_line = lines[0]
-    assert food_line.allocated == 100_000 and food_line.spent == 40_000
-    assert food_line.available == 60_000 and food_line.status == "under"
-    fun_line = lines[1]
-    assert fun_line.available == -20_000 and fun_line.status == "over"
-    assert summary.n_green == 1 and summary.n_red == 1
-    assert summary.rollover_generated == 60_000  # only Food's positive available
-
-
-def test_envelope_lines_empty_when_no_budgets(session):
-    agg = load_month_aggregate(session, "2026-06", TRM)
-    lines, summary = reports._envelope_lines(agg)
-    assert lines == []
-    assert summary.n_green == 0 and summary.n_red == 0 and summary.rollover_generated == 0
-
-
-def test_goal_lines_defined_and_open_ended(session):
-    from quaestor.services import goals
-
-    sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
-    goals.create_goal(
+    funds.create_fund(session, food.id, rule="fixed", amount=100_000, start_month="2026-06")
+    funds.create_fund(
         session,
-        name="Trip",
-        monthly_amount=200_000,
-        savings_account_id=sav.id,
-        target_amount=1_200_000,
-        deadline=date(2026, 12, 1),
+        fun.id,
+        rule="target-by-date",
+        target_amount=300_000,
+        target_month="2026-12",
+        start_month="2026-06",
+        opening_balance=150_000,
     )
-    goals.create_goal(session, name="Buffer", monthly_amount=100_000, savings_account_id=sav.id)
-    lines = reports._goal_lines(session, today=date(2026, 6, 1))
-    by_name = {row.name: row for row in lines}
-    assert by_name["Trip"].target == 1_200_000 and by_name["Trip"].eta is not None
-    assert by_name["Trip"].on_track is not None
-    assert by_name["Buffer"].target is None and by_name["Buffer"].eta is None
-    assert by_name["Buffer"].on_track is None
+    transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
+    transactions.record_expense(session, acc.id, 70_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)
+    agg = load_month_aggregate(session, "2026-06", TRM)
+    lines, summary = reports._fund_lines(agg, funds.month_available(agg).funds)
+    assert [row.category_name for row in lines] == ["Food", "Fun"]
+    food_line = lines[0]
+    assert food_line.asks == 100_000 and food_line.spent == 40_000
+    assert food_line.holds == 0 and food_line.on_track is True
+    fun_line = lines[1]
+    assert fun_line.holds == 80_000 and fun_line.spent == 70_000
+    assert fun_line.asks == 36_667 and fun_line.on_track is False  # drained, so it asks more
+    assert summary.n_on_track == 1 and summary.n_behind == 1
+    assert summary.set_aside == 80_000
+
+
+def test_fund_lines_empty_when_no_funds(session):
+    agg = load_month_aggregate(session, "2026-06", TRM)
+    lines, summary = reports._fund_lines(agg, [])
+    assert lines == []
+    assert summary.n_on_track == 0 and summary.n_behind == 0 and summary.set_aside == 0
 
 
 def test_balance_lines_exclude_archived_sorted(session):
@@ -317,14 +305,12 @@ def test_monthly_report_pending_lines_exclude_prior_overdue(session):
 
 
 def test_monthly_report_end_to_end(session):
-    from quaestor.services import budgets, goals
+    from quaestor.services import funds
 
     fx.set_trm(session, "4000")
     acc = _acc(session)
-    sav = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
     food = _cat(session, name="Food")
-    budgets.set_budget(session, food.id, "2026-06", 100_000)
-    goals.create_goal(session, name="Buffer", monthly_amount=50_000, savings_account_id=sav.id)
+    funds.create_fund(session, food.id, rule="fixed", amount=100_000, start_month="2026-06")
     transactions.record_income(
         session, acc.id, 500_000, "COP", date(2026, 6, 1), "salary", category_id=a_category(session, TxType.income)
     )
@@ -334,11 +320,12 @@ def test_monthly_report_end_to_end(session):
 
     assert report.month == "2026-06"
     assert report.income == 500_000 and report.expense == 80_000 and report.net == 420_000
-    assert report.envelopes_summary.n_green == 1
+    assert report.funds_summary.n_on_track == 1
     assert [c.category for c in report.by_category] == ["Food"]
     assert report.drift_mom is None  # cold start
     assert report.usd_share == 0.0
-    assert report.safe_to_spend.year_month == "2026-06"
+    assert report.available.year_month == "2026-06"
+    assert report.available.free == report.available.income - 100_000 - report.available.uncovered
     # markdown is rendered from the same data
     assert report.markdown.startswith("# Monthly report — 2026-06")
     assert "**Net:** $4,200.00 COP" in report.markdown

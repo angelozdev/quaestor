@@ -1,9 +1,8 @@
-"""Output DTOs returned by budget/goal/recurring services (not DB models)."""
+"""Output DTOs returned by the fund and recurring services (not DB models)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,60 +10,77 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class BudgetStatus:
+class FundLine:
+    """One fund, as the screen and the assistant list it."""
+
+    fund_id: int
     category_id: int
-    year_month: str
-    assigned: int
-    rollover_in: int
-    spent: int
-    available: int
-    pct_used: int
-    status: str  # "over" | "under"
-
-
-@dataclass(frozen=True)
-class BudgetLine:
-    category_id: int
-    category_name: str
-    assigned: int
-    rollover_in: int
-    spent: int
-    available: int
-    pct_used: int
-    status: str  # "over" | "under"
-
-
-@dataclass(frozen=True)
-class CommittedItem:
-    kind: str  # "recurring" | "planned"
     name: str
-    date: date
-    amount: int  # COP cents
+    rule: str
+    start_month: str
+    accumulates: bool
 
 
 @dataclass(frozen=True)
-class SafeToSpend:
+class FundStatus:
+    """What one fund asks, holds and reports for one month (ADR-0043).
+
+    `averaged_over` is filled by the `average` rule only; `spreads_over` and
+    `whole_by` by the rules that save toward a dated charge.
+    """
+
+    fund_id: int
+    category_id: int
+    name: str
     year_month: str
-    income_forecast: int
-    committed: int
-    assigned_envelopes: int
+    rule: str
+    asks: int
+    holds: int
+    accumulates: bool
+    accumulation_is_implied: bool
+    on_track: bool
+    averaged_over: int | None = None
+    spreads_over: int | None = None
+    whole_by: str | None = None
+
+
+@dataclass(frozen=True)
+class MonthAvailable:
+    """The money available for one month, opened into the terms that make it.
+
+    `income − Σ funds asks − uncovered = free` holds exactly, which is why
+    `uncovered` is one term and not three (AC-10, ADR-0044).
+    """
+
+    year_month: str
+    income: int
+    funds: list[FundStatus]
+    uncovered: int
     free: int
-    committed_breakdown: list  # list[CommittedItem]
 
 
 @dataclass(frozen=True)
-class GoalProgress:
-    goal_id: int
-    name: str
-    type: str  # "defined" | "open-ended"
-    monthly_amount: int
-    saved: int
-    target_amount: int | None = None
-    deadline: date | None = None
-    monthly_required: int | None = None
-    on_track: bool | None = None
-    eta: date | None = None
-    remaining: int | None = None
+class MonthRates:
+    """What the owner earns and what the owner costs, each a month's worth.
+
+    Rates are smoothed across a cycle and are never the money available: a
+    quarterly income counts every month here and only in the month it is due
+    there (AC-14b).
+    """
+
+    year_month: str
+    earning: int
+    cost: int
+    margin: int
+
+
+@dataclass(frozen=True)
+class FundPreview:
+    """What a fund would ask before it exists, and the warning it carries (AC-24)."""
+
+    category_id: int
+    would_ask: int
+    warning: str | None = None
 
 
 @dataclass(frozen=True)

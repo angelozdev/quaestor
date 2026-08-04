@@ -2,14 +2,13 @@
 
 Both views (MCP chat in P2, the /reports screen in P6) consume the same object;
 this module turns its data into the markdown half. Section order follows ADR-019:
-the headline is net + envelope performance; safe-to-spend is the closing line.
+the headline is net + how the funds did; the money left over is the closing line.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .dates import display_date
 from .money import cents_to_major
 
 if TYPE_CHECKING:
@@ -28,26 +27,24 @@ def _pct(value: float) -> str:
 def render_markdown(report: MonthlyReport) -> str:
     lines: list[str] = []
 
-    # 1. Headline — net + envelope performance (ADR-019)
+    # 1. Headline — net + how the funds did (ADR-019, ADR-0043)
     lines.append(f"# Monthly report — {report.month}")
     lines.append("")
     lines.append(f"**Net:** {money(report.net)}  (income {money(report.income)} − expense {money(report.expense)})")
-    s = report.envelopes_summary
-    lines.append(f"**Envelopes:** {s.n_green} green / {s.n_red} red · rollover generated {money(s.rollover_generated)}")
+    s = report.funds_summary
+    lines.append(f"**Funds:** {s.n_on_track} on track / {s.n_behind} behind · set aside {money(s.set_aside)}")
     lines.append("")
 
-    # 2. Envelopes detail
-    lines.append("## Envelopes")
-    if report.envelopes:
-        lines.append("| Category | Allocated | Rollover in | Spent | Available | Status |")
-        lines.append("|---|---|---|---|---|---|")
-        for e in report.envelopes:
-            lines.append(
-                f"| {e.category} | {money(e.allocated)} | {money(e.rollover_in)} | "
-                f"{money(e.spent)} | {money(e.available)} | {e.status} |"
-            )
+    # 2. Funds detail
+    lines.append("## Funds")
+    if report.funds:
+        lines.append("| Category | Asks | Holds | Spent | Status |")
+        lines.append("|---|---|---|---|---|")
+        for f in report.funds:
+            status = "on track" if f.on_track else "behind"
+            lines.append(f"| {f.category_name} | {money(f.asks)} | {money(f.holds)} | {money(f.spent)} | {status} |")
     else:
-        lines.append("_No envelopes this month._")
+        lines.append("_No funds this month._")
     lines.append("")
 
     # 3. Expense by category
@@ -72,21 +69,7 @@ def render_markdown(report: MonthlyReport) -> str:
         lines.append("_No expenses this month._")
     lines.append("")
 
-    # 5. Goals — ETA/on-track only on defined goals
-    lines.append("## Goals")
-    if report.goals:
-        for g in report.goals:
-            if g.target is not None:
-                track = "on track" if g.on_track else "behind"
-                eta = display_date(g.eta) if g.eta else "—"
-                lines.append(f"- **{g.name}**: {money(g.accumulated)} / {money(g.target)} · ETA {eta} · {track}")
-            else:
-                lines.append(f"- **{g.name}**: {money(g.accumulated)} (open-ended)")
-    else:
-        lines.append("_No goals._")
-    lines.append("")
-
-    # 6. Account balances
+    # 5. Account balances
     lines.append("## Account balances")
     if report.balances:
         for b in report.balances:
@@ -95,7 +78,7 @@ def render_markdown(report: MonthlyReport) -> str:
         lines.append("_No accounts._")
     lines.append("")
 
-    # 7. Month-over-month drift + USD share
+    # 6. Month-over-month drift + USD share
     lines.append("## Month-over-month")
     if report.drift_mom is not None:
         d = report.drift_mom
@@ -114,15 +97,15 @@ def render_markdown(report: MonthlyReport) -> str:
     lines.append(f"USD share of expense: {report.usd_share * 100:.1f}%")
     lines.append("")
 
-    # 8. Pending confirmations (only when present)
+    # 7. Pending confirmations (only when present)
     if report.pending:
         lines.append("## Pending confirmations")
         for p in report.pending:
             lines.append(f"- {p}")
         lines.append("")
 
-    # 9. Closing — safe-to-spend (ADR-019: not a headline)
+    # 8. Closing — the money available (ADR-019: not a headline)
     lines.append("## Closing")
-    lines.append(f"You closed with {money(report.safe_to_spend.free)} free to spend.")
+    lines.append(f"You closed with {money(report.available.free)} free to spend.")
 
     return "\n".join(lines)

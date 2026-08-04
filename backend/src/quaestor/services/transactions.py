@@ -524,9 +524,8 @@ def delete_transaction(session: Session, tx_id: int) -> None:
     A transfer leg that belongs to a group deletes its whole pair: both legs'
     balances are reversed per their stored direction and both rows plus their
     tag links are removed atomically (ADR-0032) — a half-deleted transfer can
-    never exist. A group-less transfer is a proposed goal contribution whose
-    second leg is only born at confirm time; it deletes as a single row, and
-    moves no balance unless it was already posted.
+    never exist. A group-less transfer deletes as a single row, and moves no
+    balance unless it was already posted.
 
     Raises:
         NotFound: If the transaction does not exist.

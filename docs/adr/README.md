@@ -18,8 +18,8 @@ New ADRs are created with the `adr` skill:
 | 0002 | App-agnostic frontend design system in `ui/` module | accepted | 2026-06-20 |
 | 0003 | pnpm as the sole package manager for the frontend | accepted | 2026-06-20 |
 | 0004 | Dark-first theming via next-themes with an app-level elevation token layer | accepted | 2026-06-20 |
-| 0005 | Soft-delete and restore as the uniform lifecycle for goals, recurring, and masters | accepted | 2026-06-21 |
-| 0006 | Goals and budgets write API with MCP parity | accepted | 2026-06-21 |
+| 0005 | Soft-delete and restore as the uniform lifecycle for goals, recurring, and masters | superseded by 0043 (goal clause) | 2026-06-21 |
+| 0006 | Goals and budgets write API with MCP parity | superseded by 0043 | 2026-06-21 |
 | 0007 | Biome and lefthook as frontend format/lint | accepted | 2026-06-21 |
 | 0008 | TanStack Form as the sole form library, restoring zod to v4 | accepted | 2026-06-21 |
 | 0009 | Closing the MCP parity gap | accepted | 2026-06-21 |
@@ -56,3 +56,5 @@ New ADRs are created with the `adr` skill:
 | 0040 | Strict ruff lint as a gate on the acceptance pipeline | accepted | 2026-08-02 |
 | 0041 | Category presence is a type-discriminated constraint, not a blanket NOT NULL | accepted | 2026-08-03 |
 | 0042 | A category belongs to one direction and one resolver answers which category a movement carries | accepted | 2026-08-03 |
+| 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted | 2026-08-04 |
+| 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | proposed | 2026-08-04 |

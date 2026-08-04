@@ -41,7 +41,7 @@ export function ToPayWidget() {
       qc.invalidateQueries({ queryKey: ["planned"] })
       qc.invalidateQueries({ queryKey: ["reports"] })
       qc.invalidateQueries({ queryKey: ["accounts"] })
-      qc.invalidateQueries({ queryKey: ["budgets"] })
+      qc.invalidateQueries({ queryKey: ["funds"] })
     },
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "No se pudo confirmar el pago"),

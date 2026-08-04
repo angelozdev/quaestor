@@ -1,11 +1,6 @@
 from datetime import date
 from decimal import Decimal
 
-from quaestor.domain.dtos import (
-    BudgetLine,
-    GoalProgress,
-    SafeToSpend,
-)
 from quaestor.domain.errors import (
     MissingRate,
     NotFound,
@@ -17,8 +12,6 @@ from quaestor.domain.models import (
     AccountType,
     Category,
     CategoryGroup,
-    Goal,
-    GoalStatus,
     IntervalUnit,
     RecurringItem,
     RecurringMode,
@@ -230,85 +223,6 @@ def test_settings_card():
     text = format.settings_card(s)
     assert "Base currency: COP" in text
     assert "default source account: 3" in text
-
-
-def test_budgets_table_empty():
-    assert format.budgets_table([]) == "No budgets for that month."
-
-
-def test_budgets_table_renders_lines():
-    lines = [
-        BudgetLine(
-            category_id=1,
-            category_name="Groceries",
-            assigned=200_000,
-            rollover_in=0,
-            spent=80_000,
-            available=120_000,
-            pct_used=40.0,
-            status="under",
-        )
-    ]
-    text = format.budgets_table(lines)
-    assert "Groceries" in text and "| Category |" in text
-    assert "2000.00" in text and "800.00" in text
-    assert "1200.00" in text
-
-
-def test_safe_to_spend_card():
-    sts = SafeToSpend(
-        year_month="2026-06",
-        income_forecast=2_000_000,
-        committed=600_000,
-        assigned_envelopes=400_000,
-        free=1_000_000,
-        committed_breakdown=[],
-    )
-    text = format.safe_to_spend_card(sts)
-    assert "2026-06" in text
-    assert "10000.00 COP" in text  # free
-    assert "20000.00 COP" in text  # income
-    assert "free to spend" in text.lower()
-
-
-def test_goals_table():
-    goals = [
-        Goal(
-            id=1,
-            name="Trip",
-            monthly_amount=500_000,
-            savings_account_id=2,
-            target_amount=2_000_000,
-            deadline=date(2026, 12, 31),
-            status=GoalStatus.active,
-        ),
-    ]
-    text = format.goals_table(goals)
-    assert "Trip" in text and "5000.00 COP" in text
-    assert "id=1" in text and "defined" in text
-
-
-def test_goals_table_empty():
-    assert format.goals_table([]) == "No goals."
-
-
-def test_goals_progress_table():
-    progress = [
-        GoalProgress(
-            goal_id=1,
-            name="Trip",
-            type="defined",
-            monthly_amount=500_000,
-            saved=600_000,
-            target_amount=2_000_000,
-            deadline=date(2026, 12, 31),
-            eta=None,
-            on_track=True,
-        )
-    ]
-    text = format.goals_progress_table(progress)
-    assert "Trip" in text and "6000.00" in text and "20000.00" in text
-    assert "on-track" in text
 
 
 def test_monthly_report_card_headline():

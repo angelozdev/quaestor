@@ -765,12 +765,13 @@ def then_income_category(world: World, category: str) -> None:
     )
 
 
-@step(r'viewing the expense shows payee "(?P<payee>[^"]+)" and notes "(?P<notes>[^"]+)"')
+@step(r'viewing the expense shows payee "(?P<payee>[^"]+)" and notes "(?P<notes>[^"]*)"')
 def then_expense_payee_and_notes(world: World, payee: str, notes: str) -> None:
     world.require_clean("what was already typed should have survived")
     tx = _last_expense(world)
     assert tx.payee == payee, f"expected payee {payee!r}, got {tx.payee!r}"
-    assert tx.notes == notes, f"expected notes {notes!r}, got {tx.notes!r}"
+    written = tx.notes or ""
+    assert written == notes, f"expected notes {notes!r}, got {tx.notes!r}"
 
 
 @step(r"both sides of the transfer show no category")

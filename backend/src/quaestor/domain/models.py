@@ -130,7 +130,6 @@ class Transaction(SQLModel, table=True):
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[int | None, Field(default=None, foreign_key="category.id")] = None
     recurring_id: Annotated[int | None, Field(default=None, foreign_key="recurring_item.id")] = None
-    goal_id: Annotated[int | None, Field(default=None, foreign_key="goal.id")] = None
     transfer_group_id: Annotated[str | None, Field(default=None, index=True)] = None
     transfer_direction: Annotated[TransferDirection | None, Field(default=None)] = None
     source: Source = Source.manual
@@ -192,52 +191,34 @@ class RecurringOccurrence(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class GoalStatus(StrEnum):
-    active = "active"
-    reached = "reached"
-    paused = "paused"
+class FundRule(StrEnum):
+    """How a fund works out what it asks for each month (ADR-0043)."""
+
+    fixed = "fixed"
+    average = "average"
+    from_recurring = "from-recurring"
+    target_by_date = "target-by-date"
 
 
-class ContributionSource(StrEnum):
-    """`confirmed`: proposed by rollover, confirmed in To-pay.
-    `manual`: standalone contribution."""
+class Fund(SQLModel, table=True):
+    """One fund per expense category: the rule is stored, the balance derived.
 
-    confirmed = "confirmed"
-    manual = "manual"
+    No balance column and no account reference — what a fund holds is folded
+    forward from its start month over the category's posted spending
+    (ADR-0043). `anchor_amount` is the owner's own statement of what it already
+    holds; `anchor_month` is the month that statement was made for, and `None`
+    means it was made for whatever month is being looked at.
+    """
 
-
-class Budget(SQLModel, table=True):
-    """`year_month` is "YYYY-MM"; `amount_assigned` is COP cents, >= 0."""
-
-    __table_args__ = (UniqueConstraint("category_id", "year_month", name="uq_budget_category_month"),)
+    __table_args__ = (UniqueConstraint("category_id", name="uq_fund_category"),)
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     category_id: Annotated[int, Field(foreign_key="category.id")]
-    year_month: str
-    amount_assigned: int = 0
-
-
-class Goal(SQLModel, table=True):
-    """Amounts are COP cents. A defined goal has both `target_amount` and
-    `deadline`; an open-ended goal has neither. `monthly_amount` is > 0."""
-
-    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
-    name: str
-    target_amount: int | None = None
-    deadline: date | None = None
-    monthly_amount: int
-    savings_account_id: Annotated[int, Field(foreign_key="account.id")]
-    status: GoalStatus = GoalStatus.active
-
-
-class GoalContribution(SQLModel, table=True):
-    """`amount` is the physical cents of the contribution's transfer leg, in
-    the savings account's currency — no COP snapshot is stored (ADR-0031)."""
-
-    __tablename__ = "goal_contribution"
-    __table_args__ = (Index("ix_goal_contribution_goal_date", "goal_id", "date"),)
-    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
-    goal_id: Annotated[int, Field(foreign_key="goal.id")]
-    date: date
-    amount: int
-    source: ContributionSource
-    transaction_id: Annotated[int | None, Field(default=None, foreign_key="transaction.id")] = None
+    rule: FundRule
+    start_month: str
+    accumulates: bool = True
+    amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
+    window_months: int | None = None
+    target_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
+    target_month: str | None = None
+    anchor_month: str | None = None
+    anchor_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None

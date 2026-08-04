@@ -36,6 +36,10 @@ def to_cop_cents(amount_cents: int, currency: str, trm: Decimal) -> int:
 
     COP converts at identity (the TRM never touches it); USD multiplies by
     the TRM with half-up rounding to the COP cent.
+
+    A read path always holds a rate before it gets here: every read entry
+    point asks for the TRM first and fails loud without one, so `trm` is
+    never absent (ADR-0031, product ADR-038).
     """
     if currency == BASE_CURRENCY:
         return amount_cents

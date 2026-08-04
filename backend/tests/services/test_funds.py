@@ -1,0 +1,925 @@
+"""The funds service: what a fund asks, what it holds, and what it refuses."""
+
+from datetime import date
+
+import pytest
+from quaestor.db import init_db, make_engine
+from quaestor.domain.errors import MissingRate, NotFound, ValidationError
+from quaestor.services import categories, funds, fx, planned, recurring, transactions
+from sqlmodel import Session
+
+from tests.support.query_counter import count_queries
+
+SEEDED_TRM = "4200"
+"""The rate a running app always carries — background state, not a subject.
+
+Every fund read demands it on entry (ADR-0031), so a test that is not about
+currency starts with one already set. A test that *is* about currency sets its
+own, which overwrites this.
+"""
+
+
+@pytest.fixture
+def session():
+    engine = make_engine(memory=True)
+    init_db(engine)
+    with Session(engine) as s:
+        fx.set_trm(s, SEEDED_TRM)
+        yield s
+
+
+@pytest.fixture
+def engine_session():
+    engine = make_engine(memory=True)
+    init_db(engine)
+    with Session(engine) as s:
+        fx.set_trm(s, SEEDED_TRM)
+        yield engine, s
+
+
+def _clear_trm(session):
+    """Take the app back to a fresh install, before any rate was ever set."""
+    from quaestor.domain.models import Settings
+    from sqlmodel import select
+
+    for settings in session.exec(select(Settings)).all():
+        settings.usd_cop = None
+        session.add(settings)
+    session.commit()
+
+
+def _category(session, name="Seguro", is_income=False):
+    return categories.create_category(session, name, is_income=is_income).id
+
+
+def _spend(session, category_id, amount, on):
+    return transactions.record_expense(
+        session, _default_account(session), amount, "COP", on, "Gasto", category_id=category_id
+    )
+
+
+def _default_account(session):
+    from quaestor.services import accounts
+
+    existing = [a for a in accounts.list_accounts(session) if a.name == "Caja"]
+    if existing:
+        return existing[0].id
+    return accounts.create_account(session, "Caja", "debit", "COP", balance=0).id
+
+
+def _obligation(session, category_id, amount, start, unit="month", count=1, name="SOAT", currency="COP"):
+    return recurring.create_recurring(
+        session,
+        name=name,
+        payee=name,
+        type="expense",
+        mode="manual",
+        amount=amount,
+        currency=currency,
+        category_id=category_id,
+        account_id=_account_for(session, currency),
+        interval_unit=unit,
+        interval_count=count,
+        start_date=start,
+        declared_on=start,
+    )
+
+
+def _recurring_id(session, name):
+    from quaestor.domain.models import RecurringItem
+    from sqlmodel import select
+
+    return session.exec(select(RecurringItem).where(RecurringItem.name == name)).first().id
+
+
+def _account_for(session, currency):
+    from quaestor.services import accounts
+
+    existing = [a for a in accounts.list_accounts(session) if a.currency == currency]
+    if existing:
+        return existing[0].id
+    return accounts.create_account(session, f"Banco {currency}", "debit", currency, balance=0).id
+
+
+# ------------------------------------------------------------------- asking
+
+
+def test_a_fixed_fund_asks_its_amount_from_its_start_month(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 100_000_00
+
+
+def test_a_fixed_fund_asks_nothing_before_its_start_month(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-09").asks == 0
+
+
+def test_a_fixed_amount_does_not_move_with_spending(session):
+    cat = _category(session, "Restaurantes")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
+    _spend(session, cat, 350_000_00, date(2026, 11, 12))
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 200_000_00
+
+
+def test_a_dated_obligation_spreads_over_the_months_that_remain(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 74_550_00
+    assert status.spreads_over == 6
+    assert status.whole_by == "2027-04"
+
+
+def test_the_ask_recomputes_as_months_pass_and_as_the_fund_fills(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=297_300_00)
+    assert funds.fund_status(session, fund.id, "2027-01").asks == 37_500_00
+
+
+def test_the_month_the_charge_lands_does_not_contribute(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=447_300_00)
+    status = funds.fund_status(session, fund.id, "2027-04")
+    assert status.asks == 0
+    assert status.on_track is True
+
+
+def test_every_obligation_in_the_category_is_added_together(session):
+    cat = _category(session, "Internet")
+    for name, amount in (("Hogar", 85_000_00), ("Datos", 38_900_00), ("Datos Mama", 37_500_00)):
+        _obligation(session, cat, amount, date(2026, 1, 5), name=name)
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 161_400_00
+
+
+def test_obligations_of_different_cycles_are_each_brought_to_a_month(session):
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 250_000_00, date(2026, 1, 5), name="EPM")
+    _obligation(session, cat, 600_000_00, date(2027, 11, 5), unit="year", name="Antivirus")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 300_000_00
+
+
+def test_a_drained_fund_raises_its_ask_and_says_it_is_behind(session):
+    cat = _category(session)
+    _obligation(session, cat, 7_200_000_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=3_600_000_00)
+    _spend(session, cat, 3_600_000_00, date(2026, 11, 20))
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 1_200_000_00
+    assert status.on_track is False
+
+
+def test_a_charge_still_standing_this_month_is_the_one_the_fund_is_filling(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2027-05")
+    assert status.whole_by == "2027-04"
+    assert status.holds == 447_300_00
+    assert status.asks == 0
+
+
+def test_a_charge_landing_this_month_that_nothing_saved_for_asks_for_all_of_it(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2027-05")
+    assert funds.fund_status(session, fund.id, "2027-05").asks == 447_300_00
+
+
+def test_the_next_cycle_begins_once_the_fund_has_paid(session):
+    cat = _category(session)
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=447_300_00)
+    _spend(session, cat, 447_300_00, date(2027, 5, 10))
+    status = funds.fund_status(session, fund.id, "2027-05")
+    assert status.whole_by == "2028-04"
+    assert status.holds == 0
+
+
+def test_a_skipped_charge_lowers_what_its_fund_asks_that_month(session):
+    cat = _category(session, "Internet")
+    for name, amount in (("Hogar", 85_000_00), ("Datos", 38_900_00), ("Datos Mama", 37_500_00)):
+        _obligation(session, cat, amount, date(2026, 11, 5), name=name)
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    recurring.skip_recurring(session, _recurring_id(session, "Datos Mama"), date(2026, 11, 5))
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 123_900_00
+
+
+def test_the_month_after_a_skipped_charge_asks_the_full_amount_again(session):
+    cat = _category(session, "Internet")
+    _obligation(session, cat, 37_500_00, date(2026, 11, 5), name="Datos Mama")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    recurring.skip_recurring(session, _recurring_id(session, "Datos Mama"), date(2026, 11, 5))
+    assert funds.fund_status(session, fund.id, "2026-12").asks == 37_500_00
+
+
+def test_the_average_divides_by_the_months_the_app_has_data_for(session):
+    cat = _category(session, "Servicios")
+    _spend(session, cat, 200_000_00, date(2026, 9, 10))
+    _spend(session, cat, 100_000_00, date(2026, 10, 10))
+    fund = funds.create_fund(session, cat, rule="average", window_months=12, start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 150_000_00
+    assert status.averaged_over == 2
+
+
+def test_a_month_inside_the_window_with_no_spending_counts_as_zero(session):
+    history = _category(session, "Historia")
+    _spend(session, history, 100, date(2026, 6, 10))
+    cat = _category(session, "Cursos")
+    _spend(session, cat, 300_000_00, date(2026, 9, 10))
+    fund = funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 100_000_00
+    assert status.averaged_over == 3
+
+
+def test_the_current_month_does_not_average_itself(session):
+    history = _category(session, "Historia")
+    _spend(session, history, 100, date(2026, 6, 10))
+    cat = _category(session, "Mercado")
+    _spend(session, cat, 300_000_00, date(2026, 10, 10))
+    _spend(session, cat, 900_000_00, date(2026, 11, 10))
+    fund = funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 100_000_00
+
+
+def test_a_dollar_obligation_is_asked_for_in_cop(session):
+    fx.set_trm(session, "4000")
+    cat = _category(session, "Gimnasio")
+    _obligation(session, cat, 30_00, date(2026, 1, 5), name="Smart Fit", currency="USD")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 120_000_00
+
+
+def test_a_fund_cannot_be_read_without_a_rate_even_in_pure_cop(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    _clear_trm(session)
+    with pytest.raises(MissingRate):
+        funds.fund_status(session, fund.id, "2026-11")
+
+
+# ------------------------------------------------------------------ holding
+
+
+def test_an_accumulating_fund_carries_its_balance_into_the_next_month(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11", accumulates=True)
+    assert funds.fund_status(session, fund.id, "2026-12").holds == 100_000_00
+
+
+def test_a_resetting_fund_starts_each_month_fresh(session):
+    cat = _category(session, "Restaurantes")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11", accumulates=False)
+    assert funds.fund_status(session, fund.id, "2026-12").holds == 0
+
+
+def test_an_accumulating_fund_overspent_falls_to_zero_not_below(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11", accumulates=True)
+    _spend(session, cat, 400_000_00, date(2026, 11, 12))
+    assert funds.fund_status(session, fund.id, "2026-12").holds == 0
+
+
+def test_the_opening_balance_counts_toward_what_the_fund_still_needs(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+        opening_balance=1_200_000_00,
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.holds == 1_200_000_00
+    assert status.asks == 300_000_00
+
+
+def test_the_fund_never_reads_an_account_balance(session):
+    from quaestor.services import accounts
+
+    accounts.create_account(session, "Ahorros", "savings", "COP", balance=9_000_000_00)
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+        opening_balance=1_200_000_00,
+    )
+    assert funds.fund_status(session, fund.id, "2026-11").holds == 1_200_000_00
+
+
+def test_a_fund_saving_toward_a_date_accumulates_without_being_asked(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.accumulates is True
+    assert status.accumulation_is_implied is True
+
+
+# ----------------------------------------------------------------- refusing
+
+
+def test_a_fund_on_an_income_category_is_refused(session):
+    cat = _category(session, "Salario", is_income=True)
+    with pytest.raises(ValidationError, match="going out"):
+        funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+
+
+def test_a_second_fund_on_the_same_category_is_refused_naming_it(session):
+    cat = _category(session, "Restaurantes")
+    funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
+    with pytest.raises(ValidationError, match="Restaurantes"):
+        funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+
+
+def test_averaging_a_category_with_no_spending_at_all_is_refused(session):
+    cat = _category(session, "Reembolsable")
+    with pytest.raises(ValidationError, match="fixed"):
+        funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+
+
+def test_spending_only_in_the_month_the_fund_starts_does_not_count_as_history(session):
+    cat = _category(session, "Peajes")
+    _spend(session, cat, 90_000_00, date(2026, 11, 10))
+    with pytest.raises(ValidationError):
+        funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+
+
+def test_a_fund_saving_toward_a_date_refuses_to_reset(session):
+    cat = _category(session, "Ahorro Viaje")
+    with pytest.raises(ValidationError, match="accumulate"):
+        funds.create_fund(
+            session,
+            cat,
+            rule="target-by-date",
+            target_amount=3_000_000_00,
+            target_month="2027-05",
+            start_month="2026-11",
+            accumulates=False,
+        )
+
+
+def test_a_category_holding_a_fund_cannot_be_archived(session):
+    cat = _category(session)
+    funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    with pytest.raises(ValidationError, match="fund"):
+        categories.archive_category(session, cat)
+
+
+def test_the_category_archives_once_its_fund_is_gone(session):
+    cat = _category(session)
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    funds.delete_fund(session, fund.id)
+    assert categories.archive_category(session, cat).archived is True
+
+
+def test_a_fund_that_does_not_exist_is_reported_as_missing(session):
+    with pytest.raises(NotFound):
+        funds.fund_status(session, 999_999, "2026-11")
+
+
+# ----------------------------------------------------------- listing, preview
+
+
+def test_the_app_starts_with_no_funds_at_all(session):
+    cat = _category(session, "Internet")
+    _obligation(session, cat, 85_000_00, date(2026, 1, 5), name="Hogar")
+    assert funds.list_funds(session) == []
+
+
+def test_a_listed_fund_names_its_category(session):
+    cat = _category(session, "Restaurantes")
+    funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
+    assert [line.name for line in funds.list_funds(session)] == ["Restaurantes"]
+
+
+def test_an_implausible_target_is_announced_with_its_figure_before_the_fund_exists(session):
+    cat = _category(session, "Ahorro Viaje")
+    preview = funds.preview_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=10_000_000_00,
+        target_month="2026-08",
+        start_month="2026-08",
+    )
+    assert preview.would_ask == 10_000_000_00
+    assert preview.warning is not None
+    assert funds.list_funds(session) == []
+
+
+def test_a_reachable_target_is_previewed_without_a_warning(session):
+    cat = _category(session, "Ahorro Viaje")
+    preview = funds.preview_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-08",
+        start_month="2026-08",
+    )
+    assert preview.would_ask == 250_000_00
+    assert preview.warning is None
+
+
+# ------------------------------------------------------------- the read path
+
+
+def test_a_fund_reading_stays_bounded_no_matter_how_many_months_it_folds(engine_session):
+    engine, session = engine_session
+    cat = _category(session, "Seguro")
+    _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-01")
+    for month in range(1, 13):
+        _spend(session, cat, 1_000_00, date(2026, month, 10))
+    with count_queries(engine) as counted:
+        funds.fund_status(session, fund.id, "2026-12")
+    assert counted.count <= 13, f"fund_status issued {counted.count} queries"
+
+
+# -------------------------------------------------------- the month's number
+
+
+def _income_obligation(session, category_id, amount, start, unit="month", count=1, name="Empresa", currency="COP"):
+    return recurring.create_recurring(
+        session,
+        name=name,
+        payee=name,
+        type="income",
+        mode="auto",
+        amount=amount,
+        currency=currency,
+        category_id=category_id,
+        account_id=_account_for(session, currency),
+        interval_unit=unit,
+        interval_count=count,
+        start_date=start,
+        declared_on=start,
+    )
+
+
+def _earn(session, category_id, amount, on, payee="Empresa"):
+    return transactions.record_income(
+        session, _account_for(session, "COP"), amount, "COP", on, payee, category_id=category_id
+    )
+
+
+def _salario(session):
+    cat = _category(session, "Salario", is_income=True)
+    _income_obligation(session, cat, 5_000_000_00, date(2026, 1, 5))
+    return cat
+
+
+def test_an_income_category_with_nothing_recorded_counts_what_it_promises(session):
+    _salario(session)
+    assert funds.available(session, "2026-11").income == 5_000_000_00
+
+
+def test_what_arrived_replaces_what_the_category_promised(session):
+    cat = _salario(session)
+    _earn(session, cat, 4_200_000_00, date(2026, 11, 20))
+    assert funds.available(session, "2026-11").income == 4_200_000_00
+
+
+def test_a_category_stops_guessing_for_every_obligation_it_holds(session):
+    """The declared boundary of ADR-0044: per category, never per obligation."""
+    cat = _salario(session)
+    _income_obligation(session, cat, 2_000_000_00, date(2026, 1, 5), name="Socio")
+    assert funds.available(session, "2026-11").income == 7_000_000_00
+    _earn(session, cat, 4_200_000_00, date(2026, 11, 20))
+    assert funds.available(session, "2026-11").income == 4_200_000_00
+
+
+def test_money_with_no_obligation_behind_it_counts_from_the_moment_it_is_recorded(session):
+    cat = _category(session, "Rendimientos", is_income=True)
+    _earn(session, cat, 250_000_00, date(2026, 11, 10), payee="Banco")
+    assert funds.available(session, "2026-11").income == 250_000_00
+
+
+def test_a_quarterly_income_counts_nothing_until_the_month_it_is_due(session):
+    cat = _category(session, "Bonos", is_income=True)
+    _income_obligation(session, cat, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
+    assert funds.available(session, "2026-08").free == 0
+    assert funds.available(session, "2026-09").free == 3_000_000_00
+
+
+def test_only_the_excess_past_a_fund_leaves_the_money_available(session):
+    _salario(session)
+    cat = _category(session, "Restaurantes")
+    funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
+    _spend(session, cat, 350_000_00, date(2026, 11, 12))
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 150_000_00
+    assert view.free == 4_650_000_00
+
+
+def test_spending_no_fund_covers_comes_straight_out_of_the_money_available(session):
+    _salario(session)
+    loose = _category(session, "Transporte")
+    _spend(session, loose, 150_000_00, date(2026, 11, 12))
+    assert funds.available(session, "2026-11").free == 4_850_000_00
+
+
+def test_an_obligation_no_fund_covers_is_uncovered_too(session):
+    _salario(session)
+    cat = _category(session, "Arriendo")
+    _obligation(session, cat, 1_000_000_00, date(2026, 1, 5), name="Arrendador")
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 1_000_000_00
+    assert view.free == 4_000_000_00
+
+
+def test_the_breakdown_names_every_fund_and_adds_up_exactly(session):
+    _salario(session)
+    restaurantes = _category(session, "Restaurantes")
+    mercado = _category(session, "Mercado")
+    funds.create_fund(session, restaurantes, rule="fixed", amount=200_000_00, start_month="2026-11")
+    funds.create_fund(session, mercado, rule="fixed", amount=300_000_00, start_month="2026-11")
+    _spend(session, _category(session, "Transporte"), 150_000_00, date(2026, 11, 12))
+    view = funds.available(session, "2026-11")
+    assert {line.name: line.asks for line in view.funds} == {"Restaurantes": 200_000_00, "Mercado": 300_000_00}
+    assert view.income - sum(line.asks for line in view.funds) - view.uncovered == view.free
+    assert view.free == 4_350_000_00
+
+
+def test_a_fund_asking_nothing_this_month_is_still_named(session):
+    cat = _category(session, "Seguro")
+    funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
+    view = funds.available(session, "2026-11")
+    assert [(line.name, line.asks) for line in view.funds] == [("Seguro", 0)]
+
+
+def test_the_money_available_cannot_be_read_without_a_rate_even_in_pure_cop(session):
+    _category(session, "Gimnasio")
+    _clear_trm(session)
+    with pytest.raises(MissingRate):
+        funds.available(session, "2026-11")
+
+
+def test_the_earning_rate_smooths_a_quarterly_income_across_its_cycle(session):
+    _salario(session)
+    bonos = _category(session, "Bonos", is_income=True)
+    _income_obligation(session, bonos, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
+    assert funds.rates(session, "2026-08").earning == 6_000_000_00
+    assert funds.rates(session, "2026-09").earning == 6_000_000_00
+
+
+def test_the_rate_and_the_balance_differ_when_a_quarterly_income_has_not_landed(session):
+    _salario(session)
+    bonos = _category(session, "Bonos", is_income=True)
+    _income_obligation(session, bonos, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
+    assert funds.rates(session, "2026-08").earning == 6_000_000_00
+    assert funds.available(session, "2026-08").free == 5_000_000_00
+
+
+def test_the_cost_rate_is_every_fund_ask_plus_the_obligations_no_fund_covers(session):
+    restaurantes = _category(session, "Restaurantes")
+    funds.create_fund(session, restaurantes, rule="fixed", amount=200_000_00, start_month="2026-11")
+    arriendo = _category(session, "Arriendo")
+    _obligation(session, arriendo, 1_000_000_00, date(2026, 1, 5), name="Arrendador")
+    assert funds.rates(session, "2026-11").cost == 1_200_000_00
+
+
+def test_an_obligation_a_fund_covers_is_not_counted_in_the_cost_rate_twice(session):
+    cat = _category(session, "Internet")
+    _obligation(session, cat, 85_000_00, date(2026, 1, 5), name="Internet Hogar")
+    funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    assert funds.rates(session, "2026-11").cost == 85_000_00
+
+
+def test_the_margin_is_what_the_earning_rate_leaves_after_the_cost_rate(session):
+    _salario(session)
+    cat = _category(session, "Restaurantes")
+    funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
+    rates = funds.rates(session, "2026-11")
+    assert (rates.earning, rates.cost, rates.margin) == (5_000_000_00, 200_000_00, 4_800_000_00)
+
+
+def test_the_month_number_reads_the_month_asked_about_not_a_stored_one(session):
+    cat = _salario(session)
+    _income_obligation(session, cat, 2_000_000_00, date(2026, 1, 5), name="Socio")
+    funds.available(session, "2026-09")
+    recurring.deactivate_recurring(session, _recurring_id(session, "Socio"))
+    assert funds.available(session, "2026-09").income == 5_000_000_00
+
+
+def test_the_month_number_stays_bounded_however_many_funds_it_walks(engine_session):
+    engine, session = engine_session
+    _salario(session)
+    for index in range(6):
+        cat = _category(session, f"Fondo {index}")
+        funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-01")
+        _spend(session, cat, 10_000_00, date(2026, 6, 10))
+    with count_queries(engine) as counted:
+        funds.available(session, "2026-11")
+    assert counted.count <= 13, f"available issued {counted.count} queries"
+
+
+# ---------------------------------------------- boundaries the mutation sweep found
+
+
+def test_a_fixed_fund_with_no_amount_at_all_is_refused(session):
+    cat = _category(session, "Tecnologia")
+    with pytest.raises(ValidationError, match="above zero"):
+        funds.create_fund(session, cat, rule="fixed", start_month="2026-11")
+
+
+def test_a_fixed_fund_asking_exactly_zero_is_refused(session):
+    cat = _category(session, "Tecnologia")
+    with pytest.raises(ValidationError, match="above zero"):
+        funds.create_fund(session, cat, rule="fixed", amount=0, start_month="2026-11")
+
+
+def test_a_fixed_fund_may_ask_a_single_centavo(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=1, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 1
+
+
+def test_an_average_fund_with_no_window_at_all_is_refused(session):
+    cat = _category(session, "Mercado")
+    _spend(session, cat, 100_000_00, date(2026, 10, 5))
+    with pytest.raises(ValidationError, match="at least one month"):
+        funds.create_fund(session, cat, rule="average", start_month="2026-11")
+
+
+def test_an_average_fund_with_a_window_of_zero_months_is_refused(session):
+    cat = _category(session, "Mercado")
+    _spend(session, cat, 100_000_00, date(2026, 10, 5))
+    with pytest.raises(ValidationError, match="at least one month"):
+        funds.create_fund(session, cat, rule="average", window_months=0, start_month="2026-11")
+
+
+def test_an_average_fund_may_look_back_a_single_month(session):
+    cat = _category(session, "Mercado")
+    _spend(session, cat, 100_000_00, date(2026, 10, 5))
+    fund = funds.create_fund(session, cat, rule="average", window_months=1, start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 100_000_00
+    assert status.averaged_over == 1
+
+
+def test_a_fund_saving_toward_a_date_with_no_target_at_all_is_refused(session):
+    cat = _category(session, "Ahorro Viaje")
+    with pytest.raises(ValidationError, match="above zero"):
+        funds.create_fund(session, cat, rule="target-by-date", target_month="2027-05", start_month="2026-11")
+
+
+def test_a_fund_saving_toward_a_date_with_a_target_of_zero_is_refused(session):
+    cat = _category(session, "Ahorro Viaje")
+    with pytest.raises(ValidationError, match="above zero"):
+        funds.create_fund(
+            session, cat, rule="target-by-date", target_amount=0, target_month="2027-05", start_month="2026-11"
+        )
+
+
+def test_a_fund_saving_toward_a_date_may_target_a_single_centavo(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session, cat, rule="target-by-date", target_amount=1, target_month="2027-05", start_month="2026-11"
+    )
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 1
+
+
+def test_a_fund_already_holding_more_than_its_target_asks_for_nothing(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=1_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+        opening_balance=1_500_000_00,
+    )
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 0
+
+
+def test_a_fund_holds_nothing_in_a_month_before_it_starts(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(
+        session, cat, rule="fixed", amount=100_000_00, start_month="2026-11", opening_balance=500_000_00
+    )
+    status = funds.fund_status(session, fund.id, "2026-09")
+    assert status.asks == 0
+    assert status.holds == 0
+
+
+def test_spending_on_the_very_first_day_of_the_start_month_is_not_history(session):
+    """`before the start month` is strict — the start month itself is not history."""
+    cat = _category(session, "Peajes")
+    _spend(session, cat, 90_000_00, date(2026, 11, 1))
+    with pytest.raises(ValidationError, match="fixed"):
+        funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+
+
+def test_a_target_exactly_one_month_out_is_reachable_and_carries_no_warning(session):
+    cat = _category(session, "Ahorro Viaje")
+    preview = funds.preview_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=1_000_000_00,
+        target_month="2026-12",
+        start_month="2026-11",
+    )
+    assert preview.would_ask == 1_000_000_00
+    assert preview.warning is None
+
+
+def test_a_planned_payment_no_fund_covers_leaves_the_money_available(session):
+    salario = _salario(session)
+    assert salario is not None
+    cat = _category(session, "Impuestos")
+    before = funds.available(session, "2026-11")
+    planned.plan_payment(
+        session,
+        payee="DIAN",
+        amount=300_000_00,
+        currency="COP",
+        due_date=date(2026, 11, 20),
+        account_id=_default_account(session),
+        category_id=cat,
+    )
+    after = funds.available(session, "2026-11")
+    assert after.uncovered == before.uncovered + 300_000_00
+    assert after.free == before.free - 300_000_00
+
+
+def test_a_planned_payment_a_fund_already_covers_is_not_counted_twice(session):
+    _salario(session)
+    cat = _category(session, "Impuestos")
+    funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
+    before = funds.available(session, "2026-11")
+    planned.plan_payment(
+        session,
+        payee="DIAN",
+        amount=300_000_00,
+        currency="COP",
+        due_date=date(2026, 11, 20),
+        account_id=_default_account(session),
+        category_id=cat,
+    )
+    after = funds.available(session, "2026-11")
+    assert after.uncovered == before.uncovered
+    assert after.free == before.free
+
+
+# ------------------------------------------- mutants the sweep left standing
+
+
+def test_a_fund_holds_nothing_before_its_start_month(session):
+    """The fold's early return is an answer, not a placeholder."""
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    status = funds.fund_status(session, fund.id, "2026-09")
+    assert status.holds == 0
+    assert status.asks == 0
+
+
+def test_spending_before_a_fund_starts_is_uncovered_in_full(session):
+    """A fund that has not started yet holds nothing to absorb the spending."""
+    cat = _category(session, "Tecnologia")
+    funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-12")
+    _spend(session, cat, 50_000_00, date(2026, 11, 10))
+    assert funds.available(session, "2026-11").uncovered == 50_000_00
+
+
+def test_a_target_fund_that_already_holds_its_target_asks_nothing(session):
+    cat = _category(session, "Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=1_000_000_00,
+        target_month="2027-06",
+        start_month="2026-11",
+        opening_balance=1_000_000_00,
+    )
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 0
+
+
+def test_the_average_rule_reads_only_months_completed_before_it_starts(session):
+    """Spending on the first day of the start month is not spending before it."""
+    cat = _category(session, "Servicios")
+    _spend(session, cat, 300_000_00, date(2026, 11, 1))
+    with pytest.raises(ValidationError, match="nothing has ever been spent"):
+        funds.create_fund(session, cat, rule="average", window_months=12, start_month="2026-11")
+
+
+@pytest.mark.parametrize("amount", [None, 0])
+def test_a_fixed_fund_refuses_an_amount_that_is_not_above_zero(session, amount):
+    cat = _category(session, f"Tecnologia {amount}")
+    with pytest.raises(ValidationError, match="above zero"):
+        funds.create_fund(session, cat, rule="fixed", amount=amount, start_month="2026-11")
+
+
+@pytest.mark.parametrize("amount", [1, 2])
+def test_a_fixed_fund_takes_the_smallest_amount_above_zero(session, amount):
+    cat = _category(session, f"Tecnologia {amount}")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=amount, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == amount
+
+
+@pytest.mark.parametrize("window", [None, 0])
+def test_an_average_fund_refuses_a_window_below_one_month(session, window):
+    cat = _category(session, f"Servicios {window}")
+    _spend(session, cat, 300_000_00, date(2026, 10, 5))
+    with pytest.raises(ValidationError, match="at least one month"):
+        funds.create_fund(session, cat, rule="average", window_months=window, start_month="2026-11")
+
+
+def test_an_average_fund_takes_a_window_of_one_month(session):
+    cat = _category(session, "Servicios uno")
+    _spend(session, cat, 300_000_00, date(2026, 10, 5))
+    fund = funds.create_fund(session, cat, rule="average", window_months=1, start_month="2026-11")
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 300_000_00
+
+
+@pytest.mark.parametrize("target", [None, 0])
+def test_a_target_fund_refuses_a_target_that_is_not_above_zero(session, target):
+    cat = _category(session, f"Viaje {target}")
+    with pytest.raises(ValidationError, match="target above zero"):
+        funds.create_fund(
+            session, cat, rule="target-by-date", target_amount=target, target_month="2027-06", start_month="2026-11"
+        )
+
+
+@pytest.mark.parametrize("target", [1, 2])
+def test_a_target_fund_takes_the_smallest_target_above_zero(session, target):
+    cat = _category(session, f"Viaje {target}")
+    fund = funds.create_fund(
+        session, cat, rule="target-by-date", target_amount=target, target_month="2027-06", start_month="2026-11"
+    )
+    assert funds.fund_status(session, fund.id, "2026-11").asks == 1
+
+
+def test_a_target_one_month_out_is_not_warned_about(session):
+    """One month of runway is the least that still leaves a month to save in."""
+    cat = _category(session, "Viaje")
+    preview = funds.preview_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=600_000_00,
+        target_month="2026-12",
+        start_month="2026-11",
+    )
+    assert preview.warning is None
+
+
+def test_a_turn_on_the_last_day_of_the_month_moves_the_fund_to_the_next_cycle(session):
+    """A settled turn is done: the fund fills for the next one, not for it again."""
+    cat = _category(session, "Arriendo")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 30), name="Arriendo")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
+    _spend(session, cat, 200_000_00, date(2026, 11, 30))
+    assert funds.fund_status(session, fund.id, "2026-11").whole_by == "2026-11"
+
+
+def test_everything_no_fund_covers_lands_in_one_term(session):
+    """Loose spending, an obligation, a planned payment and an overspend, added once each."""
+    account = _default_account(session)
+    salary = _category(session, "Sueldo", is_income=True)
+    transactions.record_income(session, account, 10_000_000_00, "COP", date(2026, 11, 1), "Sueldo", category_id=salary)
+    _spend(session, _category(session, "Regalos"), 100_000_00, date(2026, 11, 3))
+    _obligation(session, _category(session, "Gimnasio"), 200_000_00, date(2026, 11, 15), name="Gym")
+    planned.plan_payment(
+        session,
+        payee="Hotel",
+        amount=400_000_00,
+        currency="COP",
+        due_date=date(2026, 11, 20),
+        account_id=account,
+        category_id=_category(session, "Viajes"),
+    )
+    mercado = _category(session, "Mercado")
+    funds.create_fund(session, mercado, rule="fixed", amount=50_000_00, start_month="2026-11")
+    _spend(session, mercado, 850_000_00, date(2026, 11, 6))
+
+    available = funds.available(session, "2026-11")
+    assert available.uncovered == 100_000_00 + 200_000_00 + 400_000_00 + 800_000_00

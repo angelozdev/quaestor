@@ -1,13 +1,13 @@
 """Monthly report: posted-only aggregation + formatting (P5).
 
-Reuses P0 (reads), P3 (to_pay), P4 (budget_status, safe_to_spend, goals_progress).
+Reuses P0 (reads), P3 (to_pay) and the fund read path of feature 003 — the
+fund lines and the closing line both come out of one walk of the month.
 Every COP aggregate converts at read time from the current TRM (ADR-0031),
 fetched once per report.
 """
 
 from __future__ import annotations
 
-import re
 from datetime import date as Date
 from datetime import timedelta
 from decimal import Decimal
@@ -22,26 +22,22 @@ from ..domain.report_types import (
     AccountBalance,
     CategorySection,
     DriftMoM,
-    EnvelopeLine,
-    EnvelopesSummary,
-    GoalLine,
+    FundReportLine,
+    FundsSummary,
     GroupSection,
+    MonthAvailable,
     MonthlyReport,
 )
-from ..domain.rules import prev_year_month
+from ..domain.rules import is_year_month, prev_year_month
 from . import accounts as _accounts
 from . import fx as _fx
-from . import goals as _goals
 from . import planned as _planned
-from .budgets import _safe_to_spend
-from .budgets import _status as _budget_status_from_agg
+from .funds import month_available
 from .month_aggregate import MonthAggregate, load_month_aggregate
-
-_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
 
 def _validate_month(month: str) -> None:
-    if not _MONTH_RE.match(month):
+    if not is_year_month(month):
         raise ValidationError(f"malformed month (expected YYYY-MM): {month!r}")
 
 
@@ -111,44 +107,34 @@ def _drift(agg: MonthAggregate, income: int, expense: int, net: int) -> DriftMoM
     )
 
 
-def _envelope_lines(agg: MonthAggregate) -> tuple[list[EnvelopeLine], EnvelopesSummary]:
-    """One EnvelopeLine per budget in the month + the green/red/rollover summary."""
-    lines: list[EnvelopeLine] = []
-    for b in agg.budgets_month:
-        st = _budget_status_from_agg(agg, b.category_id)
-        cat = agg.category(b.category_id)
-        name = cat.name if cat is not None else f"category {b.category_id}"
-        lines.append(
-            EnvelopeLine(
-                category=name,
-                allocated=st.assigned,
-                rollover_in=st.rollover_in,
-                spent=st.spent,
-                available=st.available,
-                status=st.status,
-            )
-        )
-    lines.sort(key=lambda e: e.category)
-    n_green = sum(1 for e in lines if e.status == "under")
-    n_red = sum(1 for e in lines if e.status == "over")
-    rollover_generated = sum(max(e.available, 0) for e in lines)
-    return lines, EnvelopesSummary(n_green=n_green, n_red=n_red, rollover_generated=rollover_generated)
+def _fund_lines(agg: MonthAggregate, statuses: list) -> tuple[list[FundReportLine], FundsSummary]:
+    """One FundReportLine per fund in the month + the on-track/behind summary.
 
+    The statuses come from the same walk that produced the closing line, so a
+    fund is folded forward once per report and not twice.
 
-def _goal_lines(session: Session, today: Date) -> list[GoalLine]:
-    """GoalLine per active goal; ETA/on-track only on defined goals (P4 supplies them)."""
-    lines: list[GoalLine] = []
-    for p in _goals.goals_progress(session, today=today):
-        lines.append(
-            GoalLine(
-                name=p.name,
-                accumulated=p.saved,
-                target=p.target_amount,
-                eta=p.eta,
-                on_track=p.on_track,
+    The month's record is unchanged by whatever set money aside for it: a
+    charge a fund saved for shows under its category like any other (AC-12).
+    """
+    lines = sorted(
+        (
+            FundReportLine(
+                category_name=status.name,
+                asks=status.asks,
+                holds=status.holds,
+                spent=agg.spent_in(status.category_id, agg.year_month),
+                on_track=status.on_track,
             )
-        )
-    return lines
+            for status in statuses
+        ),
+        key=lambda f: f.category_name,
+    )
+    n_on_track = sum(1 for f in lines if f.on_track)
+    return lines, FundsSummary(
+        n_on_track=n_on_track,
+        n_behind=len(lines) - n_on_track,
+        set_aside=sum(f.holds for f in lines),
+    )
 
 
 def _balance_lines(session: Session) -> list[AccountBalance]:
@@ -193,38 +179,38 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
     """Build the retrospective monthly report (data + markdown) for "YYYY-MM".
 
     Posted-only aggregates in COP cents, converted at read time from ONE
-    TRM fetch; reuses P3/P4 for pending/envelopes/goals/safe-to-spend.
-    `today` (defaults to date.today()) drives deterministic goal ETAs.
+    TRM fetch; reuses P3 for pending and feature 003's fund read path for both
+    the fund lines and the closing line. `today` is accepted and unused on
+    purpose — the goal ETAs that needed a clock are gone, and every figure now
+    comes from the month asked about.
 
     Raises:
         ValidationError: malformed month.
-        MissingRate: no TRM set (AC-9 — even for all-COP data).
+        MissingRate: no TRM set (005 AC-9 — even for all-COP data).
     """
     _validate_month(month)
-    if today is None:
-        today = Date.today()
     trm = _fx.get_trm(session)
     agg = load_month_aggregate(session, month, trm)
     start, end = agg.start, agg.end
 
     expenses = agg.month_expense()
     income, expense, net = agg.totals_for(month)
-    envelopes, envelopes_summary = _envelope_lines(agg)
+    available: MonthAvailable = month_available(agg)
+    funds, funds_summary = _fund_lines(agg, available.funds)
     report = MonthlyReport(
         month=month,
         income=income,
         expense=expense,
         net=net,
-        envelopes_summary=envelopes_summary,
-        envelopes=envelopes,
+        funds_summary=funds_summary,
+        funds=funds,
         by_category=_category_sections(agg, expenses, expense),
         by_group=_group_sections(agg, expenses, expense),
-        goals=_goal_lines(session, today),
         balances=_balance_lines(session),
         drift_mom=_drift(agg, income, expense, net),
         usd_share=_usd_share(agg, expenses, expense),
         pending=_pending_lines(session, start, end, trm),
-        safe_to_spend=_safe_to_spend(agg),
+        available=available,
         markdown="",
     )
     report.markdown = render_markdown(report)

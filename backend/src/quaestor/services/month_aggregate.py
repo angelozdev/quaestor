@@ -1,13 +1,13 @@
 """Single-pass month loader: bulk-load once, compute aggregates in memory.
 
-Replaces the per-category rollover recursion and per-budget query fanout in
-the report/budget read-path. Expense history is loaded as GROUP BY sums
-(rows bounded by categories × active months); full transaction rows are
-loaded only for the report month and its previous month. All accessors read
-memory — no DB access after `load_month_aggregate`. Response contracts are
-unchanged; callers orchestrate over this unit.
+Replaces the per-category query fanout in the report and fund read-path.
+Expense history is loaded as GROUP BY sums (rows bounded by categories ×
+active months); full transaction rows are loaded only for the report month
+and its previous month. All accessors read memory — no DB access after
+`load_month_aggregate`. Response contracts are unchanged; callers orchestrate
+over this unit.
 
-Consistency: the ~8 loads run as separate statements (READ COMMITTED on
+Consistency: the ~10 loads run as separate statements (READ COMMITTED on
 Postgres — each sees its own snapshot). A concurrent write landing mid-load
 can skew one aggregate against another within a single response. Accepted
 for this app; see the bounded-read-path ADR.
@@ -15,7 +15,7 @@ for this app; see the bounded-read-path ADR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date as Date
 from decimal import Decimal
 
@@ -23,27 +23,18 @@ from sqlalchemy import extract, func
 from sqlmodel import Session, select
 
 from ..domain.models import (
-    Budget,
     Category,
     CategoryGroup,
+    Fund,
+    OccurrenceStatus,
     RecurringItem,
+    RecurringOccurrence,
     Transaction,
     TxStatus,
     TxType,
 )
 from ..domain.money import to_cop_cents
-from ..domain.rules import month_bounds, prev_year_month
-
-
-def _ym(d: Date) -> str:
-    return f"{d.year:04d}-{d.month:02d}"
-
-
-def _next_year_month(year_month: str) -> str:
-    year, month = int(year_month[:4]), int(year_month[5:7])
-    if month == 12:
-        return f"{year + 1:04d}-01"
-    return f"{year:04d}-{month + 1:02d}"
+from ..domain.rules import month_bounds, prev_year_month, year_month_of
 
 
 @dataclass
@@ -51,8 +42,8 @@ class MonthAggregate:
     """In-memory month snapshot at one TRM; every accessor is DB-free.
 
     The `_window_*` lists hold full rows only for [previous month, report
-    month]; all earlier history lives in `_spent_by_cat_month` /
-    `_assigned_by_cat_month` as per-(category, month) COP sums.
+    month]; all earlier history lives in `_spent_by_cat_month` as
+    per-(category, month) COP sums.
     """
 
     year_month: str
@@ -61,16 +52,14 @@ class MonthAggregate:
     trm: Decimal
     categories: dict[int, Category]
     groups: dict[int, CategoryGroup]
-    budgets_month: list[Budget]
-    budgeted_category_ids: frozenset[int]
     active_recurring: list[RecurringItem]
     month_planned_expense: list[Transaction]
+    funds: list[Fund]
+    first_movement_month: str | None
+    skipped_turns: frozenset[tuple[int, Date]]
     _window_expense: list[Transaction]
     _window_income: list[Transaction]
     _spent_by_cat_month: dict[tuple[int | None, str], int]
-    _assigned_by_cat_month: dict[tuple[int, str], int]
-    _first_active: dict[int, str]
-    _available_cache: dict[int, dict[str, int]] = field(default_factory=dict)
 
     def category(self, category_id: int | None) -> Category | None:
         return self.categories.get(category_id) if category_id is not None else None
@@ -82,36 +71,22 @@ class MonthAggregate:
         grp = self.groups.get(cat.group_id)
         return grp.name if grp is not None else None
 
-    def assigned(self, category_id: int, year_month: str) -> int:
-        return self._assigned_by_cat_month.get((category_id, year_month), 0)
+    def spent_in(self, category_id: int, year_month: str) -> int:
+        """A category's posted spending for one month, in COP cents.
 
-    def spent_for_budget(self, category_id: int, year_month: str) -> int:
-        cat = self.categories.get(category_id)
-        if cat is not None and (cat.exclude_from_budget or cat.exclude_from_totals):
-            return 0
+        This hides nothing: a fund covers whatever its category spent, and
+        money set aside that vanished from the figure would leave the fund
+        reporting a balance it does not have.
+        """
         return self._spent_by_cat_month.get((category_id, year_month), 0)
 
-    def available(self, category_id: int, year_month: str) -> int:
-        """Iterative forward fold with memo, including the gap-month reset
-        (an inactive month yields 0 and passes no rollover forward)."""
-        cache = self._available_cache.setdefault(category_id, {})
-        cached = cache.get(year_month)
-        if cached is not None:
-            return cached
-        start = self._first_active.get(category_id)
-        if start is None or year_month < start:
-            return 0
-        prev_avail = 0
-        ym = start
-        while True:
-            assigned = self.assigned(category_id, ym)
-            spent = self.spent_for_budget(category_id, ym)
-            avail = 0 if assigned == 0 and spent == 0 else max(prev_avail, 0) + assigned - spent
-            cache[ym] = avail
-            if ym == year_month:
-                return avail
-            prev_avail = avail
-            ym = _next_year_month(ym)
+    def obligations_in(self, category_id: int) -> list[RecurringItem]:
+        """The live expense obligations filed under one category (AC-4)."""
+        return [i for i in self.active_recurring if i.type == TxType.expense and i.category_id == category_id]
+
+    def was_skipped(self, recurring_id: int, due_date: Date) -> bool:
+        """Whether the owner said this turn will not happen (AC-17)."""
+        return (recurring_id, due_date) in self.skipped_turns
 
     def posted_in_month(self, year_month: str, tx_type: TxType) -> list[Transaction]:
         """Posted rows of the month, minus excluded categories. Valid ONLY
@@ -119,7 +94,7 @@ class MonthAggregate:
         source = self._window_expense if tx_type == TxType.expense else self._window_income
         kept: list[Transaction] = []
         for tx in source:
-            if _ym(tx.date) != year_month:
+            if year_month_of(tx.date) != year_month:
                 continue
             cat = self.category(tx.category_id)
             if cat is not None and cat.exclude_from_totals:
@@ -191,7 +166,6 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     window_expense = _window(TxType.expense)
     window_income = _window(TxType.income)
 
-    budgets_all = list(session.exec(select(Budget)).all())
     active_recurring = list(
         session.exec(
             select(RecurringItem).where(RecurringItem.active == True)  # noqa: E712
@@ -209,15 +183,17 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         ).all()
     )
 
-    assigned_by_cat_month = {(b.category_id, b.year_month): b.amount_assigned for b in budgets_all}
-    budgets_month = [b for b in budgets_all if b.year_month == year_month]
-
-    first_active: dict[int, str] = {}
-    for cat_id, ym in list(spent_by_cat_month) + list(assigned_by_cat_month):
-        if cat_id is None:
-            continue
-        if cat_id not in first_active or ym < first_active[cat_id]:
-            first_active[cat_id] = ym
+    funds = list(session.exec(select(Fund)).all())
+    first_movement = session.exec(
+        select(Transaction.date).where(Transaction.status == TxStatus.posted).order_by(Transaction.date).limit(1)
+    ).first()
+    skipped_turns = frozenset(
+        session.exec(
+            select(RecurringOccurrence.recurring_id, RecurringOccurrence.due_date).where(
+                RecurringOccurrence.status == OccurrenceStatus.skipped
+            )
+        ).all()
+    )
 
     return MonthAggregate(
         year_month=year_month,
@@ -226,13 +202,12 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         trm=trm,
         categories=categories,
         groups=groups,
-        budgets_month=budgets_month,
-        budgeted_category_ids=frozenset(b.category_id for b in budgets_month),
         active_recurring=active_recurring,
         month_planned_expense=month_planned_expense,
+        funds=funds,
+        first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
+        skipped_turns=skipped_turns,
         _window_expense=window_expense,
         _window_income=window_income,
         _spent_by_cat_month=spent_by_cat_month,
-        _assigned_by_cat_month=assigned_by_cat_month,
-        _first_active=first_active,
     )

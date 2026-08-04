@@ -1,7 +1,7 @@
 """Planned payments: the to-pay queue, plan/confirm/skip (ADR-007).
 
 confirm_payment is the only planned -> posted transition and fires the
-post-confirm hooks (the seam P4 uses to record goal contributions).
+post-confirm hooks. The seam is registered and currently empty.
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def to_pay(
 
     `today_resolved` is `today` if provided, else `date.today()`. The
     `today` kwarg exists for testability (the same pattern as
-    `goals.goals_progress` and `reports.monthly_report`).
+    `reports.monthly_report`).
 
     The overdue bucket is constrained by `until` so callers that scope
     to a window don't get items from a future retrospective they

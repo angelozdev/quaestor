@@ -5,22 +5,20 @@ from quaestor import db
 from quaestor.mcp import builder
 from quaestor.mcp.registry import (
     ACCOUNTS_TOOL_NAMES,
-    BUDGETS_READS_TOOL_NAMES,
     CATEGORIES_TOOL_NAMES,
     CATEGORY_GROUPS_TOOL_NAMES,
     CORE_TOOL_NAMES,
-    GOALS_READS_TOOL_NAMES,
+    FUNDS_TOOL_NAMES,
     RECURRING_RESTORE_TOOL_NAMES,
     REPORTS_TOOL_NAMES,
     SETTINGS_TOOL_NAMES,
     TAGS_TOOL_NAMES,
     TRANSACTIONS_WRITES_TOOL_NAMES,
     register_accounts_tools,
-    register_budgets_reads_tools,
     register_categories_tools,
     register_category_groups_tools,
     register_core_tools,
-    register_goals_reads_tools,
+    register_funds_tools,
     register_recurring_restore_tools,
     register_reports_tools,
     register_settings_tools,
@@ -73,7 +71,7 @@ def test_registered_tool_runs_against_db_engine(monkeypatch, engine):
 
 
 def test_empty_input_tools_accept_no_args(monkeypatch, engine):
-    """Regression: get_settings, list_goals, goals_progress have empty Input models.
+    """Regression: a tool with an empty Input model must still accept `{}`.
 
     The LLM naturally calls them with `{}` (no fields to fill). The wrapper
     used to declare `inp: XxxInput` as required, so FastMCP raised
@@ -82,18 +80,13 @@ def test_empty_input_tools_accept_no_args(monkeypatch, engine):
     """
     monkeypatch.setattr(db, "engine", engine)
 
-    for name, register in (
-        ("get_settings", register_settings_tools),
-        ("list_goals", register_goals_reads_tools),
-        ("goals_progress", register_goals_reads_tools),
-    ):
-        mcp = FastMCP("test")
-        register(mcp)
-        result = asyncio.run(mcp.call_tool(name, {}))
-        # Pydantic-validated call returns text; no ToolError raised.
-        text = str(result)
-        assert "ToolError" not in text, f"{name} raised: {text}"
-        assert text, f"{name} returned empty result"
+    mcp = FastMCP("test")
+    register_settings_tools(mcp)
+    result = asyncio.run(mcp.call_tool("get_settings", {}))
+    # Pydantic-validated call returns text; no ToolError raised.
+    text = str(result)
+    assert "ToolError" not in text, f"get_settings raised: {text}"
+    assert text, "get_settings returned empty result"
 
 
 def test_register_accounts_tools_exposes_all_five():
@@ -139,25 +132,18 @@ def test_register_settings_tools_exposes_both():
     assert len(SETTINGS_TOOL_NAMES) == 2
 
 
-def test_register_budgets_reads_tools_exposes_both():
-    mcp = FastMCP("test")
-    register_budgets_reads_tools(mcp)
-    assert set(BUDGETS_READS_TOOL_NAMES) <= _tool_names(mcp)
-    assert len(BUDGETS_READS_TOOL_NAMES) == 2
-
-
-def test_register_goals_reads_tools_exposes_both():
-    mcp = FastMCP("test")
-    register_goals_reads_tools(mcp)
-    assert set(GOALS_READS_TOOL_NAMES) <= _tool_names(mcp)
-    assert len(GOALS_READS_TOOL_NAMES) == 2
-
-
 def test_register_reports_tools_exposes_one():
     mcp = FastMCP("test")
     register_reports_tools(mcp)
     assert set(REPORTS_TOOL_NAMES) <= _tool_names(mcp)
     assert len(REPORTS_TOOL_NAMES) == 1
+
+
+def test_register_funds_tools_exposes_all_eight():
+    mcp = FastMCP("test")
+    register_funds_tools(mcp)
+    assert set(FUNDS_TOOL_NAMES) <= _tool_names(mcp)
+    assert len(FUNDS_TOOL_NAMES) == 8
 
 
 def test_register_recurring_restore_tools_exposes_one():
@@ -179,12 +165,13 @@ def test_build_mcp_registers_every_new_group():
         TAGS_TOOL_NAMES,
         TRANSACTIONS_WRITES_TOOL_NAMES,
         SETTINGS_TOOL_NAMES,
-        BUDGETS_READS_TOOL_NAMES,
-        GOALS_READS_TOOL_NAMES,
         REPORTS_TOOL_NAMES,
+        FUNDS_TOOL_NAMES,
         RECURRING_RESTORE_TOOL_NAMES,
     ):
         assert set(grp) <= names, f"missing tools: {set(grp) - names}"
     # And the renamed one is present, not the old name.
     assert "archive_recurring" in names
     assert "delete_recurring" not in names
+    # And the surfaces feature 003 removed are not reachable through the assistant.
+    assert not [n for n in names if "goal" in n or "budget" in n]

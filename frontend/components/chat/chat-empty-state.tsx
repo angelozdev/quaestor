@@ -20,7 +20,7 @@ export function ChatEmptyState({ onPick }: Props) {
         Pregúntale a tu asistente
       </p>
       <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-        Puede leer tus cuentas, transacciones, presupuestos y metas.
+        Puede leer tus cuentas, transacciones y fondos.
       </p>
       <div className="mt-1 flex flex-wrap gap-2">
         {SUGGESTIONS.map((text) => (

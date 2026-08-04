@@ -145,45 +145,43 @@ export default function ReportsPage() {
               </div>
             </Section>
 
-            {/* Sobres */}
-            <Section title="Sobres">
-              {data.envelopes.length > 0 ? (
+            {/* Fondos */}
+            <Section title="Fondos">
+              {data.funds.length > 0 ? (
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ color: "var(--muted-foreground)" }}>
                       <th className="text-left pb-3 font-medium text-xs">Categoría</th>
-                      <th className="text-right pb-3 font-medium text-xs">Asignado</th>
+                      <th className="text-right pb-3 font-medium text-xs">Pidió</th>
                       <th className="text-right pb-3 font-medium text-xs">Gastado</th>
-                      <th className="text-right pb-3 font-medium text-xs">Disponible</th>
+                      <th className="text-right pb-3 font-medium text-xs">Tiene</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {data.envelopes.map((e) => (
+                    {data.funds.map((f) => (
                       <tr
-                        key={e.category}
+                        key={f.category_name}
                         className="border-t"
                         style={{ borderColor: "var(--border)" }}
                       >
-                        <td className="py-2.5 text-sm">{e.category}</td>
+                        <td className="py-2.5 text-sm">{f.category_name}</td>
                         <td
                           className="py-2.5 text-right tabular-nums text-sm"
                           style={{ color: "var(--muted-foreground)" }}
                         >
-                          {formatCents(e.allocated, "COP")}
+                          {formatCents(f.asks, "COP")}
                         </td>
                         <td
                           className="py-2.5 text-right tabular-nums text-sm"
                           style={{ color: "var(--muted-foreground)" }}
                         >
-                          {formatCents(e.spent, "COP")}
+                          {formatCents(f.spent, "COP")}
                         </td>
                         <td
                           className="py-2.5 text-right tabular-nums text-sm font-medium"
-                          style={{
-                            color: e.status === "over" ? "var(--expense)" : "var(--income)",
-                          }}
+                          style={{ color: f.on_track ? "var(--income)" : "var(--expense)" }}
                         >
-                          {formatCents(e.available, "COP")}
+                          {formatCents(f.holds, "COP")}
                         </td>
                       </tr>
                     ))}
@@ -191,8 +189,8 @@ export default function ReportsPage() {
                 </table>
               ) : (
                 <EmptyState
-                  message="Sin sobres este mes"
-                  action={{ label: "Ir a presupuestos", href: "/budgets" }}
+                  message="Sin fondos este mes"
+                  action={{ label: "Ir a fondos", href: "/funds" }}
                 />
               )}
             </Section>
@@ -248,35 +246,37 @@ export default function ReportsPage() {
             </Section>
 
             {/* Cierre */}
-            <Section title="Disponible para gastar · cierre">
+            <Section title="Disponible · cierre">
               <div className="space-y-4">
                 <p className="text-3xl font-bold tabular-nums tracking-tight">
-                  {formatCents(data.safe_to_spend.free, "COP")}
+                  {formatCents(data.available.free, "COP")}
                 </p>
                 <hr style={{ borderColor: "var(--border)" }} />
                 <div className="space-y-1">
-                  <Row label="Ingreso previsto" faint>
+                  <Row label="Ingreso del mes" faint>
                     <span
                       className="text-sm tabular-nums"
                       style={{ color: "var(--muted-foreground)" }}
                     >
-                      {formatCents(data.safe_to_spend.income_forecast, "COP")}
+                      {formatCents(data.available.income, "COP")}
                     </span>
                   </Row>
-                  <Row label="Comprometido" faint>
+                  {data.available.funds.map((f) => (
+                    <Row key={f.fund_id} label={`Fondo · ${f.name}`} faint>
+                      <span
+                        className="text-sm tabular-nums"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {formatCents(f.asks, "COP")}
+                      </span>
+                    </Row>
+                  ))}
+                  <Row label="Sin fondo que lo cubra" faint>
                     <span
                       className="text-sm tabular-nums"
                       style={{ color: "var(--muted-foreground)" }}
                     >
-                      {formatCents(data.safe_to_spend.committed, "COP")}
-                    </span>
-                  </Row>
-                  <Row label="Asignado a sobres" faint>
-                    <span
-                      className="text-sm tabular-nums"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {formatCents(data.safe_to_spend.assigned_envelopes, "COP")}
+                      {formatCents(data.available.uncovered, "COP")}
                     </span>
                   </Row>
                 </div>

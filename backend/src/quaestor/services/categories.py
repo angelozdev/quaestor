@@ -6,7 +6,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Category, CategoryGroup, RecurringItem, Transaction, TxType
+from ..domain.models import Category, CategoryGroup, Fund, RecurringItem, Transaction, TxType
 from ..domain.rules import category_is_income_for
 
 
@@ -107,7 +107,8 @@ def create_category(
         name: Name of the category (required, non-empty).
         group_id: Optional group ID. Must exist if provided.
         is_income: Whether this is an income category (default: False).
-        exclude_from_budget: Whether to exclude from budget calculations (default: False).
+        exclude_from_budget: Stored and read by nothing since feature 003 took
+            the envelope out (ADR-0043); kept so existing rows survive.
         exclude_from_totals: Whether to exclude from totals (default: False).
 
     Returns:
@@ -278,13 +279,30 @@ def update_category(
     return cat
 
 
+def _refuse_archiving_a_funded_category(session: Session, cat: Category) -> None:
+    """A category holding a fund cannot be archived (AC-21).
+
+    Archiving takes the category out of every offering, so the money the fund
+    sets aside would stop being asked for with nothing said. The owner deletes
+    the fund first, which is a decision rather than a side effect.
+    """
+    if session.exec(select(Fund).where(Fund.category_id == cat.id)).first() is None:
+        return
+    raise ValidationError(
+        f"category {cat.name!r} holds a fund — delete the fund first, or archiving would "
+        f"silently release the money it sets aside"
+    )
+
+
 def archive_category(session: Session, category_id: int) -> Category:
     """Archive a category.
 
     Raises:
         NotFound: If the category does not exist.
+        ValidationError: The category holds a fund (AC-21).
     """
     cat = get_category(session, category_id)
+    _refuse_archiving_a_funded_category(session, cat)
     cat.archived = True
     session.add(cat)
     session.commit()

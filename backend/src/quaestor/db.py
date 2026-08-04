@@ -9,7 +9,7 @@ import still gets the intended engine.
 
 Alembic is the source of truth for schema. `init_db()` runs
 `alembic upgrade head` to the latest revision, seeds the canonical
-`Settings(id=1)` row, then registers the goal-event hooks.
+`Settings(id=1)` row, then registers the cross-service hooks.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session
 
 from .domain.models import Settings
-from .services.bootstrap import register_goal_hooks, register_recurring_hooks
+from .services.bootstrap import register_recurring_hooks
 
 _BACKEND_ROOT: Final[Path] = Path(__file__).resolve().parents[2]
 _ALEMBIC_INI: Final[Path] = _BACKEND_ROOT / "alembic.ini"
@@ -131,7 +131,6 @@ def init_db(target_engine: Engine = engine) -> None:
     """
     _apply_migrations(target_engine)
     _seed_default_settings(target_engine)
-    register_goal_hooks()
     register_recurring_hooks()
 
 

@@ -1,8 +1,7 @@
 """The recurrence date engine: cadence arithmetic and due-date questions.
 
-Pure — no session, no I/O. Split out of `rules.py`, which mixes balance signs,
-recurrence, envelope math and goal progress. Calendar helpers stay here and
-`rules.py` imports them.
+Pure — no session, no I/O. Split out of `rules.py`, which mixes balance signs
+and fund arithmetic. Calendar helpers stay here and `rules.py` imports them.
 """
 
 from __future__ import annotations
@@ -71,6 +70,30 @@ def due_dates(
             results.append(d)
         k += 1
     return results
+
+
+def next_due_on_or_after(
+    start_date: date,
+    end_date: date | None,
+    interval_unit: IntervalUnit,
+    interval_count: int,
+    since: date,
+) -> date | None:
+    """The first due date on or after `since`, or None once the cadence ended.
+
+    Unbounded above, unlike `due_dates`: a sinking fund asks about the *next*
+    charge and does not know how far away it is.
+    """
+    if interval_count < 1:
+        raise ValueError("interval_count must be >= 1")
+    k = 0
+    while True:
+        d = _add_interval(start_date, interval_unit, interval_count, k)
+        if end_date is not None and d > end_date:
+            return None
+        if d >= since:
+            return d
+        k += 1
 
 
 def is_due_on(

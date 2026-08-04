@@ -7,9 +7,7 @@ describe("ChatEmptyState", () => {
   it("renders the title and subtitle copy", () => {
     render(<ChatEmptyState onPick={vi.fn()} />)
     expect(screen.getByText("Pregúntale a tu asistente")).toBeInTheDocument()
-    expect(
-      screen.getByText(/Puede leer tus cuentas, transacciones, presupuestos y metas\./),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/Puede leer tus cuentas, transacciones y fondos\./)).toBeInTheDocument()
   })
 
   it("renders exactly 3 suggested-prompt buttons", () => {

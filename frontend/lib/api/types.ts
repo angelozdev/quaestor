@@ -104,87 +104,90 @@ export interface ToPay {
   total_base: number
 }
 
-export interface CommittedItem {
-  kind: string
-  name: string
-  date: string
-  amount: number
-}
+export type FundRule = "fixed" | "average" | "from-recurring" | "target-by-date"
 
-export interface SafeToSpend {
-  year_month: string
-  income_forecast: number
-  committed: number
-  assigned_envelopes: number
-  free: number
-  committed_breakdown: CommittedItem[]
-}
-
-export interface GoalProgress {
-  goal_id: number
-  name: string
-  type: string
-  monthly_amount: number
-  saved: number
-  target_amount: number | null
-  deadline: string | null
-  monthly_required: number | null
-  on_track: boolean | null
-  eta: string | null
-  remaining: number | null
-}
-
-export type GoalStatus = "active" | "reached" | "paused"
-
-export interface Goal {
+/** A fund's stored rule. What it holds is never stored — it is derived. */
+export interface Fund {
   id: number
-  name: string
-  target_amount: number | null
-  deadline: string | null
-  monthly_amount: number
-  savings_account_id: number
-  status: GoalStatus
-}
-
-export interface GoalContribution {
-  id: number
-  goal_id: number
-  date: string
-  amount: number
-  source: string
-  transaction_id: number | null
-}
-
-export interface BudgetLine {
   category_id: number
-  category_name: string
-  assigned: number
-  rollover_in: number
-  spent: number
-  available: number
-  pct_used: number
-  status: string
+  rule: FundRule
+  start_month: string
+  accumulates: boolean
+  amount: number | null
+  window_months: number | null
+  target_amount: number | null
+  target_month: string | null
 }
 
-export interface GoalCreate {
+export interface FundLine {
+  fund_id: number
+  category_id: number
   name: string
-  monthly_amount: number
-  savings_account_id: number
-  target_amount?: number | null
-  deadline?: string | null
+  rule: FundRule
+  start_month: string
+  accumulates: boolean
 }
 
-export interface GoalUpdate {
-  name?: string
-  monthly_amount?: number
-  target_amount?: number | null
-  deadline?: string | null
-  savings_account_id?: number
+/** What one fund asks, holds and reports for one month. */
+export interface FundStatus {
+  fund_id: number
+  category_id: number
+  name: string
+  year_month: string
+  rule: FundRule
+  asks: number
+  holds: number
+  accumulates: boolean
+  accumulation_is_implied: boolean
+  on_track: boolean
+  averaged_over: number | null
+  spreads_over: number | null
+  whole_by: string | null
 }
 
-export interface GoalContributeBody {
-  amount: number
-  date: string
+export interface FundPreview {
+  category_id: number
+  would_ask: number
+  warning: string | null
+}
+
+/** `income − Σ funds.asks − uncovered = free`, exactly. */
+export interface MonthAvailable {
+  year_month: string
+  income: number
+  funds: FundStatus[]
+  uncovered: number
+  free: number
+}
+
+/** A rate is never the money available: it spreads each cycle over its months. */
+export interface MonthRates {
+  year_month: string
+  earning: number
+  cost: number
+  margin: number
+}
+
+export interface FundCreate {
+  category_id: number
+  rule: FundRule
+  start_month: string
+  accumulates?: boolean
+  amount?: number | null
+  window_months?: number | null
+  target_amount?: number | null
+  target_month?: string | null
+  opening_balance?: number | null
+}
+
+export interface FundUpdate {
+  rule?: FundRule
+  accumulates?: boolean
+  amount?: number | null
+  window_months?: number | null
+  target_amount?: number | null
+  target_month?: string | null
+  balance?: number | null
 }
 
 export interface RecurringUpdate {
@@ -200,24 +203,17 @@ export interface RecurringUpdate {
   end_date?: string | null
 }
 
-export interface BudgetAssign {
-  category_id: number
-  year_month: string
-  amount_assigned: number
+export interface FundsSummary {
+  n_on_track: number
+  n_behind: number
+  set_aside: number
 }
-
-export interface EnvelopesSummary {
-  n_green: number
-  n_red: number
-  rollover_generated: number
-}
-export interface EnvelopeLine {
-  category: string
-  allocated: number
-  rollover_in: number
+export interface FundReportLine {
+  category_name: string
+  asks: number
+  holds: number
   spent: number
-  available: number
-  status: string
+  on_track: boolean
 }
 export interface CategorySection {
   category: string
@@ -229,13 +225,6 @@ export interface GroupSection {
   group: string
   total: number
   pct: number
-}
-export interface GoalLine {
-  name: string
-  accumulated: number
-  target: number | null
-  eta: string | null
-  on_track: boolean | null
 }
 export interface AccountBalance {
   account: string
@@ -256,16 +245,15 @@ export interface MonthlyReport {
   income: number
   expense: number
   net: number
-  envelopes_summary: EnvelopesSummary
-  envelopes: EnvelopeLine[]
+  funds_summary: FundsSummary
+  funds: FundReportLine[]
   by_category: CategorySection[]
   by_group: GroupSection[]
-  goals: GoalLine[]
   balances: AccountBalance[]
   drift_mom: DriftMoM | null
   usd_share: number
   pending: string[]
-  safe_to_spend: SafeToSpend
+  available: MonthAvailable
   markdown: string
 }
 
