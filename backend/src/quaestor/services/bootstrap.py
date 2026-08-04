@@ -11,17 +11,6 @@ never imports the transaction service.
 from __future__ import annotations
 
 
-def register_goal_hooks() -> None:
-    from .goals import propose_goal_contributions, record_confirmed_contribution
-    from .planned import POST_CONFIRM_HOOKS, register_post_confirm_hook
-    from .rollover import ROLLOVER_HOOKS, register_rollover_hook
-
-    if propose_goal_contributions not in ROLLOVER_HOOKS:
-        register_rollover_hook(propose_goal_contributions)
-    if record_confirmed_contribution not in POST_CONFIRM_HOOKS:
-        register_post_confirm_hook(record_confirmed_contribution)
-
-
 def register_recurring_hooks() -> None:
     from .occurrences import close_date_of_deleted_charge
     from .transactions import PRE_DELETE_HOOKS, register_pre_delete_hook

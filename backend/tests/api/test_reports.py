@@ -26,8 +26,8 @@ def test_reports_endpoint(client, auth, expense_category):
     body = r.json()
     assert body["month"] == "2026-06"
     assert body["expense"] == 50_000
-    assert "safe_to_spend" in body and "markdown" in body
-    assert body["safe_to_spend"]["year_month"] == "2026-06"
+    assert "available" in body and "markdown" in body
+    assert body["available"]["year_month"] == "2026-06"
     assert body["drift_mom"] is None
 
 

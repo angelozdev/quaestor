@@ -11,17 +11,11 @@ const MODE: Record<string, { label: string; variant: Variant }> = {
   auto: { label: "Automático", variant: "secondary" },
   manual: { label: "Manual", variant: "outline" },
 }
-const GOAL: Record<string, { label: string; variant: Variant }> = {
-  active: { label: "Activa", variant: "secondary" },
-  reached: { label: "Cumplida", variant: "secondary" },
-  paused: { label: "Pausada", variant: "ghost" },
-}
-
 export function StatusBadge({
   kind,
   value,
 }: {
-  kind: "tx" | "mode" | "archived" | "onTrack" | "goal"
+  kind: "tx" | "mode" | "archived" | "onTrack"
   value: string | boolean
 }) {
   let label = String(value)
@@ -32,9 +26,6 @@ export function StatusBadge({
     if (m) ({ label, variant } = m)
   } else if (kind === "mode") {
     const m = MODE[String(value)]
-    if (m) ({ label, variant } = m)
-  } else if (kind === "goal") {
-    const m = GOAL[String(value)]
     if (m) ({ label, variant } = m)
   } else if (kind === "archived") {
     if (value !== true) return null

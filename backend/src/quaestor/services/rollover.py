@@ -1,10 +1,9 @@
 """Monthly close (ADR-017/022): an atomic, idempotent run of rollover hooks.
 
-P3 registers no hooks of its own (its temporal work is the daily materialize_due).
-It leaves the seam ready and empty; P4 registers propose_goal_contributions via
-register_rollover_hook without touching close_month. Each hook is
-(period, session) -> None, runs in the same transaction, must be idempotent on
-its own, and a failure in any hook aborts the whole close.
+The seam is ready and currently empty: the goal-contribution proposals that
+used to hang off it went with the goals. A hook is (period, session) -> None,
+runs in the same transaction, must be idempotent on its own, and a failure in
+any hook aborts the whole close.
 """
 
 from __future__ import annotations

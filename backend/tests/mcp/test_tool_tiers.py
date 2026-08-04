@@ -37,12 +37,6 @@ _KNOWN_TOOL_NAMES: list[str] = [
     "to_pay",
     "update_recurring",
     "archive_recurring",
-    "assign_budget",
-    "create_goal",
-    "update_goal",
-    "contribute_goal",
-    "pause_goal",
-    "restore_goal",
     "create_account",
     "update_account",
     "archive_account",
@@ -65,21 +59,25 @@ _KNOWN_TOOL_NAMES: list[str] = [
     "delete_transaction",
     "get_settings",
     "update_settings",
-    "list_budgets",
-    "safe_to_spend",
-    "list_goals",
-    "goals_progress",
     "monthly_report",
     "restore_recurring",
     "restore_payment",
+    "create_fund",
+    "preview_fund",
+    "list_funds",
+    "fund_status",
+    "set_fund",
+    "delete_fund",
+    "money_available",
+    "money_rates",
 ]
 
 
 def test_every_known_tool_classified_with_no_duplicates():
     classifications = [tool_tier(n) for n in _KNOWN_TOOL_NAMES]
     counts = Counter(c.value for c in classifications)
-    assert counts["read"] >= 15
-    assert counts["write_safe"] >= 10
+    assert counts["read"] >= 10
+    assert counts["write_safe"] >= 8
     assert counts["write_destructive"] >= 20
 
 
@@ -94,10 +92,10 @@ def test_destructive_tools_are_not_in_llm_allowed():
         "archive_category_group",
         "archive_recurring",
         "update_transaction",
-        "pause_goal",
         "skip_payment",
         "restore_payment",
         "confirm_payment",
+        "delete_fund",
     ]:
         assert name not in LLM_ALLOWED_TOOLS, f"{name} must be hidden from LLM"
         assert tool_tier(name) == ToolTier.WRITE_DESTRUCTIVE
@@ -110,9 +108,13 @@ def test_read_only_tools_are_in_llm_allowed():
         "list_categories",
         "list_tags",
         "monthly_report",
-        "goals_progress",
-        "safe_to_spend",
-        "list_budgets",
+        "get_settings",
+        "to_pay",
+        "list_funds",
+        "fund_status",
+        "preview_fund",
+        "money_available",
+        "money_rates",
     ]:
         assert name in LLM_ALLOWED_TOOLS, f"{name} must be reachable by LLM"
         assert tool_tier(name) == ToolTier.READ
@@ -125,7 +127,9 @@ def test_write_safe_tools_are_in_llm_allowed():
         "create_account",
         "create_category",
         "create_tag",
-        "create_goal",
+        "create_recurring",
+        "create_fund",
+        "set_fund",
     ]:
         assert name in LLM_ALLOWED_TOOLS, f"{name} must be reachable by LLM"
         assert tool_tier(name) == ToolTier.WRITE_SAFE

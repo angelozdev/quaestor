@@ -9,8 +9,7 @@ import { QueryBoundary } from "@/components/query-boundary"
 import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
-import { safeToSpend } from "@/lib/api/budgets"
-import { goalsProgress } from "@/lib/api/goals"
+import { moneyAvailable, moneyRates } from "@/lib/api/funds"
 import { report as fetchReport } from "@/lib/api/reports"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
@@ -49,9 +48,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export default function DashboardPage() {
-  const sts = useQuery({ queryKey: qk.safeToSpend(MONTH), queryFn: () => safeToSpend(MONTH) })
+  const available = useQuery({
+    queryKey: qk.moneyAvailable(MONTH),
+    queryFn: () => moneyAvailable(MONTH),
+  })
+  const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
   const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
-  const goals = useQuery({ queryKey: qk.goalsProgress(), queryFn: () => goalsProgress() })
   const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() })
 
   return (
@@ -59,15 +61,18 @@ export default function DashboardPage() {
       {/* Hero */}
       <div className="hero-glow animate-fade-up space-y-1">
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Disponible para gastar · {MONTH}
+          Disponible este mes · {MONTH}
         </p>
         <QueryBoundary
-          query={sts}
+          query={available}
           skeleton={<SkeletonBlock className="h-14 w-64" />}
-          errorMessage="No se pudo cargar disponible para gastar"
+          errorMessage="No se pudo cargar el disponible"
         >
           {(data) => (
-            <p className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl">
+            <p
+              data-slot="money-available"
+              className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
+            >
               {formatCents(data.free, "COP")}
             </p>
           )}
@@ -149,46 +154,46 @@ export default function DashboardPage() {
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: "130ms" }}>
-          <Card label="Metas">
+          <Card label="De dónde sale el disponible">
             <QueryBoundary
-              query={goals}
-              skeleton={<SkeletonBlock className="h-16" />}
-              empty={{
-                when: (d) => d.length === 0,
-                node: <EmptyState message="Sin metas activas" />,
-              }}
+              query={available}
+              skeleton={<SkeletonText lines={3} />}
+              errorMessage="No se pudo cargar el desglose"
             >
               {(data) => (
-                <div className="space-y-4">
-                  {data.map((g) => {
-                    const pct = g.target_amount
-                      ? Math.min(100, Math.round((g.saved / g.target_amount) * 100))
-                      : null
-                    return (
-                      <div key={g.goal_id} className="space-y-2">
-                        <div className="flex justify-between items-baseline gap-2">
-                          <span className="text-sm font-medium truncate">{g.name}</span>
-                          <span
-                            className="text-xs tabular-nums shrink-0"
-                            style={{ color: "var(--muted-foreground)" }}
-                          >
-                            {pct !== null ? `${pct}%` : formatCents(g.saved, "COP")}
-                          </span>
-                        </div>
-                        {pct !== null && (
-                          <div
-                            className="h-1.5 rounded-full overflow-hidden"
-                            style={{ background: "var(--muted)" }}
-                          >
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${pct}%`, background: "var(--primary)" }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                <div className="space-y-2.5">
+                  <Row label="Ingreso del mes">
+                    <MoneyAmount
+                      cents={data.income}
+                      currency="COP"
+                      type="income"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  {data.funds.map((fund) => (
+                    <Row key={fund.fund_id} label={`Fondo · ${fund.name}`}>
+                      <MoneyAmount
+                        cents={fund.asks}
+                        currency="COP"
+                        type="expense"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  ))}
+                  <Row label="Sin fondo que lo cubra">
+                    <MoneyAmount
+                      cents={data.uncovered}
+                      currency="COP"
+                      type="expense"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <hr style={{ borderColor: "var(--border)" }} />
+                  <Row label="Disponible">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.free, "COP")}
+                    </span>
+                  </Row>
                 </div>
               )}
             </QueryBoundary>
@@ -196,29 +201,41 @@ export default function DashboardPage() {
         </div>
 
         <div className="animate-fade-up" style={{ animationDelay: "150ms" }}>
-          <Card label="Sobres en riesgo">
-            <QueryBoundary query={report} skeleton={<SkeletonBlock className="h-16" />}>
-              {(data) => {
-                const over = data.envelopes.filter((e) => e.status === "over")
-                return over.length > 0 ? (
-                  <div className="space-y-2.5">
-                    {over.map((e) => (
-                      <Row key={e.category} label={e.category}>
-                        <MoneyAmount
-                          cents={Math.abs(e.available)}
-                          currency="COP"
-                          type="expense"
-                          className="text-sm font-medium"
-                        />
-                      </Row>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm" style={{ color: "var(--income)" }}>
-                    Todos los sobres al día
+          <Card label="Tasas · lo que ganas y lo que cuestas al mes">
+            <QueryBoundary
+              query={rates}
+              skeleton={<SkeletonText lines={3} />}
+              errorMessage="No se pudieron cargar las tasas"
+            >
+              {(data) => (
+                <div className="space-y-2.5">
+                  <Row label="Ganas al mes">
+                    <MoneyAmount
+                      cents={data.earning}
+                      currency="COP"
+                      type="income"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <Row label="Cuestas al mes">
+                    <MoneyAmount
+                      cents={data.cost}
+                      currency="COP"
+                      type="expense"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <hr style={{ borderColor: "var(--border)" }} />
+                  <Row label="Margen">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.margin, "COP")}
+                    </span>
+                  </Row>
+                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Una tasa no es el disponible: reparte cada ciclo entre sus meses.
                   </p>
-                )
-              }}
+                </div>
+              )}
             </QueryBoundary>
           </Card>
         </div>

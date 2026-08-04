@@ -9,7 +9,6 @@ from __future__ import annotations
 from decimal import Decimal
 
 from ..domain.dates import display_date
-from ..domain.dtos import GoalProgress, SafeToSpend  # noqa: F401
 from ..domain.errors import (
     IllegalTransition,
     MissingRate,
@@ -224,21 +223,6 @@ def recurring_deleted(item: RecurringItem) -> str:
     return f"Deactivated recurring '{item.name}' (id {item.id}). Existing occurrences stay."
 
 
-def budget_assigned(status, category_name: str) -> str:
-    return (
-        f"Assigned {category_name} envelope for {status.year_month}: {status.assigned} (available {status.available})."
-    )
-
-
-def goal_saved(goal) -> str:
-    kind = "defined" if goal.target_amount is not None else "open-ended"
-    return f"Goal '{goal.name}' (id {goal.id}, {kind}, {goal.status.value}), monthly {goal.monthly_amount}."
-
-
-def goal_contribution_recorded(contribution) -> str:
-    return f"Recorded {contribution.amount} contribution to goal {contribution.goal_id}."
-
-
 def to_pay_table(queue: OutstandingQueue, trm: Decimal) -> str:
     """Render the outstanding queue as markdown.
 
@@ -323,65 +307,6 @@ def settings_card(settings) -> str:
     return f"Settings — Base currency: {settings.base_currency}; default source account: {src}"
 
 
-def budgets_table(lines: list) -> str:
-    if not lines:
-        return "No budgets for that month."
-    rows = [
-        "| Category | Assigned | Rollover in | Spent | Available | Used |",
-        "|---|---|---|---|---|---|",
-    ]
-    for ln in lines:
-        rows.append(
-            f"| {ln.category_name} | {cents_to_major(ln.assigned)} | "
-            f"{cents_to_major(ln.rollover_in)} | {cents_to_major(ln.spent)} | "
-            f"{cents_to_major(ln.available)} | {ln.pct_used:.0f}% |"
-        )
-    return "\n".join(rows)
-
-
-def safe_to_spend_card(sts: SafeToSpend) -> str:
-    return "\n".join(
-        [
-            f"Safe to spend for **{sts.year_month}**: {money(sts.free, 'COP')} free to spend.",
-            f"- Income forecast: {money(sts.income_forecast, 'COP')}",
-            f"- Committed: {money(sts.committed, 'COP')}",
-            f"- Assigned to envelopes: {money(sts.assigned_envelopes, 'COP')}",
-        ]
-    )
-
-
-def goals_table(goals) -> str:
-    if not goals:
-        return "No goals."
-    rows = [
-        "| id | Name | Status | Monthly | Target | Deadline |",
-        "|---|---|---|---|---|---|",
-    ]
-    for g in goals:
-        kind = "defined" if g.target_amount is not None else "open-ended"
-        target = cents_to_major(g.target_amount) if g.target_amount is not None else "—"
-        deadline = display_date(g.deadline) if g.deadline is not None else "—"
-        rows.append(
-            f"| id={g.id} | {g.name} | {g.status.value} ({kind}) | "
-            f"{cents_to_major(g.monthly_amount)} COP | {target} | {deadline} |"
-        )
-    return "\n".join(rows)
-
-
-def goals_progress_table(progress: list) -> str:
-    if not progress:
-        return "No goal progress."
-    rows = [
-        "| id | Name | Saved | Target | On track |",
-        "|---|---|---|---|---|",
-    ]
-    for p in progress:
-        target = cents_to_major(p.target_amount) if p.target_amount is not None else "—"
-        track = "on-track" if p.on_track else "behind"
-        rows.append(f"| {p.goal_id} | {p.name} | {cents_to_major(p.saved)} COP | {target} | {track} |")
-    return "\n".join(rows)
-
-
 def monthly_report_card(report) -> str:
     return "\n".join(
         [
@@ -397,3 +322,75 @@ def monthly_report_card(report) -> str:
 
 def recurring_restored(item: RecurringItem) -> str:
     return f"✅ Recurring restored: '{item.name}' (id={item.id})."
+
+
+def fund_saved(fund, category_name: str) -> str:
+    """The rule as stored — no month is walked, so no rate is needed to confirm a write."""
+    detail = {
+        "fixed": lambda: f"{money(fund.amount or 0, 'COP')} each month",
+        "average": lambda: f"the average of the last {fund.window_months} months",
+        "from-recurring": lambda: "what its obligations come to",
+        "target-by-date": lambda: f"{money(fund.target_amount or 0, 'COP')} by {fund.target_month}",
+    }[fund.rule.value]()
+    carries = "accumulating" if fund.accumulates else "resetting"
+    return f"✅ Fund on **{category_name}** — asks {detail}, from {fund.start_month}, {carries}. id={fund.id}"
+
+
+def fund_deleted(name: str) -> str:
+    return f"✅ Fund on '{name}' deleted."
+
+
+def funds_list(lines: list) -> str:
+    if not lines:
+        return "No funds."
+    rows = ["| id | Category | Rule | Since | Accumulates |", "|---|---|---|---|---|"]
+    for line in lines:
+        rows.append(
+            f"| {line.fund_id} | {line.name} | {line.rule} | {line.start_month} | "
+            f"{'yes' if line.accumulates else 'no'} |"
+        )
+    return "\n".join(rows)
+
+
+def fund_card(status) -> str:
+    parts = [
+        f"Fund on **{status.name}** ({status.rule}) — {status.year_month}",
+        f"- Asks: {money(status.asks, 'COP')}",
+        f"- Holds: {money(status.holds, 'COP')}",
+        f"- {'On track' if status.on_track else 'Behind'}",
+    ]
+    if status.whole_by is not None:
+        parts.append(f"- Whole by: {status.whole_by}")
+    return "\n".join(parts)
+
+
+def fund_preview_card(preview, category_name: str) -> str:
+    lines = [f"A fund on **{category_name}** would ask {money(preview.would_ask, 'COP')} its first month."]
+    if preview.warning:
+        lines.append(f"⚠️ {preview.warning}")
+    return "\n".join(lines)
+
+
+def money_available_card(view) -> str:
+    """The month's number opened into the terms that make it (AC-10)."""
+    lines = [
+        f"# Money available — {view.year_month}",
+        f"- Income: {money(view.income, 'COP')}",
+    ]
+    for fund in view.funds:
+        lines.append(f"- Fund {fund.name}: −{money(fund.asks, 'COP')}")
+    lines.append(f"- Uncovered: −{money(view.uncovered, 'COP')}")
+    lines.append(f"- **Available: {money(view.free, 'COP')}**")
+    return "\n".join(lines)
+
+
+def money_rates_card(rates) -> str:
+    """What the owner earns and costs a month — never the money available (AC-14b)."""
+    return "\n".join(
+        [
+            f"# Monthly rates — {rates.year_month}",
+            f"- Earning: {money(rates.earning, 'COP')} a month",
+            f"- Cost: {money(rates.cost, 'COP')} a month",
+            f"- Margin: {money(rates.margin, 'COP')} a month",
+        ]
+    )

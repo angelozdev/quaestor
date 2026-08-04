@@ -1,14 +1,11 @@
-from datetime import date
-
-from quaestor.domain.dtos import SafeToSpend
+from quaestor.domain.dtos import MonthAvailable
 from quaestor.domain.report_markdown import money, render_markdown
 from quaestor.domain.report_types import (
     AccountBalance,
     CategorySection,
     DriftMoM,
-    EnvelopeLine,
-    EnvelopesSummary,
-    GoalLine,
+    FundReportLine,
+    FundsSummary,
     GroupSection,
     MonthlyReport,
 )
@@ -20,25 +17,21 @@ def _full_report():
         income=5_000_000,
         expense=3_000_000,
         net=2_000_000,
-        envelopes_summary=EnvelopesSummary(n_green=2, n_red=1, rollover_generated=150_000),
-        envelopes=[
-            EnvelopeLine("Food", 1_000_000, 0, 800_000, 200_000, "under"),
-            EnvelopeLine("Fun", 200_000, 0, 250_000, -50_000, "over"),
+        funds_summary=FundsSummary(n_on_track=2, n_behind=1, set_aside=150_000),
+        funds=[
+            FundReportLine("Food", 1_000_000, 200_000, 800_000, True),
+            FundReportLine("Fun", 200_000, 0, 250_000, False),
         ],
         by_category=[
             CategorySection("Food", "Essentials", 800_000, 26.666666666666668),
             CategorySection("Uncategorized", None, 100_000, 3.3333333333333335),
         ],
         by_group=[GroupSection("Essentials", 800_000, 26.666666666666668)],
-        goals=[
-            GoalLine("Trip", 600_000, target=1_200_000, eta=date(2026, 12, 1), on_track=True),
-            GoalLine("Buffer", 300_000),
-        ],
         balances=[AccountBalance("Bank", "COP", 9_000_000), AccountBalance("USD Wallet", "USD", 12_345)],
         drift_mom=DriftMoM("2026-05", 100_000, 2.0, -50_000, -1.5, 150_000, None),
         usd_share=0.25,
         pending=["Bank: $40,000.00 COP pending"],
-        safe_to_spend=SafeToSpend("2026-06", 0, 0, 0, 1_750_000, []),
+        available=MonthAvailable("2026-06", 0, [], 0, 1_750_000),
         markdown="",
     )
 
@@ -56,25 +49,24 @@ def test_render_is_deterministic():
 
 def test_render_headline_and_section_order():
     out = render_markdown(_full_report())
-    # headline = net + envelope performance (ADR-019)
+    # headline = net + how the funds did (ADR-019, ADR-0043)
     assert "# Monthly report — 2026-06" in out
     assert "**Net:** $20,000.00 COP" in out
-    assert "2 green / 1 red" in out
-    # section ordering: net before envelopes before categories before closing
-    assert out.index("Net:") < out.index("## Envelopes")
-    assert out.index("## Envelopes") < out.index("## Expense by category")
-    assert out.index("## Expense by category") < out.index("## Goals")
-    assert out.index("## Goals") < out.index("## Account balances")
+    assert "2 on track / 1 behind" in out
+    # section ordering: net before funds before categories before closing
+    assert out.index("Net:") < out.index("## Funds")
+    assert out.index("## Funds") < out.index("## Expense by category")
+    assert out.index("## Expense by category") < out.index("## Account balances")
     assert out.index("## Account balances") < out.index("## Month-over-month")
     assert out.index("## Month-over-month") < out.index("## Closing")
-    # safe-to-spend is the closing line, not the headline
+    # the money left over is the closing line, not the headline
     assert "You closed with $17,500.00 COP free" in out
 
 
-def test_render_goal_eta_only_on_defined_goals():
+def test_render_names_every_fund_with_what_it_asks_and_holds():
     out = render_markdown(_full_report())
-    assert "Trip" in out and "ETA Tue, 1 Dec 2026" in out and "on track" in out
-    assert "Buffer" in out and "open-ended" in out
+    assert "| Food | $10,000.00 COP | $2,000.00 COP | $8,000.00 COP | on track |" in out
+    assert "| Fun | $2,000.00 COP | $0.00 COP | $2,500.00 COP | behind |" in out
 
 
 def test_render_usd_share_as_percentage():
@@ -95,16 +87,15 @@ def test_render_empty_sections_do_not_crash():
         income=0,
         expense=0,
         net=0,
-        envelopes_summary=EnvelopesSummary(0, 0, 0),
-        envelopes=[],
+        funds_summary=FundsSummary(0, 0, 0),
+        funds=[],
         by_category=[],
         by_group=[],
-        goals=[],
         balances=[],
         drift_mom=None,
         usd_share=0.0,
         pending=[],
-        safe_to_spend=SafeToSpend("2026-06", 0, 0, 0, 0, []),
+        available=MonthAvailable("2026-06", 0, [], 0, 0),
         markdown="",
     )
     out = render_markdown(report)

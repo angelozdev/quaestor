@@ -1,13 +1,11 @@
 """Step handlers — feature 003 sinking-funds.
 
-**Every binding here is RED on purpose.** Nothing this feature describes
-exists: there is no fund, the number it replaces computes a different
-formula, and goals are still their own concept. Unlike 007 — where most
-bindings reached shipped calls whose assertions merely failed — these name a
-services API that has not been written. That is the point of Checkpoint 3:
-the bindings record the *intent*, and Checkpoint 4 owns the design.
+Written at Checkpoint 3 against an API that did not exist yet — the bindings
+recorded the intent and Checkpoint 4 owned the design. The feature has since
+shipped, so every binding now reaches real code; the helpers that name a
+missing capability survive as the message a future removal would produce.
 
-The API named throughout is ``quaestor.services.funds``:
+The API bound throughout is ``quaestor.services.funds``:
 
 ``create_fund``      a fund on one expense category, one rule, one start month
 ``preview_fund``     what a fund would ask, before it exists (AC-24's warning)
@@ -21,8 +19,10 @@ The API named throughout is ``quaestor.services.funds``:
 Each helper below fails with a message naming the capability it wanted, so
 the red output reads as a to-do list rather than one repeated import error.
 
-Assistant steps go through ``quaestor.mcp.tools`` — the conversational
-surface, per AC-28's parity requirement.
+Assistant steps go through ``quaestor.mcp.tools.funds`` — the conversational
+surface, per AC-28's parity requirement. They follow the house shape the
+tools ship with, ``(session, inp: Model)`` with names resolved to ids and
+``_as_text`` around the answer (decision D9, settled at Checkpoint 4).
 
 Dates are absolute here, unlike the other suites. Every fund rule is month
 arithmetic, and "2 months ago" cannot pin $74.550 the way a fixed calendar
@@ -47,6 +47,7 @@ from sqlalchemy import text as sa_text
 
 from . import step
 from .fx_read_time import _DEC, _default_account_id
+from .planned_payments import skip_the_obligations_turn
 from .world import World
 
 _REJECTED = (ValidationError, NotFound, QuaestorError, TypeError, ValueError, AttributeError)
@@ -140,22 +141,30 @@ def _cents(amount: str) -> int:
     return major_to_cents(amount)
 
 
+def _context(world: World) -> str:
+    """Any unconsumed failure, as a suffix naming the likely cause.
+
+    Used instead of ``require_clean`` by the steps that read a fund's state
+    *after* a refusal — AC-21 and AC-25 assert that the refused action left the
+    fund exactly as it was, and there is no step between them to consume the
+    rejection. Same shape as ``fx_read_time.then_account_balance``.
+    """
+    if not world.errors:
+        return ""
+    details = "; ".join(f"{type(e).__name__}: {e}" for e in world.errors)
+    return f" (a preceding action failed — {details})"
+
+
 def _fund_id(world: World, name: str) -> int:
     known = getattr(world, "funds", {})
     fund_id = known.get(name)
     if fund_id is None:
-        raise AssertionError(f"no fund on {name!r} in this scenario")
+        raise AssertionError(f"no fund on {name!r} in this scenario{_context(world)}")
     return fund_id
 
 
 def _status(world: World, name: str, year_month: str | None = None):
-    return _call(
-        "fund_status",
-        world.session,
-        _fund_id(world, name),
-        year_month or _month_of(world.today),
-        today=world.today,
-    )
+    return _call("fund_status", world.session, _fund_id(world, name), year_month or _month_of(world.today))
 
 
 def _category_id(world: World, name: str) -> int:
@@ -163,6 +172,22 @@ def _category_id(world: World, name: str) -> int:
     if cat is None:
         raise AssertionError(f"no category {name!r} in this scenario")
     return cat
+
+
+def _spending_category_id(world: World, name: str) -> int:
+    """The expense category a recorded expense is filed under, created if unnamed.
+
+    AC-9 and AC-10 spend in "Transporte" to show what *no* fund covers, and
+    never declare it — the category is background to what those scenarios pin,
+    exactly like `World.background_category`, but it carries a name because the
+    breakdown is read by name.
+    """
+    known = world.categories.get(name)
+    if known is not None:
+        return known
+    cat = categories.create_category(world.session, name, is_income=False)
+    world.categories[name] = cat.id
+    return cat.id
 
 
 def _make_fund(world: World, name: str, **spec) -> None:
@@ -245,7 +270,7 @@ def given_recorded_expense_in_category(world: World, amount: str, category: str,
         currency="COP",
         date=_shift_months(world.today, back),
         payee="Gasto",
-        category_id=_category_id(world, category),
+        category_id=_spending_category_id(world, category),
     )
 
 
@@ -281,12 +306,7 @@ def given_fund_holds(world: World, name: str, amount: str) -> None:
 
 @step(r'the payment to "(?P<payee>[^"]+)" was skipped last month')
 def given_skipped_last_month(world: World, payee: str) -> None:
-    world.attempt(
-        recurring.skip_recurring,
-        world.session,
-        world.recurring_ids[payee],
-        _shift_months(world.today, 1),
-    )
+    skip_the_obligations_turn(world, payee, _shift_months(world.today, 1))
     world.require_clean(f"skipping last month's payment to {payee!r}")
 
 
@@ -362,7 +382,7 @@ def given_ordinary_movements_before_upgrade(world: World) -> None:
 
 @step(r"the user viewed the money available for (?P<month>" + _MONTH + r")")
 def given_viewed_available(world: World, month: str) -> None:
-    world.available_view = world.attempt(_call, "available", world.session, month, today=world.today)
+    world.available_view = world.attempt(_call, "available", world.session, month)
     world.available_month = month
 
 
@@ -432,29 +452,52 @@ def when_delete_fund(world: World, name: str) -> None:
 
 @step(r'the assistant deletes the fund on "(?P<name>[^"]+)"')
 def when_assistant_deletes_fund(world: World, name: str) -> None:
-    world.attempt(_assistant, world, "delete_fund", category=name)
+    world.attempt(_assistant, world, "delete_fund", "FundInput", category=name)
     world.funds.pop(name, None)
 
 
 @step(r'the assistant creates a fund on "(?P<name>[^"]+)"' + _FIXED)
 def when_assistant_creates_fund(world: World, name: str, amount: str, start: str, roll) -> None:
-    fund = world.attempt(
-        _assistant, world, "create_fund", category=name, rule="fixed", amount=amount, start_month=start
+    world.attempt(
+        _assistant,
+        world,
+        "create_fund",
+        "CreateFundInput",
+        category=name,
+        rule="fixed",
+        amount=_cents(amount),
+        start_month=start,
     )
-    if fund is not None:
-        world.funds = getattr(world, "funds", {})
-        world.funds[name] = fund
+    _remember_assistant_fund(world, name)
 
 
 @step(r'the assistant tries to create a fund on "(?P<name>[^"]+)"' + _FIXED)
 def when_assistant_tries_fund_fixed(world: World, name: str, amount: str, start: str, roll) -> None:
-    world.attempt(_assistant, world, "create_fund", category=name, rule="fixed", amount=amount, start_month=start)
+    world.attempt(
+        _assistant,
+        world,
+        "create_fund",
+        "CreateFundInput",
+        raw=True,
+        category=name,
+        rule="fixed",
+        amount=_cents(amount),
+        start_month=start,
+    )
 
 
 @step(r'the assistant tries to create a fund on "(?P<name>[^"]+)"' + _AVERAGE)
 def when_assistant_tries_fund_average(world: World, name: str, window: str, start: str) -> None:
     world.attempt(
-        _assistant, world, "create_fund", category=name, rule="average", window_months=window, start_month=start
+        _assistant,
+        world,
+        "create_fund",
+        "CreateFundInput",
+        raw=True,
+        category=name,
+        rule="average",
+        window_months=int(window),
+        start_month=start,
     )
 
 
@@ -500,20 +543,51 @@ def when_assistant_asked_funds(world: World) -> None:
 
 @step(r"the assistant is asked how much is available this month")
 def when_assistant_asked_available(world: World) -> None:
-    world.assistant_answer = world.attempt(_assistant, world, "money_available", month=_month_of(world.today))
+    world.assistant_answer = world.attempt(
+        _assistant, world, "money_available", "MonthInput", month=_month_of(world.today)
+    )
 
 
-def _assistant(world: World, tool: str, **kwargs):
-    """Reach one fund tool through the assistant surface (AC-28)."""
-    from quaestor.mcp import registry
+def _assistant(world: World, tool: str, model: str | None = None, *, raw: bool = False, **fields):
+    """Reach one fund tool the way the house builds them: ``(session, inp)``.
 
-    module = getattr(registry, "funds", None)
-    if module is None:
-        raise AssertionError(f"the assistant has no {tool!r} tool yet — AC-28 asks for full parity with the app")
+    Every tool takes one validated input model, speaks category names, and
+    answers in text — a refusal included, because ``_as_text`` turns a domain
+    error into words. ``raw`` steps past that translation for the scenarios
+    that assert a refusal, since the world's rejection channel speaks
+    exceptions; it is the same door `mandatory_categories` opens for the same
+    reason.
+    """
+    module = _assistant_tools()
     fn = getattr(module, tool, None)
     if fn is None:
         raise AssertionError(f"the assistant has no {tool!r} tool yet — AC-28 asks for full parity with the app")
-    return fn(world.session, **kwargs)
+    call = getattr(fn, "__wrapped__", fn) if raw else fn
+    if model is None:
+        return call(world.session)
+    shape = getattr(module, model, None)
+    if shape is None:
+        raise AssertionError(f"the assistant's {tool!r} has no {model!r} yet — the house shape is (session, inp)")
+    return call(world.session, shape(**fields))
+
+
+def _assistant_tools():
+    """The assistant's fund tools, or a red naming their absence."""
+    try:
+        from quaestor.mcp.tools import funds as fund_tools
+    except ImportError as exc:
+        raise AssertionError("the assistant has no fund tools yet — AC-28 asks for full parity with the app") from exc
+    return fund_tools
+
+
+def _remember_assistant_fund(world: World, name: str) -> None:
+    """The id the app sees for the fund the assistant just made — AC-28's parity."""
+    if world.last_error is not None:
+        return
+    line = next((f for f in _call("list_funds", world.session) if f.name == name), None)
+    if line is not None:
+        world.funds = getattr(world, "funds", {})
+        world.funds[name] = line.fund_id
 
 
 def _assistant_tool_names(world: World, needle: str) -> list[str]:
@@ -527,16 +601,14 @@ def _assistant_tool_names(world: World, needle: str) -> list[str]:
 
 @step(r'the fund on "(?P<name>[^"]+)" asks (?P<amount>' + _DEC + r") COP this month")
 def then_fund_asks(world: World, name: str, amount: str) -> None:
-    world.require_clean(f"reading what the fund on {name!r} asks")
     asks = _attr(_status(world, name), "asks", f"the fund on {name!r}")
-    assert asks == _cents(amount), f"the fund on {name!r} asks {asks}, expected {_cents(amount)}"
+    assert asks == _cents(amount), f"the fund on {name!r} asks {asks}, expected {_cents(amount)}{_context(world)}"
 
 
 @step(r'the fund on "(?P<name>[^"]+)" holds (?P<amount>' + _DEC + r") COP")
 def then_fund_holds(world: World, name: str, amount: str) -> None:
-    world.require_clean(f"reading what the fund on {name!r} holds")
     holds = _attr(_status(world, name), "holds", f"the fund on {name!r}")
-    assert holds == _cents(amount), f"the fund on {name!r} holds {holds}, expected {_cents(amount)}"
+    assert holds == _cents(amount), f"the fund on {name!r} holds {holds}, expected {_cents(amount)}{_context(world)}"
 
 
 @step(r'the fund on "(?P<name>[^"]+)" is (?P<state>on track|behind)')
@@ -648,19 +720,24 @@ def then_not_warned(world: World) -> None:
 
 @step(r"no fund is listed")
 def then_no_fund_listed(world: World) -> None:
+    """Nothing is listed — reading the list here when no step viewed it.
+
+    AC-24 asserts the warning came *before* the fund existed, and never opens
+    the list to say so; the read belongs to the assertion, like the combined
+    read+assert steps in ``fx_read_time``.
+    """
     world.require_clean("listing the funds")
     listed = getattr(world, "funds_view", None)
     if listed is None:
-        raise AssertionError("nothing listed the funds")
+        listed = _call("list_funds", world.session)
     assert not listed, f"expected no fund, got {[getattr(f, 'name', f) for f in listed]}"
 
 
 @step(r"the money available this month is (?P<amount>" + _DEC + r") COP")
 def then_available_this_month(world: World, amount: str) -> None:
-    world.require_clean("reading the money available")
-    view = _call("available", world.session, _month_of(world.today), today=world.today)
+    view = _call("available", world.session, _month_of(world.today))
     free = _attr(view, "free", "the money available")
-    assert free == _cents(amount), f"the money available is {free}, expected {_cents(amount)}"
+    assert free == _cents(amount), f"the money available is {free}, expected {_cents(amount)}{_context(world)}"
 
 
 @step(r"the money available that month is (?P<amount>" + _DEC + r") COP")
@@ -712,7 +789,7 @@ def then_breakdown_adds_up(world: World) -> None:
 
 
 def _rates(world: World):
-    return _call("rates", world.session, _month_of(world.today), today=world.today)
+    return _call("rates", world.session, _month_of(world.today))
 
 
 @step(r"the earning rate is (?P<amount>" + _DEC + r") COP a month")
@@ -750,10 +827,11 @@ def then_assistant_cannot(world: World) -> None:
 
 @step(r"the assistant's answer states (?P<amount>" + _DEC + r") COP")
 def then_assistant_states_amount(world: World, amount: str) -> None:
+    """The figure, in the words the scenario uses — which is how the house renders money."""
     answer = world.assistant_answer
     if answer is None:
         raise AssertionError("the assistant answered nothing")
-    expected = f"{int(_cents(amount) // 100):,}".replace(",", ".")
+    expected = f"{amount} COP"
     assert expected in str(answer), f"the assistant's answer does not state {expected}: {answer!r}"
 
 

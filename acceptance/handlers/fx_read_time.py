@@ -34,18 +34,20 @@ from __future__ import annotations
 
 import os
 import re as _re
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
 from quaestor.domain import money as money_mod
 from quaestor.domain.errors import MissingRate, QuaestorError
-from quaestor.domain.models import TxType
+from quaestor.domain.models import Settings, TxType
 from quaestor.domain.money import major_to_cents
 from quaestor.jobs import daily as daily_job
-from quaestor.services import accounts, budgets, categories, fx, reports, transactions
+from quaestor.services import accounts, categories, fx, reports, transactions
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text as sa_text
+from sqlmodel import select
 
 from . import step
 from .world import World
@@ -103,8 +105,16 @@ def _implied_rate(sent_cents: int, received_cents: int) -> Decimal:
 
 @step(r"no TRM has been set")
 def given_no_trm(world: World) -> None:
-    # Fresh in-memory DB per scenario: nothing to do — the TRM is unset.
-    pass
+    """Take the app back to before any rate existed.
+
+    The World seeds one, because a running app always carries one. A scenario
+    whose subject *is* the missing rate therefore has to remove it rather than
+    assume it was never there.
+    """
+    for settings in world.session.exec(select(Settings)).all():
+        settings.usd_cop = None
+        world.session.add(settings)
+    world.session.commit()
 
 
 @step(r"the TRM is (?P<value>" + _DEC + r")")
@@ -281,12 +291,29 @@ def when_daily_rate_update(world: World, value: str) -> None:
     world.attempt(action)
 
 
+@dataclass(frozen=True)
+class _SpendingLine:
+    """What one category spent in the month, whatever set money aside for it."""
+
+    category_name: str
+    spent: int
+
+
 def _view_report(world: World, month: str) -> None:
+    """Open the month's report, and the per-category lines it carries with it.
+
+    ``the spending for "X" shows N`` reads those lines. 003's AC-12 asks for
+    them off the report and 005's AC-2 off the budget — two doors onto the
+    same question, so both fill the same scratchpad. The budget door survives
+    the envelope it was named after: the report's per-category sections answer
+    it for every category, funded or not.
+    """
     world.report = None
     world.report_month = month
 
     def action():
         world.report = reports.monthly_report(world.session, month, today=world.today)
+        world.spending_lines = [_SpendingLine(section.category, section.total) for section in world.report.by_category]
 
     world.attempt(action)
 
@@ -298,10 +325,7 @@ def when_view_current_report(world: World) -> None:
 
 @step(r"the user views the current month's budget")
 def when_view_budget(world: World) -> None:
-    def action():
-        world.budget_lines = budgets.list_budgets(world.session, _month_str(world.today))
-
-    world.attempt(action)
+    _view_report(world, _month_str(world.today))
 
 
 @step(
@@ -561,11 +585,11 @@ def then_expense_cop_equivalent_now(world: World, amount: str) -> None:
 
 @step(r'the spending for "(?P<name>[^"]+)" shows (?P<amount>' + _DEC + r") COP")
 def then_budget_spending(world: World, name: str, amount: str) -> None:
-    world.require_clean("viewing the budget should have succeeded")
-    assert world.budget_lines is not None, "no budget view was produced"
-    line = next((row for row in world.budget_lines if row.category_name == name), None)
+    world.require_clean("viewing the month's spending should have succeeded")
+    assert world.spending_lines is not None, "no month view was produced"
+    line = next((row for row in world.spending_lines if row.category_name == name), None)
     assert line is not None, (
-        f"no budget line for category {name!r}; got {[row.category_name for row in world.budget_lines]}"
+        f"no spending line for category {name!r}; got {[row.category_name for row in world.spending_lines]}"
     )
     expected = major_to_cents(amount)
     assert line.spent == expected, (

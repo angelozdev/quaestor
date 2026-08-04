@@ -9,7 +9,6 @@ Pydantic input model.
 from __future__ import annotations
 
 import functools
-import re
 from datetime import date as Date
 from typing import Literal
 
@@ -19,6 +18,7 @@ from sqlmodel import Session
 from ...domain.errors import NotFound, QuaestorError, ValidationError
 from ...domain.models import Account, Category, CategoryGroup, Tag
 from ...domain.money import BASE_CURRENCY, to_cop_cents
+from ...domain.rules import is_year_month
 from ...services import accounts, categories, fx, tags, transactions
 from .. import format
 
@@ -179,14 +179,8 @@ def _resolve_tag_by_name(session: Session, name: str) -> Tag:
     raise NotFound(f"Tag '{name}' not found. Available: {available}.")
 
 
-# ----- YYYY-MM validation (shared by budget reads + monthly report) -----
-
-
-_YEAR_MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
-
-
 def _validate_month(month: str) -> None:
-    if not _YEAR_MONTH_RE.match(month):
+    if not is_year_month(month):
         raise ValidationError(f"malformed year_month (expected YYYY-MM): {month!r}")
 
 

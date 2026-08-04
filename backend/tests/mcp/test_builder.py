@@ -38,13 +38,6 @@ def test_build_mcp_registers_all_expected_tools():
         "to_pay",
         "update_recurring",
         "archive_recurring",
-        # planning
-        "assign_budget",
-        "create_goal",
-        "update_goal",
-        "contribute_goal",
-        "pause_goal",
-        "restore_goal",
         # masters/accounts
         "create_account",
         "update_account",
@@ -73,14 +66,17 @@ def test_build_mcp_registers_all_expected_tools():
         # settings
         "get_settings",
         "update_settings",
-        # budgets_reads
-        "list_budgets",
-        "safe_to_spend",
-        # goals_reads
-        "list_goals",
-        "goals_progress",
         # reports
         "monthly_report",
+        # funds
+        "create_fund",
+        "preview_fund",
+        "list_funds",
+        "fund_status",
+        "set_fund",
+        "delete_fund",
+        "money_available",
+        "money_rates",
         # recurring_restore
         "restore_recurring",
     }

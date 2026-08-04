@@ -20,11 +20,10 @@ from .deps import require_auth
 from .errors import register_exception_handlers
 from .routers import (
     accounts,
-    budgets,
     categories,
     category_groups,
+    funds,
     fx,
-    goals,
     planned,
     recurring,
     reports,
@@ -114,13 +113,12 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(categories.router, prefix="/api", dependencies=protected)
     app.include_router(tags.router, prefix="/api", dependencies=protected)
     app.include_router(fx.router, prefix="/api", dependencies=protected)
+    app.include_router(funds.router, prefix="/api", dependencies=protected)
     app.include_router(settings.router, prefix="/api", dependencies=protected)
     app.include_router(transactions.router, prefix="/api", dependencies=protected)
     app.include_router(recurring.router, prefix="/api", dependencies=protected)
     app.include_router(planned.router, prefix="/api", dependencies=protected)
     app.include_router(rollover.router, prefix="/api", dependencies=protected)
-    app.include_router(budgets.router, prefix="/api", dependencies=protected)
-    app.include_router(goals.router, prefix="/api", dependencies=protected)
     app.include_router(reports.router, prefix="/api", dependencies=protected)
     app.include_router(chat_module.router, prefix="/api", dependencies=protected)
 

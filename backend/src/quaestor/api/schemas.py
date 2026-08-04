@@ -11,6 +11,7 @@ from sqlmodel import Session
 
 from ..domain.models import (
     AccountType,
+    FundRule,
     IntervalUnit,
     OccurrenceStatus,
     RecurringMode,
@@ -320,23 +321,86 @@ class CloseMonthIn(BaseModel):
     period: str
 
 
-class EnvelopesSummaryOut(BaseModel):
+class FundCreate(BaseModel):
+    category_id: int
+    rule: FundRule
+    start_month: str
+    accumulates: bool | None = None
+    amount: int | None = None
+    window_months: int | None = None
+    target_amount: int | None = None
+    target_month: str | None = None
+    opening_balance: int | None = None
+
+
+class FundUpdate(BaseModel):
+    rule: FundRule | None = None
+    accumulates: bool | None = None
+    amount: int | None = None
+    window_months: int | None = None
+    target_amount: int | None = None
+    target_month: str | None = None
+    balance: int | None = None
+
+
+class FundOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    n_green: int
-    n_red: int
-    rollover_generated: int
+    id: int
+    category_id: int
+    rule: FundRule
+    start_month: str
+    accumulates: bool
+    amount: int | None
+    window_months: int | None
+    target_amount: int | None
+    target_month: str | None
 
 
-class EnvelopeLineOut(BaseModel):
+class FundLineOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    category: str
-    allocated: int
-    rollover_in: int
+    fund_id: int
+    category_id: int
+    name: str
+    rule: str
+    start_month: str
+    accumulates: bool
+
+
+class FundPreviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category_id: int
+    would_ask: int
+    warning: str | None
+
+
+class MonthRatesOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    earning: int
+    cost: int
+    margin: int
+
+
+class FundsSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    n_on_track: int
+    n_behind: int
+    set_aside: int
+
+
+class FundReportLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category_name: str
+    asks: int
+    holds: int
     spent: int
-    available: int
-    status: str
+    on_track: bool
 
 
 class CategorySectionOut(BaseModel):
@@ -356,14 +420,32 @@ class GroupSectionOut(BaseModel):
     pct: float
 
 
-class GoalLineOut(BaseModel):
+class FundStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    fund_id: int
+    category_id: int
     name: str
-    accumulated: int
-    target: int | None = None
-    eta: Date | None = None
-    on_track: bool | None = None
+    year_month: str
+    rule: str
+    asks: int
+    holds: int
+    accumulates: bool
+    accumulation_is_implied: bool
+    on_track: bool
+    averaged_over: int | None = None
+    spreads_over: int | None = None
+    whole_by: str | None = None
+
+
+class MonthAvailableOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    income: int
+    funds: list[FundStatusOut]
+    uncovered: int
+    free: int
 
 
 class AccountBalanceOut(BaseModel):
@@ -393,113 +475,13 @@ class MonthlyReportOut(BaseModel):
     income: int
     expense: int
     net: int
-    envelopes_summary: EnvelopesSummaryOut
-    envelopes: list[EnvelopeLineOut]
+    funds_summary: FundsSummaryOut
+    funds: list[FundReportLineOut]
     by_category: list[CategorySectionOut]
     by_group: list[GroupSectionOut]
-    goals: list[GoalLineOut]
     balances: list[AccountBalanceOut]
     drift_mom: DriftMoMOut | None
     usd_share: float
     pending: list[str]
-    safe_to_spend: SafeToSpendOut
+    available: MonthAvailableOut
     markdown: str
-
-
-class GoalOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    target_amount: int | None
-    deadline: Date | None
-    monthly_amount: int
-    savings_account_id: int
-    status: str
-
-
-class GoalCreate(BaseModel):
-    name: str
-    monthly_amount: int = Field(gt=0)
-    savings_account_id: int
-    target_amount: int | None = Field(default=None, gt=0)
-    deadline: Date | None = None
-
-
-class GoalUpdate(BaseModel):
-    name: str | None = None
-    monthly_amount: int | None = Field(default=None, gt=0)
-    target_amount: int | None = None
-    deadline: Date | None = None
-    savings_account_id: int | None = None
-
-
-class GoalContributeIn(BaseModel):
-    amount: int = Field(gt=0)
-    date: Date
-
-
-class GoalContributionOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    goal_id: int
-    date: Date
-    amount: int
-    source: str
-    transaction_id: int | None
-
-
-class GoalProgressOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    goal_id: int
-    name: str
-    type: str
-    monthly_amount: int
-    saved: int
-    target_amount: int | None = None
-    deadline: Date | None = None
-    monthly_required: int | None = None
-    on_track: bool | None = None
-    eta: Date | None = None
-    remaining: int | None = None
-
-
-class CommittedItemOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    kind: str
-    name: str
-    date: Date
-    amount: int
-
-
-class SafeToSpendOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    year_month: str
-    income_forecast: int
-    committed: int
-    assigned_envelopes: int
-    free: int
-    committed_breakdown: list[CommittedItemOut]
-
-
-class BudgetLineOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    category_id: int
-    category_name: str
-    assigned: int
-    rollover_in: int
-    spent: int
-    available: int
-    pct_used: int
-    status: str
-
-
-class BudgetAssignIn(BaseModel):
-    category_id: int
-    year_month: str
-    amount_assigned: int

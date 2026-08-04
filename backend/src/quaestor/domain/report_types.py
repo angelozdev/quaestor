@@ -1,44 +1,49 @@
 """P5 contract dataclasses for the monthly report and the CSV importer.
 
 These are the stable types P1 (endpoints), P2 (MCP tools), and P6 (screens) wire
-against. SafeToSpend is reused from P4 (domain.dtos) — single source of truth.
+against. MonthAvailable is reused from the fund service's DTOs — single source
+of truth for the closing line.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 
-from .dtos import SafeToSpend  # re-exported on purpose
+from .dtos import MonthAvailable  # re-exported on purpose
 
 __all__ = [
     "AccountBalance",
     "CategorySection",
     "DriftMoM",
-    "EnvelopeLine",
-    "EnvelopesSummary",
-    "GoalLine",
+    "FundReportLine",
+    "FundsSummary",
     "GroupSection",
+    "MonthAvailable",
     "MonthlyReport",
-    "SafeToSpend",
 ]
 
 
 @dataclass(frozen=True)
-class EnvelopesSummary:
-    n_green: int  # envelopes with status "under"
-    n_red: int  # envelopes with status "over"
-    rollover_generated: int  # Σ max(available, 0), COP cents — rolls into next month
+class FundsSummary:
+    n_on_track: int  # funds the month's spending did not push behind
+    n_behind: int  # funds asking more than the month opened needing
+    set_aside: int  # Σ what the funds hold, COP cents
 
 
 @dataclass(frozen=True)
-class EnvelopeLine:
-    category: str
-    allocated: int  # assigned, COP cents
-    rollover_in: int  # COP cents
+class FundReportLine:
+    """One fund inside the month's report (ADR-0043).
+
+    `category_name` and `spent` carry the same names the envelope line used, so
+    a reader of the report keeps asking what a category spent in the month
+    regardless of what set money aside for it.
+    """
+
+    category_name: str
+    asks: int  # COP cents
+    holds: int  # COP cents
     spent: int  # COP cents
-    available: int  # COP cents
-    status: str  # "over" | "under"
+    on_track: bool
 
 
 @dataclass(frozen=True)
@@ -54,15 +59,6 @@ class GroupSection:
     group: str
     total: int  # COP cents
     pct: float  # percentage of total expense, [0, 100]
-
-
-@dataclass(frozen=True)
-class GoalLine:
-    name: str
-    accumulated: int  # saved, COP cents
-    target: int | None = None  # COP cents; None => open-ended
-    eta: date | None = None  # only on defined goals
-    on_track: bool | None = None  # only on defined goals
 
 
 @dataclass(frozen=True)
@@ -89,14 +85,13 @@ class MonthlyReport:  # not frozen: markdown is filled in after the data is buil
     income: int  # COP cents, posted only
     expense: int
     net: int  # income - expense
-    envelopes_summary: EnvelopesSummary
-    envelopes: list[EnvelopeLine]
+    funds_summary: FundsSummary
+    funds: list[FundReportLine]
     by_category: list[CategorySection]
     by_group: list[GroupSection]
-    goals: list[GoalLine]
     balances: list[AccountBalance]
     drift_mom: DriftMoM | None  # None on cold start (no previous-month activity)
     usd_share: float  # fraction of expense originated in USD, [0, 1]
     pending: list[str]  # alert lines: unconfirmed manual entries
-    safe_to_spend: SafeToSpend  # closing line, not headline (ADR-019)
+    available: MonthAvailable  # closing line, not headline (ADR-019)
     markdown: str

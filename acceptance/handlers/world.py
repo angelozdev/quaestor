@@ -3,21 +3,39 @@
 Every scenario gets a fresh in-memory SQLite database migrated to head via
 ``quaestor.db.init_db`` — full state isolation between scenarios. All step
 handlers read/write only through this object.
+
+The fresh database is not empty: it carries the background state a running app
+always has, which today is the USD→COP rate (see ``SEEDED_TRM``).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 from quaestor.db import init_db, make_engine
 from quaestor.domain.models import TxType
 from quaestor.domain.rules import category_is_income_for
 from quaestor.services.categories import create_category
+from quaestor.services.fx import set_trm
 from sqlmodel import Session
 
 MISSING_ID = 999_999_321
+
+SEEDED_TRM = Decimal("4200")
+"""The USD→COP rate a running app always carries.
+
+Background state, not a subject: the rate is demanded on entry to every read
+path and the app never guesses one (ADR-0031, product ADR-038), so a scenario
+that never mentions a rate still gets to read. A scenario whose subject *is*
+the rate overrides this — `Given the TRM is …` overwrites it, `Given no TRM
+has been set` clears it.
+
+The value appears in no `spec.md`, so a figure that leans on the seed by
+accident comes out wrong instead of coincidentally right.
+"""
 
 NO_CATEGORY = object()
 """What a step submits when the scenario says *with no category* on purpose.
@@ -36,6 +54,7 @@ class World:
         self.engine = make_engine(memory=True)
         init_db(self.engine)
         self.session: Session = Session(self.engine)
+        set_trm(self.session, SEEDED_TRM)
 
         self.today: date = date.today()
         # Any day safely inside the previous calendar month.
@@ -54,7 +73,7 @@ class World:
         self.viewed_cop_cents: int | None = None
         self.report = None  # MonthlyReport | None
         self.report_month: str | None = None
-        self.budget_lines = None  # list[BudgetLine] | None
+        self.spending_lines = None  # list of (category_name, spent) | None
         self.transfer_legs = None  # (leg_from, leg_to) | None
         self.implied_rate = None  # Decimal | None
         self.implied_rate_error: Exception | None = None

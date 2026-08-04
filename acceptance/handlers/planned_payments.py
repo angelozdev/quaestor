@@ -38,6 +38,7 @@ from quaestor.domain.models import (
     TxType,
 )
 from quaestor.domain.money import cents_to_major, major_to_cents
+from quaestor.domain.recurrence import due_dates
 from quaestor.services import (
     fx,
     occurrences,
@@ -81,12 +82,40 @@ def _account_id(world: World, name: str) -> int:
     return world.account_id_or_missing(name)
 
 
+def _payments(world: World, payee: str) -> list[Transaction]:
+    return list(world.session.exec(select(Transaction).where(Transaction.payee == payee)).all())
+
+
+def _has_payment(world: World, payee: str) -> bool:
+    return bool(_payments(world, payee))
+
+
 def _payment(world: World, payee: str) -> Transaction:
     """The most recent transaction for a payee, whatever its state."""
-    rows = world.session.exec(select(Transaction).where(Transaction.payee == payee)).all()
+    rows = _payments(world, payee)
     if not rows:
         raise AssertionError(f"no payment to {payee!r} exists in this scenario")
     return max(rows, key=lambda t: t.id)
+
+
+def skip_the_obligations_turn(world: World, payee: str, within: Date) -> None:
+    """Skip the turn an obligation actually falls due on, inside `within`'s month.
+
+    An obligation the daily run has not reached yet has no planned movement to
+    skip, only a due date the cadence implies — which is the state feature 003's
+    scenarios describe, since none of them runs the engine. Resolving the date
+    from the cadence rather than from the day handed in is what keeps a
+    cadence anchored to the 5th from being asked about the 10th.
+    """
+    item = world.session.get(RecurringItem, world.recurring_ids[payee])
+    if item is None:
+        raise AssertionError(f"no repeating obligation to {payee!r} in this scenario")
+    first = within.replace(day=1)
+    last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+    turns = due_dates(item.start_date, item.end_date, item.interval_unit, item.interval_count, first, last)
+    if not turns:
+        raise AssertionError(f"{payee!r} has no turn due in {first:%Y-%m}")
+    world.attempt(recurring.skip_recurring, world.session, item.id, turns[0])
 
 
 def _transfer(world: World, destination: str) -> Transaction:
@@ -408,8 +437,11 @@ def when_confirm_recorded_expense(world: World) -> None:
 
 @step(r'the user (?P<mode>skips|tries to skip) the payment to "(?P<payee>[^"]+)"')
 def when_skip_payment(world: World, mode: str, payee: str) -> None:
-    tx = _payment(world, payee)
-    world.attempt(planned.skip_payment, world.session, tx.id)
+    """Skip the payment, whether or not the engine has materialized it yet."""
+    if not _has_payment(world, payee):
+        skip_the_obligations_turn(world, payee, world.today)
+        return
+    world.attempt(planned.skip_payment, world.session, _payment(world, payee).id)
 
 
 @step(r'the user restores the skipped payment to "(?P<payee>[^"]+)"')

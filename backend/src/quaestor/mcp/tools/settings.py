@@ -1,7 +1,7 @@
 """MCP settings tools (ADR-0009): get/update the singleton Settings row.
 
-Lets the agent set `default_source_account_id`, which is required by
-`contribute_goal` (services/goals.py).
+Lets the agent set `default_source_account_id`, the account manual
+transfers fall back to.
 """
 
 from __future__ import annotations
