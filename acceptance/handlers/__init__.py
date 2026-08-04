@@ -87,6 +87,7 @@ _FEATURE_MODULES = (
     "mandatory_categories",
     "planned_payments",
     "recurring_engine",
+    "sinking_funds",
     "transactions_crud",
 )
 
