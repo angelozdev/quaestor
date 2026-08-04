@@ -307,3 +307,27 @@ pipeline generation → tests green. Bounded, one feature per task.
   ruled against in N1/N2. The fix is a direction on the four inputs, plus a
   refusal when the name still matches more than one. REST is unaffected — it
   addresses categories by id.
+- C17. **Product ADR-004's reconciliation clause has never been built.** The ADR
+  states the month's forecast income *"is corrected to actual as transactions
+  post, counting each income exactly once (ADR-014)"*, and it also says an
+  atypical income "counts when posted". Neither happens.
+  `services/budgets._income_forecast` iterates the active recurring items,
+  recomputes their due dates inside the month and multiplies by the declared
+  amount. It reads no `Transaction` at all, and `safe_to_spend_calc` receives
+  that figure and never compares it to anything.
+
+  **Measured 2026-08-03 against the live Postgres.** The forecast reports a flat
+  $18.128.501 every month (Ubidots Salary $6.223.101 + Keystone US$3.800 at TRM
+  3.133). The record reports $0 in April, $8.366.187 in May and $45.176.653 in
+  July. Both describe the same two salaries; nothing in the app has ever
+  compared them. A posted income carrying no `recurring_id` — 20 of the 22 in
+  production — is invisible to the headline entirely.
+
+  Two caveats against over-reading those figures: the history is a Lunch Money
+  import, so the monthly spread reflects when rows were recorded rather than
+  when money arrived, and the app itself is roughly a month old. The unread
+  transaction table is the finding; the spread is only what makes it visible.
+
+  Feature 003 owns the fix as **AC-14c**, because it replaces the headline
+  outright. Filed here anyway: the defect is live today, on the shipped number,
+  independent of whether 003 ships.

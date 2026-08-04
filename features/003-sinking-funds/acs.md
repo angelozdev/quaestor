@@ -1,6 +1,6 @@
 ---
-ac_count: 28
-high_priority_count: 19
+ac_count: 30
+high_priority_count: 21
 discovered: 2026-08-03
 ---
 
@@ -68,24 +68,45 @@ Quaestor already splits these — the monthly report builds its category
 sections from real movements and its envelope lines separately — so AC-11 and
 AC-12 are two surfaces, not a trade-off.
 
-**5. Non-monthly income is smoothed, over a stated objection.** The owner was
-shown the asymmetry: smoothing an *expense* forward is conservative (money is
-held that may not be needed), while smoothing *income* forward is optimistic
-(money is counted that may not arrive), and YNAB forbids the second outright —
-its rule is to budget only what is already in the account, because anticipating
-income creates a false sense of available funds.
+**5. Two numbers, because there are two questions.** The owner's reason for
+wanting irregular income smoothed was explicit: *"responde a la pregunta de
+cuánto estoy ganando mes a mes"*. That question is legitimate, and for it
+smoothing is **correct** — a rate should be smoothed. It is simply not the
+question *how much can I spend this month*, which is a balance rather than a
+rate.
 
-The owner chose to smooth anyway, with a reason that answers the objection:
-**a recurring income is a declaration of what you count on, and the abnormal
-case is an edit, not a detection.** If the bonus stops or the job ends, the
-recurring item is edited and every month recomputes. This is why the app does
-*not* try to notice a missed payment on its own — see AC-15.
+The owner had already drawn this exact line for the fund and the report
+(decision 4). It applies again here, on the income side.
 
-Note that "the month it falls due" is what the app does *today*
-(`_income_forecast` counts the occurrences due inside the month), so the
-smoothing in AC-14 is the change, not the status quo. This decision supersedes
-product ADR-004's forecast clause for non-monthly income; ADR-004 itself named
-the trigger — *"revisit if income becomes very irregular"*.
+YNAB ships both numbers separately and for this reason. Its *Cost to Be Me* is
+the sum of every monthly target — "what a month of being you costs" — and it is
+where YNAB invites you to enter the month's **expected** income to check whether
+it covers the plan. Its *Ready to Assign* is money actually in hand. The two are
+never merged.
+
+So the smoothing is **moved, not dropped**: it lives in the rate (AC-14b), while
+the spending number never counts money that has not arrived (AC-14). The gap
+between them carries information rather than noise — *"I earn $21.101.718 a
+month, but this month I have $18.128.501 because the bonus lands in September."*
+
+**A correction to my own analysis, recorded because it changed the
+recommendation.** I first argued against smoothing partly from production
+figures — the bonus showing 0 posted against 4 skipped occurrences, and 20 of 22
+posted incomes carrying no link to a recurring obligation. Those are **migration
+artefacts**: the history was imported from Lunch Money and this app has been in
+use for about a month, so they are evidence of nothing about either the owner or
+the engine. Retracted.
+
+What survives does not depend on the data. Smoothing an expense forward errs
+safe (money held that may not be needed); smoothing income forward errs
+unrecoverably (money spent that never arrived). And `_income_forecast` reads no
+posted movement at all, so nothing in the app could notice the difference either
+way — which is why AC-14c exists.
+
+Product ADR-004 is therefore **not superseded**. Its forecast clause is split
+across two numbers, and its reconciliation clause — *"the forecast is corrected
+to actual as transactions post"* — is finally built, seven months after it was
+accepted.
 
 **6. Nothing is frozen; every month recomputes from what is known now.** This
 is already true of the shipped code, and it is where Quaestor departs from both
@@ -265,14 +286,46 @@ Spending more in a category than its fund holds takes the difference from the
 money available, not the whole amount. A fund never carries a negative balance
 into the next month.
 
-## AC-14: Income that does not arrive monthly is counted at its monthly equivalent
+## AC-14: Income that does not arrive monthly counts in the month it is due
 
 - **Priority:** high
 - **Type:** happy-path
 
-A recurring income arriving on a longer cycle is counted at its per-month value
-in every month of that cycle — the quarterly US$2.847 bonus counts US$949 in
-each of the three. When the money actually arrives it is not counted again.
+Money arriving on a longer cycle counts in full in the month it is due, and not
+before. The quarterly US$2.847 bonus contributes nothing to August and all of
+itself to September.
+
+The money available to spend never includes income that has not arrived. This is
+the one term of the headline that would otherwise run backwards in time, and an
+error here is spent before it can be corrected.
+
+## AC-14b: What the owner earns and what the owner costs are their own numbers, and those are smoothed
+
+- **Priority:** high
+- **Type:** happy-path
+
+Beside the money available this month, the app states three figures as monthly
+rates: what the owner earns, what the owner costs, and the margin between them.
+
+The earning rate normalises every recurring income to a per-month value — the
+quarterly bonus contributes a third of itself to each of the three months. The
+cost rate is every fund's monthly ask plus the obligations no fund covers.
+
+These answer a different question from the headline: *does my life fit my
+income*, over a horizon of a year rather than a month. Smoothing belongs here and
+only here, because a rate is a description, never permission to spend.
+
+## AC-14c: Once the month's real income is recorded, the numbers use it
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+The money available this month is built from expected income until the income
+arrives, and from what actually arrived afterwards, counting each income exactly
+once. Money recorded without coming from a recurring obligation counts too, from
+the moment it is recorded.
+
+Expectation is a placeholder for reality, never a substitute for it.
 
 ## AC-15: Income that stops is a change the owner makes, not something the app detects
 
@@ -432,10 +485,18 @@ removed with the goals.
   categories cannot hold an envelope" — is superseded by AC-21 and AC-22.
 - **Consolidation task 14** (goals coverage, cancelled 2026-08-02) can be
   deleted once this ships, per its own note.
+- **A live defect this feature must fix, not inherit.** `_income_forecast` sums
+  the obligations due in the month and never reads a posted movement, so product
+  ADR-004's reconciliation clause has never been built. The forecast reports a
+  flat $18.128.501 every month while the record reports $0 in April and
+  $45.176.653 in July — both describing the same two salaries, never compared.
+  AC-14c is that clause. Filed separately as consolidation C17, because it is
+  wrong today regardless of this feature.
 - **Product decisions requiring a formal supersede at build time:** ADR-003
-  (safe-to-spend as unassigned money) and ADR-004 (forecast income) are replaced
-  by AC-9 and AC-14; ADR-006 (goals) is removed by AC-26. ADR-002 (envelopes +
-  rollover) and ADR-005 (overdraft eats the pool, no negative rollover) survive
-  unchanged and are relied on by AC-13.
+  (safe-to-spend as unassigned money) is replaced by AC-9, and ADR-006 (goals) is
+  removed by AC-26. **ADR-004 is not superseded** — its forecast clause is split
+  across AC-14 and AC-14b, and its unbuilt reconciliation clause becomes AC-14c.
+  ADR-002 (envelopes + rollover) and ADR-005 (overdraft eats the pool, no
+  negative rollover) survive unchanged and are relied on by AC-13.
 - **Feature.md notes this is too large for one pipeline run.** Nothing in these
   ACs contradicts that; the phasing decision belongs to Checkpoint 4.
