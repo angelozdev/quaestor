@@ -23,7 +23,7 @@
 
 ## ADR-002 — Hybrid budget: envelopes with rollover + safe-to-spend
 
-**Status:** accepted · **Supersedes** the flat budget from the original spec (§6, P4)
+**Status:** accepted, **amended by ADR-037** (feature 003, 2026-08-04) — the envelope becomes the *fund* and the rollover becomes per-fund rather than global; the hybrid stance survives, the two mechanisms become one · **Supersedes** the flat budget from the original spec (§6, P4)
 
 **Context.** The original spec modeled an LM-style budget: category×month, amount vs actual expense, % used. That is exactly what the user already has in LM; it doesn't differentiate.
 
@@ -39,7 +39,7 @@
 
 ## ADR-003 — safe-to-spend = unassigned money
 
-**Status:** accepted
+**Status:** **superseded by ADR-037** (feature 003, 2026-08-04) — "unassigned money" required a monthly assignment ritual that was never performed once in the app's history; the headline is now income minus what every fund's rule asks
 
 **Context.** With two layers (envelopes + global number) there is a risk of **counting the same money twice**: the unspent money that rolls over in an envelope AND counts as "free." A single source of truth is needed.
 
@@ -64,7 +64,7 @@ forecast income for the month
 
 ## ADR-004 — The safe-to-spend income is forecast (expected)
 
-**Status:** accepted
+**Status:** accepted, **split and finally built by ADR-037** (feature 003, 2026-08-04) — **not** superseded. Its forecast clause is split across two numbers (the money available counts income only in the month it is due; the earning rate smooths it), and its reconciliation clause — *"corrected to actual as transactions post, counting each income exactly once"* — is implemented for the first time, seven months after acceptance (consolidation C17)
 
 **Context.** safe-to-spend depends on how much money there is. With variable income, a forecast lies until the money arrives; with cash-on-hand you can't plan the month until the paycheck lands.
 
@@ -92,7 +92,7 @@ forecast income for the month
 
 ## ADR-006 — Flexible goals (it proposes + you confirm), not forced saving
 
-**Status:** accepted · **Changes** the stance of the original spec (§6, P4: auto-transferred contribution on rollover)
+**Status:** **superseded by ADR-037** (feature 003, 2026-08-04) — goals disappear as a concept; a goal is a fund with a target and a date, and it names no account · **Changes** the stance of the original spec (§6, P4: auto-transferred contribution on rollover)
 
 **Context.** The original spec had `close_month` auto-create the `GoalContribution` + transfer: the goal paid itself like a bill. Risk: a tight month sneaks in an automatic transfer that leaves you in the red.
 
@@ -218,6 +218,8 @@ forecast income for the month
 
 ## ADR-015 — Source account for goal contributions: global (Settings)
 
+**Note (2026-08-04):** moot under ADR-037 — the goal transfers this setting existed for are gone. The setting itself stays: manual transfers still use it.
+
 **Status:** accepted (case A3)
 
 **Context.** A goal contribution is an internal transfer: the goal defines the **destination** account (savings), but the **source** account the money comes from was still undefined.
@@ -232,7 +234,7 @@ forecast income for the month
 
 ## ADR-016 — Optional envelopes (not "every dollar a job")
 
-**Status:** accepted (case A4)
+**Status:** accepted (case A4), **amended by ADR-037** (feature 003, 2026-08-04) — "optional envelopes" becomes "optional funds" and `unbudgeted_spending` becomes *spending in categories no fund covers*. The principle is unchanged and is why the headline stays meaningful instead of tending to zero
 
 **Context.** Should every category with spending have an envelope (YNAB "every dollar a job"), or only some?
 
@@ -584,3 +586,69 @@ Money invisible to every report, posted and confirmed: **$2.072.854 COP + US$7.4
 - Uncategorised is no longer a state the data can reach, so per-category reports, monthly averages and any future envelope see every peso. `unbudgeted_spending` (ADR-016) is untouched and keeps its meaning — a category **without an envelope** is still unbudgeted; what disappears is money with **no category at all**. The two were never the same thing.
 - The historical 131 rows were resolved by hand before the rule turned on, after a fresh backup (`quaestor-local-2026-08-02.dump`, ADR-0030): 101 by setting the 10 recurring items that lacked a category, 30 individually, with seven new categories created (🎁 Bonos, 💰 Rendimientos, 💳 Cashback, 🏦 Comisiones bancarias, 💸 Impuestos, 🔧 Mantenimiento Carro, 🧽 Lavado Carro).
 - **Out of scope, and stated so it is not mistaken for an oversight:** re-categorising movements that already carry a category. Notably the 24 rows in `🔄 Payment / Transfer` that are typed as expenses but are not spending (`Ubidots (salario) -$6.223.101`, `Tyba -$29.084.436`, loans, Bitcoin) — the owner's workaround for the missing transfer category, which alternative (C) will decide.
+
+---
+
+## ADR-037 — Envelopes and goals collapse into one thing, the fund; and the month shows two numbers, not one
+
+**Status:** accepted (feature 003, 2026-08-04) · **Supersedes** ADR-003 (safe-to-spend = unassigned money) and ADR-006 (flexible goals) · **Amends** ADR-002 and ADR-016 · Technical detail in `docs/adr/0043` and `docs/adr/0044`
+
+**Context.** ADR-002 gave Quaestor two layers: per-category envelopes with rollover, and a global safe-to-spend on top. ADR-006 added a third mechanism, the goal, with its own table, its own screen and a savings account it forced the user to link.
+
+Measured against production on 2026-08-02:
+
+- **Zero envelopes have ever been created.** Not one `Budget` row in the app's history. The differentiator ADR-002 named has no users.
+- **One goal, zero contributions**, and it is broken in the exact way the design predicts:
+
+  ```
+  Goal "Korea"        $0 of $10.000.000      0%    ← what the app shows
+  Account 🇰🇷 Korea    $14.659.572                  ← what actually exists
+  ```
+
+  Progress counts `GoalContribution` rows instead of the balance of the account the goal demanded. Three proposed transfers sit unconfirmed. The owner's correction during AC discovery is the whole point: *"olvida la cuenta"* — the $10.000.000 exist and have simply never been registered, and they are waiting for this feature.
+- **The lumpiness is real and large.** $7.000.000 car insurance and $447.300 SOAT, both annual, land as a single crater; a US$2.847 quarterly bonus lands as a spike.
+
+The reason the envelope stayed empty is not reluctance to configure. YNAB and Actual both require a **monthly ritual** — a button that distributes money into categories — and Quaestor copied the shape without asking whether a single user would press it every month for years. The answer, in seven months of data, is no.
+
+**Decision.** **One noun: the fund.** A fund lives on one expense category, carries a **funding rule** and a start month, and *asks* for an amount each month. That ask is subtracted from the money available. A goal is a fund with a target and a date; an envelope is a fund with a fixed amount. There is no separate goals feature and no separate envelope.
+
+- **The rule is the number — there is no monthly ritual.** Once configured, a fund costs zero clicks per month forever. This is the load-bearing decision: any design needing a recurring manual action ends up empty again.
+- **Four rules.** `fixed` (an amount the owner names) · `average` (what the category actually cost, over a window the owner chooses) · `from-recurring` (every obligation filed under the category, added up) · `target-by-date` (an amount by a date — the former goal).
+- **The fund never names an account.** Where the money sits and what it is for are orthogonal. A fund that already holds money is told so once, at creation, and never re-reads anything afterwards.
+- **The fund is whole the month *before* the charge.** The SOAT charging 2027-05-02 from a November start asks $74.550 over six months, not $63.900 over seven — otherwise the money is still short on the morning it is taken.
+- **A dated obligation divides by the months that remain, and recomputes.** Not a fixed ÷12. Putting in more one month lowers the next; a fund that gets drained raises its ask so the charge is still met.
+- **Rollover is per fund.** 🍽️ Restaurantes resets each month; 💻 Tecnología accumulates. The choice is offered only where both make sense — a fund saving toward a date always accumulates, and is not asked.
+
+**And the month shows two numbers, never merged:**
+
+| | answers | smoothed? |
+|---|---|---|
+| **the money available this month** | *how much can I spend* — a balance | **no** |
+| **earning rate / cost rate / margin** | *does my life fit my income* — rates | **yes** |
+
+```
+money available = income this month − Σ what every fund asks − what no fund covers
+```
+
+Income counts in the month it is **due**, and never before: the quarterly bonus contributes nothing to August and all of itself to September. Once real money lands in an income category, the guess for that category is dropped and only what arrived counts — **which is ADR-004's reconciliation clause, accepted seven months ago and never built.**
+
+The rates are the other question, and there smoothing is correct: the quarterly bonus contributes a third of itself to each of three months. YNAB ships the same split — *Cost to Be Me* against *Ready to Assign* — and puts expected income in the first, never the second.
+
+**Alternatives rejected.**
+
+- **(A) Keep envelopes and add funds beside them.** Two ways to depress the same headline, which is already a live defect: an envelope can be assigned to an income category today and depresses safe-to-spend permanently with no way to clear it. A `fixed` accumulating fund *is* an envelope; keeping both is keeping the bug.
+- **(B) Smooth the income into the money available too** — the owner's first choice, reopened after `acs.md` was written and argued in full. It was not rejected but **moved**. Smoothing an expense forward errs safe (money held that may not be needed); smoothing income forward errs unrecoverably (money spent that never arrived). The question the owner actually wanted answered — *"cuánto estoy ganando mes a mes"* — is a rate, and it now has its own number where smoothing is right.
+- **(C) Auto-propose a full set of funds** from the recurring items and spending history. Reversed by the owner: the app starts empty and every fund exists because the owner made it. Once created, the rule still computes its own amount — that is the rule working, not a proposal. Auto-proposal stays available if adoption stalls.
+- **(D) A configurable average** (divide by months-with-data vs months-in-window). Two reasons a month can be empty were separated instead: a month the app has **no data for** is excluded from the division; a month that existed with nothing spent is a real zero and counts. With that separated, the remaining "choice" was two different questions, and the other one is already reachable — it is the `fixed` rule.
+
+**Consequences.**
+
+- **ADR-003 is replaced.** Safe-to-spend as *unassigned money* required the assignment ritual to mean anything. The money available is now income minus what the rules ask, and it **shows its work**: the number opens into the income it counted, each fund by name and amount, and the uncovered spending. Nothing in it is unattributable.
+- **ADR-006 is removed entirely.** The goals screen, the goal records and the month-end routine that proposed one transfer per goal all go. Nothing in the app afterwards requires a savings account to express an intention. The three unconfirmed Korea proposals are deleted with them — they were proposals from a routine that no longer exists and never moved money.
+- **ADR-002 is amended:** the envelope becomes the fund and the rollover becomes per-fund rather than global. The hybrid stance survives; the two mechanisms become one.
+- **ADR-016 is amended:** "optional envelopes" becomes "optional funds", and `unbudgeted_spending` becomes *spending in categories no fund covers*. The principle is unchanged and is why the headline stays meaningful instead of tending to zero.
+- **ADR-004 is NOT superseded.** Its forecast clause is split across the two numbers, and its reconciliation clause is finally built.
+- **ADR-005 survives unchanged** and is relied on directly: spending past a fund takes only the excess from the money available, and a fund never carries a negative balance into the next month.
+- **ADR-015** (global source account for goal contributions) becomes moot with the goal transfers it existed for.
+- **Nothing is frozen.** Asking for August's available money after switching off an income in October gives August's figure *without* that income. This is where Quaestor departs from both YNAB and Actual, where an assignment is a stored fact. The cost, chosen knowingly: a screenshot of August's number will not always match the app later.
+- **A destructive migration on real data** — three tables and one column dropped, three unconfirmed proposals deleted. It runs behind a fresh backup and explicit human authorisation (charter §7, ADR-0030).

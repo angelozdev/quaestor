@@ -2,6 +2,8 @@
 
 Signed off by Angelo on 2026-07-28 (DAE onboarding, Checkpoint 0).
 §2 amended 2026-07-29 — ADR-0030 alignment (cleanup C6), signed off by Angelo.
+§4 amended 2026-08-04 — feature 003 collapses envelopes and goals into the fund
+(product ADR-037, technical ADR-0043/0044), signed off by Angelo.
 
 ## 1. Methodology
 
@@ -53,9 +55,10 @@ Signed off by Angelo on 2026-07-28 (DAE onboarding, Checkpoint 0).
 ## 4. Scope
 
 - **In:** personal finance for a single user, local-only. Differentiators:
-  hybrid budget — per-category envelopes with rollover + global safe-to-spend
-  (product ADR-002/003) — and an agent-native MCP layer over an owned schema
-  (product ADR-001).
+  the **fund** — one noun replacing envelopes and goals, where a funding rule
+  *is* the monthly number and no monthly ritual exists (product ADR-037,
+  amending ADR-002/016 and superseding ADR-003/006) — and an agent-native MCP
+  layer over an owned schema (product ADR-001).
 - **Out:** multi-tenant, public deployment, TLS termination, mobile apps.
 
 ## 5. Agent team
