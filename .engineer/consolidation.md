@@ -435,3 +435,38 @@ pipeline generation → tests green. Bounded, one feature per task.
   scenarios only cover target = start and target = start + 12. Nothing tests
   target = start + 1. It is the same class feature 008 recorded when the
   browser found two defects its tests did not.
+
+- C21. **The implausible-target warning reaches the owner in English, with the
+  figure in raw cents.** Found in the browser on 2026-08-04 while confirming
+  C20's fix, and invisible to every test: the unit tests assert
+  `preview.warning is not None`, never what it says.
+
+  The app is Spanish throughout. `services/funds._warning` builds the string
+  server-side in English and `funds/page.tsx:303` renders `preview.warning`
+  verbatim, so the owner sees, in red, above the *Crear de todos modos* button:
+
+  > `2026-09 leaves no month to save in, so the whole target falls on 2026-08: it would ask 100000000 at once`
+
+  Two defects in one line. **The language** — the only English string a Spanish
+  user meets in the funds flow. **The figure** — `100000000` is $1.000.000 in
+  cents, printed with no separator, no currency and no decimal, next to a form
+  where the owner typed `1000000`. The two numbers differ by 100× on screen at
+  the exact moment the app is asking them to reconsider.
+
+  C20 makes this worse, not better: the warning now fires on a case it used to
+  skip, so it is seen more often. Both belong to `_warning`; the frontend is
+  only the messenger. Whoever fixes it should decide where refusal text is
+  worded — the same question every other server-side message raises.
+
+- C22. **Duplicate category names survive the rule that forbids them.**
+  `services/categories.py:92` refuses a second category of the same name *and
+  direction*, but the check is service-side only: no unique index, no backfill.
+  The dev sandbox carries two active expense categories both named
+  "Restaurantes" — one grouped in "Estilo de vida", one ungrouped — which the
+  app would now refuse to create.
+
+  Seen while picking a category for C19's QA: the *Nueva transacción* dropdown
+  offers "Restaurantes" twice with nothing to tell them apart, and the fund is
+  on only one of them. Picking wrong silently sends the expense past the fund.
+  Whether the local production database carries the same duplicates is
+  **unverified** — worth a query before it matters.
