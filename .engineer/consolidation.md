@@ -455,8 +455,23 @@ pipeline generation → tests green. Bounded, one feature per task.
 
   C20 makes this worse, not better: the warning now fires on a case it used to
   skip, so it is seen more often. Both belong to `_warning`; the frontend is
-  only the messenger. Whoever fixes it should decide where refusal text is
-  worded — the same question every other server-side message raises.
+  only the messenger.
+
+  **It is systemic, and that was verified rather than assumed.** Creating a
+  category that already exists shows the owner `an expense category named
+  'Transporte' already exists` — the same English, from a different module,
+  through a different path. `api/errors.py:59` puts `str(exc)` on the wire for
+  **102 raise sites, 69 distinct messages**, concentrated in categories (21),
+  recurring (17), transactions (14), planned (13) and funds (11). ADR-0001
+  fixed English for all code and put user-facing copy explicitly out of scope;
+  no ADR ever picked it up.
+
+  **Promoted 2026-08-04 to roadmap `id:error-contract`** — the owner chose
+  codes-plus-data with the mapping in the frontend. The fund warning is the
+  pilot: it is not an exception but a `FundPreview.warning` field in a 200
+  response, and its number already travels beside it as `would_ask`, so it
+  proves the pattern at the lowest cost. MCP is out of scope — it has its own
+  `domain_error_text` and never crosses this seam.
 
 - C22. **Duplicate category names survive the rule that forbids them.**
   `services/categories.py:92` refuses a second category of the same name *and
