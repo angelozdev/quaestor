@@ -2,7 +2,7 @@
 title: "Sinking funds: envelope funding rules + smoothed monthly available"
 slug: sinking-funds
 number: 003
-status: ready
+status: done
 autonomy_level: medium
 branch: sinking-funds
 area: budget
@@ -13,6 +13,7 @@ roadmap_ref: sinking-funds
 relevant_adrs: [0006, 0028]
 created: 2026-07-28
 promoted: 2026-08-02
+shipped: 2026-08-04
 intake: discuss
 ---
 
