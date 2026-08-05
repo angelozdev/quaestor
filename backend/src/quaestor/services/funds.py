@@ -72,6 +72,7 @@ class _Month:
 
     opening: int
     holds: int
+    spent: int
     ask: _Ask
     ask_before_spending: _Ask
 
@@ -241,7 +242,13 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
     year_month = agg.year_month
     month, opening = _fold_start(fund, year_month)
     if year_month < month:
-        return _Month(opening=0, holds=0, ask=_Ask(0), ask_before_spending=_Ask(0))
+        return _Month(
+            opening=0,
+            holds=0,
+            spent=agg.spent_in(fund.category_id, year_month),
+            ask=_Ask(0),
+            ask_before_spending=_Ask(0),
+        )
     while True:
         spent = agg.spent_in(fund.category_id, month)
         holds = fund_holds_calc(opening, spent)
@@ -250,6 +257,7 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
             return _Month(
                 opening=opening,
                 holds=holds,
+                spent=spent,
                 ask=ask,
                 ask_before_spending=_ask(agg, fund, month, max(opening, 0)),
             )
@@ -260,6 +268,27 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
 def _accumulation_is_implied(fund: Fund) -> bool:
     """A fund saving toward a date always accumulates and is never asked (AC-8)."""
     return fund.rule in _DATED_RULES
+
+
+def _overspill(walked: _Month) -> int:
+    """What the month spent past everything the fund had for it (AC-13).
+
+    One reading, two readers: the money the overspill costs the month, and
+    whether the fund lost ground keeping it.
+    """
+    return uncovered_excess_calc(walked.spent, walked.opening, walked.ask.amount)
+
+
+def _on_track(walked: _Month) -> bool:
+    """Whether the month left the fund no worse than not touching it would (product ADR-040).
+
+    A fund loses ground two ways, and a rule that can only lose it one way
+    still has to be able to say so: the spending pushed up what it must ask,
+    or the spending went past everything it had. Asking only the first leaves
+    a fixed or averaged fund unable to ever be behind — it asks the same
+    however much is spent — and leaves any fund opening at zero the same way.
+    """
+    return walked.ask.amount <= walked.ask_before_spending.amount and _overspill(walked) == 0
 
 
 def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
@@ -276,7 +305,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         holds=walked.holds,
         accumulates=fund.accumulates,
         accumulation_is_implied=_accumulation_is_implied(fund),
-        on_track=walked.ask.amount <= walked.ask_before_spending.amount,
+        on_track=_on_track(walked),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
@@ -384,12 +413,7 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
         if item.type == TxType.expense and item.category_id not in funded
     )
     planned = sum(agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded)
-    excess = sum(
-        uncovered_excess_calc(
-            agg.spent_in(fund.category_id, agg.year_month), walked[fund.id].opening, walked[fund.id].ask.amount
-        )
-        for fund in agg.funds
-    )
+    excess = sum(_overspill(walked[fund.id]) for fund in agg.funds)
     return spent + obligations + planned + excess
 
 

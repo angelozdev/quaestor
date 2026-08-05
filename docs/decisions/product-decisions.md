@@ -707,3 +707,33 @@ The match is **per turn**, not per obligation or per category: a posted expense 
 - **The number moves when you register.** Confirming a bill at its real amount changes the money available on the spot. That is the point — the figure tracks reality rather than a declaration.
 - **A fund absorbs this before it reaches the headline.** In a category *with* a fund, only spending past what the fund had set aside reaches the money available (AC-13), so this rule bites hardest on categories with no fund — which is every category until the owner creates one.
 - **Pinned by the contract, not only by unit tests.** Six unit tests plus **AC-29**, three scenarios the owner authorised adding to the approved `spec.md`. They were run against the code they replaced and all three fail there, so they can actually catch a regression — the check AC-7 never had, and the reason that AC is filed as a defect.
+
+## ADR-040 — A fund is behind when the month left it worse than not touching it would
+
+**Status:** accepted (feature 003, 2026-08-04) · **Completes** ADR-037's fund status · Closes consolidation defect C19
+
+**Context.** The funds table shows a badge per fund: *En camino* in green, *Atrasado* in red. Nothing ever decided what it means. It was a scope bullet in `feature.md` that Checkpoint 2 never turned into an acceptance criterion, so the implementer had to invent a threshold, and the one it invented can barely fire.
+
+The badge asked one question: *did this month's spending push up what the fund must ask?* That reading is real and the contract already pins it — vacía un fondo de $3.600.000 de seguro y la cuota sube de $600.000 a $1.200.000, so it is behind. But it is the only question asked, and two of the four funding rules cannot answer it:
+
+- **A fixed fund asks the same however much is spent.** $300.000 a month whether the category spent nothing or $900.000. Both sides of the comparison are equal, so the badge is green — including the month the fund empties out and spills over.
+- **An averaged fund is the same**, its ask coming from completed months only.
+- **Any fund opening at zero is the same**, because a fund holding nothing cannot hold less. That is every fund's first month, every month of a fund that resets, and every month after one is drained.
+
+Seen live: a fund overdrawn by 350% with the green badge on, and the report's counter reading *cero atrasados*.
+
+**Decision.** **A fund is behind when the month left it worse than not touching that category would have.** A fund can lose ground two ways, and both count:
+
+1. the spending pushed up what the fund must ask, or
+2. the spending went past everything the fund had — what it opened with plus what it asks.
+
+Green means neither happened. The second reading is the same figure the money available already uses for the overspill (AC-13), so **the badge turns red exactly when the fund starts costing the month money** — the badge and the headline number can no longer disagree.
+
+**Alternatives rejected.** (A) **Replace the ask-rise reading with the overspill one.** Simpler and uniform, but it contradicts an approved scenario: raiding a $3.600.000 insurance fund spills nothing (the money was there) yet doubles the cuota, and the owner's contract already calls that behind. Tried, and the acceptance suite refused it. (B) **Ritmo — compare what the fund holds against what it should hold by now.** The sharpest reading for a dated goal, but undated funds have no target to fall behind of, so half the funds would need the badge hidden and the owner would have two meanings to hold. Kept on the table for the *metas* feature, where every fund has a date by construction. (C) **Drop the badge.** Honest, and rejected: the case that hurts — spending more than the sobre had — is exactly what the owner wants flagged.
+
+**Consequences.**
+
+- **The badge can now be red for every rule.** Fixed and averaged funds get their first way to fail.
+- **The counter is trustworthy.** *Atrasados* on the report counts the funds that actually cost the month money.
+- **Not a pace warning.** A goal quietly slipping behind schedule while never overspending still shows green. That is the trade named in alternative (B) and is deliberate — the fix belongs to *metas*.
+- **No new reading of the database.** The overspill was already computed for the money available; the fund's fold now hands the same figure to both, so the badge costs nothing and the two can never drift.

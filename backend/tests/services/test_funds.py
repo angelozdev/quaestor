@@ -199,6 +199,43 @@ def test_a_drained_fund_raises_its_ask_and_says_it_is_behind(session):
     assert status.on_track is False
 
 
+def test_a_fund_that_spent_past_everything_it_had_says_it_is_behind(session):
+    cat = _category(session)
+    fund = funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=350_000_00)
+    _spend(session, cat, 900_000_00, date(2026, 11, 20))
+    assert funds.fund_status(session, fund.id, "2026-11").on_track is False
+
+
+def test_a_fund_that_spent_every_peso_it_had_and_no_more_is_on_track(session):
+    cat = _category(session)
+    fund = funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=350_000_00)
+    _spend(session, cat, 650_000_00, date(2026, 11, 20))
+    assert funds.fund_status(session, fund.id, "2026-11").on_track is True
+
+
+def test_a_fund_opening_at_zero_can_still_say_it_is_behind(session):
+    cat = _category(session)
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=8_000_000_00,
+        target_month="2028-12",
+        start_month="2026-11",
+    )
+    _spend(session, cat, 2_000_000_00, date(2026, 11, 20))
+    assert funds.fund_status(session, fund.id, "2026-11").on_track is False
+
+
+def test_a_fund_that_has_not_started_yet_does_not_swallow_the_spending(session):
+    cat = _category(session)
+    fund = funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2027-01")
+    _spend(session, cat, 900_000_00, date(2026, 11, 20))
+    assert funds.fund_status(session, fund.id, "2026-11").on_track is False
+
+
 def test_a_charge_still_standing_this_month_is_the_one_the_fund_is_filling(session):
     cat = _category(session)
     _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")

@@ -364,8 +364,24 @@ pipeline generation → tests green. Bounded, one feature per task.
   One product answer unblocks both: when an obligation declares one amount and
   posts another, does the month count the declared, the posted, or the greater?
 
-- C19. **"En camino" is structurally true whenever a fund opens the month
-  holding nothing.** `funds._walk` computes the reference figure as
+- C19. ~~**"En camino" is structurally true whenever a fund opens the month
+  holding nothing.**~~ **CLOSED 2026-08-04** — product ADR-040: a fund is behind
+  when the month left it worse than not touching that category would have, which
+  happens two ways — the spending pushed up what it must ask, or it went past
+  everything the fund had. The second reading is the same overspill figure the
+  money available already uses, so the badge and the headline can no longer
+  disagree. Five unit tests, one per way to lose ground plus the boundary and
+  the not-yet-started fund.
+
+  **Replacing the ask-rise reading was tried first and refused by the contract**
+  — `spec.md`'s *"Spending the fund on something else raises what it asks next"*
+  asserts a raided fund is behind though it spilled nothing. Completing the
+  reading rather than swapping it keeps that scenario green.
+
+  **AC-7 stays open**, split off below: it is the same hole from the spec side
+  and needs the owner's permission to touch `spec.md`. Original finding follows.
+
+  `funds._walk` computed the reference figure as
   `_ask(..., max(opening, 0))`; when opening is zero that is the same call as
   the real ask, so the two always coincide and `on_track` can only be `True`.
   Reported first as affecting the two undated rules, it is wider: it also hits
