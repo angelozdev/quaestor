@@ -204,9 +204,12 @@ def _ask_average(agg: MonthAggregate, fund: Fund, year_month: str) -> _Ask:
 
 
 def _ask(agg: MonthAggregate, fund: Fund, year_month: str, holds: int) -> _Ask:
-    """What the fund asks in `year_month`, given what it holds by then."""
-    if year_month < fund.start_month:
-        return _Ask(0)
+    """What the fund asks in `year_month`, given what it holds by then.
+
+    Never asked about a month before the fund starts: the fold begins at
+    `max(anchor, start)` and only moves forward, so `_walk`'s own early return
+    is the one that answers that case.
+    """
     if fund.rule == FundRule.fixed:
         return _Ask(fund.amount or 0)
     if fund.rule == FundRule.average:
