@@ -92,6 +92,27 @@ def _recurring_id(session, name):
     return session.exec(select(RecurringItem).where(RecurringItem.name == name)).first().id
 
 
+def _post_the_charge(session, name, on, amount=None):
+    """Take one obligation's turn all the way to posted, at its real amount.
+
+    The path a real charge takes: the engine materializes the turn at what the
+    obligation declared, and the owner confirms it with what the bill actually
+    said.
+    """
+    from quaestor.domain.models import Transaction, TxStatus
+    from quaestor.services.occurrences import materialize_due
+    from sqlmodel import select
+
+    materialize_due(session, on)
+    charge = session.exec(
+        select(Transaction).where(
+            Transaction.recurring_id == _recurring_id(session, name),
+            Transaction.status == TxStatus.planned,
+        )
+    ).first()
+    return planned.confirm_payment(session, charge.id, amount=amount)
+
+
 def _account_for(session, currency):
     from quaestor.services import accounts
 
@@ -551,6 +572,68 @@ def test_an_obligation_no_fund_covers_is_uncovered_too(session):
     view = funds.available(session, "2026-11")
     assert view.uncovered == 1_000_000_00
     assert view.free == 4_000_000_00
+
+
+def test_a_charge_that_posts_above_its_promise_costs_the_month_what_it_really_was(session):
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
+    _post_the_charge(session, "EPM", date(2026, 11, 12), amount=250_000_00)
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 250_000_00
+    assert view.free == 4_750_000_00
+
+
+def test_a_charge_that_posts_below_its_promise_gives_the_difference_back(session):
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
+    _post_the_charge(session, "EPM", date(2026, 11, 12), amount=150_000_00)
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 150_000_00
+    assert view.free == 4_850_000_00
+
+
+def test_an_obligation_switched_off_after_paying_still_costs_the_month(session):
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
+    _post_the_charge(session, "EPM", date(2026, 11, 12))
+    recurring.deactivate_recurring(session, _recurring_id(session, "EPM"))
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 200_000_00
+    assert view.free == 4_800_000_00
+
+
+def test_a_charge_still_ahead_keeps_counting_what_it_promised(session):
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 200_000_00
+    assert view.free == 4_800_000_00
+
+
+def test_a_posted_charge_is_counted_once_not_twice(session):
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
+    _post_the_charge(session, "EPM", date(2026, 11, 12))
+    view = funds.available(session, "2026-11")
+    assert view.uncovered == 200_000_00
+
+
+def test_only_the_turn_that_posted_stops_being_promised(session):
+    from quaestor.domain.models import IntervalUnit
+    from quaestor.domain.recurrence import due_dates
+
+    _salario(session)
+    cat = _category(session, "Servicios")
+    _obligation(session, cat, 100_000_00, date(2026, 11, 3), unit="week", count=1, name="Aseo")
+    _post_the_charge(session, "Aseo", date(2026, 11, 3), amount=120_000_00)
+    turns = len(due_dates(date(2026, 11, 3), None, IntervalUnit.week, 1, date(2026, 11, 1), date(2026, 11, 30)))
+    assert turns > 1
+    assert funds.available(session, "2026-11").uncovered == 120_000_00 + (turns - 1) * 100_000_00
 
 
 def test_the_breakdown_names_every_fund_and_adds_up_exactly(session):

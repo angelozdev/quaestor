@@ -677,3 +677,33 @@ The friction is accepted because it **names its own expiry**: a job that fetches
 - **The accepted cost:** a month recorded entirely in pesos cannot be read until a rate is set. The owner knows this and chose it.
 - **The 92 approved scenarios stand untouched.** They were silent about the rate, not dependent on its absence — every scenario whose subject *is* the missing rate says so explicitly. The acceptance suite seeds a rate as background state, exactly as a running app carries one.
 - **The expiry is a roadmap item**, not a promise in prose: `daily-trm-fetch`. When it ships, this decision's friction disappears without the rule changing.
+
+---
+
+## ADR-039 — A bill that arrives for a different amount costs what it really cost
+
+**Status:** accepted (feature 003, 2026-08-04) · **Mirrors** ADR-004's reconciliation clause onto the expense side · Technical detail in `docs/adr/0044`
+
+**Context.** Feature 003 made the month's income stop guessing the moment money lands: a salary expecting $5.000.000 where $4.200.000 arrived counts $4.200.000, not both. The expense side was never given the same rule, and nobody noticed until Checkpoint 7.
+
+Recurring expenses declare an amount. Real bills do not honour it — the electricity bill declared at $200.000 arrives at $250.000. The app was subtracting the **declared** figure from the money available and skipping the posted movement entirely, on the assumption that the declaration already accounted for it.
+
+Two ways that loses money, both **upward**, which is the direction that gets spent before it can be corrected:
+
+- the bill posts at $250.000 → the headline is $50.000 too high;
+- the owner switches the obligation off after paying → the whole $200.000 disappears from the month, and `uncovered` reports $0,00 for a month that really spent $200.000.
+
+**Decision.** **A turn that has posted is counted at what actually left the account; a turn still ahead is counted at what its obligation declared.** Every posted expense counts exactly once, at its real figure.
+
+The owner, choosing between three framings put to him with numbers: *"Option 2"* — what really happened.
+
+The match is **per turn**, not per obligation or per category: a posted expense carries the `recurring_id` of the turn that produced it, so each posted charge replaces exactly one promise. A weekly obligation with one charge posted and three ahead counts one real amount plus three declared ones. Income cannot do this — a posted income carries no link back to the obligation that expected it — which is why its boundary stays per category.
+
+**Alternatives rejected.** (A) **Always the declared amount** — what the defect did. Stable, predictable, and wrong every time reality differs. (B) **The greater of declared and posted** — never overstates, but hides money from the owner in every month a bill comes in cheap: pay $150.000 against a $200.000 declaration and the app keeps $50.000 you actually have. It also needs two rules where one now serves, since the income side already reconciles to actual.
+
+**Consequences.**
+
+- **One rule for money in and money out.** *What really happened if it happened; what was expected if not.* The two sides of the headline now read the same way, which is one thing to remember instead of two.
+- **The number moves when you register.** Confirming a bill at its real amount changes the money available on the spot. That is the point — the figure tracks reality rather than a declaration.
+- **A fund absorbs this before it reaches the headline.** In a category *with* a fund, only spending past what the fund had set aside reaches the money available (AC-13), so this rule bites hardest on categories with no fund — which is every category until the owner creates one.
+- **No acceptance scenario yet.** The behaviour is pinned by six unit tests. Writing the scenario means editing an approved `spec.md`, which is the owner's call; until then the acceptance contract would not catch a regression here.

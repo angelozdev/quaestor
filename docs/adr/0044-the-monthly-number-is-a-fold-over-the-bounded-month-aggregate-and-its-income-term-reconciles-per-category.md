@@ -1,11 +1,13 @@
 # 0044. The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-04
-- **Acceptance withheld:** 2026-08-04 (feature 003 Checkpoint 7). The withdrawn
-  lazy-TRM amendment below is sound and agrees with product ADR-038, but the
-  `uncovered` term does not describe what was built — see *A gap on the expense
-  side*, below. Closing that is the condition of acceptance.
+- **Accepted:** 2026-08-04, after the gap that held it was closed. Checkpoint 7
+  withheld acceptance because the `uncovered` term described behaviour the code
+  did not implement; product ADR-039 decided the rule, the code now matches the
+  paragraph, and six unit tests pin it. One debt is carried openly rather than
+  waived: the behaviour has no acceptance scenario yet, because adding one means
+  editing an approved `spec.md`.
 - **Deciders:** Angelo
 - **Supersedes:** — (extends 0028; **0031 stands unamended** — see the
   withdrawn amendment below)
@@ -146,43 +148,31 @@ free(M)  = income(M) − Σ funds asks(M) − uncovered(M)
 ```
 
 `uncovered(M)` is everything no fund covers: posted spending in categories with
-no fund, obligations due in categories with no fund, and the excess past a
-fund's holdings (AC-13 — only the excess leaves the money available, never the
-whole amount). One term, because the breakdown must add up exactly:
+no fund, what those categories' obligations still promise for turns that have
+**not** posted, planned payments no fund covers, and the excess past a fund's
+holdings (AC-13 — only the excess leaves the money available, never the whole
+amount). One term, because the breakdown must add up exactly:
 `income − Σ asks − uncovered = free` is asserted by AC-10.
 
-#### A gap on the expense side, found 2026-08-04 at Checkpoint 7
+**The expense term stops guessing turn by turn, mirroring the income term.** A
+charge that posted is counted at what actually left the account; a turn still
+ahead carries what its obligation declared. So an obligation declaring
+`200.000` whose bill posts at `250.000` costs the month `250.000`, one that
+posts at `150.000` costs `150.000`, and one switched off *after* its charge
+posted still costs the `200.000` that really left. Every posted expense is
+counted exactly once, at its real figure.
 
-The income term above stops guessing the moment money lands. **The expense term
-does not, and the asymmetry was never declared.**
+The reconciliation is finer here than on the income side, and deliberately: a
+posted expense carries the `recurring_id` of the turn that produced it, so each
+posted charge replaces exactly one promised turn. Income has no such link,
+which is why its boundary is per category (above). A weekly obligation with one
+turn posted and three ahead therefore counts one real amount plus three
+promises.
 
-As built, `uncovered` skips every posted movement that carries a recurring
-link, on the assumption that the obligations term already accounts for it — but
-that term sums what each obligation **promises**, never what actually posted.
-Two consequences, both in the direction that gets spent:
-
-- an obligation promising `$200.000` whose charge posts at `$250.000` leaves
-  `$50.000` out of the headline entirely;
-- switch that obligation off *after* its charge has posted and the whole
-  `$200.000` leaves with it, so the money available reads `$200.000` **too
-  high**.
-
-This contradicts AC-9 in its own words — *"minus spending in categories no fund
-covers"* — and it contradicts this ADR's own second decision driver, that the
-money available must never count money that has not arrived, *because an error
-here is spent before it can be corrected*. AC-16 justifies dropping an
-obligation's **promise** when the owner switches it off; it does not justify
-dropping a **posted movement**.
-
-The suite is green over it because no approved scenario records a recurring
-charge, in a category with **no fund**, posting at anything other than the
-amount promised.
-
-**This is why this ADR is not accepted at Checkpoint 7.** Either the expense
-term reconciles the way the income term does, or the asymmetry is written here
-as a chosen boundary the way the per-category one above is. Both move the
-number the owner reads every day, so the choice is the owner's, and it needs an
-acceptance criterion and a scenario before any code moves.
+Recorded as product ADR-039, decided by the owner on 2026-08-04. The
+alternatives — always the declared amount, or the greater of the two — were
+weighed and rejected: the first is what the defect did, and the second hides
+money from the owner in every month a bill comes in cheap.
 
 Separately, and never mixed in:
 
@@ -196,36 +186,32 @@ A quarterly `$3.000.000` bonus contributes `$1.000.000` to the earning rate in
 every month of its cycle, and `$0` to the money available until the month it is
 due. The gap between the two numbers carries information rather than noise.
 
-#### A gap on the expense side, found at Checkpoint 7
+#### The gap this ADR was held over, and how it closed
 
-**The paragraph above describes what `uncovered(M)` should be. It is not what
-`services/funds._uncovered` computes, and that is why this ADR is not accepted
-yet.**
-
-Two asymmetries, both on the expense side, both against the income rule this
-same ADR states one section earlier — *once money lands in an income category,
-that category stops guessing*:
-
-- A **posted** expense carrying a `recurring_id` is skipped from the spending
-  term on the assumption that the obligations term covers it. That term sums
-  what each obligation **promised**, never what actually posted. An obligation
-  promising `200.000` whose charge posts at `250.000` leaves `50.000` off the
-  headline.
-- Switch that obligation off after its charge has posted and the promise
-  disappears with it, taking the whole `200.000` — money that really left the
-  account — out of `uncovered`. The money available then reads `200.000` too
-  high.
+Checkpoint 7 refused to accept this ADR because the paragraph above described
+an `uncovered(M)` that `services/funds._uncovered` did not compute: a posted
+expense carrying a `recurring_id` was skipped from the spending term on the
+assumption that the obligations term covered it, and that term summed what each
+obligation **promised**, never what posted. An obligation declaring `200.000`
+whose charge posted at `250.000` left `50.000` off the headline; switched off
+after posting, the whole `200.000` vanished and the money available read that
+much **too high** — the direction that is spent before it can be corrected.
 
 AC-16 justifies dropping a **promise** when an obligation is switched off. It
-does not justify dropping a **posted movement**. The fix is the income rule
-applied to expenses — actual-if-any-else-expected — but which figure the
-headline should carry is a product decision with no approved scenario behind
-it, so it is not taken here.
+never justified dropping a **posted movement**.
 
-**Condition of acceptance:** a scenario covering a recurring expense in a
-category with no fund posting at something other than its promise, and the
-`uncovered` paragraph above rewritten to match whatever that scenario decides.
-Until then this ADR describes an intention rather than the code.
+The suite was green over it because no approved scenario records a recurring
+charge, in a category with **no fund**, posting at anything other than the
+amount promised. Neither did mutation testing catch it: mutation measures
+whether tests discriminate behaviour that *exists*, and the tests pinned the
+defective behaviour, so its mutants died. A missing requirement has no mutant.
+
+Closed 2026-08-04 by the owner's decision (product ADR-039), implemented as the
+`uncovered(M)` paragraph now states, and pinned by six unit tests in
+`backend/tests/services/test_funds.py`. **Still owed: an acceptance scenario.**
+Adding one means editing an approved `spec.md`, which is the owner's to
+authorise; until it exists this behaviour is defended by unit tests alone and
+would not be caught by the acceptance contract if it regressed.
 
 ### Withdrawn: the lazy TRM. ADR-0031 stands unamended
 

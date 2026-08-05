@@ -331,7 +331,14 @@ pipeline generation → tests green. Bounded, one feature per task.
   Feature 003 owns the fix as **AC-14c**, because it replaces the headline
   outright. Filed here anyway: the defect is live today, on the shipped number,
   independent of whether 003 ships.
-- C18. **The money available reads too high when a recurring expense posts off
+- C18. ~~**The money available reads too high when a recurring expense posts off
+  its promise.**~~ **CLOSED 2026-08-04** — product ADR-039: a turn that posted
+  counts at what really left the account, a turn still ahead at what it
+  declared. Six unit tests pin it; ADR-0044 accepted. **Debt carried:** no
+  acceptance scenario yet, since writing one means editing an approved
+  `spec.md`. Original finding below.
+
+  **The money available reads too high when a recurring expense posts off
   its promise.** `services/funds._uncovered` skips posted rows carrying a
   `recurring_id`, on the assumption that the obligations term beside it already
   counts them. That term sums `_promised` — the *declared* amount — so the two

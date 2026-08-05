@@ -20,6 +20,7 @@ switching an obligation off in October gives August without it.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date as Date
 from datetime import timedelta
@@ -348,6 +349,17 @@ def _income(agg: MonthAggregate) -> int:
     return sum(arrived.values()) + sum(promised.values())
 
 
+def _unsettled_promise(agg: MonthAggregate, item: RecurringItem, posted_turns: int) -> int:
+    """What an obligation still promises, after the turns that already posted.
+
+    A turn that posted is not promised any more — it happened, and the money
+    that left is counted at its real figure instead (product ADR-039). Only the
+    turns still ahead carry the declared amount.
+    """
+    remaining = max(len(_live_turns(agg, item)) - posted_turns, 0)
+    return remaining * to_cop_cents(item.amount, item.currency, agg.trm)
+
+
 def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
     """Everything the month owes that no fund covers (ADR-0044).
 
@@ -355,13 +367,19 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
     categories with no fund, and the excess past what a fund had — only the
     excess leaves the money available, never the whole amount (AC-13).
     Splitting it would stop the breakdown adding up (AC-10).
+
+    An obligation stops guessing the moment its charge posts, the same way an
+    income category does (product ADR-039, mirroring D5): a bill declaring
+    200.000 that posts at 250.000 costs the month 250.000, and one whose
+    obligation is switched off after posting still costs what it really did.
+    Every posted expense counts once, at what left the account.
     """
     funded = {fund.category_id for fund in agg.funds}
-    loose = sum(
-        agg.to_cop_cents(tx) for tx in agg.month_expense() if tx.recurring_id is None and tx.category_id not in funded
-    )
+    posted = [tx for tx in agg.month_expense() if tx.category_id not in funded]
+    spent = sum(agg.to_cop_cents(tx) for tx in posted)
+    posted_turns = Counter(tx.recurring_id for tx in posted if tx.recurring_id is not None)
     obligations = sum(
-        _promised(agg, item)
+        _unsettled_promise(agg, item, posted_turns[item.id])
         for item in agg.active_recurring
         if item.type == TxType.expense and item.category_id not in funded
     )
@@ -372,7 +390,7 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
         )
         for fund in agg.funds
     )
-    return loose + obligations + planned + excess
+    return spent + obligations + planned + excess
 
 
 def month_available(agg: MonthAggregate) -> MonthAvailable:

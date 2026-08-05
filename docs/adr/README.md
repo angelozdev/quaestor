@@ -57,4 +57,4 @@ New ADRs are created with the `adr` skill:
 | 0041 | Category presence is a type-discriminated constraint, not a blanket NOT NULL | accepted | 2026-08-03 |
 | 0042 | A category belongs to one direction and one resolver answers which category a movement carries | accepted | 2026-08-03 |
 | 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted | 2026-08-04 |
-| 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | proposed | 2026-08-04 |
+| 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | accepted | 2026-08-04 |
