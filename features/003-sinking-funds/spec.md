@@ -161,9 +161,9 @@ Scenario: Obligations of different cycles in one category are each brought to a 
   And an account "Banco" in COP with balance 20000000.00 COP
   And an expense category "Servicios"
   And a repeating payment of 250000.00 COP to "EPM" from "Banco" every 1 month starting on 2026-01-05 in category "Servicios", waiting for approval
-  And a repeating payment of 600000.00 COP to "Antivirus" from "Banco" every 1 year starting on 2027-11-05 in category "Servicios", waiting for approval
+  And a repeating payment of 600000.00 COP to "Antivirus" from "Banco" every 1 year starting on 2027-05-05 in category "Servicios", waiting for approval
   And a fund on "Servicios" funded from its obligations, starting 2026-11
-  Then the fund on "Servicios" asks 300000.00 COP this month
+  Then the fund on "Servicios" asks 350000.00 COP this month
 ```
 
 ## AC-5 — A dated obligation is spread over the months that remain
@@ -257,7 +257,6 @@ Scenario: Spending the fund on something else raises what it asks next
   And the fund on "Seguro" already holds 3600000.00 COP
   When the user registers an expense of 3600000.00 COP from "Banco" paying "Taller" in category "Seguro"
   Then the fund on "Seguro" asks 1200000.00 COP this month
-  And the fund on "Seguro" is behind
 ```
 
 ## AC-8 — A fund accumulates or resets, and the choice is offered only where it exists
@@ -422,12 +421,15 @@ Scenario: Only the excess leaves the money available
   When the user registers an expense of 350000.00 COP from "Banco" paying "Andres" in category "Restaurantes"
   Then the money available this month is 4650000.00 COP
 
-Scenario: A fund does not carry a negative balance into the next month
+Scenario: Last month's overspend does not reduce this month's money available
   Given today is 2026-12-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And an expense category "Restaurantes"
   And a fund on "Restaurantes" that asks a fixed 200000.00 COP each month, starting 2026-11, resetting
   And a recorded expense of 350000.00 COP in category "Restaurantes" 1 month ago
-  Then the fund on "Restaurantes" holds 0.00 COP
+  Then the money available this month is 4800000.00 COP
 
 Scenario: An accumulating fund overspent falls to zero, not below
   Given today is 2026-12-10
@@ -541,6 +543,7 @@ Scenario: An income is never counted twice
   And an income category "Salario"
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-11-25 in category "Salario", paying itself
+  When the daily run happens
   Then the money available this month is 5000000.00 COP
 
 Scenario: Money recorded without any obligation behind it counts from the moment it is recorded
@@ -554,13 +557,20 @@ Scenario: Money recorded without any obligation behind it counts from the moment
 ## AC-15 — Income that stops is a change the owner makes, not something the app detects
 
 ```gherkin
-Scenario: An income that has not arrived is never flagged by the app
+Scenario: An income that has not arrived yet already counts toward the earning rate
   Given today is 2026-08-10
   And an income category "Bonos"
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 3000000.00 COP from "Bono" into "Banco" every 3 month starting on 2026-09-30 in category "Bonos", paying itself
   Then the earning rate is 1000000.00 COP a month
-  And nothing about "Bono" is waiting for the user's answer
+
+Scenario: An income whose date has passed is never left waiting for the user
+  Given today is 2026-10-10
+  And an income category "Bonos"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 3000000.00 COP from "Bono" into "Banco" every 3 month starting on 2026-09-30 in category "Bonos", paying itself
+  When the daily run happens
+  Then nothing about "Bono" is waiting for the user's answer
 
 Scenario: Switching the income off changes every number at once
   Given today is 2026-10-10
@@ -677,9 +687,9 @@ Scenario: A yearly dollar obligation is brought to a month and to COP
   And an account "Banco USD" in USD with balance 5000.00 USD
   And the TRM is 4000.00
   And an expense category "Software"
-  And a repeating payment of 60.00 USD to "Opal" from "Banco USD" every 1 year starting on 2027-11-05 in category "Software", waiting for approval
+  And a repeating payment of 60.00 USD to "Opal" from "Banco USD" every 1 year starting on 2027-05-05 in category "Software", waiting for approval
   And a fund on "Software" funded from its obligations, starting 2026-11
-  Then the fund on "Software" asks 20000.00 COP this month
+  Then the fund on "Software" asks 40000.00 COP this month
 ```
 
 ## AC-19 — A fund that already holds money is told so once
@@ -1033,4 +1043,20 @@ Scenario: A fund holding nothing yet still says it is behind when the month over
   And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
   When the user registers an expense of 2000000.00 COP from "Banco" paying "Agencia" in category "Ahorro Viaje"
   Then the fund on "Ahorro Viaje" is behind
+
+Scenario: A fund saving toward a date that nothing was spent against is on track
+  Given today is 2026-11-10
+  And an expense category "Ahorro Viaje"
+  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  Then the fund on "Ahorro Viaje" is on track
+
+Scenario: A fund whose ask was pushed up by the spending says it is behind
+  Given today is 2026-11-10
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And an expense category "Seguro"
+  And a repeating payment of 7200000.00 COP to "Seguro del Carro" from "Banco" every 1 year starting on 2027-05-02 in category "Seguro", waiting for approval
+  And a fund on "Seguro" funded from its obligations, starting 2026-11
+  And the fund on "Seguro" already holds 3600000.00 COP
+  When the user registers an expense of 3600000.00 COP from "Banco" paying "Taller" in category "Seguro"
+  Then the fund on "Seguro" is behind
 ```
