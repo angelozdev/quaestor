@@ -2,10 +2,9 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-04
-- **Accepted:** 2026-08-04 (feature 003 Checkpoint 7. Two amendments below are
-  marked `proposed` — the anchor's month, and the undated rules not reading
-  what the fund holds. Neither is covered by this acceptance; both await the
-  owner)
+- **Accepted:** 2026-08-04 (feature 003 Checkpoint 7. Of the two amendments
+  below, the undated-rules one was **resolved 2026-08-04** by product ADR-040
+  and AC-30; the anchor's month is still `proposed` and awaits the owner)
 - **Deciders:** Angelo
 - **Supersedes:** 0006 (both halves — its goals write API and its budget
   envelope write API), 0005 in part (the goal clause of the uniform
@@ -109,7 +108,26 @@ Two consequences fall out rather than being coded:
 - **An obligation due this month asks for its full amount.** Zero months remain,
   the floor makes it one, and the fund needs the money now. Same formula.
 
-#### Amendment, 2026-08-04 (proposed): the undated rules do not read what the fund holds
+#### Amendment, 2026-08-04 (resolved 2026-08-04): the undated rules do not read what the fund holds
+
+**Resolved by product ADR-040 and AC-30.** The boundary this amendment recorded
+no longer exists: a fund is now behind when the month left it worse than not
+touching that category would have, which happens either because the ask went up
+*or* because the spending went past everything the fund had. The second reading
+is `spent > opening + asks` — the predicate this amendment named — so a `fixed`
+or `average` fund can report behind, and so can any fund opening at zero.
+
+The amendment's own condition was that a scenario had to come before the code.
+It did not: the code moved first and AC-30 was written afterwards, on the
+owner's explicit permission to edit the approved `spec.md`. Recorded as it
+happened. Its three scenarios were run against the code they replaced and two of
+the three fail there.
+
+The first paragraph below stands unchanged and is not amended — the four rules
+still differ in whether they read what the fund holds, and that is still
+load-bearing. Only the *on track* consequence is resolved.
+
+The original text follows.
 
 *"What is still missing"* is not the same quantity for all four rules, and the
 difference is load-bearing. The dated rules subtract what the fund already

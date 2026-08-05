@@ -230,6 +230,15 @@ Scenario: The money is there before the charge day
 ## AC-7 — A fund that gets drained raises its ask to still arrive
 
 ```gherkin
+Scenario: A fund still holding its savings asks only for what is missing
+  Given today is 2026-11-10
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And an expense category "Seguro"
+  And a repeating payment of 7200000.00 COP to "Seguro del Carro" from "Banco" every 1 year starting on 2027-05-02 in category "Seguro", waiting for approval
+  And a fund on "Seguro" funded from its obligations, starting 2026-11
+  And the fund on "Seguro" already holds 3600000.00 COP
+  Then the fund on "Seguro" asks 600000.00 COP this month
+
 Scenario: An emptied fund raises its ask for the months that remain
   Given today is 2026-11-10
   And an account "Banco" in COP with balance 20000000.00 COP
@@ -994,4 +1003,34 @@ Scenario: Money that already left still counts when the obligation is switched o
   And the user confirms the payment to "EPM"
   And the user switches off "EPM"
   Then the money available this month is 4800000.00 COP
+```
+
+## AC-30 — A fund says it is behind when the month left it worse than not touching it would
+
+```gherkin
+Scenario: A fund that spent past everything it had says it is behind
+  Given today is 2026-11-10
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And an expense category "Tecnologia"
+  And a fund on "Tecnologia" that asks a fixed 300000.00 COP each month, starting 2026-11
+  And the fund on "Tecnologia" already holds 350000.00 COP
+  When the user registers an expense of 900000.00 COP from "Banco" paying "Alkosto" in category "Tecnologia"
+  Then the fund on "Tecnologia" is behind
+
+Scenario: A fund that spent every peso it had and no more is on track
+  Given today is 2026-11-10
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And an expense category "Tecnologia"
+  And a fund on "Tecnologia" that asks a fixed 300000.00 COP each month, starting 2026-11
+  And the fund on "Tecnologia" already holds 350000.00 COP
+  When the user registers an expense of 650000.00 COP from "Banco" paying "Alkosto" in category "Tecnologia"
+  Then the fund on "Tecnologia" is on track
+
+Scenario: A fund holding nothing yet still says it is behind when the month overspends it
+  Given today is 2026-11-10
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And an expense category "Ahorro Viaje"
+  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  When the user registers an expense of 2000000.00 COP from "Banco" paying "Agencia" in category "Ahorro Viaje"
+  Then the fund on "Ahorro Viaje" is behind
 ```

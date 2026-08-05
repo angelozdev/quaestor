@@ -1,6 +1,6 @@
 ---
-ac_count: 31
-high_priority_count: 21
+ac_count: 32
+high_priority_count: 22
 discovered: 2026-08-03
 ---
 
@@ -528,3 +528,31 @@ left as unwritten behaviour.
   negative rollover) survive unchanged and are relied on by AC-13.
 - **Feature.md notes this is too large for one pipeline run.** Nothing in these
   ACs contradicts that; the phasing decision belongs to Checkpoint 4.
+
+## AC-30: A fund says it is behind when the month left it worse than not touching it would
+
+- **Priority:** high
+- **Type:** happy path
+- **Added:** 2026-08-04, after the feature shipped — see below
+
+A fund reports whether it is **on track** or **behind**. It is behind when the
+month left it worse off than not spending in that category at all would have,
+and there are two ways that happens: the spending pushed up what the fund must
+ask, or the spending went past everything the fund had — what it opened with
+plus what it asks. Neither happened means on track.
+
+The second reading is the same figure AC-13 already uses for the overspill, so
+the badge turns red exactly when the fund starts costing the month money.
+
+**What it does not claim.** A fund quietly falling behind the pace of its target
+while never overspending still reports on track. Pace is a different question and
+belongs to the *metas* work, where every fund has a date by construction.
+
+**Why it arrived late.** *Fund health* was a `feature.md` scope bullet that
+Checkpoint 2 never turned into a criterion, so the threshold was the
+implementer's to invent, and the one invented could barely fire: a fixed or
+averaged fund asks the same however much is spent, and a fund holding nothing
+cannot hold less, so for those the verdict was green by construction. A fund
+overdrawn 350% rendered the green badge in the browser and the report counted
+zero behind. Recorded as a known boundary in ADR-0043's amendment, decided by the
+owner as product ADR-040, and only now written into the contract.
