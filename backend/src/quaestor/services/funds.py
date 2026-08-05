@@ -43,7 +43,6 @@ from ..domain.rules import (
     month_bounds,
     monthly_average_calc,
     monthly_rate_calc,
-    months_between,
     months_to_fund,
     next_year_month,
     prev_year_month,
@@ -623,11 +622,13 @@ def _warning(fund: Fund, would_ask: int) -> str | None:
 
     A target dated so close that no month is left to save in is the reachable
     definition of a target that cannot be reached: the whole amount falls on
-    one month.
+    one month. Asked of the very divisor the ask uses, so the warning cannot
+    stay silent on a month it lands on — a target the month after the start
+    still has to be whole by the end of the start month (AC-6).
     """
     if fund.target_month is None:
         return None
-    if months_between(fund.start_month, fund.target_month) >= 1:
+    if months_to_fund(fund.start_month, fund.target_month) > 1:
         return None
     return (
         f"{fund.target_month} leaves no month to save in, so the whole target falls on "

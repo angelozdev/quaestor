@@ -405,8 +405,20 @@ pipeline generation → tests green. Bounded, one feature per task.
   draining entirely passes both, so the AC cannot fail. Moving its clock to
   2027-02-10 makes the recomputation visible ($2.400.000).
 
-- C20. **AC-24's warning is off by one month, and the browser is what found
-  it.** `services/funds._implausible_warning` returns `None` when
+- C20. ~~**AC-24's warning is off by one month, and the browser is what found
+  it.**~~ **CLOSED 2026-08-04** — the warning now asks the very divisor the ask
+  uses (`months_to_fund`), so it cannot stay silent on a month the whole target
+  lands on. No product decision needed: the code's own message already
+  described the case it was skipping.
+
+  **Two unit tests pinned the defect and carried the proof inside them** — both
+  asserted the preview would ask the target *in full* and that no warning
+  fired. Rewritten, and the boundary is now stated as a pair: a target the month
+  after the start warns and asks 600.000 whole; two months after does not and
+  asks 300.000. AC-24's three approved scenarios never covered the +1 case, so
+  the contract is untouched.
+
+  Original finding: `services/funds._warning` returned `None` when
   `months_between(start_month, target_month) >= 1`, but the ask divides by the
   months from the start *through the month before the target*. A fund starting
   2026-08 with target 2026-09 therefore asks its whole target in August while

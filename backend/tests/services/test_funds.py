@@ -857,7 +857,7 @@ def test_spending_on_the_very_first_day_of_the_start_month_is_not_history(sessio
         funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
 
 
-def test_a_target_exactly_one_month_out_is_reachable_and_carries_no_warning(session):
+def test_a_target_the_month_after_the_start_is_warned_about_too(session):
     cat = _category(session, "Ahorro Viaje")
     preview = funds.preview_fund(
         session,
@@ -868,7 +868,7 @@ def test_a_target_exactly_one_month_out_is_reachable_and_carries_no_warning(sess
         start_month="2026-11",
     )
     assert preview.would_ask == 1_000_000_00
-    assert preview.warning is None
+    assert preview.warning is not None
 
 
 def test_a_planned_payment_no_fund_covers_leaves_the_money_available(session):
@@ -998,18 +998,27 @@ def test_a_target_fund_takes_the_smallest_target_above_zero(session, target):
     assert funds.fund_status(session, fund.id, "2026-11").asks == 1
 
 
-def test_a_target_one_month_out_is_not_warned_about(session):
-    """One month of runway is the least that still leaves a month to save in."""
+def test_a_target_two_months_out_is_the_first_that_is_not_warned_about(session):
+    """Two months out is the least runway that leaves a month to save in.
+
+    A target in December has to be whole by the end of November (AC-6), so a
+    fund starting in November has November and nothing else — the same single
+    month the warning exists to announce.
+    """
     cat = _category(session, "Viaje")
-    preview = funds.preview_fund(
-        session,
-        cat,
-        rule="target-by-date",
-        target_amount=600_000_00,
-        target_month="2026-12",
-        start_month="2026-11",
+    warned, spread = (
+        funds.preview_fund(
+            session,
+            cat,
+            rule="target-by-date",
+            target_amount=600_000_00,
+            target_month=target,
+            start_month="2026-11",
+        )
+        for target in ("2026-12", "2027-01")
     )
-    assert preview.warning is None
+    assert warned.warning is not None and warned.would_ask == 600_000_00
+    assert spread.warning is None and spread.would_ask == 300_000_00
 
 
 def test_a_turn_on_the_last_day_of_the_month_moves_the_fund_to_the_next_cycle(session):
