@@ -334,9 +334,10 @@ pipeline generation → tests green. Bounded, one feature per task.
 - C18. ~~**The money available reads too high when a recurring expense posts off
   its promise.**~~ **CLOSED 2026-08-04** — product ADR-039: a turn that posted
   counts at what really left the account, a turn still ahead at what it
-  declared. Six unit tests pin it; ADR-0044 accepted. **Debt carried:** no
-  acceptance scenario yet, since writing one means editing an approved
-  `spec.md`. Original finding below.
+  declared. Pinned by six unit tests and by **AC-29**, three scenarios the owner
+  authorised adding to the approved `spec.md` and verified to fail against the
+  code they replaced — the check AC-7 never had. ADR-0044 accepted; product
+  ADR-039 records the decision. Original finding below.
 
   **The money available reads too high when a recurring expense posts off
   its promise.** `services/funds._uncovered` skips posted rows carrying a

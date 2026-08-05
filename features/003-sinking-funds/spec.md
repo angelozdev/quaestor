@@ -957,3 +957,41 @@ Scenario: The assistant deletes a fund
   And the user views the funds
   Then no fund is listed
 ```
+
+## AC-29 — A bill that arrives for a different amount costs what it really cost
+
+```gherkin
+Scenario: A charge that costs more than it declared takes the difference too
+  Given today is 2026-11-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-11-05 in category "Salario", paying itself
+  And an expense category "Servicios"
+  And a repeating payment of 200000.00 COP to "EPM" from "Banco" every 1 month starting on 2026-11-05 in category "Servicios", waiting for approval
+  When the daily run happens
+  And the user confirms the payment to "EPM" for 250000.00 COP
+  Then the money available this month is 4750000.00 COP
+
+Scenario: A charge that costs less than it declared gives the difference back
+  Given today is 2026-11-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-11-05 in category "Salario", paying itself
+  And an expense category "Servicios"
+  And a repeating payment of 200000.00 COP to "EPM" from "Banco" every 1 month starting on 2026-11-05 in category "Servicios", waiting for approval
+  When the daily run happens
+  And the user confirms the payment to "EPM" for 150000.00 COP
+  Then the money available this month is 4850000.00 COP
+
+Scenario: Money that already left still counts when the obligation is switched off
+  Given today is 2026-11-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-11-05 in category "Salario", paying itself
+  And an expense category "Servicios"
+  And a repeating payment of 200000.00 COP to "EPM" from "Banco" every 1 month starting on 2026-11-05 in category "Servicios", waiting for approval
+  When the daily run happens
+  And the user confirms the payment to "EPM"
+  And the user switches off "EPM"
+  Then the money available this month is 4800000.00 COP
+```

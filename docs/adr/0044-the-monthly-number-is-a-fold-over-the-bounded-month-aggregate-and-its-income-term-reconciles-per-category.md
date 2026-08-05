@@ -5,9 +5,9 @@
 - **Accepted:** 2026-08-04, after the gap that held it was closed. Checkpoint 7
   withheld acceptance because the `uncovered` term described behaviour the code
   did not implement; product ADR-039 decided the rule, the code now matches the
-  paragraph, and six unit tests pin it. One debt is carried openly rather than
-  waived: the behaviour has no acceptance scenario yet, because adding one means
-  editing an approved `spec.md`.
+  paragraph, and it is pinned by six unit tests and by **AC-29**, whose three
+  scenarios the owner authorised adding to the approved `spec.md` and which were
+  checked against the code they replaced: all three fail there.
 - **Deciders:** Angelo
 - **Supersedes:** — (extends 0028; **0031 stands unamended** — see the
   withdrawn amendment below)
@@ -208,10 +208,9 @@ defective behaviour, so its mutants died. A missing requirement has no mutant.
 
 Closed 2026-08-04 by the owner's decision (product ADR-039), implemented as the
 `uncovered(M)` paragraph now states, and pinned by six unit tests in
-`backend/tests/services/test_funds.py`. **Still owed: an acceptance scenario.**
-Adding one means editing an approved `spec.md`, which is the owner's to
-authorise; until it exists this behaviour is defended by unit tests alone and
-would not be caught by the acceptance contract if it regressed.
+`backend/tests/services/test_funds.py` and by **AC-29**, whose three scenarios
+the owner authorised adding to the approved `spec.md`. They were checked against
+the code they replaced and all three fail there — the check AC-7 never had.
 
 ### Withdrawn: the lazy TRM. ADR-0031 stands unamended
 

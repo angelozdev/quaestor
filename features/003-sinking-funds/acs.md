@@ -1,5 +1,5 @@
 ---
-ac_count: 30
+ac_count: 31
 high_priority_count: 21
 discovered: 2026-08-03
 ---
@@ -464,6 +464,34 @@ Every fund can be created, changed, listed and removed by talking to the
 assistant, and the available money and its breakdown can be asked for in words.
 Each refusal and each warning above holds identically there. The goal tools are
 removed with the goals.
+
+---
+
+## AC-29: A bill that arrives for a different amount costs what it really cost
+
+- **Priority:** high
+- **Type:** happy path
+- **Added:** 2026-08-04, after the feature shipped — see below
+
+A repeating expense declares an amount, and the real bill rarely honours it. The
+month counts **what actually left the account** once a charge has been paid, and
+what the obligation **declared** only for the turns still ahead. A bill declaring
+$200.000 that arrives at $250.000 costs the month $250.000; one that arrives at
+$150.000 costs $150.000; and one whose obligation is switched off *after* it was
+paid still costs the $200.000 that really left. Every payment counts once, at its
+real figure.
+
+This is the same rule AC-14c already applies to money coming in, now applied to
+money going out.
+
+**Why it arrived late.** It was not discovered by discovery: the month was
+counting the declared amount and skipping the paid movement, so the money
+available read **too high** — up to the whole amount of any obligation switched
+off after paying. Found at Checkpoint 7 by reading the code, confirmed by probe,
+and decided by the owner as product ADR-039. Neither the 92 approved scenarios
+nor mutation testing could have caught it: the tests pinned the defective
+behaviour, and a missing requirement has no mutant. Recorded here rather than
+left as unwritten behaviour.
 
 ---
 
