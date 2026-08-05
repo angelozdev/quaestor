@@ -2,9 +2,10 @@
 
 - **Status:** accepted
 - **Date:** 2026-08-04
-- **Accepted:** 2026-08-04 (feature 003 Checkpoint 7. Of the two amendments
-  below, the undated-rules one was **resolved 2026-08-04** by product ADR-040
-  and AC-30; the anchor's month is still `proposed` and awaits the owner)
+- **Accepted:** 2026-08-04 (feature 003 Checkpoint 7. Both amendments below are
+  now decided: the undated-rules one by product ADR-040 and AC-30 on
+  2026-08-04, the anchor's month by product ADR-041 on 2026-08-05. ADR-041 is
+  decided but **not yet built** — see its Confirmation)
 - **Deciders:** Angelo
 - **Supersedes:** 0006 (both halves — its goals write API and its budget
   envelope write API), 0005 in part (the goal clause of the uniform
@@ -166,7 +167,32 @@ the start of a month. It is written at creation (AC-19: *"the owner may type
 what the fund already holds"*) and rewritten when the owner corrects it. The
 fold starts from it instead of from zero.
 
-#### Amendment, 2026-08-04 (proposed): the anchor's month may be absent
+#### Amendment, 2026-08-04 (decided 2026-08-05): the anchor's month may be absent
+
+**Decided by product ADR-041: the month is never absent.** A stated balance
+always carries one, and it is never chosen freely — the create form dates it at
+the fund's start month, which the owner picks on that same screen; the assistant
+dates it at the current month; nothing is backdated.
+
+Two findings moved the answer past what this amendment framed. **The screen
+cannot state a balance at all** — the fund form has no such field and the table
+offers only delete, so the undated path is not one of two ways in, it is the
+only way a person has. And **neither YNAB nor Actual Budget has an undated
+balance**, because in both the budget *is* month-by-month: money is assigned
+into a month's column and the balance rolls from there. There is nothing to date
+because nothing floats. YNAB refuses retroactive resets outright.
+
+So the fix is not "date the floating figure" but "stop having one". The nullable
+column stays — the writing call still has no clock — but its callers stop
+handing it nothing.
+
+**Not yet built.** `create_fund(opening_balance=…)` already dates its anchor.
+The form field and the current-month stamp on `set_fund(balance=…)` are pending,
+tracked as roadmap `id:fund-opening-balance`. Until they ship, the cost stated
+below is still what the app does, which is why it is left standing rather than
+struck out.
+
+The original text follows.
 
 Implementing F0 showed the pair cannot always be written whole. `set_fund`,
 the call that records *"the fund already holds $149.100"*, receives no date:

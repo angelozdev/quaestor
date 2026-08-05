@@ -485,3 +485,28 @@ pipeline generation → tests green. Bounded, one feature per task.
   on only one of them. Picking wrong silently sends the expense past the fund.
   Whether the local production database carries the same duplicates is
   **unverified** — worth a query before it matters.
+
+- C23. **A fund's opening balance is reachable from the assistant and from
+  nowhere else.** Found 2026-08-05 while deciding ADR-0043's anchor amendment,
+  by reading the form rather than the service.
+
+  `funds/page.tsx` declares exactly eight fields — `categoryId`, `rule`,
+  `amount`, `windowMonths`, `targetAmount`, `targetMonth`, `startMonth`,
+  `accumulates` — and the table's only row action is delete. There is no
+  opening-balance input and no edit dialog. The API carries it on both paths
+  (`FundCreateIn.opening_balance`, `FundUpdateIn.balance`) and MCP exposes both,
+  so the owner can say *"this fund already holds $500.000"* to the chat and by
+  no other means.
+
+  **The contract could not catch it.** `spec.md`'s preamble says each AC is
+  observed "at a surface a person uses — the app **or** the assistant", so
+  AC-19's scenarios about a stated balance are satisfied by the assistant alone
+  and never ask the app. A surface-parity clause would have caught it; the
+  suites, mutation and CRAP could not, because nothing is broken — something is
+  merely absent.
+
+  **Closed by building** roadmap `id:fund-opening-balance`, which carries the
+  field and the month rule together (product ADR-041). Filed separately from
+  that task because the *general* lesson outlives it: an AC satisfiable at
+  either surface silently permits a hole in one of them, and this feature has
+  30 such ACs.

@@ -738,3 +738,45 @@ Green means neither happened. The second reading is the same figure the money av
 - **Not a pace warning.** A goal quietly slipping behind schedule while never overspending still shows green. That is the trade named in alternative (B) and is deliberate — the fix belongs to *metas*.
 - **No new reading of the database.** The overspill was already computed for the money available; the fund's fold now hands the same figure to both, so the badge costs nothing and the two can never drift.
 - **Pinned by the contract, not only by unit tests.** Five unit tests plus **AC-30**, three scenarios the owner authorised adding to the approved `spec.md`. Two of the three were run against the code they replaced and fail there; the third is the boundary and passes both ways, which is what a boundary is for. This closes the amendment in ADR-0043 that recorded the green badge as a known hole — and closes it *late*, since that amendment asked for the scenario **before** the code and got it after.
+
+## ADR-041 — What a fund already holds is always said for a month, and never for a past one
+
+**Status:** accepted (2026-08-05) · **Decides** ADR-0043's anchor-month amendment · **Not yet implemented** — see Confirmation
+
+**Context.** A fund's balance is derived, never stored (ADR-0043). The one exception is the owner's own statement — *"this fund already holds $500.000"* — which is an input, not a reading. The app records the figure but not the month it was said for, and reads it as *"stated for whichever month is being looked at"*.
+
+That makes the figure follow the owner around. A fund told in January it holds $500.000, asking $200.000 a month:
+
+| Month opened | True | What the app says |
+|---|---|---|
+| December | $0 — nothing had been declared yet | $500.000 |
+| January | $500.000 | $500.000 |
+| February | $700.000 | $500.000 |
+| March | $900.000 | $500.000 |
+
+Right only in the month it was written, and in December it invents money in the past.
+
+**Two things were found while deciding this, and both changed the answer.**
+
+*The screen cannot say it at all.* The fund form offers category, rule, amount, window, target, target month, start month and accumulate — and no opening balance. The table offers only delete. The API supports it on both create and update; only the assistant ever writes it. So the undated path is not one of two ways to state a balance, it is the **only** way a person has.
+
+*Neither reference system has an undated balance — the concept does not exist.* In YNAB and Actual Budget the budget **is** month-by-month: money is assigned into a month's column, and a category's balance is that month's assignment minus its spending plus what rolled over. There is nothing to date because nothing floats. YNAB also refuses retroactive resets outright — a Fresh Start begins today, with no way to create one from a point in the past; reflecting history means entering the movements.
+
+**Decision.** **A stated balance always carries the month it was said for, and that month is never chosen freely.**
+
+- **Said while creating the fund** — it carries the fund's **start month**, which the owner has just picked on the same screen. The form gains the field it never had, so *"it starts in August and by then it already held $500.000"* is one sentence in one place.
+- **Said afterwards, through the assistant** — it carries the **current month**. The assistant has no idea which month is on screen, but it does know what day it is.
+- **Never backdated.** Following YNAB: to reflect the past, record the movements.
+
+The owner chose this over leaving the figure undated, after the behaviour was put to him month by month with the numbers above.
+
+**Alternatives rejected.** (A) **Leave it undated.** What ships today. Correct for the month it is written and progressively wrong in every other, and it is the December row — money asserted before it was ever declared — that decides it. (B) **Let the owner pick any month for the statement.** Maximum flexibility, and it re-opens exactly what YNAB closed: a balance asserted for a month whose movements say otherwise, with no way to reconcile the two. The start month is a date the owner picked for a reason; a second free date is a second thing to get wrong.
+
+**Consequences.**
+
+- **A fund's opening becomes reachable from the app.** Today it is assistant-only, which is a gap the acceptance contract never caught because it allows an AC to be observed at *either* surface.
+- **Rolling works from the statement forward.** February shows $700.000 because January's ask rolled in, which is the whole point of an accumulating fund.
+- **Months before the statement read zero,** which is what they were.
+- **The untested branch gets a behaviour to test.** Mutation left three survivors on the anchor branch — `stated_for > year_month` inverted, and its two return values — because no scenario dates an anchor at all. They stop being a hole once there is a decided behaviour to pin.
+
+**Confirmation.** **Decided, not built.** Live today: `anchor_month` is nullable and `create_fund(opening_balance=…)` already dates its anchor at the start month. Pending: the form field, and dating what `set_fund(balance=…)` receives at the current month. Tracked as roadmap `id:fund-opening-balance`. Until it ships, the December row above is still what the app does.
