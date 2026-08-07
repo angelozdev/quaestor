@@ -34,11 +34,14 @@ Exit codes:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 TEST_SUFFIXES = (".test.ts", ".test.tsx")
+UNWALKED_DIRS = frozenset({"node_modules"})
 OTHER_STREAM_TAGS = ("@browser", "@backend")
 _SCENARIO = re.compile(r"^\s*(?:#+\s*)?Scenario(?:\s+Outline)?:\s*(.+?)\s*$")
 _TAG_LINE = re.compile(r"^\s*@[\w-]+(?:\s+@[\w-]+)*\s*$")
@@ -90,6 +93,15 @@ def tagged_scenarios(spec_path: Path) -> dict[str, set[str]]:
     return found
 
 
+def test_files(test_root: Path) -> Iterator[Path]:
+    """Every test file under the root, without descending into UNWALKED_DIRS."""
+    for parent, subdirs, names in os.walk(test_root):
+        subdirs[:] = [name for name in subdirs if name not in UNWALKED_DIRS]
+        for name in names:
+            if name.endswith(TEST_SUFFIXES):
+                yield Path(parent) / name
+
+
 def test_corpus(test_root: Path) -> str:
     """Every test file under the root, concatenated.
 
@@ -98,11 +110,7 @@ def test_corpus(test_root: Path) -> str:
     """
     if not test_root.is_dir():
         raise CoverageError(f"no test root at {test_root}")
-    parts = [
-        path.read_text(encoding="utf-8", errors="replace")
-        for path in sorted(test_root.rglob("*"))
-        if path.is_file() and path.name.endswith(TEST_SUFFIXES) and "node_modules" not in path.parts
-    ]
+    parts = [path.read_text(encoding="utf-8", errors="replace") for path in sorted(test_files(test_root))]
     return "\n".join(parts)
 
 

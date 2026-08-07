@@ -237,27 +237,19 @@ _TARGET = (
     r"(?P<roll>, accumulating|, resetting)?"
 )
 
-_FIXED_RESETTING = (
+_FIXED_IN_PLAIN_WORDS = (
     r" that asks a fixed (?P<amount>" + _DEC + r") COP each month without accumulating,"
     r" starting (?P<start>" + _MONTH + r")"
 )
-_CATEGORY_AVERAGE = (
+_AVERAGE_IN_PLAIN_WORDS = (
     r" that asks what the category averaged over the last (?P<window>\d+) months?,"
     r" starting (?P<start>" + _MONTH + r")"
 )
-_RECURRING_CHARGES = r" that asks what its recurring charges need, starting (?P<start>" + _MONTH + r")"
-_SAVES_BY = (
+_OBLIGATIONS_IN_PLAIN_WORDS = r" that asks what its recurring charges need, starting (?P<start>" + _MONTH + r")"
+_TARGET_IN_PLAIN_WORDS = (
     r" that saves (?P<target>" + _DEC + r") COP by (?P<by>" + _MONTH + r"),"
     r" starting (?P<start>" + _MONTH + r")"
 )
-"""Feature 010's plain-language phrasings of the four rules.
-
-The same four specs 003 already builds, said the way the screen says them:
-010 is a vocabulary feature and its spec names each rule by the job it does
-rather than by the arithmetic it runs. Registered as their own patterns
-instead of widened into 003's, so the 348 scenarios resting on those keep
-matching exactly what they matched before.
-"""
 
 
 # -------------------------------------------------------------------- Given
@@ -308,27 +300,27 @@ def given_fund_fixed(world: World, name: str, amount: str, start: str, roll: str
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _AVERAGE)
-@step(r'a fund on "(?P<name>[^"]+)"' + _CATEGORY_AVERAGE)
+@step(r'a fund on "(?P<name>[^"]+)"' + _AVERAGE_IN_PLAIN_WORDS)
 def given_fund_average(world: World, name: str, window: str, start: str) -> None:
     _make_fund(world, name, rule="average", window_months=int(window), start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
-@step(r'a fund on "(?P<name>[^"]+)"' + _RECURRING_CHARGES)
+@step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS_IN_PLAIN_WORDS)
 def given_fund_from_obligations(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _TARGET)
-@step(r'a fund on "(?P<name>[^"]+)"' + _SAVES_BY)
+@step(r'a fund on "(?P<name>[^"]+)"' + _TARGET_IN_PLAIN_WORDS)
 def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening=None, roll=None) -> None:
     _make_fund(world, name, **_target_spec(target, by, start, opening, roll))
     world.require_clean(f"creating the fund on {name!r}")
 
 
-@step(r'a fund on "(?P<name>[^"]+)"' + _FIXED_RESETTING)
+@step(r'a fund on "(?P<name>[^"]+)"' + _FIXED_IN_PLAIN_WORDS)
 def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str) -> None:
     _make_fund(world, name, **_fixed_spec(amount, start, ", resetting"))
     world.require_clean(f"creating the fund on {name!r}")
