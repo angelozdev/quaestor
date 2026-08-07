@@ -1,10 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
 import type { Recurring } from "@/lib/api/types"
-import { openHelpPanel } from "@/tests/factories"
+import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
 const { listRecurring } = vi.hoisted(() => ({ listRecurring: vi.fn() }))
 
@@ -38,15 +37,6 @@ const NETFLIX: Recurring = {
   active: true,
 }
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={qc}>
-      <RecurringPage />
-    </QueryClientProvider>,
-  )
-}
-
 const openHelp = () => openHelpPanel("Recurrentes")
 
 beforeEach(() => {
@@ -56,7 +46,7 @@ beforeEach(() => {
 
 describe("AC-7 — every screen carries the same control", () => {
   it("Recurrentes offers to explain itself", async () => {
-    renderPage()
+    render(<RecurringPage />, { wrapper: queryWrapper })
 
     expect(await screen.findByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
     expect(await openHelp()).toHaveTextContent("Un cobro recurrente es uno que vuelve solo")
@@ -66,7 +56,7 @@ describe("AC-7 — every screen carries the same control", () => {
 describe("AC-8 — the panel explains the screen using the owner's own figures", () => {
   it("Every screen's panel speaks about what that screen holds", async () => {
     listRecurring.mockResolvedValue([NETFLIX])
-    renderPage()
+    render(<RecurringPage />, { wrapper: queryWrapper })
     await screen.findByText("Netflix")
 
     const panel = await openHelp()
@@ -79,7 +69,7 @@ describe("AC-8 — the panel explains the screen using the owner's own figures",
 describe("AC-10 — an empty screen teaches and offers the way in", () => {
   it("An empty Recurrentes screen teaches and offers the way in", async () => {
     const user = userEvent.setup()
-    renderPage()
+    render(<RecurringPage />, { wrapper: queryWrapper })
 
     expect(
       await screen.findByText(/Un cobro recurrente es uno que vuelve solo/),

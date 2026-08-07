@@ -308,19 +308,22 @@ def given_fund_fixed(world: World, name: str, amount: str, start: str, roll: str
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _AVERAGE)
+@step(r'a fund on "(?P<name>[^"]+)"' + _CATEGORY_AVERAGE)
 def given_fund_average(world: World, name: str, window: str, start: str) -> None:
     _make_fund(world, name, rule="average", window_months=int(window), start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+@step(r'a fund on "(?P<name>[^"]+)"' + _RECURRING_CHARGES)
 def given_fund_from_obligations(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _TARGET)
-def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening, roll) -> None:
+@step(r'a fund on "(?P<name>[^"]+)"' + _SAVES_BY)
+def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening=None, roll=None) -> None:
     _make_fund(world, name, **_target_spec(target, by, start, opening, roll))
     world.require_clean(f"creating the fund on {name!r}")
 
@@ -328,24 +331,6 @@ def given_fund_target(world: World, name: str, target: str, by: str, start: str,
 @step(r'a fund on "(?P<name>[^"]+)"' + _FIXED_RESETTING)
 def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str) -> None:
     _make_fund(world, name, **_fixed_spec(amount, start, ", resetting"))
-    world.require_clean(f"creating the fund on {name!r}")
-
-
-@step(r'a fund on "(?P<name>[^"]+)"' + _CATEGORY_AVERAGE)
-def given_fund_category_average(world: World, name: str, window: str, start: str) -> None:
-    _make_fund(world, name, rule="average", window_months=int(window), start_month=start)
-    world.require_clean(f"creating the fund on {name!r}")
-
-
-@step(r'a fund on "(?P<name>[^"]+)"' + _RECURRING_CHARGES)
-def given_fund_recurring_charges(world: World, name: str, start: str) -> None:
-    _make_fund(world, name, rule="from-recurring", start_month=start)
-    world.require_clean(f"creating the fund on {name!r}")
-
-
-@step(r'a fund on "(?P<name>[^"]+)"' + _SAVES_BY)
-def given_fund_saves_by(world: World, name: str, target: str, by: str, start: str) -> None:
-    _make_fund(world, name, **_target_spec(target, by, start, None, None))
     world.require_clean(f"creating the fund on {name!r}")
 
 

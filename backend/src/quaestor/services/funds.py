@@ -74,6 +74,7 @@ class _Month:
     spent: int
     ask: _Ask
     ask_before_spending: _Ask
+    carries: int
 
 
 @dataclass(frozen=True)
@@ -250,11 +251,13 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
             spent=agg.spent_in(fund.category_id, year_month),
             ask=_Ask(0),
             ask_before_spending=_Ask(0),
+            carries=_opening_next(fund, year_month),
         )
     while True:
         spent = agg.spent_in(fund.category_id, month)
         holds = fund_holds_calc(opening, spent)
         ask = _ask(agg, fund, month, holds)
+        next_opening = fund_next_opening_calc(opening, spent, ask.amount, fund.accumulates)
         if month == year_month:
             return _Month(
                 opening=opening,
@@ -262,8 +265,9 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
                 spent=spent,
                 ask=ask,
                 ask_before_spending=_ask(agg, fund, month, max(opening, 0)),
+                carries=next_opening,
             )
-        opening = fund_next_opening_calc(opening, spent, ask.amount, fund.accumulates)
+        opening = next_opening
         month = next_year_month(month)
 
 
@@ -293,38 +297,41 @@ def _on_track(walked: _Month) -> bool:
     return walked.ask.amount <= walked.ask_before_spending.amount and _overspill(walked) == 0
 
 
-def _look_ahead(agg: MonthAggregate, fund: Fund, walked: _Month, year_month: str) -> tuple[int, int]:
-    """What the fund carries into next month, and what next month has to spend.
+def _opening_next(fund: Fund, year_month: str) -> int:
+    """What a fund that has not begun by `year_month` opens the next month with.
 
-    One more turn of the loop `_walk` already runs, for the month after the
-    one asked about. The carry is the opening that month would start with, and
-    what it has to spend is that carry plus what the rule asks then — asked
-    before anything is spent, because the month has not happened.
+    `_walk`'s own early return read one month on: nothing at all while the fund
+    is still ahead of the calendar, and whatever `_fold_start` puts there once
+    it is not.
+    """
+    ahead = next_year_month(year_month)
+    begins, opening = _fold_start(fund, ahead)
+    return opening if ahead >= begins else 0
 
-    A fund whose fold has not begun by `year_month` opens next month wherever
-    `_fold_start` puts it, which is `_walk`'s own early return read one month
-    on: nothing at all while the fund is still ahead of the calendar.
+
+def _look_ahead(agg: MonthAggregate, fund: Fund, walked: _Month) -> int:
+    """What next month has to spend: what the fund carries, plus what it asks then.
+
+    The carry itself is `_walk`'s, not this function's — the fold step lives in
+    the loop that owns it, so the two can never disagree about it. What is new
+    here is the ask, taken before anything is spent because the month has not
+    happened.
 
     Every input is already in the aggregate the caller loaded, so looking one
     month ahead costs no query (ADR-0028).
     """
-    ahead = next_year_month(year_month)
-    begins, _ = _fold_start(fund, year_month)
-    if year_month >= begins:
-        carries = fund_next_opening_calc(walked.opening, walked.spent, walked.ask.amount, fund.accumulates)
-    else:
-        begins_ahead, opening = _fold_start(fund, ahead)
-        if ahead < begins_ahead:
-            return 0, 0
-        carries = opening
-    return carries, carries + _ask(agg, fund, ahead, carries).amount
+    ahead = next_year_month(agg.year_month)
+    begins, _ = _fold_start(fund, ahead)
+    if ahead < begins:
+        return 0
+    return walked.carries + _ask(agg, fund, ahead, walked.carries).amount
 
 
 def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
     year_month = agg.year_month
     charge = walked.ask.charge_month
     category = agg.category(fund.category_id)
-    carries, next_month_has = _look_ahead(agg, fund, walked, year_month)
+    next_month_has = _look_ahead(agg, fund, walked)
     return FundStatus(
         fund_id=fund.id,
         category_id=fund.category_id,
@@ -334,7 +341,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         asks=walked.ask.amount,
         holds=walked.holds,
         spent=walked.spent,
-        carries=carries,
+        carries=walked.carries,
         next_month_has=next_month_has,
         accumulates=fund.accumulates,
         accumulation_is_implied=_accumulation_is_implied(fund),

@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { openHelpPanel } from "@/tests/factories"
+import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
 const { listCategoryGroups } = vi.hoisted(() => ({ listCategoryGroups: vi.fn() }))
 
@@ -21,15 +20,6 @@ vi.mock("@/lib/api/category-groups", () => ({
 
 import CategoryGroupsPage from "./page"
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={qc}>
-      <CategoryGroupsPage />
-    </QueryClientProvider>,
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   listCategoryGroups.mockResolvedValue([])
@@ -37,7 +27,7 @@ beforeEach(() => {
 
 describe("AC-7 — every screen carries the same control", () => {
   it("Grupos offers to explain itself", async () => {
-    renderPage()
+    render(<CategoryGroupsPage />, { wrapper: queryWrapper })
 
     expect(await openHelpPanel("Grupos")).toHaveTextContent(
       "Un grupo junta categorías que van juntas",
@@ -48,7 +38,7 @@ describe("AC-7 — every screen carries the same control", () => {
 describe("AC-10 — an empty screen teaches and offers the way in", () => {
   it("An empty Grupos screen teaches and offers the way in", async () => {
     const user = userEvent.setup()
-    renderPage()
+    render(<CategoryGroupsPage />, { wrapper: queryWrapper })
 
     expect(await screen.findByText(/Un grupo junta categorías que van juntas/)).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Crear el primero" }))

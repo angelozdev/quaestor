@@ -10,7 +10,7 @@ import { QueryBoundary } from "@/components/query-boundary"
 import { ScreenHelp } from "@/components/screen-help"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
-import { nounOf, shapeOf } from "@/lib/funds"
+import { labelOf } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -282,7 +282,7 @@ export default function ReportsPage() {
                     </span>
                   </Row>
                   {data.available.funds.map((f) => (
-                    <Row key={f.fund_id} label={`${nounOf(shapeOf(f))} · ${f.name}`} faint>
+                    <Row key={f.fund_id} label={labelOf(f)} faint>
                       <span
                         className="text-sm tabular-nums"
                         style={{ color: "var(--muted-foreground)" }}

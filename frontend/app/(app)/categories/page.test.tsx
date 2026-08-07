@@ -1,8 +1,7 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { openHelpPanel } from "@/tests/factories"
+import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
 const { listCategories, listCategoryGroups } = vi.hoisted(() => ({
   listCategories: vi.fn(),
@@ -35,15 +34,6 @@ const RESTAURANTES = {
   archived: false,
 }
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={qc}>
-      <CategoriesPage />
-    </QueryClientProvider>,
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   listCategories.mockResolvedValue([RESTAURANTES])
@@ -53,7 +43,7 @@ beforeEach(() => {
 describe("AC-21 — one vocabulary, everywhere", () => {
   it("The dead setting that used the word is gone from Categorías", async () => {
     const user = userEvent.setup()
-    renderPage()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
     await user.click(await screen.findByRole("button", { name: "Editar" }))
 
     expect(await screen.findByText("Editar categoría")).toBeInTheDocument()
@@ -64,7 +54,7 @@ describe("AC-21 — one vocabulary, everywhere", () => {
   })
 
   it("The badge for the dead setting is gone from the category list", async () => {
-    renderPage()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
 
     await screen.findByText("Restaurantes")
     expect(screen.queryByText(/no-presup/)).not.toBeInTheDocument()
@@ -73,7 +63,7 @@ describe("AC-21 — one vocabulary, everywhere", () => {
 
   it("The setting that does work keeps working and keeps its name", async () => {
     const user = userEvent.setup()
-    renderPage()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
     await user.click(await screen.findByRole("button", { name: "Editar" }))
 
     expect(
@@ -84,7 +74,7 @@ describe("AC-21 — one vocabulary, everywhere", () => {
 
 describe("AC-7 — every screen carries the same control", () => {
   it("Categorías offers to explain itself", async () => {
-    renderPage()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
 
     expect(await openHelpPanel("Categorías")).toHaveTextContent(
       "Una categoría dice para qué fue un movimiento",
@@ -96,7 +86,7 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
   it("An empty Categorías screen teaches and offers the way in", async () => {
     listCategories.mockResolvedValue([])
     const user = userEvent.setup()
-    renderPage()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
 
     expect(
       await screen.findByText(/Una categoría dice para qué fue un movimiento/),

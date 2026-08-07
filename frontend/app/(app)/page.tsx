@@ -14,7 +14,7 @@ import { listAccounts } from "@/lib/api/accounts"
 import { moneyAvailable, moneyRates } from "@/lib/api/funds"
 import { report as fetchReport } from "@/lib/api/reports"
 import type { MonthAvailable } from "@/lib/api/types"
-import { nounOf, shapeOf } from "@/lib/funds"
+import { labelOf, shapeOf } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                     />
                   </Row>
                   {data.funds.map((fund) => (
-                    <Row key={fund.fund_id} label={`${nounOf(shapeOf(fund))} · ${fund.name}`}>
+                    <Row key={fund.fund_id} label={labelOf(fund)}>
                       <MoneyAmount
                         cents={fund.asks}
                         currency="COP"

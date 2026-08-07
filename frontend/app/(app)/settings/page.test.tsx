@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { queryWrapper } from "@/tests/factories"
 
 const { getSettings, updateSettings, getFx, setFx, listAccounts } = vi.hoisted(() => ({
   getSettings: vi.fn(),
@@ -16,15 +16,6 @@ vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 
 import SettingsPage from "./page"
 
-function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={qc}>
-      <SettingsPage />
-    </QueryClientProvider>,
-  )
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   getSettings.mockResolvedValue({ base_currency: "COP", default_source_account_id: null })
@@ -34,7 +25,7 @@ beforeEach(() => {
 
 describe("AC-21 — one vocabulary, everywhere", () => {
   it("Ajustes no longer speaks of a feature that was removed", async () => {
-    renderPage()
+    render(<SettingsPage />, { wrapper: queryWrapper })
 
     await screen.findByText("Ajustes")
     expect(document.body.textContent).not.toMatch(/metas/i)

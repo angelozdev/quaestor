@@ -1,6 +1,6 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import { queryWrapper } from "@/tests/factories"
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/",
@@ -11,13 +11,11 @@ vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "dark", setThe
 import { AppShell } from "./app-shell"
 
 function renderShell() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    <QueryClientProvider client={qc}>
-      <AppShell>
-        <p>contenido</p>
-      </AppShell>
-    </QueryClientProvider>,
+    <AppShell>
+      <p>contenido</p>
+    </AppShell>,
+    { wrapper: queryWrapper },
   )
 }
 

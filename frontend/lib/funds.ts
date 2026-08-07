@@ -38,3 +38,8 @@ export function whatItIs(shape: FundShape): string {
 export function shapeSentence(shape: FundShape): string {
   return `Un ${shape} ${whatItIs(shape)}`
 }
+
+/** How a fund is labelled in a breakdown: "Presupuesto · Restaurantes". */
+export function labelOf(fund: { accumulates: boolean; name: string }): string {
+  return `${nounOf(shapeOf(fund))} · ${fund.name}`
+}
