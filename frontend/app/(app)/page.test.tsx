@@ -85,6 +85,20 @@ describe("DashboardPage breakdown", () => {
   })
 })
 
+describe("AC-21 — one vocabulary, everywhere", () => {
+  it("The Dashboard breakdown calls a presupuesto a presupuesto", async () => {
+    moneyAvailable.mockResolvedValue({
+      ...AVAILABLE,
+      income: 300_000_000,
+      funds: [{ ...AVAILABLE.funds[0], accumulates: false, asks: 10_000_000 }],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
+    expect(screen.queryByText("Fondo · Restaurantes")).not.toBeInTheDocument()
+  })
+})
+
 describe("DashboardPage keeps the money available and the rates apart", () => {
   it("labels them as different figures and shows both", async () => {
     const { container } = renderPage()

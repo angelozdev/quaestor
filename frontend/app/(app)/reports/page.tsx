@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
+import { nounOf, shapeOf } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -145,8 +146,7 @@ export default function ReportsPage() {
               </div>
             </Section>
 
-            {/* Fondos */}
-            <Section title="Fondos">
+            <Section title="Fondos y presupuestos">
               {data.funds.length > 0 ? (
                 <table className="w-full text-sm">
                   <thead>
@@ -262,7 +262,7 @@ export default function ReportsPage() {
                     </span>
                   </Row>
                   {data.available.funds.map((f) => (
-                    <Row key={f.fund_id} label={`Fondo · ${f.name}`} faint>
+                    <Row key={f.fund_id} label={`${nounOf(shapeOf(f))} · ${f.name}`} faint>
                       <span
                         className="text-sm tabular-nums"
                         style={{ color: "var(--muted-foreground)" }}

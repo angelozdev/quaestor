@@ -35,7 +35,6 @@ const FIELDS: Field[] = [
     allowNullLabel: "Sin grupo",
   },
   { kind: "checkbox", name: "is_income", label: "Es ingreso" },
-  { kind: "checkbox", name: "exclude_from_budget", label: "Excluir del presupuesto" },
   { kind: "checkbox", name: "exclude_from_totals", label: "Excluir de los totales" },
 ]
 
@@ -67,7 +66,6 @@ export default function CategoriesPage() {
     name: String(v.name),
     group_id: (v.group_id as number | null) ?? null,
     is_income: Boolean(v.is_income),
-    exclude_from_budget: Boolean(v.exclude_from_budget),
     exclude_from_totals: Boolean(v.exclude_from_totals),
   })
 
@@ -164,11 +162,7 @@ export default function CategoriesPage() {
                     {groupName(c.group_id)}
                   </td>
                   <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    {[
-                      c.is_income && "ingreso",
-                      c.exclude_from_budget && "no-presup.",
-                      c.exclude_from_totals && "no-totales",
-                    ]
+                    {[c.is_income && "ingreso", c.exclude_from_totals && "no-totales"]
                       .filter(Boolean)
                       .join(" · ") || "—"}
                   </td>
@@ -209,7 +203,6 @@ export default function CategoriesPage() {
           name: "",
           group_id: null,
           is_income: false,
-          exclude_from_budget: false,
           exclude_from_totals: false,
         }}
         pending={create.isPending}
@@ -224,7 +217,6 @@ export default function CategoriesPage() {
           name: editing?.name ?? "",
           group_id: editing?.group_id ?? null,
           is_income: editing?.is_income ?? false,
-          exclude_from_budget: editing?.exclude_from_budget ?? false,
           exclude_from_totals: editing?.exclude_from_totals ?? false,
         }}
         pending={update.isPending}

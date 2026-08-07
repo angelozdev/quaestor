@@ -11,6 +11,7 @@ import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
 import { moneyAvailable, moneyRates } from "@/lib/api/funds"
 import { report as fetchReport } from "@/lib/api/reports"
+import { nounOf, shapeOf } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -171,7 +172,7 @@ export default function DashboardPage() {
                     />
                   </Row>
                   {data.funds.map((fund) => (
-                    <Row key={fund.fund_id} label={`Fondo · ${fund.name}`}>
+                    <Row key={fund.fund_id} label={`${nounOf(shapeOf(fund))} · ${fund.name}`}>
                       <MoneyAmount
                         cents={fund.asks}
                         currency="COP"

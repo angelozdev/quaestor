@@ -90,7 +90,7 @@ export default function SettingsPage() {
 
       <Section title="Cuenta origen por defecto">
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Cuenta usada como origen de las contribuciones a metas y transferencias planeadas.
+          Cuenta usada como origen de las transferencias planeadas.
         </p>
         <div className="space-y-1.5">
           <Label>Cuenta origen</Label>
