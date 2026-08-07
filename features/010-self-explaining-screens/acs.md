@@ -74,9 +74,18 @@ the control until data exists, which would make its location something to learn.
 
 ## What this feature must not do
 
-**Not one line of the arithmetic moves.** `domain/rules.py` and
-`services/funds.py` are untouched, no migration, no schema change. AC-18 is the
-statement of that, and 003's acceptance suite is what proves it.
+**No figure the app already reports may move.** `domain/rules.py` is untouched,
+no migration, no schema change. AC-18 is the statement of that, and 003's
+acceptance suite is what proves it.
+
+*Amended 2026-08-08, on the owner's explicit permission, because it had stopped
+being true.* As written at CP2 this said `services/funds.py` was untouched too,
+and it was — the feature was frontend-only then. At CP3 the owner decided a fund
+must report three figures it never reported (what the category spent, what it
+carries into next month, what next month has to spend), which changed that file.
+None of it is new arithmetic and no existing figure moved, which is what AC-18
+and 003's 361 scenarios prove; but the sentence claimed more than that and was
+left standing through four checkpoints. Found by the CP7 verifier.
 
 **The assistant is out of scope**, excluded by the owner during the audit. The
 risk this leaves is named rather than fixed: after this feature the screens say

@@ -151,8 +151,8 @@ Answered 2026-08-07 in `acs.md`, 21 ACs.
 
 - **Mostly frontend, with one backend seam.** Three new reported figures (above)
   and everything else on the screen. Three streams cover it: vitest for what a
-  screen says, the generated stream for the nine `@backend` scenarios, and the
-  Chrome MCP for the one scenario about layout — plus 003's suite proving
+  screen says, the generated stream for the 13 `@backend` scenarios, and the
+  Chrome MCP for the 2 scenarios about layout and position — plus 003's suite proving
   nothing else moved. ADR-0045 is amended by this feature to define `@backend`.
 - **No migration**, so CHARTER §7's data gate does not apply.
 - **UI copy is Spanish** (CHARTER §3, ADR-0001) — this feature is almost

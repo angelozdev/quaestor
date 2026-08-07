@@ -7,7 +7,9 @@ created: 2026-08-07
 
 # Plan — 010 self-explaining-screens
 
-113 scenarios over 21 ACs, approved 2026-08-07 after three spec-guardian passes.
+115 scenarios over 21 ACs. 113 were approved 2026-08-07 after three
+spec-guardian passes; AC-9 gained two more the same day, on the owner's explicit
+permission, when he asked that clicking outside the panel close it.
 Architecture confirmed by the owner the same day.
 
 ## Architecture
@@ -43,6 +45,14 @@ month asked for". Making it overshoot by one changes the meaning of its return
 and touches the one function whose correctness 003's whole suite rests on.
 A separate call that *reuses the same body* keeps the blast radius at a new
 function plus three fields.
+
+**Changed at CP6, and the plan is left standing as the plan.** Refine found that
+"reuses the same body" had become "repeats the same body": `_look_ahead`'s carry
+line was `_walk`'s loop body character-for-character. The fold step now lives in
+`_walk` alone, on a `carries` field of `_Month`, and `_look_ahead(agg, fund,
+walked) -> int` keeps only the ask. The reasoning above still holds — `_walk`'s
+invariant is why the two stayed apart — but the signature described here is no
+longer the code. See `handoffs/2026-08-08T0030-refine.md`.
 
 **Risk named:** `_ask` for `from_recurring` in a month the aggregate was not
 built for is the one call that could behave differently. AC-18's two new
@@ -126,10 +136,10 @@ run-acceptance-tests.sh                    route the @backend subset
 
 | Charter rule | Status | Note |
 |---|---|---|
-| §1 DAE with full ATDD coverage | ✅ | 21 ACs, 113 scenarios, three streams, all red but the five green by design |
+| §1 DAE with full ATDD coverage | ✅ | 21 ACs, 115 scenarios, three streams, all red but the eight green by design |
 | §1 ADRs for significant decisions | ✅ | ADR-0045 written and amended at CP3; product ADR-042 at CP2 |
 | §2 Backend layering api → services → domain | ✅ | `_look_ahead` sits in `services`; `domain/rules.py` untouched |
-| §2 MCP/REST parity (ADR-0006/0009) | ⚠️ | The three new fields must reach the MCP fund tool too, or parity breaks. Folded into phase 1 rather than deferred — see Amendments |
+| §2 MCP/REST parity (ADR-0006/0009) | ⚠️ | The three new fields must reach the MCP fund tool too, or parity breaks. Folded into phase 1 rather than deferred — see Amendments. **CP7 found it is honoured but UNTESTED**: deleting all three `mcp/format.fund_card` lines leaves 996 backend and 361 acceptance green. Filed, not fixed |
 | §2 `QueryBoundary` as the async contract (ADR-0029) | ✅ | Untouched; the panel deliberately sits outside it, and AC-16 is why |
 | §3 English for code, Spanish for UI copy | ✅ | This feature is almost entirely Spanish UI copy |
 | §3 pnpm only (ADR-0003) | ✅ | No new frontend dependency at all |
@@ -228,7 +238,7 @@ Runs once phase 2 lands. Their step vocabulary is 003's, verbatim, so
 `spent N COP this month`, `carries N COP into next month`, `will have N COP to
 spend next month`.
 
-**2. vitest — the 98 untagged scenarios.** What a screen says and offers. Bound
+**2. vitest — the 100 untagged scenarios.** What a screen says and offers. Bound
 by `acceptance/spec_coverage.py`, which fails on any untagged scenario with no
 test carrying its name. Binding is exact-string; a smart quote leaves a scenario
 silently unbound, which errs safe and is recorded as a known sharp edge.
