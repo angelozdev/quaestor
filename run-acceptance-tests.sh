@@ -46,8 +46,13 @@ else
     fi
 fi
 
-# --- parse + generate per feature ------------------------------------------
+# --- parse, then route each feature to its stream (ADR-0045) ----------------
+# `acceptance_stream: frontend` binds every scenario to vitest and generates no
+# pytest; `mixed` does the same but also carries @backend scenarios, which have
+# no generator yet (see ADR-0045's amendment) and are reported rather than run.
+# Anything else generates pytest as it always did.
 GENERATED_DIRS=""
+FRONTEND_FAILED=0
 for dir in $FEATURE_DIRS; do
     dir="$(cd "$dir" && pwd)"
     spec="$dir/spec.md"
@@ -57,12 +62,27 @@ for dir in $FEATURE_DIRS; do
     fi
     mkdir -p "$dir/.build"
     python3 "$DAE_GHERKIN" "$spec" "$dir/.build/spec.json"
+
+    if grep -qE '^acceptance_stream:[[:space:]]*(frontend|mixed)[[:space:]]*$' "$dir/feature.md" 2>/dev/null; then
+        python3 "$ROOT/acceptance/spec_coverage.py" "$dir" "$ROOT/frontend" || FRONTEND_FAILED=1
+        continue
+    fi
+
     python3 "$ROOT/acceptance/generator.py" "$dir"
     GENERATED_DIRS="$GENERATED_DIRS $dir/.build/generated"
 done
 
 # --- run --------------------------------------------------------------------
 # From backend/ so uv resolves the backend project env (same as `just dev-test`).
-cd "$ROOT/backend"
-# shellcheck disable=SC2086 — word splitting over generated dirs is intended
-exec uv run pytest $GENERATED_DIRS
+PYTEST_STATUS=0
+if [ -n "$GENERATED_DIRS" ]; then
+    cd "$ROOT/backend"
+    # shellcheck disable=SC2086 — word splitting over generated dirs is intended
+    uv run pytest $GENERATED_DIRS || PYTEST_STATUS=$?
+fi
+
+if [ "$FRONTEND_FAILED" -ne 0 ]; then
+    echo "spec-coverage failed: a scenario has no test — see the UNBOUND list above" >&2
+    exit 1
+fi
+exit "$PYTEST_STATUS"

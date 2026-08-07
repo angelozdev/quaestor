@@ -11,6 +11,7 @@ assignee: local
 tracker_ref: local
 roadmap_ref: fund-vs-budget-vocabulary
 relevant_adrs: [0001, 0002, 0029, 0043, 0045]
+acceptance_stream: mixed
 created: 2026-08-05
 intake: discuss
 ---
@@ -85,8 +86,21 @@ copy change into a help surface, and why the slug was renamed the same day.
   rollover for him.
 - **The table shows the two shapes as two labelled groups**, so the owner can
   read his own setup back.
-- **Out of scope:** every line of fund arithmetic — `domain/rules.py` and
-  `services/funds.py` untouched, no migration, no schema change. The two layers
+- **A fund reports three figures it has never reported** — what the category
+  spent this month, what it carries into next month, and what it will have to
+  spend next month. Decided by the owner on 2026-08-07 at CP3, after a
+  spec-guardian pass proved AC-3 could not be built without them. **This is a
+  deliberate scope change: the feature is no longer frontend-only.**
+
+  None is new arithmetic and no existing figure moves, which is what AC-18 and
+  003's suite exist to prove. `spent` is already a field of the month the fold
+  returns; the carry is one more evaluation of `fund_next_opening_calc`, which
+  the fold runs for every month *before* the one being asked about and returns
+  before running for that one; and next month's figure is the fold advancing one
+  month. The third was found by the second audit — AC-3's presupuesto row
+  asserts `ask - spent`, derivable from nothing the screen receives today.
+- **Out of scope:** changing any figure the app already reports —
+  `domain/rules.py` untouched, no migration, no schema change. The two layers
   the owner declined, plus the *"lo que todavía no usas"* section he cut at CP2.
   The assistant, excluded from the audit at his request.
   The audit's other findings, which stay there as their own candidates.
@@ -135,8 +149,11 @@ Answered 2026-08-07 in `acs.md`, 21 ACs.
 
 ## Charter signals
 
-- **Frontend-only.** The local test surface covers it fully: vitest plus 003's
-  acceptance suite proving no behaviour moved.
+- **Mostly frontend, with one backend seam.** Three new reported figures (above)
+  and everything else on the screen. Three streams cover it: vitest for what a
+  screen says, the generated stream for the nine `@backend` scenarios, and the
+  Chrome MCP for the one scenario about layout — plus 003's suite proving
+  nothing else moved. ADR-0045 is amended by this feature to define `@backend`.
 - **No migration**, so CHARTER §7's data gate does not apply.
 - **UI copy is Spanish** (CHARTER §3, ADR-0001) — this feature is almost
   entirely that copy, the surface ADR-0001 explicitly put out of scope and that

@@ -1,6 +1,6 @@
 # 0045. Frontend acceptance criteria bind to vitest, and one Gherkin parser stays the single source
 
-- **Status:** accepted
+- **Status:** accepted, **amended 2026-08-07** — see *Amendment: the `@backend` tag*
 - **Date:** 2026-08-07
 - **Deciders:** Angelo
 - **Supersedes:** —
@@ -215,6 +215,47 @@ Concretely:
 - CHARTER §6's *"no e2e layer"* stands and is now qualified by this ADR rather
   than merely observed: there is no automated e2e layer, and there is a manual
   browser stream with a stated evidence contract.
+
+## Amendment: the `@backend` tag
+
+**2026-08-07, same day, forced by feature 010's own CP3.** Two independent
+spec-guardian passes reported the same hole: this ADR assumed a frontend feature
+is *entirely* frontend, and 010 stopped being that. Its AC-3 could not be built
+without a fund reporting three figures it never reported, so the owner took a
+deliberate scope change and nine of 010's scenarios now assert what a **fund
+reports**, not what a screen renders.
+
+Under this ADR as first written those nine had two possible fates, both wrong:
+fail the coverage check forever, or be bound to a mocked frontend, where an
+assertion about a figure the frontend was handed proves nothing about the figure
+the backend computes.
+
+**A third tag is defined: `@backend`.** The observable is a reported figure. The
+scenario belongs to the generated pytest stream — the one this ADR skips for the
+*rest* of a frontend feature — and it is exempt from the vitest binding
+requirement, not from being run.
+
+**The stream table, complete:**
+
+| tag | observable | bound to | gate |
+|---|---|---|---|
+| *(none)* | what a screen says or offers | vitest + React Testing Library | exit code, per scenario name |
+| `@backend` | what a fund reports | generated pytest | exit code |
+| `@browser` | layout, real CSS, the accessibility tree | Chrome MCP against the running stack | recorded observation in the handoff |
+
+**A feature declares `acceptance_stream: mixed`** in `feature.md` when it has
+both. `frontend` keeps its meaning: no generated stream at all.
+
+**The gap this amendment does NOT close, named so it is not mistaken for
+closed.** `acceptance/generator.py` emits *every* scenario in the IR and cannot
+filter by tag — the tags live in `spec.md`, which `dae_gherkin.py` drops as
+free-form markdown, and the IR carries no tag field. So a `mixed` feature cannot
+yet generate only its `@backend` subset. Until that is built, the runner prints
+the tagged scenarios and exits non-zero rather than pretending they ran. **This
+is the first thing feature 010's `plan.md` has to settle**, and it is the reason
+`@backend` is defined here rather than deferred: a tag with no definition and no
+runner is exactly the "prose nobody executes" outcome this ADR exists to prevent,
+and naming it is what makes it fixable.
 
 ## Sources
 
