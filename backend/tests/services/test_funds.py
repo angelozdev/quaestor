@@ -366,6 +366,20 @@ def test_the_opening_balance_counts_toward_what_the_fund_still_needs(session):
     assert status.asks == 300_000_00
 
 
+def test_a_stated_opening_balance_still_seeds_the_fold_in_a_later_month(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+        opening_balance=1_200_000_00,
+    )
+    assert funds.fund_status(session, fund.id, "2026-12").holds == 1_500_000_00
+
+
 def test_the_fund_never_reads_an_account_balance(session):
     from quaestor.services import accounts
 
@@ -488,6 +502,41 @@ def test_a_stated_balance_is_what_next_month_builds_on(session):
     status = funds.fund_status(session, fund.id, "2026-11")
     assert status.carries == 600_000_00
     assert status.next_month_has == 700_000_00
+
+
+def test_a_fund_that_starts_next_month_already_carries_the_balance_it_was_given(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(
+        session, cat, rule="fixed", amount=100_000_00, start_month="2026-12", opening_balance=500_000_00
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.holds == 0
+    assert status.carries == 500_000_00
+    assert status.next_month_has == 600_000_00
+
+
+def test_a_balance_stated_on_a_fund_two_months_out_carries_nothing_yet(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
+    funds.set_fund(session, fund.id, balance=500_000_00)
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 0
+    assert status.next_month_has == 0
+
+
+def test_a_fund_whose_target_falls_next_month_asks_the_whole_thing_and_is_on_track(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=600_000_00,
+        target_month="2026-12",
+        start_month="2026-11",
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 600_000_00
+    assert status.on_track is True
 
 
 # ----------------------------------------------------------------- refusing
