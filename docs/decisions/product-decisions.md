@@ -591,7 +591,7 @@ Money invisible to every report, posted and confirmed: **$2.072.854 COP + US$7.4
 
 ## ADR-037 — Envelopes and goals collapse into one thing, the fund; and the month shows two numbers, not one
 
-**Status:** accepted (feature 003, 2026-08-04) · **Supersedes** ADR-003 (safe-to-spend = unassigned money) and ADR-006 (flexible goals) · **Amends** ADR-002 and ADR-016 · Technical detail in `docs/adr/0043` and `docs/adr/0044`
+**Status:** accepted (feature 003, 2026-08-04), **amended by ADR-042** (feature 010, 2026-08-07) — vocabulary only: the fund that does not accumulate is named *presupuesto*, and every mechanism below stands unchanged · **Supersedes** ADR-003 (safe-to-spend = unassigned money) and ADR-006 (flexible goals) · **Amends** ADR-002 and ADR-016 · Technical detail in `docs/adr/0043` and `docs/adr/0044`
 
 **Context.** ADR-002 gave Quaestor two layers: per-category envelopes with rollover, and a global safe-to-spend on top. ADR-006 added a third mechanism, the goal, with its own table, its own screen and a savings account it forced the user to link.
 
@@ -780,3 +780,47 @@ The owner chose this over leaving the figure undated, after the behaviour was pu
 - **The untested branch gets a behaviour to test.** Mutation left three survivors on the anchor branch — `stated_for > year_month` inverted, and its two return values — because no scenario dates an anchor at all. They stop being a hole once there is a decided behaviour to pin.
 
 **Confirmation.** **Decided, not built.** Live today: `anchor_month` is nullable and `create_fund(opening_balance=…)` already dates its anchor at the start month. Pending: the form field, and dating what `set_fund(balance=…)` receives at the current month. Tracked as roadmap `id:fund-opening-balance`. Until it ships, the December row above is still what the app does.
+
+---
+
+## ADR-042 — A ceiling and a pot get two names; the mechanism stays one
+
+**Status:** accepted (feature 010, 2026-08-07) · **Amends** ADR-037 in vocabulary only — its collapse of mechanisms stands unchanged
+
+**Context.** ADR-037 collapsed envelopes and goals into one noun, the **fund**, and was right to: three tables, a goals screen and a monthly assignment ritual became one record with a rule that computes its own number. The collapse was about mechanisms.
+
+It also produced one word for two behaviours that differ in the only way the owner cares about. A fund carries a rollover flag:
+
+| | spend $60.000 of $100.000 in August | September opens at |
+|---|---|---|
+| does not accumulate | the $40.000 are not kept | $100.000 |
+| accumulates | the $40.000 are kept | $140.000 |
+
+On the screen that choice is a bare checkbox — *"Acumula lo que sobra cada mes"* — with no statement of what it changes next month, and it is unnamed to a screen reader.
+
+On 2026-08-05 the owner asked for a monthly spending ceiling, a savings pot for irregular costs, and month-by-month saving toward an annual subscription. **All three were already built, tested and in production**, and he had commissioned all three. Asking for the first, he produced the missing word himself, unprompted and correctly: *"esos no son fondos sino presupuestos"*.
+
+**Decision.** **Two nouns.**
+
+- A **presupuesto** is a monthly ceiling. What is not spent is not kept.
+- A **fondo** carries its leftover money into the next month.
+
+The screen shows them as two labelled groups, creating one starts from which of the two the owner is making, and the rollover checkbox disappears — the entry point decides it. The navigation reads `Fondos y presupuestos`, because the menu is the only place a word is visible without a click.
+
+**Every combination reachable before stays reachable.** The two rules that offer the choice reach both nouns; the two that must carry money forward — reading the owner's recurring charges, and saving toward a date — reach only the fondo.
+
+**ADR-037 is amended, not weakened.** After this there is still one record shape, one screen, one create form, one rule that *is* the monthly number, and zero monthly ritual. What splits is what the owner is told he is making. The failure ADR-037 diagnosed was a ritual nobody performed; the failure this one diagnoses is a capability nobody could find.
+
+**Alternatives rejected.**
+
+- **(A) One noun with the mode written out.** Every entry stays a *fondo* and says in words whether it accumulates and what that means in September. Strictly truthful, strictly cheaper, and it keeps ADR-037's letter as well as its spirit. Rejected because the word the owner reached for is the word that would never appear: he would search the app for *presupuesto* and find nothing, which is the exact failure being fixed.
+- **(B) Leave the checkbox and explain it better.** A longer label under the control. Rejected on Nielsen Norman's rule, which the audit applied directly: content whose absence stops the user completing the task must be a label, not help text — and the accumulate choice determines whether the owner picks right or wrong. Explaining a control well does not make it findable by someone who does not know it exists.
+
+**Consequences.**
+
+- **No migration, no schema change, no arithmetic change.** Nothing already created is edited or asked about; each existing entry simply appears under the heading matching what it already does. Feature 010's AC-18 states this and 003's acceptance suite is what proves it.
+- **The rollover checkbox and its accessibility defect both disappear** rather than being fixed. The audit's D15 — the control announcing itself as an unnamed checkbox at the most important decision in the form — has no control left to be unnamed.
+- **The assistant does not learn the word.** It was excluded from the audit by the owner, so after this the screens say *presupuesto* and the assistant does not know it. Named as a gap, filed for the roadmap, not fixed here.
+- **The vocabulary is now load-bearing for anything new.** Feature 009 (named goals) was deliberately sequenced behind this one so it would inherit settled words instead of adding a fourth invisible surface.
+
+**Confirmation.** Decided at feature 010's Checkpoint 2 on 2026-08-07, after the two shapes were put to the owner as behaviour with the September figures above. Not built: it ships with 010.

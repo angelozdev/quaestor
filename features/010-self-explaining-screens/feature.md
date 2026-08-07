@@ -10,7 +10,7 @@ owner: angelo
 assignee: local
 tracker_ref: local
 roadmap_ref: fund-vs-budget-vocabulary
-relevant_adrs: [0001, 0002, 0029, 0043]
+relevant_adrs: [0001, 0002, 0029, 0043, 0045]
 created: 2026-08-05
 intake: discuss
 ---
@@ -21,9 +21,11 @@ intake: discuss
 
 On every screen, a discreet **¿Cómo funciona esto?** opens a panel that explains
 what that screen does — not in general, but **using what the owner actually has
-there right now**. It never interrupts, it is always available, and it ends by
-naming what the screen can do that he is *not* using yet, with a button that
-starts it.
+there right now**. It never interrupts and it is always available, in the same
+place whether the screen holds data or not.
+
+And every screen that is still empty teaches what the thing is and offers the
+button that starts it, instead of spending the first visit on a label.
 
 The fund rules stop being named after the arithmetic they run and start being
 named after the job they do, so the picker and the panel say the same thing.
@@ -73,21 +75,20 @@ copy change into a help surface, and why the slug was renamed the same day.
   Fondos it names his funds, what each asks this month, and why. Affordable
   precisely because Quaestor has exactly one user (CHARTER §4) — no
   segmentation, no analytics, no targeting to build.
-- **The panel ends with what is not being used**, and offers to start it. That
-  section is the whole point: it is what was missing all four times.
-- **The fund rule picker names the job, not the arithmetic**, with a one-line
+- **The ten empty screens teach**, in one or two sentences, and offer the button
+  that starts the thing. The shared component already accepts that button and
+  ten of its twelve uses don't pass one.
+- **The rule picker names the job, not the arithmetic**, with a one-line
   consequence carrying a number under each option.
-- **The accumulate choice** stops being a bare checkbox; the screen says which
-  of the two shapes is being created and what it means next month.
-- **The funds table** says which shape each fund is, so the owner can read his
-  own setup back.
-- **A product decision** in `docs/decisions/product-decisions.md`: whether the
-  two accumulate shapes get separate names (*presupuesto* / *fondo*) or stay one
-  noun with a stated mode. This partly re-expands what ADR-037 collapsed, so it
-  is argued, not assumed.
+- **The accumulate checkbox disappears.** Which of the two shapes is being made
+  is the first thing the owner chooses, in his own words, and it decides the
+  rollover for him.
+- **The table shows the two shapes as two labelled groups**, so the owner can
+  read his own setup back.
 - **Out of scope:** every line of fund arithmetic — `domain/rules.py` and
   `services/funds.py` untouched, no migration, no schema change. The two layers
-  the owner declined. The assistant, excluded from the audit at his request.
+  the owner declined, plus the *"lo que todavía no usas"* section he cut at CP2.
+  The assistant, excluded from the audit at his request.
   The audit's other findings, which stay there as their own candidates.
 
 ## What the panel looks like
@@ -95,40 +96,42 @@ copy change into a help surface, and why the slug was renamed the same day.
 Drafted with the sandbox's real figures, as the shape to build toward:
 
 ```
-¿Qué es un fondo?                                          [×]
+¿Cómo funciona esto?                                       [×]
 
-Aparta plata todos los meses para una categoría, sin que
-tengas que acordarte.
+Un PRESUPUESTO es un tope del mes: lo que no gastes, no se
+guarda. Un FONDO va juntando: lo que sobre pasa al mes
+siguiente.
 
-TUS FONDOS AHORA MISMO
+LO QUE TIENES AHORA MISMO
 
-Restaurantes · pide $89.000 este mes
-  Es el promedio de lo que gastaste antes.
-  No acumula: si gastas $60.000, los $29.000 que sobran
-  NO pasan a septiembre.
+Restaurantes · presupuesto · pide $89.000 este mes
+  El tope sale del promedio de lo que gastaste antes.
+  Si gastas $60.000, septiembre vuelve a $89.000.
 
-Mercado · pide $10.000.000 este mes
+Mercado · fondo · pide $10.000.000 este mes
   Va juntando para una fecha.
   ⚠️ Pide más de lo que entra al mes.
-
-LO QUE TODAVÍA NO USAS
-
-Pagar suscripciones mes a mes
-  Netflix te cobra $35.000. Un fondo con esta regla lo
-  aparta solo y se renueva cada ciclo sin que hagas nada.
-  [ Crear ese fondo ]
 ```
 
-## Open questions for CP2
+## What CP2 decided
 
-- One noun with a stated mode, or two nouns (*presupuesto* / *fondo*)?
-- All 12 screens in this feature, or screen by screen starting with Fondos?
-- How does *"lo que todavía no usas"* decide what to show — a hand-written list
-  per screen, or derived from what the data says is absent?
-- Does the panel work on a phone, where a side panel becomes a full sheet? (The
-  audit's D10 says mobile has bigger problems first.)
-- Does anything in 003's `spec.md` earn an AC from the renamed rules?
-- Does the assistant's vocabulary move too, or only the screens?
+Answered 2026-08-07 in `acs.md`, 21 ACs.
+
+- **Two nouns**, *presupuesto* and *fondo* — recorded as product ADR-042,
+  amending ADR-037 in vocabulary and upholding every mechanism in it.
+- **The menu reads `Fondos y presupuestos`**, so the word is visible without a
+  click.
+- **All ten app screens** get the panel, not just Fondos.
+- **The *"lo que todavía no usas"* section is cut** by the owner. It was the
+  only part that spoke without being opened; what survives teaches at the start
+  (the empty screen) and on demand (the panel).
+- **The panel is in the same place with or without data**; with nothing of his
+  own to quote it explains with worked examples, marked as examples.
+- **The empty screens are in**, absorbing the audit's D13.
+- **003's `spec.md` earns no AC** — the arithmetic does not move, and AC-18
+  states that the 003 suite is what proves it.
+- **The assistant does not learn the word**, and the gap is named rather than
+  fixed. Roadmap material.
 
 ## Charter signals
 
