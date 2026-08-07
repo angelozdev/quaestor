@@ -52,6 +52,7 @@ fi
 # for its @backend ones alone. Anything else generates pytest as it always did.
 GENERATED_DIRS=""
 FRONTEND_FAILED=0
+FRONTEND_STREAM=0
 for dir in $FEATURE_DIRS; do
     dir="$(cd "$dir" && pwd)"
     spec="$dir/spec.md"
@@ -63,6 +64,7 @@ for dir in $FEATURE_DIRS; do
     python3 "$DAE_GHERKIN" "$spec" "$dir/.build/spec.json"
 
     if grep -qE '^acceptance_stream:[[:space:]]*(frontend|mixed)[[:space:]]*$' "$dir/feature.md" 2>/dev/null; then
+        FRONTEND_STREAM=1
         python3 "$ROOT/acceptance/spec_coverage.py" "$dir" "$ROOT/frontend" || FRONTEND_FAILED=1
         if grep -qE '^acceptance_stream:[[:space:]]*mixed[[:space:]]*$' "$dir/feature.md"; then
             python3 "$ROOT/acceptance/generator.py" --tag @backend "$dir"
@@ -76,6 +78,14 @@ for dir in $FEATURE_DIRS; do
 done
 
 # --- run --------------------------------------------------------------------
+# spec_coverage.py only checks that a test carrying each scenario's name EXISTS.
+# The tests themselves are vitest's, so a frontend stream that never runs them
+# would report green over a suite nobody executed.
+VITEST_STATUS=0
+if [ "$FRONTEND_STREAM" -ne 0 ]; then
+    (cd "$ROOT/frontend" && pnpm vitest run) || VITEST_STATUS=$?
+fi
+
 # From backend/ so uv resolves the backend project env (same as `just dev-test`).
 PYTEST_STATUS=0
 if [ -n "$GENERATED_DIRS" ]; then
@@ -87,5 +97,9 @@ fi
 if [ "$FRONTEND_FAILED" -ne 0 ]; then
     echo "spec-coverage failed: a scenario has no test — see the UNBOUND list above" >&2
     exit 1
+fi
+if [ "$VITEST_STATUS" -ne 0 ]; then
+    echo "vitest failed: the scenarios are bound to tests that do not pass" >&2
+    exit "$VITEST_STATUS"
 fi
 exit "$PYTEST_STATUS"

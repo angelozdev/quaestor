@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { createPortal } from "react-dom"
 
 const FOCUSABLE = [
   "a[href]",
@@ -45,6 +46,11 @@ function focusablesIn(panel: HTMLElement | null): HTMLElement[] {
  *
  * It is deliberately placed outside `QueryBoundary` (ADR-0029): the panel has
  * to open and explain even when the screen's figures never arrive.
+ *
+ * While it is open the rest of the page is `inert`, so a screen reader cannot
+ * browse behind it. `aria-modal` alone does not stop that, which is why the
+ * panel is rendered into `body` — from inside the page it could not mark its
+ * own ancestors hidden without hiding itself.
  */
 export function ScreenHelp({ screen, children }: { screen: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -53,6 +59,23 @@ export function ScreenHelp({ screen, children }: { screen: string; children: Rea
   const backdrop = useRef<HTMLDivElement>(null)
   const pressBeganOnBackdrop = useRef(false)
   const titleId = useId()
+  const [host, setHost] = useState<HTMLElement | null>(null)
+
+  useEffect(() => {
+    const node = document.createElement("div")
+    document.body.append(node)
+    setHost(node)
+    return () => node.remove()
+  }, [])
+
+  useEffect(() => {
+    if (!open || host === null) return
+    const behind = Array.from(document.body.children).filter((el) => el !== host)
+    for (const el of behind) el.setAttribute("inert", "")
+    return () => {
+      for (const el of behind) el.removeAttribute("inert")
+    }
+  }, [open, host])
 
   useEffect(() => {
     if (open) focusablesIn(panel.current)[0]?.focus()
@@ -109,58 +132,61 @@ export function ScreenHelp({ screen, children }: { screen: string; children: Rea
         {HELP_LABEL}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex justify-end">
-          <div
-            ref={backdrop}
-            aria-hidden
-            data-slot="screen-help-backdrop"
-            className="absolute inset-0 bg-black/40"
-          />
-          <section
-            ref={panel}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={titleId}
-            onKeyDown={onKeyDown}
-            className="relative flex h-full w-full max-w-full flex-col overflow-y-auto border-l shadow-xl sm:w-[26rem]"
-            style={{ background: "var(--card)", borderColor: "var(--border)" }}
-          >
-            <header
-              className="flex items-start justify-between gap-3 border-b px-4 py-3"
-              style={{ borderColor: "var(--border)" }}
+      {open &&
+        host !== null &&
+        createPortal(
+          <div className="fixed inset-0 z-50 flex justify-end">
+            <div
+              ref={backdrop}
+              aria-hidden
+              data-slot="screen-help-backdrop"
+              className="absolute inset-0 bg-black/40"
+            />
+            <section
+              ref={panel}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={titleId}
+              onKeyDown={onKeyDown}
+              className="relative flex h-full w-full max-w-full flex-col overflow-y-auto border-l shadow-xl sm:w-[26rem]"
+              style={{ background: "var(--card)", borderColor: "var(--border)" }}
             >
-              <h2 id={titleId} className="font-display text-base font-semibold tracking-tight">
-                ¿Cómo funciona {screen}?
-              </h2>
-              <button
-                type="button"
-                onClick={close}
-                aria-label="Cerrar"
-                className="shrink-0 rounded-md p-1"
-                style={{ color: "var(--muted-foreground)" }}
+              <header
+                className="flex items-start justify-between gap-3 border-b px-4 py-3"
+                style={{ borderColor: "var(--border)" }}
               >
-                <X aria-hidden className="size-4" />
-              </button>
-            </header>
+                <h2 id={titleId} className="font-display text-base font-semibold tracking-tight">
+                  ¿Cómo funciona {screen}?
+                </h2>
+                <button
+                  type="button"
+                  onClick={close}
+                  aria-label="Cerrar"
+                  className="shrink-0 rounded-md p-1"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  <X aria-hidden className="size-4" />
+                </button>
+              </header>
 
-            <div className="flex-1 space-y-3 break-words px-4 py-4 text-sm leading-relaxed">
-              {children}
-            </div>
+              <div className="flex-1 space-y-3 break-words px-4 py-4 text-sm leading-relaxed">
+                {children}
+              </div>
 
-            <footer className="border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
-              <button
-                type="button"
-                onClick={close}
-                className="w-full rounded-md border px-3 py-1.5 text-xs transition-colors"
-                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
-              >
-                Entendido
-              </button>
-            </footer>
-          </section>
-        </div>
-      )}
+              <footer className="border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
+                <button
+                  type="button"
+                  onClick={close}
+                  className="w-full rounded-md border px-3 py-1.5 text-xs transition-colors"
+                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                >
+                  Entendido
+                </button>
+              </footer>
+            </section>
+          </div>,
+          host,
+        )}
     </>
   )
 }

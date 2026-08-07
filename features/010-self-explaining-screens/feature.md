@@ -2,7 +2,7 @@
 title: "Every screen can explain itself, with the owner's own numbers"
 slug: self-explaining-screens
 number: 010
-status: ready
+status: done
 autonomy_level: medium
 branch: self-explaining-screens
 area: budget

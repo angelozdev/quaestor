@@ -108,4 +108,18 @@ describe("ScreenHelp mechanics", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
   })
+
+  it("puts the rest of the page out of reach while the panel is open", async () => {
+    const user = userEvent.setup()
+    const { container } = render(aScreenCalled("Cuentas"))
+
+    expect(container).not.toHaveAttribute("inert")
+
+    await user.click(screen.getByRole("button", { name: HELP_LABEL }))
+    expect(container).toHaveAttribute("inert")
+    expect(panel().closest("[inert]")).toBeNull()
+
+    await user.click(within(panel()).getByRole("button", { name: "Entendido" }))
+    expect(container).not.toHaveAttribute("inert")
+  })
 })
