@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { HELP_LABEL } from "@/components/screen-help"
 import type { FundCreate, FundRule, FundStatus, MonthAvailable } from "@/lib/api/types"
+import { openHelpPanel } from "@/tests/factories"
 
 const { createFund, previewFund, moneyAvailable, deleteFund, listFunds, listCategories, toast } =
   vi.hoisted(() => ({
@@ -111,6 +113,27 @@ const under = async (heading: RegExp) => within(await screen.findByRole("table",
 
 const entriesUnder = (table: ReturnType<typeof within>) => table.getAllByRole("row").length - 1
 
+const THIS_SCREEN = "Fondos y presupuestos"
+
+const panel = () => screen.getByRole("dialog", { name: `¿Cómo funciona ${THIS_SCREEN}?` })
+
+const openHelp = (user: ReturnType<typeof setup>) => openHelpPanel(THIS_SCREEN, user)
+
+const overlay = () => document.querySelector('[data-slot="screen-help-backdrop"]') as HTMLElement
+
+/** Whatever follows a "$" in the panel, so a blank one can be told from a figure. */
+function figuresIn(open: HTMLElement): string[] {
+  return [...(open.textContent ?? "").matchAll(/\$\s*(\S*)/g)].map((hit) => hit[1])
+}
+
+async function reachHelpWithKeyboard(user: ReturnType<typeof setup>) {
+  const help = screen.getByRole("button", { name: HELP_LABEL })
+  for (let step = 0; step < 20 && document.activeElement !== help; step += 1) {
+    await user.tab()
+  }
+  expect(help).toHaveFocus()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers({ toFake: ["Date"] })
@@ -178,6 +201,32 @@ describe("AC-2 — each list says what its shape does", () => {
 
     expect(entriesUnder(await under(/PRESUPUESTOS/))).toBe(1)
     expect(entriesUnder(await under(/FONDOS/))).toBe(1)
+  })
+
+  it("shows both headings even when one shape has nothing under it", async () => {
+    showing([presupuesto()])
+    renderPage()
+
+    expect(entriesUnder(await under(/PRESUPUESTOS/))).toBe(1)
+    expect(screen.getByRole("heading", { name: /FONDOS/ })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Todavía no tienes fondos. Un fondo aparta plata cada mes y guarda lo que sobra.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("teaches what a presupuesto is when no presupuesto exists yet", async () => {
+    showing([tecnologia()])
+    renderPage()
+
+    expect(entriesUnder(await under(/FONDOS/))).toBe(1)
+    expect(screen.getByRole("heading", { name: /PRESUPUESTOS/ })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Todavía no tienes presupuestos. Un presupuesto es un tope: lo que no gastes no se guarda.",
+      ),
+    ).toBeInTheDocument()
   })
 })
 
@@ -537,9 +586,212 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
 
     await screen.findByText("Todavía no tienes fondos ni presupuestos.")
     expect(screen.queryByRole("button", { name: "Crear el primero" })).not.toBeInTheDocument()
-    for (const button of screen.getAllByRole("button")) {
+    const waysIn = screen.getAllByRole("button").filter((b) => b.textContent !== HELP_LABEL)
+    expect(waysIn.length).toBeGreaterThan(0)
+    for (const button of waysIn) {
       expect(button.textContent).toMatch(/presupuesto|fondo/i)
     }
+  })
+})
+
+const AVERAGED = () => presupuesto({ rule: "average", asks: 8_900_000, averaged_over: 1, spent: 0 })
+
+describe("AC-7 — every screen carries the same control", () => {
+  it("Fondos y presupuestos offers to explain itself", async () => {
+    showing([presupuesto()])
+    const user = setup()
+    renderPage()
+
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
+    expect(await openHelp(user)).toHaveTextContent(
+      "Un fondo aparta plata cada mes y guarda lo que sobra.",
+    )
+  })
+})
+
+describe("AC-8 — the panel explains the screen using the owner's own figures", () => {
+  it("The panel names what is on the screen", async () => {
+    showing([AVERAGED()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+    const open = await openHelp(user)
+
+    expect(open).toHaveTextContent("Lo que tienes en esta pantalla:")
+    expect(within(open).getByRole("list")).toHaveTextContent("Restaurantes")
+    expect(open).not.toHaveTextContent("son de un ejemplo")
+  })
+
+  it("The panel states the figure the screen is showing", async () => {
+    showing([AVERAGED()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+
+    expect(await openHelp(user)).toHaveTextContent("pide $ 89.000 este mes")
+  })
+
+  it("The panel states why the figure is that figure", async () => {
+    showing([AVERAGED()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+
+    expect(await openHelp(user)).toHaveTextContent("porque es el promedio de lo que gastaste antes")
+  })
+})
+
+describe("AC-9 — the panel never opens by itself", () => {
+  it("The control is offered and nothing is open until it is used", async () => {
+    showing([presupuesto()])
+    renderPage()
+    await screen.findByText("Restaurantes")
+
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  it("Clicking outside the panel closes it", async () => {
+    const user = setup()
+    renderPage()
+    await openHelp(user)
+
+    await user.click(overlay())
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toHaveFocus()
+  })
+
+  it("Selecting text in the panel and releasing outside does not close it", async () => {
+    showing([presupuesto()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+    const open = await openHelp(user)
+
+    fireEvent.mouseDown(within(open).getByText("Lo que tienes en esta pantalla:"))
+    fireEvent.mouseUp(overlay())
+
+    expect(panel()).toHaveTextContent("Un fondo aparta plata cada mes y guarda lo que sobra.")
+  })
+
+  it("Closing the panel closes it and leaves the way back", async () => {
+    const user = setup()
+    renderPage()
+    const open = await openHelp(user)
+
+    await user.click(within(open).getByRole("button", { name: "Cerrar" }))
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
+  })
+})
+
+describe("AC-11 — with nothing of his own to quote, the panel works an example", () => {
+  it("The panel still says what a fondo is when the screen holds nothing", async () => {
+    const user = setup()
+    renderPage()
+
+    expect(await openHelp(user)).toHaveTextContent(
+      "Un fondo aparta plata cada mes y guarda lo que sobra.",
+    )
+  })
+
+  it("The panel still says what a presupuesto is when the screen holds nothing", async () => {
+    const user = setup()
+    renderPage()
+
+    expect(await openHelp(user)).toHaveTextContent(
+      "Un presupuesto es un tope: lo que no gastes no se guarda.",
+    )
+  })
+
+  it("The panel works an example with figures and says they are an example", async () => {
+    const user = setup()
+    renderPage()
+    const open = await openHelp(user)
+
+    expect(figuresIn(open).length).toBeGreaterThanOrEqual(1)
+    expect(open).toHaveTextContent("Las cifras de abajo son de un ejemplo, no tuyas.")
+  })
+})
+
+describe("AC-16 — the panel opens even when the screen's figures never arrive", () => {
+  it("The panel opens when the month's figures never arrive", async () => {
+    moneyAvailable.mockRejectedValue(new Error("boom"))
+    const user = setup()
+    renderPage()
+    await screen.findByText("No se pudieron cargar los fondos y presupuestos")
+
+    expect(await openHelp(user)).toHaveTextContent("Un fondo aparta plata cada mes")
+  })
+
+  it("The panel still says what both shapes are when the figures never arrive", async () => {
+    moneyAvailable.mockRejectedValue(new Error("boom"))
+    const user = setup()
+    renderPage()
+    await screen.findByText("No se pudieron cargar los fondos y presupuestos")
+    const open = await openHelp(user)
+
+    expect(open).toHaveTextContent("Un fondo aparta plata cada mes y guarda lo que sobra.")
+    expect(open).toHaveTextContent("Un presupuesto es un tope: lo que no gastes no se guarda.")
+  })
+
+  it("A panel with no figures to quote shows worked examples, not blanks", async () => {
+    moneyAvailable.mockRejectedValue(new Error("boom"))
+    const user = setup()
+    renderPage()
+    await screen.findByText("No se pudieron cargar los fondos y presupuestos")
+    const open = await openHelp(user)
+
+    const figures = figuresIn(open)
+    expect(figures.length).toBeGreaterThanOrEqual(1)
+    for (const figure of figures) expect(figure).toMatch(/^\d/)
+    expect(open).toHaveTextContent("Las cifras de abajo son de un ejemplo, no tuyas.")
+  })
+})
+
+describe("AC-19 — the panel can be opened, read and closed with the keyboard alone", () => {
+  it("The panel opens without a mouse", async () => {
+    const user = setup()
+    renderPage()
+
+    await reachHelpWithKeyboard(user)
+    await user.keyboard("{Enter}")
+
+    expect(panel()).toHaveTextContent("Un fondo aparta plata cada mes")
+  })
+
+  it("The keyboard stays inside the panel while it is open", async () => {
+    showing([presupuesto()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+    await reachHelpWithKeyboard(user)
+    await user.keyboard("{Enter}")
+
+    const open = panel()
+    const visited: Element[] = []
+    for (let step = 0; step < 6; step += 1) {
+      await user.tab()
+      expect(open).toContainElement(document.activeElement as HTMLElement)
+      visited.push(document.activeElement as Element)
+    }
+
+    expect(visited).toContain(within(open).getByRole("button", { name: "Cerrar" }))
+  })
+
+  it("Escape closes the panel and gives the reader back their place", async () => {
+    const user = setup()
+    renderPage()
+    await reachHelpWithKeyboard(user)
+    await user.keyboard("{Enter}")
+    expect(panel()).toBeInTheDocument()
+
+    await user.keyboard("{Escape}")
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toHaveFocus()
   })
 })
 
@@ -739,6 +991,17 @@ describe("AC-21 — one vocabulary, everywhere", () => {
     expect(
       within(row).getByLabelText("Eliminar el presupuesto de Restaurantes"),
     ).toBeInTheDocument()
+  })
+
+  it("The panel uses the same two words the rows use", async () => {
+    showing([presupuesto(), tecnologia()])
+    const user = setup()
+    renderPage()
+    await screen.findByText("Restaurantes")
+    const open = await openHelp(user)
+
+    expect(open).toHaveTextContent("Restaurantes es un presupuesto")
+    expect(open).toHaveTextContent("Tecnologia es un fondo")
   })
 
   it("The empty screen uses the same two words", async () => {

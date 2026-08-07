@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { MonthlyReport } from "@/lib/api/types"
+import { openHelpPanel } from "@/tests/factories"
 
 const { report } = vi.hoisted(() => ({ report: vi.fn() }))
 vi.mock("@/lib/api/reports", () => ({ report }))
@@ -78,5 +79,29 @@ describe("AC-21 — one vocabulary, everywhere", () => {
 
     expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
     expect(screen.queryByText("Fondo · Restaurantes")).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-7 — every screen carries the same control", () => {
+  it("Reportes offers to explain itself", async () => {
+    renderPage()
+
+    expect(await openHelpPanel("Reportes")).toHaveTextContent(
+      "Este reporte muestra a dónde se fue el gasto del mes",
+    )
+  })
+})
+
+describe("AC-10 — an empty screen teaches and offers the way in", () => {
+  it("An empty Reportes screen teaches what it would show", async () => {
+    renderPage()
+
+    expect(
+      await screen.findByText(/Este reporte muestra a dónde se fue el gasto del mes/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Registrar un movimiento" })).toHaveAttribute(
+      "href",
+      "/transactions",
+    )
   })
 })

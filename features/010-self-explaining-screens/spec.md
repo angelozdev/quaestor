@@ -96,6 +96,14 @@ fact is present, with its figure where the scenario gives one.
 
 **Order is not pinned.** Nothing here decides how entries are sorted.
 
+**Amended after approval, 2026-08-07, on the owner's explicit permission.** He
+used the running app and asked that clicking outside the panel close it — the
+affordance people reach for first in a sheet, whose absence makes the panel feel
+like it has trapped them. AC-9 gains two scenarios: the close itself, asserting
+focus returns to the trigger so all three close paths must share one route; and
+the case that betrays a naive implementation, where a press begins inside the
+panel and is released outside while selecting text.
+
 ```gherkin
 Feature: Every screen can explain itself, with the owner's own numbers
 ```
@@ -527,6 +535,19 @@ Scenario: A panel that was closed does not come back on the next visit
   And the owner opens the "Recurrentes" screen
   And the owner opens the "Fondos y presupuestos" screen
   Then no panel is open
+
+Scenario: Clicking outside the panel closes it
+  When the owner opens the "Fondos y presupuestos" screen
+  And the owner opens "¿Cómo funciona esto?"
+  And the owner clicks outside the panel
+  Then no panel is open
+  And "¿Cómo funciona esto?" holds the keyboard's place again
+
+Scenario: Selecting text in the panel and releasing outside does not close it
+  When the owner opens the "Fondos y presupuestos" screen
+  And the owner opens "¿Cómo funciona esto?"
+  And the owner presses inside the panel and releases outside it
+  Then a panel explains what the "Fondos y presupuestos" screen does
 ```
 
 ## AC-10 — An empty screen teaches and offers the way in

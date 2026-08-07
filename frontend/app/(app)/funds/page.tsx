@@ -8,13 +8,14 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
+import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { SkeletonRows } from "@/components/skeleton"
 import { StatusBadge } from "@/components/status-badge"
 import { deleteFund, listFunds, moneyAvailable } from "@/lib/api/funds"
 import type { FundStatus } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
 import { monthNameOf, nextYearMonth } from "@/lib/date"
-import { type FundShape, nounOf, shapeOf } from "@/lib/funds"
+import { type FundShape, nounOf, shapeOf, shapeSentence, whatItIs } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input } from "@/ui"
@@ -34,17 +35,81 @@ const SECTIONS: { shape: FundShape; heading: string; says: string }[] = [
   },
 ]
 
+/** What one shape is, with its noun picked out — the same claim wherever it is made. */
+function ShapeIs({ shape }: { shape: FundShape }) {
+  return (
+    <>
+      Un <strong>{shape}</strong> {whatItIs(shape)}
+    </>
+  )
+}
+
 const NOTHING_YET = (
   <>
     <p>
-      Un <strong>fondo</strong> aparta plata cada mes y guarda lo que sobra — para el mantenimiento
-      del carro, o para pagar una suscripción anual mes a mes.
+      <ShapeIs shape="fondo" /> — para el mantenimiento del carro, o para pagar una suscripción
+      anual mes a mes.
     </p>
     <p>
-      Un <strong>presupuesto</strong> es un tope: lo que no gastes no se guarda.
+      <ShapeIs shape="presupuesto" />.
     </p>
   </>
 )
+
+/** Why the entry asks what it asks, in the words of the rule that decides it. */
+function whyItAsks(fund: FundStatus, shape: FundShape): string {
+  if (fund.rule === "average") return "porque es el promedio de lo que gastaste antes"
+  if (fund.rule === "from-recurring") return "porque es lo que piden sus cobros registrados"
+  if (fund.rule === "target-by-date")
+    return "porque es lo que falta, repartido entre los meses que quedan"
+  return shape === "presupuesto"
+    ? "porque ese es el tope que pusiste"
+    : "porque ese es el monto que decidiste apartar"
+}
+
+/** One entry as the panel says it: its shape, its figure, and what it does next month. */
+function panelLine(fund: FundStatus): string {
+  const shape = shapeOf(fund)
+  const next = monthNameOf(nextYearMonth(fund.year_month)).toLowerCase()
+  const leftover =
+    shape === "fondo" ? `Lo que sobre pasa a ${next}.` : `Lo que sobre no pasa a ${next}.`
+  return `${fund.name} es un ${shape} — pide ${formatCents(fund.asks, "COP")} este mes ${whyItAsks(fund, shape)}. ${leftover}`
+}
+
+/**
+ * What this screen is, said with the entries it is showing.
+ *
+ * `funds` is undefined while the month's figures are loading and when they
+ * never arrive at all (AC-16), so the worked example is the fallback for both.
+ */
+function FundsHelp({ funds, month }: { funds: FundStatus[] | undefined; month: string }) {
+  const next = monthNameOf(nextYearMonth(month)).toLowerCase()
+  return (
+    <>
+      <p>
+        <ShapeIs shape="fondo" />. <ShapeIs shape="presupuesto" />.
+      </p>
+      {funds !== undefined && funds.length > 0 ? (
+        <HelpSection lead="Lo que tienes en esta pantalla:">
+          {funds.map((fund) => (
+            <li key={fund.fund_id}>{panelLine(fund)}</li>
+          ))}
+        </HelpSection>
+      ) : (
+        <HelpExample>
+          <li>
+            Por ejemplo: Restaurantes, un presupuesto de $ 100.000 al mes. Si gastas $ 60.000,{" "}
+            {next} vuelve a empezar en $ 100.000 y los $ 40.000 que sobraron no se guardan.
+          </li>
+          <li>
+            Por ejemplo: Tecnología, un fondo de $ 100.000 al mes. Si gastas $ 60.000, {next} abre
+            con $ 140.000 porque los $ 40.000 que sobraron se quedan.
+          </li>
+        </HelpExample>
+      )}
+    </>
+  )
+}
 
 /** What the month did to the entry, and what it leaves behind. */
 function keptLine(fund: FundStatus): string {
@@ -145,30 +210,39 @@ function FundSection({
       <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
         {says}
       </p>
-      <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-        <table aria-labelledby={headingId} className="w-full text-sm">
-          <thead>
-            <tr style={{ color: "var(--muted-foreground)" }}>
-              <th className="px-3 py-2.5 text-left text-xs font-medium">Categoría</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium">Regla</th>
-              <th className="px-3 py-2.5 text-right text-xs font-medium">Pide</th>
-              <th className="px-3 py-2.5 text-right text-xs font-medium">Tiene</th>
-              <th className="px-3 py-2.5 text-left text-xs font-medium">Estado</th>
-              <th className="w-28 px-3 py-2.5" />
-            </tr>
-          </thead>
-          <tbody>
-            {funds.map((fund) => (
-              <FundRow
-                key={fund.fund_id}
-                fund={fund}
-                startedThisMonth={startMonths.get(fund.fund_id) === month}
-                onDelete={() => onDelete(fund)}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {funds.length === 0 ? (
+        <p
+          className="rounded-lg border border-dashed px-3 py-4 text-sm"
+          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+        >
+          {`Todavía no tienes ${shape}s. ${shapeSentence(shape)}.`}
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
+          <table aria-labelledby={headingId} className="w-full text-sm">
+            <thead>
+              <tr style={{ color: "var(--muted-foreground)" }}>
+                <th className="px-3 py-2.5 text-left text-xs font-medium">Categoría</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium">Regla</th>
+                <th className="px-3 py-2.5 text-right text-xs font-medium">Pide</th>
+                <th className="px-3 py-2.5 text-right text-xs font-medium">Tiene</th>
+                <th className="px-3 py-2.5 text-left text-xs font-medium">Estado</th>
+                <th className="w-28 px-3 py-2.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {funds.map((fund) => (
+                <FundRow
+                  key={fund.fund_id}
+                  fund={fund}
+                  startedThisMonth={startMonths.get(fund.fund_id) === month}
+                  onDelete={() => onDelete(fund)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
@@ -222,6 +296,11 @@ export default function FundsPage() {
             <Button onClick={() => setMaking("fondo")}>+ Nuevo fondo</Button>
           </div>
         }
+        help={
+          <ScreenHelp screen="Fondos y presupuestos">
+            <FundsHelp funds={view.data?.funds} month={month} />
+          </ScreenHelp>
+        }
       />
 
       {making !== null && (
@@ -258,22 +337,18 @@ export default function FundsPage() {
       >
         {(data) => (
           <div className="space-y-8">
-            {SECTIONS.map((section) => {
-              const funds = data.funds.filter((fund) => shapeOf(fund) === section.shape)
-              if (funds.length === 0) return null
-              return (
-                <FundSection
-                  key={section.shape}
-                  shape={section.shape}
-                  heading={section.heading}
-                  says={section.says}
-                  funds={funds}
-                  startMonths={startMonths}
-                  month={month}
-                  onDelete={setDeleting}
-                />
-              )
-            })}
+            {SECTIONS.map((section) => (
+              <FundSection
+                key={section.shape}
+                shape={section.shape}
+                heading={section.heading}
+                says={section.says}
+                funds={data.funds.filter((fund) => shapeOf(fund) === section.shape)}
+                startMonths={startMonths}
+                month={month}
+                onDelete={setDeleting}
+              />
+            ))}
           </div>
         )}
       </QueryBoundary>

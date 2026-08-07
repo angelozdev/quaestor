@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state"
 import { MoneyAmount } from "@/components/money-amount"
 import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
+import { ScreenHelp } from "@/components/screen-help"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
 import { nounOf, shapeOf } from "@/lib/funds"
@@ -18,6 +19,20 @@ const CARD_STYLE = {
   boxShadow: "var(--shadow-card)",
   borderRadius: "var(--radius)",
 } as const
+
+const WHERE_THE_MONTH_WENT = (
+  <p>Este reporte muestra a dónde se fue el gasto del mes, repartido por categoría y por grupo.</p>
+)
+
+const REPORTS_HELP = (
+  <>
+    {WHERE_THE_MONTH_WENT}
+    <p>
+      Debajo del reparto están el resultado del mes —ingresos contra gastos— y de dónde sale el
+      disponible. Cambia el mes arriba a la derecha para leer cualquier otro.
+    </p>
+  </>
+)
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -82,6 +97,7 @@ export default function ReportsPage() {
             onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
           />
         }
+        help={<ScreenHelp screen="Reportes">{REPORTS_HELP}</ScreenHelp>}
       />
 
       <QueryBoundary
@@ -216,7 +232,11 @@ export default function ReportsPage() {
                   ))}
                 </div>
               ) : (
-                <EmptyState message="Sin gastos este mes" />
+                <EmptyState
+                  message="Sin gastos este mes"
+                  description={WHERE_THE_MONTH_WENT}
+                  action={{ label: "Registrar un movimiento", href: "/transactions" }}
+                />
               )}
             </Section>
 

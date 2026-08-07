@@ -5,17 +5,76 @@ import { format } from "date-fns"
 import { ChatSection } from "@/components/chat/chat-section"
 import { EmptyState } from "@/components/empty-state"
 import { MoneyAmount } from "@/components/money-amount"
+import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
+import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
 import { moneyAvailable, moneyRates } from "@/lib/api/funds"
 import { report as fetchReport } from "@/lib/api/reports"
+import type { MonthAvailable } from "@/lib/api/types"
 import { nounOf, shapeOf } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
 const MONTH = format(new Date(), "yyyy-MM")
+
+const ASKS_MORE_THAN_COMES_IN = "Pide más de lo que entra este mes"
+
+const NO_MOVEMENTS_YET = (
+  <p>
+    Las cifras de esta pantalla salen de los movimientos que registres: cada gasto y cada ingreso.
+    Todavía no hay ninguno.
+  </p>
+)
+
+/**
+ * What this screen is, said with the month it is showing.
+ *
+ * `available` is undefined while the month's figures are loading and when they
+ * never arrive at all (AC-16), so the worked example is the fallback for both.
+ */
+function DashboardHelp({ available }: { available: MonthAvailable | undefined }) {
+  const live = available !== undefined && (available.income > 0 || available.funds.length > 0)
+  const askingTooMuch = available?.funds.filter((fund) => fund.asks > available.income) ?? []
+  return (
+    <>
+      <p>
+        Esta pantalla resume el mes: lo que entra, lo que cada fondo y cada presupuesto pide, y lo
+        que queda libre después de eso.
+      </p>
+      {live && available !== undefined ? (
+        <>
+          <p>Este mes entran {formatCents(available.income, "COP")}.</p>
+          <HelpSection lead="Cada uno pide:">
+            {available.funds.map((fund) => (
+              <li key={fund.fund_id}>
+                {`${fund.name} (${shapeOf(fund)}) — pide ${formatCents(fund.asks, "COP")}`}
+              </li>
+            ))}
+          </HelpSection>
+          {askingTooMuch.length > 0 && (
+            <HelpSection lead={`${ASKS_MORE_THAN_COMES_IN}:`} label={ASKS_MORE_THAN_COMES_IN}>
+              {askingTooMuch.map((fund) => (
+                <li key={fund.fund_id}>
+                  {`${fund.name} — pide ${formatCents(fund.asks, "COP")} y este mes entran ${formatCents(available.income, "COP")}.`}
+                </li>
+              ))}
+            </HelpSection>
+          )}
+        </>
+      ) : (
+        <HelpExample>
+          <li>
+            Por ejemplo: entran $ 3.000.000 en el mes. Un fondo de Mercado pide $ 500.000 y un
+            presupuesto de Restaurantes pide $ 200.000, así que quedan $ 2.300.000 libres.
+          </li>
+        </HelpExample>
+      )}
+    </>
+  )
+}
 
 const CARD_STYLE = {
   background: "var(--card)",
@@ -59,6 +118,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
+      <PageHeader
+        title="Dashboard"
+        help={
+          <ScreenHelp screen="Dashboard">
+            <DashboardHelp available={available.data} />
+          </ScreenHelp>
+        }
+      />
+
       {/* Hero */}
       <div className="hero-glow animate-fade-up space-y-1">
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
@@ -91,7 +159,20 @@ export default function DashboardPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="animate-fade-up" style={{ animationDelay: "90ms" }}>
           <Card label="Ingresos · Gastos · Neto">
-            <QueryBoundary query={report} skeleton={<SkeletonText lines={3} />}>
+            <QueryBoundary
+              query={report}
+              skeleton={<SkeletonText lines={3} />}
+              empty={{
+                when: (d) => d.income === 0 && d.expense === 0,
+                node: (
+                  <EmptyState
+                    message="Todavía no has registrado movimientos."
+                    description={NO_MOVEMENTS_YET}
+                    action={{ label: "Registrar el primero", href: "/transactions" }}
+                  />
+                ),
+              }}
+            >
               {(data) => (
                 <div className="space-y-2.5">
                   <Row label="Ingresos">

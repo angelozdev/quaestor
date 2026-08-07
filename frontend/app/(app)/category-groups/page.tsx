@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/empty-state"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
 import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import {
   archiveCategoryGroup,
@@ -26,6 +27,22 @@ const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
   { kind: "number", name: "sort_order", label: "Orden", min: 0 },
 ]
+
+const WHAT_A_GROUP_IS = (
+  <p>
+    Un grupo junta categorías que van juntas — «Casa» puede reunir arriendo, servicios y mercado.
+  </p>
+)
+
+const GROUPS_HELP = (
+  <>
+    {WHAT_A_GROUP_IS}
+    <p>
+      Sirve para leer el mes de más lejos: los reportes suman por grupo además de por categoría, así
+      que ves cuánto se fue en «Casa» sin sumar tres líneas a mano.
+    </p>
+  </>
+)
 
 export default function CategoryGroupsPage() {
   const qc = useQueryClient()
@@ -89,6 +106,7 @@ export default function CategoryGroupsPage() {
       <PageHeader
         title="Grupos de categorías"
         action={<Button onClick={() => setCreating(true)}>Nuevo</Button>}
+        help={<ScreenHelp screen="Grupos">{GROUPS_HELP}</ScreenHelp>}
       />
 
       <label
@@ -117,7 +135,13 @@ export default function CategoryGroupsPage() {
       {list.isError && (
         <ErrorState message="No se pudieron cargar los grupos" onRetry={() => list.refetch()} />
       )}
-      {list.data && list.data.length === 0 && <EmptyState message="Sin grupos" />}
+      {list.data && list.data.length === 0 && (
+        <EmptyState
+          message="Todavía no tienes grupos."
+          description={WHAT_A_GROUP_IS}
+          action={{ label: "Crear el primero", onClick: () => setCreating(true) }}
+        />
+      )}
 
       {list.data && list.data.length > 0 && (
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>

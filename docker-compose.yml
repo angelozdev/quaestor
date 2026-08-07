@@ -63,7 +63,7 @@ services:
       API_URL: http://api:8000
       API_INTERNAL_URL: http://api:8000
     ports:
-      - "3000:3000"
+      - "${QUAESTOR_WEB_PORT:-3000}:3000"
     volumes:
       - ./frontend/app:/app/app
       - ./frontend/components:/app/components

@@ -22,3 +22,19 @@ export function accumulatesAs(shape: FundShape): boolean {
 export function nounOf(shape: FundShape): string {
   return shape === "fondo" ? "Fondo" : "Presupuesto"
 }
+
+/**
+ * What each shape does, in the one clause every screen builds its sentence
+ * from — the empty screen, an empty heading and the panel all make the same
+ * claim, so the claim is written here once.
+ */
+export function whatItIs(shape: FundShape): string {
+  return shape === "fondo"
+    ? "aparta plata cada mes y guarda lo que sobra"
+    : "es un tope: lo que no gastes no se guarda"
+}
+
+/** The clause as a whole sentence, with no full stop: "Un fondo aparta …". */
+export function shapeSentence(shape: FundShape): string {
+  return `Un ${shape} ${whatItIs(shape)}`
+}

@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { openHelpPanel } from "@/tests/factories"
 
 const { listCategories, listCategoryGroups } = vi.hoisted(() => ({
   listCategories: vi.fn(),
@@ -78,5 +79,30 @@ describe("AC-21 — one vocabulary, everywhere", () => {
     expect(
       await screen.findByRole("checkbox", { name: "Excluir de los totales" }),
     ).toBeInTheDocument()
+  })
+})
+
+describe("AC-7 — every screen carries the same control", () => {
+  it("Categorías offers to explain itself", async () => {
+    renderPage()
+
+    expect(await openHelpPanel("Categorías")).toHaveTextContent(
+      "Una categoría dice para qué fue un movimiento",
+    )
+  })
+})
+
+describe("AC-10 — an empty screen teaches and offers the way in", () => {
+  it("An empty Categorías screen teaches and offers the way in", async () => {
+    listCategories.mockResolvedValue([])
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(
+      await screen.findByText(/Una categoría dice para qué fue un movimiento/),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Crear la primera" }))
+
+    expect(screen.getByText("Nueva categoría")).toBeInTheDocument()
   })
 })

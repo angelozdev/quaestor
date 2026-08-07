@@ -1,8 +1,8 @@
 "use client"
 
 import { MoreHorizontal } from "lucide-react"
-import { useMemo, useState } from "react"
-import { EmptyState } from "@/components/empty-state"
+import { type ReactNode, useMemo, useState } from "react"
+import { type Action, EmptyState } from "@/components/empty-state"
 import { ErrorState } from "@/components/error-state"
 import {
   Button,
@@ -37,6 +37,8 @@ export function DataTable<T>({
   isError,
   onRetry,
   emptyMessage = "Sin resultados",
+  emptyDescription,
+  emptyAction,
 }: {
   rows: T[] | undefined
   columns: Column<T>[]
@@ -48,6 +50,8 @@ export function DataTable<T>({
   isError?: boolean
   onRetry?: () => void
   emptyMessage?: string
+  emptyDescription?: ReactNode
+  emptyAction?: Action | Action[]
 }) {
   const [page, setPage] = useState(0)
   const all = useMemo(() => rows ?? [], [rows])
@@ -75,7 +79,7 @@ export function DataTable<T>({
           ))}
         </div>
       ) : all.length === 0 ? (
-        <EmptyState message={emptyMessage} />
+        <EmptyState message={emptyMessage} description={emptyDescription} action={emptyAction} />
       ) : (
         <>
           <div
