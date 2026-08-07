@@ -25,6 +25,11 @@ class FundLine:
 class FundStatus:
     """What one fund asks, holds and reports for one month (ADR-0043).
 
+    `spent` is what the category cost that month; `carries` is what survives
+    into the next one, which is nothing at all for a fund that resets; and
+    `next_month_has` is that carry plus what the rule asks then, so a screen
+    can say what next month starts with without doing the arithmetic itself.
+
     `averaged_over` is filled by the `average` rule only; `spreads_over` and
     `whole_by` by the rules that save toward a dated charge.
     """
@@ -36,6 +41,9 @@ class FundStatus:
     rule: str
     asks: int
     holds: int
+    spent: int
+    carries: int
+    next_month_has: int
     accumulates: bool
     accumulation_is_implied: bool
     on_track: bool

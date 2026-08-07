@@ -133,7 +133,7 @@ def report(feature_dir: Path, test_root: Path) -> int:
         print(f"  UNBOUND   {name}")
 
     if tagged["@backend"]:
-        print("  NOTE: @backend scenarios have no generator yet — see ADR-0045's amendment")
+        print("  NOTE: @backend scenarios run as generated pytest — the runner emits that subset")
 
     return 1 if missing else 0
 

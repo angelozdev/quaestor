@@ -48,9 +48,8 @@ fi
 
 # --- parse, then route each feature to its stream (ADR-0045) ----------------
 # `acceptance_stream: frontend` binds every scenario to vitest and generates no
-# pytest; `mixed` does the same but also carries @backend scenarios, which have
-# no generator yet (see ADR-0045's amendment) and are reported rather than run.
-# Anything else generates pytest as it always did.
+# pytest; `mixed` does the same for its untagged scenarios and generates pytest
+# for its @backend ones alone. Anything else generates pytest as it always did.
 GENERATED_DIRS=""
 FRONTEND_FAILED=0
 for dir in $FEATURE_DIRS; do
@@ -65,6 +64,10 @@ for dir in $FEATURE_DIRS; do
 
     if grep -qE '^acceptance_stream:[[:space:]]*(frontend|mixed)[[:space:]]*$' "$dir/feature.md" 2>/dev/null; then
         python3 "$ROOT/acceptance/spec_coverage.py" "$dir" "$ROOT/frontend" || FRONTEND_FAILED=1
+        if grep -qE '^acceptance_stream:[[:space:]]*mixed[[:space:]]*$' "$dir/feature.md"; then
+            python3 "$ROOT/acceptance/generator.py" --tag @backend "$dir"
+            GENERATED_DIRS="$GENERATED_DIRS $dir/.build/generated"
+        fi
         continue
     fi
 

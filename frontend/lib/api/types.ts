@@ -128,7 +128,13 @@ export interface FundLine {
   accumulates: boolean
 }
 
-/** What one fund asks, holds and reports for one month. */
+/**
+ * What one fund asks, holds and reports for one month.
+ *
+ * `spent` is what the category cost that month; `carries` is what survives
+ * into the next one, which is 0 for a fund that resets; `next_month_has` is
+ * that carry plus what the rule asks then.
+ */
 export interface FundStatus {
   fund_id: number
   category_id: number
@@ -137,6 +143,9 @@ export interface FundStatus {
   rule: FundRule
   asks: number
   holds: number
+  spent: number
+  carries: number
+  next_month_has: number
   accumulates: boolean
   accumulation_is_implied: boolean
   on_track: boolean

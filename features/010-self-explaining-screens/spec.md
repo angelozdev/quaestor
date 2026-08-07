@@ -42,14 +42,16 @@ the screen receives today.
 
 **Untagged — the screen.** Bound to frontend tests per ADR-0045.
 
-**`@backend` — what a fund reports.** Nine scenarios. The observable is a
+**`@backend` — what a fund reports.** Thirteen scenarios. The observable is a
 reported figure, so a mocked frontend would prove nothing. **These reuse 003's
-step vocabulary verbatim** (`a fund on "X" that asks a fixed …`, `the fund on
-"X" asks N COP this month`, `holds N COP`, `is behind`, `a recorded expense of N
-COP in category "X" this month`, `the money available this month is N COP`) so
-the existing handlers already bind them; only three step families are new, one
-per new figure. They say **fund**, not *fondo* or *presupuesto*, because their
-subject is the record and not the screen — AC-21 governs what a screen says.
+step vocabulary wherever it fits** — `a fund on "X" that asks a fixed …`, `the
+fund on "X" asks N COP this month`, `holds N COP`, `is behind`, `a recorded
+expense of N COP in category "X" this month`, `the money available this month is
+N COP`. Nine step families are new rather than the three first estimated: three
+for the new figures, and six because **this feature renames all four rules into
+plain language**, which is the whole point of it. They say **fund**, not *fondo*
+or *presupuesto*, because their subject is the record and not the screen — AC-21
+governs what a screen says.
 
 **`@browser` — what a DOM emulator cannot see.** jsdom and happy-dom have no
 layout engine and report every element as zero-sized, so anything about width,
@@ -57,13 +59,14 @@ overflow, wrapping or position lives here, verified against the running stack
 with the observation recorded in the handoff.
 
 ADR-0045 named only `@browser`; it is amended by this feature to define
-`@backend`, because leaving nine scenarios exempt from every gate is the "prose
+`@backend`, because leaving thirteen scenarios exempt from every gate is the "prose
 nobody executes" outcome that ADR exists to prevent.
 
 ## Not every scenario is red
 
-**Five are green by design** — the four `@backend` scenarios of AC-18 and AC-13's
-— because their entire job is to assert that untouched behaviour is untouched.
+**Eight are green by design** — AC-18's seven `@backend` scenarios and AC-13's
+one — because their entire job is to assert that untouched behaviour is
+untouched. The five that start red are AC-3's, which carry the new figures.
 003's spec made the same distinction for the same reason. Everything else is red:
 the app ships zero help text of any kind, and `¿Cómo funciona esto?` exists
 nowhere.

@@ -293,10 +293,38 @@ def _on_track(walked: _Month) -> bool:
     return walked.ask.amount <= walked.ask_before_spending.amount and _overspill(walked) == 0
 
 
+def _look_ahead(agg: MonthAggregate, fund: Fund, walked: _Month, year_month: str) -> tuple[int, int]:
+    """What the fund carries into next month, and what next month has to spend.
+
+    One more turn of the loop `_walk` already runs, for the month after the
+    one asked about. The carry is the opening that month would start with, and
+    what it has to spend is that carry plus what the rule asks then — asked
+    before anything is spent, because the month has not happened.
+
+    A fund whose fold has not begun by `year_month` opens next month wherever
+    `_fold_start` puts it, which is `_walk`'s own early return read one month
+    on: nothing at all while the fund is still ahead of the calendar.
+
+    Every input is already in the aggregate the caller loaded, so looking one
+    month ahead costs no query (ADR-0028).
+    """
+    ahead = next_year_month(year_month)
+    begins, _ = _fold_start(fund, year_month)
+    if year_month >= begins:
+        carries = fund_next_opening_calc(walked.opening, walked.spent, walked.ask.amount, fund.accumulates)
+    else:
+        begins_ahead, opening = _fold_start(fund, ahead)
+        if ahead < begins_ahead:
+            return 0, 0
+        carries = opening
+    return carries, carries + _ask(agg, fund, ahead, carries).amount
+
+
 def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
     year_month = agg.year_month
     charge = walked.ask.charge_month
     category = agg.category(fund.category_id)
+    carries, next_month_has = _look_ahead(agg, fund, walked, year_month)
     return FundStatus(
         fund_id=fund.id,
         category_id=fund.category_id,
@@ -305,6 +333,9 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         rule=fund.rule.value,
         asks=walked.ask.amount,
         holds=walked.holds,
+        spent=walked.spent,
+        carries=carries,
+        next_month_has=next_month_has,
         accumulates=fund.accumulates,
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),

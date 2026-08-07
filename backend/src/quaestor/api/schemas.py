@@ -430,6 +430,9 @@ class FundStatusOut(BaseModel):
     rule: str
     asks: int
     holds: int
+    spent: int
+    carries: int
+    next_month_has: int
     accumulates: bool
     accumulation_is_implied: bool
     on_track: bool

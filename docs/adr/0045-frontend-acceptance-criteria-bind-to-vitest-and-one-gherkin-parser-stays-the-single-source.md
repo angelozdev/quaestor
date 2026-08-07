@@ -246,16 +246,27 @@ requirement, not from being run.
 **A feature declares `acceptance_stream: mixed`** in `feature.md` when it has
 both. `frontend` keeps its meaning: no generated stream at all.
 
-**The gap this amendment does NOT close, named so it is not mistaken for
-closed.** `acceptance/generator.py` emits *every* scenario in the IR and cannot
-filter by tag — the tags live in `spec.md`, which `dae_gherkin.py` drops as
-free-form markdown, and the IR carries no tag field. So a `mixed` feature cannot
-yet generate only its `@backend` subset. Until that is built, the runner prints
-the tagged scenarios and exits non-zero rather than pretending they ran. **This
-is the first thing feature 010's `plan.md` has to settle**, and it is the reason
-`@backend` is defined here rather than deferred: a tag with no definition and no
-runner is exactly the "prose nobody executes" outcome this ADR exists to prevent,
-and naming it is what makes it fixable.
+**The gap this amendment did NOT close when it was written, named so it was not
+mistaken for closed.** `acceptance/generator.py` emitted *every* scenario in the
+IR and could not filter by tag — the tags live in `spec.md`, which
+`dae_gherkin.py` drops as free-form markdown, and the IR carries no tag field.
+So a `mixed` feature could not generate only its `@backend` subset, and the
+runner printed the tagged scenarios and exited non-zero rather than pretending
+they ran. **This was the first thing feature 010's `plan.md` had to settle**, and
+it is the reason `@backend` was defined here rather than deferred: a tag with no
+definition and no runner is exactly the "prose nobody executes" outcome this ADR
+exists to prevent, and naming it is what makes it fixable.
+
+**Closed 2026-08-07 by feature 010's phase 2**, delivering what the paragraph
+above asked for rather than deciding anything new. `generate(feature_dir, only)`
+takes a set of scenario names and `--tag` fills it from `spec.md` through
+`spec_coverage.tagged_scenarios`, which already owned tag parsing;
+`dae_gherkin.py` is untouched, as the plan's Architecture §E decided. The runner
+now generates a `mixed` feature's `@backend` subset and adds it to the pytest
+run alongside the coverage check. `only=None` remains the default, so the six
+backend features' generated output is byte-identical to what it was.
+`spec_coverage.py` gained a test of its own at the same time, since the tag
+reader is now load-bearing for two callers instead of one.
 
 ## Sources
 

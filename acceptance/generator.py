@@ -2,7 +2,12 @@
 """Acceptance test generator — reads a feature's fixed JSON IR and emits pytest.
 
 Usage:
-    python3 acceptance/generator.py <feature-dir> [<feature-dir> ...]
+    python3 acceptance/generator.py [--tag TAG] <feature-dir> [<feature-dir> ...]
+
+``--tag`` emits only the scenarios carrying that tag in ``spec.md`` — the
+subset a mixed-stream feature routes to pytest while the rest binds to vitest
+(ADR-0045's amendment). Without it every scenario in the IR is emitted, which
+is what every backend feature does.
 
 For each feature dir (e.g. ``features/005-fx-read-time-conversion``):
 
@@ -12,9 +17,11 @@ For each feature dir (e.g. ``features/005-fx-read-time-conversion``):
 
 One scenario -> one test function; one example row -> one parametrised
 execution (``<param>`` placeholders resolved at generation time, so the
-generated file shows fully-resolved, readable step texts). The generator
-reads ONLY the IR — it never parses ``spec.md``. Output is deterministic
-for a fixed IR. Do not hand-edit anything under ``.build/generated/``.
+generated file shows fully-resolved, readable step texts). Step texts come
+ONLY from the IR; ``spec.md`` is read for tags alone, and only when ``--tag``
+asks for a subset, because the IR carries no tag field. Output is
+deterministic for a fixed IR. Do not hand-edit anything under
+``.build/generated/``.
 """
 
 from __future__ import annotations
@@ -63,7 +70,14 @@ def _steps_literal(steps: list[tuple[str, str]], indent: str) -> str:
     return "\n".join(lines)
 
 
-def _emit_test_module(feature_dir: Path, ir: dict) -> str:
+def _selected(ir: dict, only: set[str] | None) -> list[dict]:
+    """The scenarios to emit, in IR order — every one unless a subset was named."""
+    if only is None:
+        return ir["scenarios"]
+    return [s for s in ir["scenarios"] if s["name"] in only]
+
+
+def _emit_test_module(feature_dir: Path, ir: dict, only: set[str] | None) -> str:
     spec_rel = (feature_dir / "spec.md").relative_to(REPO_ROOT).as_posix()
     out = [
         _HEADER,
@@ -79,7 +93,7 @@ def _emit_test_module(feature_dir: Path, ir: dict) -> str:
     ]
 
     seen: dict[str, int] = {}
-    for scenario in ir["scenarios"]:
+    for scenario in _selected(ir, only):
         base = f"test_{_sanitize(scenario['name'])}"
         seen[base] = seen.get(base, 0) + 1
         fn_name = base if seen[base] == 1 else f"{base}_{seen[base]}"
@@ -142,7 +156,16 @@ def world():
 """
 
 
-def generate(feature_dir: Path) -> Path:
+def generate(feature_dir: Path, only: set[str] | None = None) -> Path:
+    """Emit one feature's pytest module. ``only`` names the scenarios to keep.
+
+    Args:
+        feature_dir: The feature whose ``.build/spec.json`` is read.
+        only: Scenario names to emit; ``None`` emits every scenario in the IR.
+
+    Raises:
+        SystemExit: the IR has not been produced yet.
+    """
     feature_dir = feature_dir.resolve()
     ir_path = feature_dir / ".build" / "spec.json"
     if not ir_path.is_file():
@@ -155,19 +178,48 @@ def generate(feature_dir: Path) -> Path:
     slug = _sanitize(feature_dir.name)
     (generated_dir / "conftest.py").write_text(_emit_conftest(generated_dir), encoding="utf-8")
     test_path = generated_dir / f"test_{slug}.py"
-    test_path.write_text(_emit_test_module(feature_dir, ir), encoding="utf-8")
+    test_path.write_text(_emit_test_module(feature_dir, ir, only), encoding="utf-8")
 
-    n = len(ir["scenarios"])
+    n = len(_selected(ir, only))
     print(f"generated {test_path.relative_to(REPO_ROOT)} ({n} scenarios)")
     return generated_dir
 
 
+def tagged(feature_dir: Path, tag: str) -> set[str]:
+    """The scenario names carrying ``tag`` in the feature's ``spec.md``.
+
+    Read through ``spec_coverage``, which owns tag parsing because the portable
+    parser drops tag lines and the IR has no tag field (ADR-0045's amendment).
+
+    Raises:
+        SystemExit: the spec is missing, or the tag is not one it knows.
+    """
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    from acceptance.spec_coverage import CoverageError, tagged_scenarios
+
+    try:
+        found = tagged_scenarios(feature_dir / "spec.md")
+    except CoverageError as exc:
+        raise SystemExit(f"error: {exc}") from exc
+    if tag not in found:
+        raise SystemExit(f"error: unknown tag {tag!r} — known tags are {', '.join(sorted(found))}")
+    return found[tag]
+
+
 def main(argv: list[str]) -> int:
+    tag = None
+    if argv and argv[0] == "--tag":
+        if len(argv) < 2:
+            print(__doc__, file=sys.stderr)
+            return 2
+        tag, argv = argv[1], argv[2:]
     if not argv:
         print(__doc__, file=sys.stderr)
         return 2
     for arg in argv:
-        generate(Path(arg))
+        feature_dir = Path(arg)
+        generate(feature_dir, tagged(feature_dir, tag) if tag is not None else None)
     return 0
 
 
