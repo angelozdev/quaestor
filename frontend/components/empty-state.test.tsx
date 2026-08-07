@@ -19,4 +19,24 @@ describe("EmptyState", () => {
     render(<EmptyState message="Nada aún" action={{ label: "Ir", href: "/x" }} />)
     expect(screen.getByRole("link", { name: "Ir" })).toHaveAttribute("href", "/x")
   })
+
+  it("renders one way in per action when a screen holds more than one kind of thing", () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    render(
+      <EmptyState
+        message="Nada aún"
+        description={<p>lo que cada uno hace</p>}
+        action={[
+          { label: "Crear el primero", onClick: first },
+          { label: "Crear el otro", onClick: second },
+        ]}
+      />,
+    )
+
+    expect(screen.getByText("lo que cada uno hace")).toBeInTheDocument()
+    screen.getByRole("button", { name: "Crear el otro" }).click()
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
 })

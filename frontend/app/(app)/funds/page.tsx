@@ -245,7 +245,13 @@ export default function FundsPage() {
             <EmptyState
               message="Todavía no tienes fondos ni presupuestos."
               description={NOTHING_YET}
-              action={{ label: "Crear el primero", onClick: () => setMaking("fondo") }}
+              action={[
+                {
+                  label: "Crear mi primer presupuesto",
+                  onClick: () => setMaking("presupuesto"),
+                },
+                { label: "Crear mi primer fondo", onClick: () => setMaking("fondo") },
+              ]}
             />
           ),
         }}

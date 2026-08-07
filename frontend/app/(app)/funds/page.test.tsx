@@ -517,9 +517,29 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
     const user = setup()
     renderPage()
 
-    const start = await screen.findByRole("button", { name: "Crear el primero" })
-    await user.click(start)
+    await user.click(await screen.findByRole("button", { name: "Crear mi primer presupuesto" }))
+    expect(screen.getByText("Estás creando un presupuesto.")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "+ Nuevo fondo" }))
     expect(screen.getByText("Estás creando un fondo.")).toBeInTheDocument()
+  })
+
+  it("offers the first one of each shape, so the choice is made after reading what each is", async () => {
+    const user = setup()
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Crear mi primer fondo" }))
+    expect(screen.getByText("Estás creando un fondo.")).toBeInTheDocument()
+  })
+
+  it("names a shape in every way in it offers, and adds no third word", async () => {
+    renderPage()
+
+    await screen.findByText("Todavía no tienes fondos ni presupuestos.")
+    expect(screen.queryByRole("button", { name: "Crear el primero" })).not.toBeInTheDocument()
+    for (const button of screen.getAllByRole("button")) {
+      expect(button.textContent).toMatch(/presupuesto|fondo/i)
+    }
   })
 })
 

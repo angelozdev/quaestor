@@ -42,7 +42,7 @@ exit_criteria:
   - criterion: The frontend suite is green and grew
     verified_by: tool
     met: true
-    evidence: "`cd frontend && pnpm vitest run` → `Test Files 48 passed (48)` / `Tests 307 passed (307)`, exit 0. Baseline was `44 passed (44)` / `253 passed (253)`. Four new test files (`components/app-shell.test.tsx`, `app/(app)/categories/page.test.tsx`, `app/(app)/reports/page.test.tsx`, `app/(app)/settings/page.test.tsx`); `app/(app)/funds/page.test.tsx` went from 10 tests to 53. Arithmetic: 253 − 10 + 53 + 4 (date) + 1 (dashboard) + 1 + 3 + 1 + 1 = 307."
+    evidence: "`cd frontend && pnpm vitest run` → `Test Files 48 passed (48)` / `Tests 310 passed (310)`, exit 0. Baseline was `44 passed (44)` / `253 passed (253)`. Four new test files (`components/app-shell.test.tsx`, `app/(app)/categories/page.test.tsx`, `app/(app)/reports/page.test.tsx`, `app/(app)/settings/page.test.tsx`); `app/(app)/funds/page.test.tsx` went from 10 tests to 55. Arithmetic: 253 − 10 + 55 + 4 (date) + 1 (dashboard) + 1 (empty-state) + 1 + 3 + 1 + 1 = 310. It was 307 at the first pass of this checkpoint; the addendum's empty-screen change added 3."
   - criterion: Lint is clean across both halves
     verified_by: tool
     met: true
@@ -67,15 +67,19 @@ exit_criteria:
     verified_by: tool
     met: true
     evidence: "`grep -n '^\\s*//\\|{/\\*'` over every file this checkpoint created or changed returns nothing. The one comment-shaped edit is a DELETION: the stale `{/* Fondos */}` JSX comment in `reports/page.tsx`, which after the section rename disagreed with the title one line below it. Docstrings are on `shapeOf`/`accumulatesAs`/`nounOf`, `nextYearMonth`/`monthNameOf`, `rulesFor`/`ruleLabel`/`ruleConsequence`, `previewBody`, `keptLine`/`nextMonthLine` and `EmptyState`."
+  - criterion: The owner's empty-screen decision is delivered, and AC-4 stopped disagreeing with AC-10
+    verified_by: tool
+    met: true
+    evidence: "Added after `04d58a2`, on the owner's decision — see the dated addendum in the body. The empty Fondos screen now offers `Crear mi primer presupuesto` and `Crear mi primer fondo` instead of `Crear el primero`. Measured with a temporary probe, since removed: the EMPTY screen's buttons are `['+ Nuevo presupuesto', '+ Nuevo fondo', 'Crear mi primer presupuesto', 'Crear mi primer fondo']` and the POPULATED screen's are `['+ Nuevo presupuesto', '+ Nuevo fondo', 'Eliminar']`. AC-4's `the screen offers no way in that does not name a shape` was FALSE on the empty screen before this change and is now TRUE on both — findings (2)'s tension is gone. AC-20's `exactly 2 controls decide the shape` is 2 on the populated screen and 4 on the empty one, so it holds under the 'two decisions' reading and not under a literal control count; the empty screen now REPEATS the pair rather than contradicting it, and AC-20's scenario has no Given so its test runs on the populated screen unchanged. `EmptyState.action` widened to `Action | Action[]`, all 11 existing call sites untouched. Verified non-vacuous by rendering only the first action → `2 failed | 57 passed (59)`, restored → `59 passed (59)`."
   - criterion: AC-14 and AC-7's @browser scenarios verified with Chrome MCP
     verified_by: tool
     met: false
     evidence: "NOT DONE, and not in scope. Both `@browser` scenarios (`The control sits in the same place on every screen`, `The panel wraps instead of running off a phone screen`) are about the `¿Cómo funciona esto?` panel, which plan phase 4 builds. There is nothing to observe yet. The plan's Collaboration schedule puts the 390px observation at phase 4 and ADR-0045's evidence rule applies there, not here."
-findings_summary: "Plan phase 3 is done and green: 60 of the 98 unbound scenarios are now bound and passing, and the two nouns exist everywhere the brief said they must. FOUR THINGS THE BRIEF DID NOT ANTICIPATE, ALL DECIDED AND NAMED RATHER THAN QUIETLY APPLIED. (1) ONE AC-21 SCENARIO CANNOT BE BUILT IN THIS PHASE. The brief lists AC-21 as mine and its expected end state says every untagged AC-21 scenario is bound. But AC-21's second scenario is `The panel uses the same two words the rows use`, whose When is `the owner opens \"¿Cómo funciona esto?\"` — the panel the brief explicitly forbids me to build. It is left unbound and belongs to phase 4 with the rest of the panel. That is 11 of AC-21's 12, not 12. (2) THE EMPTY SCREEN'S BUTTON AND AC-4/AC-20 ARE IN TENSION, AND THE SPEC ITSELF RESOLVES IT. AC-10's owner-approved copy ends with `[ Crear el primero ]`, a way in that does not name a shape; AC-4 says `the screen offers no way in that does not name a shape` and AC-20 says `exactly 2 controls decide the shape`. Every AC-4 and AC-20 scenario has NO Given at all, while all three AC-10 Fondos scenarios are `Given no fondos and no presupuestos exist`. So the ACs describe two different screens: AC-4/AC-20 the populated one, AC-10 the empty one. The tests are set up that way — AC-4's and AC-20's with an entry present, AC-10's with none — and `Crear el primero` opens the fondo form (the shape the empty-state paragraph leads with). If the owner would rather it opened nothing and only pointed at the two buttons, that is a one-line change and worth one look. (3) THE RULE PICKER'S LIVE FIGURES COME FROM `POST /funds/preview`, NOT FROM ARITHMETIC ON THE SCREEN. AC-5 requires the subscription rule, the averaging rule and the dated rule each to state their real monthly figure for the chosen category. The screen never computes it: it previews, through the endpoint feature 003 already built for exactly this, with `useQueries` — one query per offered rule, `enabled` only once that rule has the figure it is made of. Two consequences worth naming. The `average` preview 400s for a category that never spent before the start month (`services/funds.py:580`), which is correct behaviour and lands the picker back on the worked example — but it is a failed request on a common path. And the dated rule re-previews per keystroke of the target amount, because the query key carries it. Both are cheap on a local single-user app and both are debounce/`select`-shaped work for refine. (4) THE ROW NEEDED THE FUND'S START MONTH, WHICH `FundStatus` DOES NOT CARRY. `Tiene $0 porque empezó este mes.` is a claim about the start month, and no combination of `asks`/`holds`/`spent`/`carries` distinguishes a first month from a month that spent its whole opening — a presupuesto holds 0 forever, so guessing would have printed the sentence every month of its life. The page therefore also reads `listFunds()`, which already returns `start_month`, and the note renders only when it equals the month on screen. The list is NOT gated behind the QueryBoundary: if it fails the note simply does not appear and nothing else on the screen moves. COPY: WRITTEN AS THE OWNER APPROVED IT, WITH TWO STATED DEVIATIONS. Every heading, entry point, rule label, worked example, row line, empty-state sentence and refusal is the owner's string verbatim. The two deviations are both about money formatting. Live figures render through `formatCents`, which is `$ 60.000` with a space — the owner wrote `$60.000`. Using two formats on one screen would have been worse than either, so computed figures follow the app and the literal examples keep the owner's exact characters, including `Tiene $0 porque empezó este mes.` where the zero is a constant and not a computed figure. The second: the averaging rule's line names its window (`Los últimos 3 meses…`, `El último mes…`) because the window is an editable field and the owner's copy hard-codes 3; the default is now 3, which is what makes the approved sentence the one he actually sees. TWO EXTRA VOCABULARY SITES, ONE FIXED AND ONE LEFT. Reportes' fund table was headed `Fondos` and now lists both shapes, so a presupuesto sat under a heading calling it a fondo — renamed to `Fondos y presupuestos`, the same decision the navigation made, one string. LEFT ALONE and named here: the Dashboard and Reportes both still say `Sin fondo que lo cubra` for spending nothing covers. It names no entry and no category, it was not in the brief's list, and rewording it is a judgement about a third sentence rather than about the two nouns."
+findings_summary: "Plan phase 3 is done and green: 60 of the 98 unbound scenarios are now bound and passing, and the two nouns exist everywhere the brief said they must. FOUR THINGS THE BRIEF DID NOT ANTICIPATE, ALL DECIDED AND NAMED RATHER THAN QUIETLY APPLIED. (1) ONE AC-21 SCENARIO CANNOT BE BUILT IN THIS PHASE. The brief lists AC-21 as mine and its expected end state says every untagged AC-21 scenario is bound. But AC-21's second scenario is `The panel uses the same two words the rows use`, whose When is `the owner opens \"¿Cómo funciona esto?\"` — the panel the brief explicitly forbids me to build. It is left unbound and belongs to phase 4 with the rest of the panel. That is 11 of AC-21's 12, not 12. (2) SETTLED BY THE OWNER AFTER `04d58a2` — SEE THE DATED ADDENDUM, WHICH SUPERSEDES THIS PARAGRAPH'S OUTCOME BUT NOT ITS FINDING. THE EMPTY SCREEN'S BUTTON AND AC-4/AC-20 ARE IN TENSION, AND THE SPEC ITSELF RESOLVES IT. AC-10's owner-approved copy ends with `[ Crear el primero ]`, a way in that does not name a shape; AC-4 says `the screen offers no way in that does not name a shape` and AC-20 says `exactly 2 controls decide the shape`. Every AC-4 and AC-20 scenario has NO Given at all, while all three AC-10 Fondos scenarios are `Given no fondos and no presupuestos exist`. So the ACs describe two different screens: AC-4/AC-20 the populated one, AC-10 the empty one. The tests are set up that way — AC-4's and AC-20's with an entry present, AC-10's with none — and `Crear el primero` opens the fondo form (the shape the empty-state paragraph leads with). RESOLVED: the owner replaced it with two buttons, one per shape — his reasoning and the measured effect on AC-4 and AC-20 are in the addendum. (3) THE RULE PICKER'S LIVE FIGURES COME FROM `POST /funds/preview`, NOT FROM ARITHMETIC ON THE SCREEN. AC-5 requires the subscription rule, the averaging rule and the dated rule each to state their real monthly figure for the chosen category. The screen never computes it: it previews, through the endpoint feature 003 already built for exactly this, with `useQueries` — one query per offered rule, `enabled` only once that rule has the figure it is made of. Two consequences worth naming. The `average` preview 400s for a category that never spent before the start month (`services/funds.py:580`), which is correct behaviour and lands the picker back on the worked example — but it is a failed request on a common path. And the dated rule re-previews per keystroke of the target amount, because the query key carries it. Both are cheap on a local single-user app and both are debounce/`select`-shaped work for refine. (4) THE ROW NEEDED THE FUND'S START MONTH, WHICH `FundStatus` DOES NOT CARRY. `Tiene $0 porque empezó este mes.` is a claim about the start month, and no combination of `asks`/`holds`/`spent`/`carries` distinguishes a first month from a month that spent its whole opening — a presupuesto holds 0 forever, so guessing would have printed the sentence every month of its life. The page therefore also reads `listFunds()`, which already returns `start_month`, and the note renders only when it equals the month on screen. The list is NOT gated behind the QueryBoundary: if it fails the note simply does not appear and nothing else on the screen moves. COPY: WRITTEN AS THE OWNER APPROVED IT, WITH TWO STATED DEVIATIONS. Every heading, entry point, rule label, worked example, row line, empty-state sentence and refusal is the owner's string verbatim. The two deviations are both about money formatting. Live figures render through `formatCents`, which is `$ 60.000` with a space — the owner wrote `$60.000`. Using two formats on one screen would have been worse than either, so computed figures follow the app and the literal examples keep the owner's exact characters, including `Tiene $0 porque empezó este mes.` where the zero is a constant and not a computed figure. The second: the averaging rule's line names its window (`Los últimos 3 meses…`, `El último mes…`) because the window is an editable field and the owner's copy hard-codes 3; the default is now 3, which is what makes the approved sentence the one he actually sees. TWO EXTRA VOCABULARY SITES, ONE FIXED AND ONE LEFT. Reportes' fund table was headed `Fondos` and now lists both shapes, so a presupuesto sat under a heading calling it a fondo — renamed to `Fondos y presupuestos`, the same decision the navigation made, one string. LEFT ALONE and named here: the Dashboard and Reportes both still say `Sin fondo que lo cubra` for spending nothing covers. It names no entry and no category, it was not in the brief's list, and rewording it is a judgement about a third sentence rather than about the two nouns."
 human_action_needed: yes
 human_action_kind: review
-recommended_next: "Plan phase 4 — `ScreenHelp`, the header slot, ten screens' content and the remaining nine empty states — then /engineer.refine, then verification. THREE THINGS WANT THE OWNER BEFORE PHASE 4 QUOTES THEM. (1) THE COPY IS NOW ON A SCREEN AND CAN BE READ IN PLACE. The plan's Collaboration schedule says the owner reviews phase 3's Spanish before phase 4 quotes it; it is all live now — two headings, two entry points, six rule labels with their consequence lines, three row lines and two refusals. Nothing about the app is running in a browser yet for this checkpoint (no @browser scenario applies to phase 3), so `just dev-local` plus the Fondos y presupuestos screen is the fastest read. (2) `[ Crear el primero ]` OPENS THE FONDO FORM. See findings (2): the alternative is that it opens nothing and the two named buttons are the only way in, which would make AC-4's `no way in that does not name a shape` true on the empty screen too. One line either way. (3) THE ROW'S `Regla` COLUMN NOW USES THE JOB LABELS. A presupuesto's fixed rule reads `Yo pongo el tope` and a fondo's reads `Aparto un monto fijo cada mes`, rather than `Monto fijo`. That is what keeps AC-21's `a presupuesto's own row never calls it a fondo` true and keeps one vocabulary between the picker and the list, but the labels are sentences in a narrow table column and the owner may want them shorter. FOR REFINE, NOT FOR PHASE 4: the two preview-query sharp edges in findings (3), and `funds/create-form.tsx` at 370 lines is the largest thing this checkpoint produced."
-tracker_update: "local — 010 stays at checkpoint 5; plan phases 1, 2 and 3 complete, phase 4 not started. Backend acceptance 361 (unchanged, no backend file touched), backend unit 992 (unchanged), vitest 48 files / 307 tests (was 44 / 253), lint exit 0. spec-coverage: 60 bound, 38 unbound, down from 98. The runner still exits 1 and will until phase 4 lands. Mutation sweep on services/funds.py still not run — verification owns it, and this checkpoint changed no Python."
+recommended_next: "Plan phase 4 — `ScreenHelp`, the header slot, ten screens' content and the remaining nine empty states — then /engineer.refine, then verification. PHASE 4 INHERITS ONE SETTLED PRECEDENT: the empty screen names both shapes in its ways in, and `EmptyState.action` already takes an array, so the other nine empty screens have the component they need. TWO THINGS STILL WANT THE OWNER (the third is now decided — see the addendum). (1) THE COPY IS NOW ON A SCREEN AND CAN BE READ IN PLACE. The plan's Collaboration schedule says the owner reviews phase 3's Spanish before phase 4 quotes it; it is all live now — two headings, two entry points, six rule labels with their consequence lines, three row lines and two refusals. Nothing about the app is running in a browser yet for this checkpoint (no @browser scenario applies to phase 3), so `just dev-local` plus the Fondos y presupuestos screen is the fastest read. (2) THE ROW'S `Regla` COLUMN NOW USES THE JOB LABELS. A presupuesto's fixed rule reads `Yo pongo el tope` and a fondo's reads `Aparto un monto fijo cada mes`, rather than `Monto fijo`. That is what keeps AC-21's `a presupuesto's own row never calls it a fondo` true and keeps one vocabulary between the picker and the list, but the labels are sentences in a narrow table column and the owner may want them shorter. FOR REFINE, NOT FOR PHASE 4: the two preview-query sharp edges in findings (3), and `funds/create-form.tsx` at 370 lines is the largest thing this checkpoint produced."
+tracker_update: "local — 010 stays at checkpoint 5; plan phases 1, 2 and 3 complete, phase 4 not started. Backend acceptance 361 (unchanged, no backend file touched), backend unit 992 (unchanged), vitest 48 files / 310 tests (was 44 / 253), lint exit 0. spec-coverage: 60 bound, 38 unbound, down from 98. The runner still exits 1 and will until phase 4 lands. Mutation sweep on services/funds.py still not run — verification owns it, and this checkpoint changed no Python."
 status: complete
 ---
 
@@ -214,3 +218,94 @@ Dos veces, y las dos son formato de plata:
    tope`, `Aparto un monto fijo cada mes`. Es lo que mantiene un solo
    vocabulario entre el selector y la lista, pero son frases en una columna
    angosta.
+
+---
+
+## 2026-08-07 · Addendum — la pantalla vacía ofrece las dos puertas
+
+Sobre `04d58a2`. **El dueño resolvió el punto 2 de arriba**, y lo resolvió al
+revés de como estaba: en vez de una sola puerta sin nombre, **dos, una por
+sustantivo**.
+
+```
+Todavía no tienes fondos ni presupuestos.
+
+Un FONDO aparta plata cada mes y guarda lo que sobra — para el
+mantenimiento del carro, o para pagar una suscripción anual mes a mes.
+
+Un PRESUPUESTO es un tope: lo que no gastes no se guarda.
+
+  [ Crear mi primer presupuesto ]   [ Crear mi primer fondo ]
+```
+
+**Su razón, textual, porque decide los casos que vengan después:** acaba de
+leer qué es cada uno, así que debe elegir **sabiendo**; y así la pantalla vacía
+dice las mismas dos palabras que dice la pantalla llena, que es justo lo que
+afirma el AC-21. `Crear el primero` **elegía por él en el momento en que menos
+sabe**, que es el defecto que existe este feature para arreglar.
+
+### Qué cambió
+
+- **`EmptyState`**: `action` pasó de `Action` a `Action | Action[]`. Un solo
+  concepto — *la puerta, o las puertas* — en vez de dos props que dicen lo
+  mismo. **Los 11 sitios que ya lo usaban no se tocaron**: siguen pasando un
+  objeto y siguen pintando exactamente lo que pintaban. El botón y el enlace
+  salieron a un `WayIn` interno para no duplicarlos por cada puerta.
+- **`funds/page.tsx`**: el estado vacío pasa las dos acciones, presupuesto
+  primero — el mismo orden que el encabezado y que las dos secciones.
+- **Tests**: `An empty Fondos screen offers to create the first one` sigue
+  ligado y ahora afirma lo que el AC-10 realmente dice — que ofrece crear el
+  primero **de cada forma**, y que cada botón abre el formulario de SU forma.
+  Dos tests más lo rodean, y uno más en `empty-state.test.tsx` fija que dos
+  acciones pintan dos puertas y que cada una llama a la suya.
+
+### Las dos pantallas dejaron de contradecirse — medido, no razonado
+
+Conté los controles de las dos pantallas con una sonda temporal (después
+borrada):
+
+| | botones | ¿todos nombran una forma? |
+|---|---|---|
+| vacía | `+ Nuevo presupuesto`, `+ Nuevo fondo`, `Crear mi primer presupuesto`, `Crear mi primer fondo` | **sí** |
+| con datos | `+ Nuevo presupuesto`, `+ Nuevo fondo`, `Eliminar` | sí |
+
+**El AC-4 quedó cierto también en la pantalla vacía.** *«the screen offers no
+way in that does not name a shape»* era **falso** ahí antes de este cambio —
+`Crear el primero` no nombraba ninguna — y ahora es cierto en las dos. Eso es
+una mejora real, no una casualidad: la tensión que reporté en los findings (2)
+**dejó de existir**, y los tests del AC-4 podrían correrse en cualquiera de las
+dos pantallas y pasar igual. Los dejé en la pantalla con datos, que es donde
+estaban, para no reescribir un binding que ya funciona.
+
+**El AC-20 no quedó igual de limpio, y lo digo en vez de taparlo.** *«exactly 2
+controls decide the shape»*: en la pantalla con datos son **2**; en la vacía son
+**4**. Bajo la lectura de «dos decisiones» sigue siendo cierto —se ofrecen
+exactamente dos formas y nada más—, pero bajo un conteo literal de controles no
+lo es. La diferencia con antes es de clase, no de grado: antes la pantalla vacía
+**contradecía** al AC-4 con una puerta anónima; ahora **repite** el par en vez
+de contradecirlo. El escenario del AC-20 no lleva `Given`, así que su test corre
+sobre la pantalla con datos y sigue verde y sigue siendo honesto.
+
+Si al dueño le molesta la repetición, lo que la quita es **ocultar las dos
+puertas del encabezado mientras la pantalla está vacía** — con eso el conteo da
+2 en las dos pantallas. No lo hice: es una decisión de diseño que él no tomó, y
+acopla el encabezado al estado de la consulta, que hoy vive dentro del
+`QueryBoundary`.
+
+### Las puertas, verificadas
+
+Dejé `EmptyState` pintando **sólo la primera** acción del arreglo y corrí:
+`2 failed | 57 passed (59)`. Restaurado: `59 passed (59)`.
+
+### Compuertas después del cambio
+
+| compuerta | resultado |
+|---|---|
+| `./run-acceptance-tests.sh` | `361 passed` · sale 1 por lo de siempre · `unbound 38` (igual) |
+| `pnpm vitest run` | `Test Files 48 passed (48)` · `Tests 310 passed (310)` (eran 307) |
+| `just lint` | exit 0 |
+| `spec_coverage.py` | `bound to tests 60` · `unbound 38` |
+
+Sin backend, sin migración, sin tocar el `spec.md`, sin comentarios de código.
+Los tres tests nuevos son de la pantalla vacía y del componente, así que
+**ningún escenario cambió de ligado a no ligado**.
