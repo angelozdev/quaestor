@@ -120,6 +120,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
+        titleHidden
         help={
           <ScreenHelp screen="Dashboard">
             <DashboardHelp available={available.data} />
