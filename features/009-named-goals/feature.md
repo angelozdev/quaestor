@@ -10,7 +10,7 @@ owner: angelo
 assignee: local
 tracker_ref: local
 roadmap_ref: named-goals
-relevant_adrs: [0005, 0006, 0028, 0043, 0044]
+relevant_adrs: [0005, 0009, 0028, 0029, 0043, 0044, 0045]
 created: 2026-08-05
 intake: discuss
 ---
@@ -50,8 +50,15 @@ move the date.
   (ADR-0005).
 - **Out of scope:** any change to the fund's rules, its fold, or its
   one-per-category constraint; any coupling of a meta to an account
-  (deliberately refused — see below); the fund-rule naming problem, which is
-  its own roadmap item (`id:fund-vs-budget-vocabulary`).
+  (deliberately refused — see below); any assistant surface for metas (the
+  owner's decision at CP2 — see `acs.md` AC-32 and the deviation it records).
+
+*The fund-rule naming problem was parked here as its own roadmap item
+(`id:fund-vs-budget-vocabulary`). It shipped on 2026-08-07 as feature 010, so
+this feature no longer picks vocabulary in a vacuum: it inherits two settled
+nouns — `presupuesto` and `fondo`, product ADR-042 — and adds a third. 010's
+AC-9 also puts a `¿Cómo funciona esto?` panel on every screen, which the metas
+screen owes (AC-30).*
 
 ## What the discuss decided, and why
 
@@ -97,19 +104,23 @@ Three findings carried the decision:
    than that account contains — exactly the coupling ADR-015 removed and ADR-037
    confirmed gone. Not reopened.
 
-## Open questions for CP2
+## Open questions for CP2 — all six answered 2026-08-08
 
-Deliberately left undecided — they are AC-discovery material, not discuss
-material:
+Resolved during AC discovery. The reasoning and the numbers each was decided
+against are in `acs.md`; this is the index.
 
-- Buying the thing with less than the target saved (the $8.000.000 phone bought
-  with $6.000.000 put by).
-- Cancelling a meta: where the money it was holding goes.
-- A meta with no date — *"$5.000.000, whenever it gets there"*.
-- Whether the assistant can create metas and contribute to them (REST/MCP
-  parity, ADR-0006/0009).
-- Metas in a currency other than COP.
-- How metas and funds sit together on the screen the owner actually reads.
+| Question | Answer | AC |
+|---|---|---|
+| Buying with less than the target saved | The uncovered part leaves that month's money available | AC-12 |
+| Cancelling a meta | What it held is released into the month it is cancelled | AC-15 |
+| A meta with no date | **There are none — the date is mandatory** | AC-1, AC-20 |
+| Can the assistant create metas | **No.** The owner intends to remove the assistant | AC-32 |
+| Metas in a currency other than COP | Yes, stored in their currency, converted at the month's rate | AC-26 |
+| How metas and funds sit together | Their own screen, `Metas`, beside `Fondos y presupuestos` | AC-5 |
+
+A seventh, raised by the owner mid-discovery and answered the same way: a meta
+is editable while it runs — *"es raro que un celular cueste EXACTAMENTE 5M"* —
+and what it asks recomputes at once (AC-11).
 
 ## Charter signals
 
