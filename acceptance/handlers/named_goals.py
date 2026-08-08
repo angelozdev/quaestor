@@ -24,11 +24,13 @@ Scratchpad attributes this module puts on the :class:`World`: ``metas``
 from __future__ import annotations
 
 from datetime import date as Date
+from pathlib import Path as _Path
 
 from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
 from quaestor.domain.models import Category as _Category
 from quaestor.domain.models import Meta as _Meta
 from quaestor.domain.money import major_to_cents
+from quaestor.mcp import tools as _mcp_tools
 from quaestor.services import categories, planned, transactions
 from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
@@ -600,3 +602,34 @@ def then_that_month_term(world: World, amount: str, term: str) -> None:
 def then_not_saving(world: World, name: str) -> None:
     cat = world.session.get(_Category, world.categories[name])
     assert not cat.counts_as_saving, f"spending in {name!r} is marked as saving, and it should not be"
+
+
+# ----------------------------------------------------------- the assistant
+
+_META_VERBS = ("create_meta", "set_meta", "contribute_to_meta", "cancel_meta", "delete_meta")
+
+
+def _assistant_meta_tools() -> list[str]:
+    """Every meta-managing tool the assistant exposes. Expected empty (AC-32)."""
+    found = []
+    for module in _mcp_tools.__all__ if hasattr(_mcp_tools, "__all__") else []:
+        found.extend(name for name in dir(module) if name in _META_VERBS)
+    for path in (_Path(_mcp_tools.__file__).parent).glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        found.extend(verb for verb in _META_VERBS if f"def {verb}" in text)
+    return sorted(set(found))
+
+
+@step(r"the assistant is asked to create a meta")
+def when_assistant_create_meta(world: World) -> None:
+    world.assistant_meta_tools = _assistant_meta_tools()
+
+
+@step(r"the assistant is asked to contribute to a meta")
+def when_assistant_contribute(world: World) -> None:
+    world.assistant_meta_tools = _assistant_meta_tools()
+
+
+@step(r'the assistant\'s answer names "(?P<name>[^"]+)"')
+def then_assistant_names(world: World, name: str) -> None:
+    assert name in world.assistant_answer, f"the assistant did not name {name!r}"
