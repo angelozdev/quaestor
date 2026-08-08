@@ -27,6 +27,7 @@ from ..domain.models import (
     CategoryGroup,
     Fund,
     Meta,
+    MetaAmendment,
     MetaContribution,
     OccurrenceStatus,
     RecurringItem,
@@ -60,6 +61,7 @@ class MonthAggregate:
     metas: list[Meta]
     cancelled: list[Meta]
     contributions: dict[int, dict[str, int]]
+    amendments: dict[int, list[MetaAmendment]]
     linked: list[Transaction]
     first_movement_month: str | None
     skipped_turns: frozenset[tuple[int, Date]]
@@ -227,6 +229,11 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         .group_by(MetaContribution.meta_id, MetaContribution.year_month)
     ).all():
         contributions.setdefault(meta_id, {})[month] = int(total)
+    amendments: dict[int, list[MetaAmendment]] = {}
+    for row in session.exec(
+        select(MetaAmendment).where(MetaAmendment.year_month <= year_month).order_by(MetaAmendment.year_month)
+    ).all():
+        amendments.setdefault(row.meta_id, []).append(row)
     linked = list(
         session.exec(
             select(Transaction).where(
@@ -260,6 +267,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         metas=metas,
         cancelled=cancelled,
         contributions=contributions,
+        amendments=amendments,
         linked=linked,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
         skipped_turns=skipped_turns,

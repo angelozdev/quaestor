@@ -70,7 +70,7 @@ def test_a_month_the_category_never_spent_in_is_zero(session):
     assert agg.spent_in(cat.id, "2026-06") == 0
 
 
-BOUNDED_LOADS = 13
+BOUNDED_LOADS = 14
 """The ceiling one month load is held under (ADR-0028), asserted with `<=`.
 
 The ceiling was already ten before feature 003 and has not moved. What moved

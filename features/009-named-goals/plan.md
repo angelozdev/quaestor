@@ -138,13 +138,16 @@ Small, last, and separate so the deviation stays visible.
 ## Performance budgets
 
 - **The month's read path stays bounded.** ADR-0028's statement count rises by
-  **three** — the live metas, the contributions dated on or before the month,
-  and the posted purchases carrying a `meta_id`. Aggregate loads go from 10 to
-  13, asserted by `test_load_issues_bounded_query_count` rather than trusted.
+  **four** — the live metas, the contributions, the amendments, and the posted
+  purchases carrying a `meta_id`. Aggregate loads go from 10 to 14, asserted by
+  `test_load_issues_bounded_query_count` rather than trusted.
 
-  *Corrected in Phase 1.* This plan first said two; the third is the linked
-  purchases, and the window the aggregate already loads cannot supply them —
-  it holds two months, and a purchase four months back still completes a meta.
+  *Corrected twice, and the correction is the finding.* This plan said two,
+  then three. Each addition is an act that had to record its own month because
+  a fold cannot recover one. A meta **derives what it holds and stores what the
+  owner did to it** — contributions, cancellations, amendments. That is the
+  boundary of ADR-0043's derive-everything stance, found by building against
+  it.
 - **The meta fold is arithmetic, not queries.** Walking a meta from its start
   month to the month asked about issues nothing; it is the same shape as
   `_walk`.

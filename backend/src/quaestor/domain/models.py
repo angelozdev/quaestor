@@ -197,6 +197,31 @@ class MetaContribution(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+class MetaAmendment(SQLModel, table=True):
+    """What a meta was changed to, and the month the change starts (AC-11).
+
+    Everything else a meta reports is folded forward and needs nothing stored.
+    An edit is not: raising the amount in October must leave August and
+    September saying what they said, and no arithmetic can recover that from a
+    single current value. The same reason `cancelled_month` exists — some facts
+    are known only to the act.
+
+    A row holds the values effective **from** its month. The meta's own
+    `amount` and `target_month` are the values effective from its start month
+    and are never rewritten, which is what keeps AC-27 true: a past month
+    answers as that month stood.
+    """
+
+    __tablename__ = "meta_amendment"
+    __table_args__ = (UniqueConstraint("meta_id", "year_month", name="uq_meta_amendment_month"),)
+    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
+    meta_id: Annotated[int, Field(foreign_key="meta.id")]
+    year_month: str
+    amount: Annotated[int, Field(sa_type=BigInteger)]
+    target_month: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Tag(SQLModel, table=True):
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     name: Annotated[str, Field(index=True, unique=True)]

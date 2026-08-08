@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 
 from ..domain.dtos import MetaStatus
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Meta, MetaContribution
+from ..domain.models import Meta, MetaAmendment, MetaContribution
 from ..domain.money import to_cop_cents
 from ..domain.rules import (
     is_year_month,
@@ -100,6 +100,20 @@ class _Month:
     holds: int
 
 
+def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
+    """What the meta wanted, and by when, as of one month (AC-11).
+
+    The meta's own amount and target are the first term of the series; each
+    amendment replaces them from its own month on. Nothing is rewritten, which
+    is why a past month still answers as that month stood (AC-27).
+    """
+    amount, target = meta.amount, meta.target_month
+    for row in agg.amendments.get(meta.id, []):
+        if row.year_month <= month:
+            amount, target = row.amount, row.target_month
+    return amount, target
+
+
 def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
     """Fold the meta forward to the month this aggregate holds (ADR-0046)."""
     year_month = agg.year_month
@@ -108,11 +122,12 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
     if year_month < month:
         return _Month(opening=0, ask=0, contributed=0, holds=0)
     while True:
-        ask = meta_ask_calc(meta.amount, opening, months_to_meta(month, meta.target_month))
+        amount, target = _wanted_in(agg, meta, month)
+        ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
         contributed = _contributions_in(agg, meta, month)
         holds = opening + ask + contributed
-        if holds > meta.amount:
-            contributed = max(meta.amount - opening - ask, 0)
+        if holds > amount:
+            contributed = max(amount - opening - ask, 0)
             holds = opening + ask + contributed
         if month == year_month:
             return _Month(opening=opening, ask=ask, contributed=contributed, holds=holds)
@@ -394,12 +409,38 @@ def set_meta(session: Session, meta_id: int, *, today: str, **changes) -> Meta:
     _validate_spec(name, amount, target_month, today)
     _refuse_name_already_held(session, name, excluding=meta.id)
     meta.name = name.strip()
-    meta.amount = amount
-    meta.target_month = target_month
     session.add(meta)
+    if (amount, target_month) != _wanted_now(session, meta, today):
+        _amend(session, meta, today, amount, target_month)
     session.commit()
     session.refresh(meta)
     return meta
+
+
+def _wanted_now(session: Session, meta: Meta, year_month: str) -> tuple[int, str]:
+    rows = session.exec(
+        select(MetaAmendment)
+        .where(MetaAmendment.meta_id == meta.id, MetaAmendment.year_month <= year_month)
+        .order_by(MetaAmendment.year_month)
+    ).all()
+    return (rows[-1].amount, rows[-1].target_month) if rows else (meta.amount, meta.target_month)
+
+
+def _amend(session: Session, meta: Meta, year_month: str, amount: int, target_month: str) -> None:
+    """Record what the meta wants from this month on, replacing this month's own.
+
+    One row per month: editing twice in October leaves October with one
+    amendment, the last one, rather than a trail nothing reads.
+    """
+    existing = session.exec(
+        select(MetaAmendment).where(MetaAmendment.meta_id == meta.id, MetaAmendment.year_month == year_month)
+    ).first()
+    if existing is not None:
+        existing.amount = amount
+        existing.target_month = target_month
+        session.add(existing)
+        return
+    session.add(MetaAmendment(meta_id=meta.id, year_month=year_month, amount=amount, target_month=target_month))
 
 
 def preview_meta(*, amount: int, target_month: str, today: str, income: int) -> MetaPreview:

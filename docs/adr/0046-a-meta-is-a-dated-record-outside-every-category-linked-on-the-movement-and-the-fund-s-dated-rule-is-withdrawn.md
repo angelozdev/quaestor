@@ -120,17 +120,24 @@ the account, which is the clause this preserves rather than breaks.
 
 ### The read path
 
-The fold gains three queries: the live metas, the contributions dated on or
-before the month, and the posted purchases carrying a `meta_id`. **ADR-0028's
-bound rises by three statements**, from 10 aggregate loads to 13.
+The fold gains four queries: the live metas (cancelled ones ride the same
+statement), the contributions dated on or before the month, the amendments, and
+the posted purchases carrying a `meta_id`. **ADR-0028's bound rises by four
+statements**, from 10 aggregate loads to 14.
 
-*Corrected during implementation.* This ADR first said two. The third is the
-linked purchases, and it is not avoidable: the aggregate's transaction window
-holds only the report month and the one before it, while a meta must know
-whether it was ever bought — a purchase four months back still completes it.
-The row count is bounded by the number of linked purchases, which is at most
-one per meta. `test_load_issues_bounded_query_count` is what caught the wrong
-figure.
+*Corrected twice during implementation, and the correction is the finding.*
+This ADR first said two, then three; it is **four**, and aggregate loads go
+from 10 to 14. Each addition is an act recording its own month, because a fold
+cannot recover one: the linked purchases (a purchase four months back still
+completes a meta, and the transaction window holds two months), and the
+amendments (raising the amount in October must leave August saying what it
+said, which no single current value can express).
+
+That is the real boundary of ADR-0043's derive-everything stance, and it is
+worth stating plainly rather than burying in a number: **a meta derives what it
+holds, and stores what the owner did to it.** Contributions, cancellations and
+amendments are the three acts. `test_load_issues_bounded_query_count` caught
+every wrong figure, which is why the bound is asserted rather than trusted.
 
 ### Currency
 
