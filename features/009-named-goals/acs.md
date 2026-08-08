@@ -1,6 +1,6 @@
 ---
-ac_count: 33
-high_priority_count: 21
+ac_count: 35
+high_priority_count: 22
 discovered: 2026-08-08
 ---
 
@@ -146,11 +146,53 @@ which would make the sum of every category's report smaller than what was
 actually spent. Rejected on cost: a separate line per category report, which
 buys a comparison the movement list already gives when the month is opened.
 
+## The overlap this feature creates, and where it is paid
+
+Found at review, when the owner asked what a meta's relationship to a fund and
+a category actually is.
+
+**The fund already contains a meta.** Its fourth rule is `target-by-date`, and
+product ADR-037 describes it in as many words: *"a goal is a fund with a target
+and a date"* … *"`target-by-date` (an amount by a date — **the former goal**)"*.
+It ships today, as `target_amount` + `target_month`.
+
+| | fund `target-by-date` | meta |
+|---|---|---|
+| category | one, required | none |
+| how many | one per category | unlimited |
+| money whole | the month **before** | the month **of** the date |
+| the purchase | deducted by category, automatically | linked by hand, and excluded |
+| on completion | nothing | asks what comes next |
+| extra contribution | no | yes |
+
+The difference is real — `target-by-date` saves for **a charge that will
+arrive**, a meta for **a purchase the owner makes** — and it is invisible. The
+owner will open the app wanting to save for something and find two paths that
+read the same, one of them inside a four-option dropdown. That is the failure
+feature 010 existed to fix, arriving again.
+
+It is squeezed from both sides: for a **recurring** charge the `from-recurring`
+rule is strictly better because it renews itself, and for a purchase the meta
+is better. One case is left — a dated charge that happens once, a tuition.
+
+**The owner decided to withdraw it, and to do it as its own feature after this
+one.** The ordering is forced: the funds using the rule today have nowhere to
+go until metas exist. It also needs an ADR superseding ADR-037's four-rule
+clause, and a destructive migration on real data — CHARTER §7 requires him in
+person, `migrations/**` is capped at autonomy `low`, and ADR-0030 requires a
+fresh `just backup` first. None of that belongs inside a feature whose own
+scope says the fund's rules do not change.
+
+**The count that shapes that migration is not yet taken.** How many funds run
+`target-by-date` in the real database decides how much there is to convert; it
+does not decide whether to withdraw the rule, which is already decided.
+
 ## What this feature must not do
 
-**Nothing about the fund changes.** Not its four rules, not its fold, not the
-one-fund-per-category constraint (AC-25 of 003). A meta belongs to no category
-and a category may carry any number of them, or none.
+**Nothing about the fund changes.** Not its four rules — including
+`target-by-date`, whose withdrawal is the next feature and not this one — not
+its fold, not the one-fund-per-category constraint (AC-25 of 003). A meta
+belongs to no category and a category may carry any number of them, or none.
 
 **A meta is never tied to an account.** Firefly III ties a piggy bank to an
 asset account and refuses to hold more than that account contains — the exact
@@ -551,3 +593,33 @@ counting it in both would count the same money twice.
 
 Nothing is netted, marked or split in the reports. An owner adding up every
 category's report gets exactly what left his accounts.
+
+## AC-34: A meta can be told what it already holds
+
+- **Priority:** high
+- **Type:** happy-path
+
+Creating a meta, the owner may state what he has already put by for it. A
+$8.000.000 meta for December created in August with $3.000.000 already saved
+asks **$1.000.000** a month — $5.000.000 over five months — not $1.600.000.
+
+What is stated this way costs no month. It is money saved before the meta
+existed, and charging August for it would make August's figure wrong.
+
+This is what `Aportar` (AC-10) cannot do and must not be used for: a
+contribution is money set aside **now** and costs the month it is made.
+
+The statement is made for a month and never re-read afterwards, the same way a
+fund's is (product ADR-041).
+
+## AC-35: Deleting the linked movement reopens the meta
+
+- **Priority:** medium
+- **Type:** edge-case
+
+A meta completed by a purchase goes back to running when that movement is
+deleted: it counts the expense no longer, resumes asking for what is missing
+over the months that remain, and the category's fund takes back nothing — the
+movement is gone from both.
+
+The same holds when the movement is archived rather than deleted.
