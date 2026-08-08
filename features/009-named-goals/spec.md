@@ -1140,7 +1140,7 @@ Scenario: A month a meta was cancelled in still adds up
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user cancels the meta "Celular"
-  Then the month reports 1600000.00 COP as ahorro
+  Then the month reports -3200000.00 COP as ahorro
   And the month reports 8200000.00 COP as libre
   And consumo, ahorro and libre add up to the income this month
 

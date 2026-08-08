@@ -26,11 +26,12 @@ from __future__ import annotations
 from datetime import date as Date
 
 from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
+from quaestor.domain.models import Category as _Category
 from quaestor.domain.models import Meta as _Meta
 from quaestor.domain.money import major_to_cents
+from quaestor.services import categories, planned, transactions
 from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
-from quaestor.services import planned, transactions
 from sqlmodel import select as _select
 
 from . import step
@@ -550,3 +551,52 @@ def then_can_be_restored(world: World, name: str) -> None:
     service.restore_meta(world.session, _meta_id(world, name))
     agg = funds_service._month_view(world.session, _today(world))
     assert name in [f.name for f in service.statuses(agg)], f"the meta {name!r} did not come back"
+
+
+# --------------------------------------------------------------- the split
+
+
+def _split(world: World):
+    return funds_service.split(world.session, _today(world))
+
+
+@step(r'an expense category "(?P<name>[^"]+)" where spending is saving')
+def given_saving_category(world: World, name: str) -> None:
+    cat = categories.create_category(world.session, name=name, counts_as_saving=True)
+    world.categories[name] = cat.id
+
+
+@step(rf"the month reports (?P<amount>{_DEC}) COP as (?P<term>consumo|ahorro|libre)")
+def then_split_term(world: World, amount: str, term: str) -> None:
+    found = getattr(_split(world), term)
+    assert found == _cents(amount), f"the month reports {found} as {term}, expected {_cents(amount)}"
+
+
+@step(r"the month reports (?P<share>-?\d+) percent of the income as ahorro")
+def then_share(world: World, share: str) -> None:
+    found = _split(world).ahorro_share
+    assert found == int(share), f"the month reports {found} percent as ahorro, expected {share}"
+
+
+@step(r"consumo, ahorro and libre add up to the income this month")
+def then_split_adds_up(world: World) -> None:
+    s = _split(world)
+    total = s.consumo + s.ahorro + s.libre
+    assert total == s.income, f"consumo + ahorro + libre is {total}, and the income is {s.income}"
+
+
+@step(rf"the user views the month's report for (?P<month>{_MONTH})")
+def when_view_split_for(world: World, month: str) -> None:
+    world.split_view = funds_service.split(world.session, month)
+
+
+@step(rf"that month reports (?P<amount>{_DEC}) COP as (?P<term>consumo|ahorro|libre)")
+def then_that_month_term(world: World, amount: str, term: str) -> None:
+    found = getattr(world.split_view, term)
+    assert found == _cents(amount), f"that month reports {found} as {term}, expected {_cents(amount)}"
+
+
+@step(r'spending in "(?P<name>[^"]+)" is not saving')
+def then_not_saving(world: World, name: str) -> None:
+    cat = world.session.get(_Category, world.categories[name])
+    assert not cat.counts_as_saving, f"spending in {name!r} is marked as saving, and it should not be"

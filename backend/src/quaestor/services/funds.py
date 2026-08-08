@@ -27,7 +27,7 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import FundLine, FundPreview, FundStatus, MonthAvailable, MonthRates
+from ..domain.dtos import FundLine, FundPreview, FundStatus, MonthAvailable, MonthRates, MonthSplit
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, Fund, FundRule, RecurringItem, Transaction, TxStatus, TxType
 from ..domain.money import to_cop_cents
@@ -46,7 +46,9 @@ from ..domain.rules import (
     months_to_fund,
     next_year_month,
     prev_year_month,
+    share_calc,
     shift_year_month,
+    split_calc,
     uncovered_excess_calc,
     year_month_of,
 )
@@ -491,6 +493,69 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
         contributed=contributed,
         released=released,
     )
+
+
+def month_split(agg: MonthAggregate) -> MonthSplit:
+    """What share of the month was spent, set aside, or left (AC-37).
+
+    Nothing new is computed: it is `month_available`'s own terms, split by the
+    one thing that already tells the two shapes apart. A *presupuesto* is a
+    ceiling and counts as consumo; a *fondo* carries its leftover forward and
+    counts as ahorro; a meta is always ahorro; and spending in a category the
+    owner marked as saving is ahorro too (AC-41).
+
+    `ahorro` is net and may be negative — a month a meta is cancelled is a
+    month savings come back out. That is what keeps `consumo + ahorro + libre`
+    equal to the income in every month, which is the property AC-37 exists for.
+    """
+    view = month_available(agg)
+    presupuesto = sum(line.asks for line in view.funds if not line.accumulates)
+    fondo = sum(line.asks for line in view.funds if line.accumulates)
+    saved_by_spending = _spent_where_spending_is_saving(agg)
+    consumo = presupuesto + view.uncovered - saved_by_spending
+    ahorro = (
+        fondo
+        + sum(line.asks for line in view.metas)
+        + metas.cancelled_asks_total(agg)
+        + view.contributed
+        + saved_by_spending
+        - view.released
+    )
+    libre = split_calc(consumo, ahorro, view.income)
+    return MonthSplit(
+        year_month=agg.year_month,
+        income=view.income,
+        consumo=consumo,
+        ahorro=ahorro,
+        libre=libre,
+        ahorro_share=share_calc(ahorro, view.income),
+    )
+
+
+def _spent_where_spending_is_saving(agg: MonthAggregate) -> int:
+    """Spending the owner declared to be saving, out of the uncovered term.
+
+    Only the uncovered part: spending a fund already covers is the fund's
+    business, and the mark moves what nothing else claims (AC-41).
+    """
+    funded = {fund.category_id for fund in agg.funds}
+    saving = {cid for cid, cat in agg.categories.items() if cat.counts_as_saving}
+    return sum(
+        agg.to_cop_cents(tx)
+        for tx in agg.month_expense()
+        if tx.category_id in saving and tx.category_id not in funded and tx.meta_id is None
+    )
+
+
+def split(session: Session, year_month: str) -> MonthSplit:
+    """What share of a month is spent, set aside, or left.
+
+    Raises:
+        ValidationError: malformed year_month.
+        MissingRate: no TRM is set.
+    """
+    _validate_year_month(year_month)
+    return month_split(_month_view(session, year_month))
 
 
 def available(session: Session, year_month: str) -> MonthAvailable:

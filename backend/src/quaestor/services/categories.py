@@ -99,6 +99,7 @@ def create_category(
     is_income: bool = False,
     exclude_from_budget: bool = False,
     exclude_from_totals: bool = False,
+    counts_as_saving: bool = False,
 ) -> Category:
     """Create a new category.
 
@@ -109,6 +110,8 @@ def create_category(
         is_income: Whether this is an income category (default: False).
         exclude_from_budget: Stored and read by nothing since feature 003 took
             the envelope out (ADR-0043); kept so existing rows survive.
+        counts_as_saving: Spending here is saving, so it joins ahorro in the
+            month's split instead of consumo (AC-41). Off by default.
         exclude_from_totals: Whether to exclude from totals (default: False).
 
     Returns:
@@ -128,6 +131,7 @@ def create_category(
         group_id=group_id,
         is_income=is_income,
         exclude_from_budget=exclude_from_budget,
+        counts_as_saving=counts_as_saving,
         exclude_from_totals=exclude_from_totals,
     )
     session.add(cat)
@@ -246,6 +250,7 @@ def update_category(
     group_id=_UNSET,
     is_income=None,
     exclude_from_budget=None,
+    counts_as_saving=None,
     exclude_from_totals=None,
 ) -> Category:
     """Update a category. `group_id=_UNSET` leaves it unchanged; `group_id=None`
@@ -271,6 +276,8 @@ def update_category(
         cat.is_income = is_income
     if exclude_from_budget is not None:
         cat.exclude_from_budget = exclude_from_budget
+    if counts_as_saving is not None:
+        cat.counts_as_saving = counts_as_saving
     if exclude_from_totals is not None:
         cat.exclude_from_totals = exclude_from_totals
     session.add(cat)

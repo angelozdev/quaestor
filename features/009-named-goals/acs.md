@@ -886,8 +886,20 @@ forward and counts as ahorro; a **meta** always counts as ahorro (product
 ADR-042). Spending in a category marked as saving counts as ahorro too (AC-41);
 all other spending nothing covers is consumo.
 
-Contributions made by hand are ahorro in the month they are made. What a
-cancelled meta releases is not ahorro and not consumo — it returns to libre.
+Contributions made by hand are ahorro in the month they are made.
+
+**Ahorro is net, and it can be negative.** What a cancelled meta releases is
+money the owner un-saved, so it comes off ahorro rather than landing anywhere
+else. Cancelling a meta holding $4.800.000 in a month that asked $1.600.000
+reads **−$3.200.000 saved** and $8.200.000 free, and the three terms still sum
+to the income exactly.
+
+*Corrected 2026-08-08, in Phase 4.* This first said the release "returns to
+libre", and the AC's own scenario then summed to $9.800.000 against a
+$5.000.000 income — the identity this criterion exists to guarantee, broken by
+the criterion itself. Netting is the only reading that holds, and it is also
+the truthful one: a month you take savings back out is a month you saved less
+than nothing.
 
 The terms sum to the income exactly, in every month, including the months the
 owner contributes, completes, cancels or edits. Any month can be read, so

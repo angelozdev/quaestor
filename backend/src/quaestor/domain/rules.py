@@ -175,8 +175,23 @@ def split_calc(consumo: int, ahorro: int, income: int) -> int:
 
     One subtraction rather than a second sum, so `consumo + ahorro + libre`
     equals the income by construction and cannot drift.
+
+    `ahorro` is net and may be negative: a month the owner cancels a meta is a
+    month he takes savings back out, and the release comes off what he set
+    aside rather than landing in another term. That is what keeps the identity
+    true — and it is also what the month actually did.
     """
     return income - consumo - ahorro
+
+
+def share_calc(part: int, whole: int) -> int:
+    """What share of the month a term took, as whole percent.
+
+    Zero income means no share to state rather than a division by zero.
+    """
+    if whole == 0:
+        return 0
+    return round(part * 100 / whole)
 
 
 def monthly_average_calc(spent: int, months_with_data: int) -> int:
