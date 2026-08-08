@@ -1,6 +1,6 @@
 # 0046. A meta is a dated record outside every category, linked on the movement, and the fund's dated rule is withdrawn
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-08
 - **Deciders:** Angelo
 - **Supersedes:** —
