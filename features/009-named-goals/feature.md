@@ -11,7 +11,7 @@ assignee: local
 tracker_ref: local
 roadmap_ref: named-goals
 acceptance_stream: mixed
-relevant_adrs: [0005, 0009, 0028, 0029, 0043, 0044, 0045]
+relevant_adrs: [0005, 0009, 0028, 0029, 0031, 0043, 0044, 0045, 0046]
 created: 2026-08-05
 intake: discuss
 ---
