@@ -1,6 +1,6 @@
 ---
-ac_count: 32
-high_priority_count: 20
+ac_count: 33
+high_priority_count: 21
 discovered: 2026-08-08
 ---
 
@@ -122,6 +122,29 @@ owner mid-question: *"es raro que un celular cueste EXACTAMENTE 5M"*. What it
 asks recomputes from what is left and the months remaining. Lowering the amount
 below what is already saved completes the meta and frees the excess into that
 month, by decision 4's rule.
+
+**10. The link changes the plan, never the history.** Found because the owner
+asked what a meta's relationship to a fund and a category actually is, and the
+first thirty-two ACs answered that for the month's budget and never for the
+reports.
+
+He answered it himself, from product ADR-037's own split — *the money available
+is a balance and smooths nothing; the rates smooth and answer whether his life
+fits his income*. Generalised: one half of the app states what happened and may
+never hide anything, the other half plans and may leave things out.
+
+A **movement** is the first half. On 12 December $8.000.000 left the account
+against *Tecnología*, and the category's report says so — the year spikes, and
+it really did. A **fund's month** and a **meta's month** are the second half:
+*"asks $1.600.000"* is not a fact, nobody moved $1.600.000.
+
+So AC-7 is not the app hiding a purchase. The fund leaves the linked expense
+out because **the meta already counted it**, and counting it in both would
+count the same money twice — the exact defect ADR-002's context warned about
+when there were two layers. Rejected outright: hiding it from the reports too,
+which would make the sum of every category's report smaller than what was
+actually spent. Rejected on cost: a separate line per category report, which
+buys a comparison the movement list already gives when the month is opened.
 
 ## What this feature must not do
 
@@ -512,3 +535,19 @@ recorded rather than fixed. It stands against CHARTER §4, which names the
 agent-native MCP layer as a product differentiator (product ADR-001), and
 against the REST/MCP parity ADR-0006/0009 require. While the assistant exists
 it will see funds and not metas. Removing it belongs in its own discuss.
+
+## AC-33: The link changes what the month plans, never what the reports say
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+A linked expense keeps its category and is counted in full by every report of
+what was spent. December in *Tecnología* reads $8.200.000 — the $8.000.000
+phone and the $200.000 charger — and the year spikes, because it did.
+
+What the link changes is only the planning side: the category's fund leaves the
+purchase out of its month (AC-7) because the meta already counted it, and
+counting it in both would count the same money twice.
+
+Nothing is netted, marked or split in the reports. An owner adding up every
+category's report gets exactly what left his accounts.
