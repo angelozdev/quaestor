@@ -32,12 +32,14 @@ move the date.
 
 - **A new noun beside the fund.** A meta has a name, a target amount and a
   target month. It does **not** belong to a category, and a category may carry
-  any number of metas — or none. Nothing about the fund changes; the
-  one-fund-per-category constraint (AC-25) stays exactly as it is.
-- **It fills itself.** A meta's monthly share is derived from what is left to
-  save and how many months remain, the same way a dated fund derives its ask.
-  Not touching the app for a month still advances the meta. Contributing extra
-  on top is allowed but never required.
+  any number of metas — or none. The one-fund-per-category constraint (AC-25 of
+  003) stays exactly as it is, and the fund's fold is untouched — but the fund
+  does lose its fourth rule to this feature, see below.
+- **It fills itself.** A meta's monthly share is what is left to save over the
+  months that remain, counting the month being read and the target month. Not
+  touching the app for a month still advances the meta. Contributing extra is
+  allowed, never required, and is charged **on top** of that month's share —
+  the month always charges its instalment.
 - **It costs the month.** What every meta asks joins what every fund asks in
   the money-available figure, so the headline number already accounts for it.
 - **The purchase is linked, once.** Recording the expense, the owner may point
@@ -74,7 +76,7 @@ move the date.
 (`id:fund-vs-budget-vocabulary`). It shipped on 2026-08-07 as feature 010, so
 this feature no longer picks vocabulary in a vacuum: it inherits two settled
 nouns — `presupuesto` and `fondo`, product ADR-042 — and adds a third. 010's
-AC-9 also puts a `¿Cómo funciona esto?` panel on every screen, which the metas
+AC-7 also puts a `¿Cómo funciona esto?` panel on every screen, which the metas
 screen owes (AC-30).*
 
 ## What the discuss decided, and why
