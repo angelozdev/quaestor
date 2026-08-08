@@ -330,7 +330,6 @@ def fund_saved(fund, category_name: str) -> str:
         "fixed": lambda: f"{money(fund.amount or 0, 'COP')} each month",
         "average": lambda: f"the average of the last {fund.window_months} months",
         "from-recurring": lambda: "what its obligations come to",
-        "target-by-date": lambda: f"{money(fund.target_amount or 0, 'COP')} by {fund.target_month}",
     }[fund.rule.value]()
     carries = "accumulating" if fund.accumulates else "resetting"
     return f"✅ Fund on **{category_name}** — asks {detail}, from {fund.start_month}, {carries}. id={fund.id}"

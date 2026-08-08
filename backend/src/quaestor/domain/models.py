@@ -258,7 +258,6 @@ class FundRule(StrEnum):
     fixed = "fixed"
     average = "average"
     from_recurring = "from-recurring"
-    target_by_date = "target-by-date"
 
 
 class Fund(SQLModel, table=True):
@@ -279,7 +278,5 @@ class Fund(SQLModel, table=True):
     accumulates: bool = True
     amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
     window_months: int | None = None
-    target_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
-    target_month: str | None = None
     anchor_month: str | None = None
     anchor_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None

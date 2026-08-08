@@ -56,7 +56,7 @@ from . import fx as _fx
 from . import metas
 from .month_aggregate import MonthAggregate, load_month_aggregate
 
-_DATED_RULES = (FundRule.from_recurring, FundRule.target_by_date)
+_DATED_RULES = (FundRule.from_recurring,)
 
 
 @dataclass(frozen=True)
@@ -218,13 +218,7 @@ def _ask(agg: MonthAggregate, fund: Fund, year_month: str, holds: int) -> _Ask:
         return _Ask(fund.amount or 0)
     if fund.rule == FundRule.average:
         return _ask_average(agg, fund, year_month)
-    if fund.rule == FundRule.from_recurring:
-        return _ask_from_obligations(agg, fund, year_month, holds)
-    missing = max((fund.target_amount or 0) - holds, 0)
-    return _Ask(
-        fund_ask_calc(missing, months_to_fund(year_month, fund.target_month)),
-        charge_month=fund.target_month,
-    )
+    return _ask_from_obligations(agg, fund, year_month, holds)
 
 
 def _fold_start(fund: Fund, year_month: str) -> tuple[str, int]:
@@ -643,7 +637,22 @@ def _has_spending_before(session: Session, category_id: int, start_month: str) -
     return earliest is not None
 
 
+_WITHDRAWN = "target-by-date"
+
+
 def _rule_of(rule: str | FundRule) -> FundRule:
+    """The rule, or the refusal that names what replaced it.
+
+    `target-by-date` was withdrawn by feature 009 (product ADR-043): saving an
+    amount by a date is said one way, as a meta. The name is refused by name
+    rather than falling into "unknown funding rule", because an owner reaching
+    for it wants the thing, not the spelling.
+    """
+    if rule == _WITHDRAWN:
+        raise ValidationError(
+            "a fund no longer saves toward a date — make a meta instead, "
+            "which is not tied to a category and can be linked to the purchase"
+        )
     try:
         return FundRule(rule)
     except ValueError as exc:
@@ -670,12 +679,6 @@ def _validated_spec(session: Session, category: Category, rule: FundRule, spec: 
                 f"name a fixed amount instead"
             )
         stored["window_months"] = window
-    elif rule == FundRule.target_by_date:
-        target = spec.get("target_amount")
-        if target is None or target <= 0:
-            raise ValidationError("a fund saving toward a date needs a target above zero")
-        stored["target_amount"] = target
-        stored["target_month"] = _validate_year_month(spec.get("target_month"), "target_month")
     if rule in _DATED_RULES:
         if accumulates is False:
             raise ValidationError(
@@ -696,7 +699,7 @@ def create_fund(session: Session, category_id: int, **spec) -> Fund:
         session: Database session.
         category_id: The expense category the fund covers.
         **spec: `rule` and its parameters — `amount` (fixed), `window_months`
-            (average), `target_amount` + `target_month` (target-by-date) —
+            (average) —
             plus `start_month`, an optional `accumulates`, and an optional
             `opening_balance` the owner types once (AC-19).
 
@@ -757,7 +760,7 @@ def _warning(fund: Fund, charge_month: str | None, would_ask: int) -> str | None
     category — and the warning had to follow it there, because the surprise
     belongs to the date and not to the rule that carried it.
     """
-    dated = fund.target_month or charge_month
+    dated = charge_month
     if dated is None:
         return None
     if months_to_fund(fund.start_month, dated) > 1:

@@ -32,14 +32,14 @@ steps:
     completed: true
     blocking_acs: []
 
-  - id: backup-before-0014
-    description: "Second fresh backup, dated the day 0014 runs — 0014 is the destructive one"
+  - id: backup-before-0015
+    description: "Fresh backup dated the day 0015 runs — 0015 is the destructive one"
     owner: human
     command: "just backup"
     evidence: null
     completed: false
     blocking_acs:
-      - migration-0014
+      - migration-0015
 
   - id: confirm-no-dated-funds
     description: "Re-confirm no fund uses the dated rule immediately before dropping it. Read-only. Expected: 0 rows."
@@ -48,10 +48,10 @@ steps:
     evidence: null
     completed: false
     blocking_acs:
-      - migration-0014
+      - migration-0015
 
-  - id: migration-0014
-    description: "Destructive migration — drop fund.target_amount, fund.target_month and the target_by_date enum value. Runs only after the withdrawal code is merged."
+  - id: migration-0015
+    description: "Destructive migration — drop fund.target_amount, fund.target_month and the target_by_date enum value. The withdrawal code is merged; 0015 refuses on its own if any fund still uses the rule."
     owner: human
     command: "just migrate"
     evidence: null
@@ -71,10 +71,17 @@ regardless of this feature's level; ADR-0030 requires a fresh dump before each.
 `0013` **adds only**. The app keeps running on the code that exists today, so
 if anything goes wrong it goes wrong before any behaviour depends on it.
 
-`0014` **drops** `fund.target_amount`, `fund.target_month` and the
+`0014` adds `meta.cancelled_month` — the one thing about a cancellation that
+cannot be derived. Also additive, also already applied.
+
+`0015` **drops** `fund.target_amount`, `fund.target_month` and the
 `target_by_date` enum value. It runs **after** the withdrawal code is merged,
 never before — the reverse order would leave the app reading columns that are
-gone.
+gone. The code is merged now, so this is the only step left.
+
+It refuses on its own if any fund still uses the rule, with a message saying
+why: each one is a decision about what the owner was saving for, and a
+migration cannot make it.
 
 ## What is at risk, stated plainly
 
@@ -90,17 +97,18 @@ today — so the gate is enforced by the recipe, not only by this file.
 ## Order
 
 ```
-1  just backup                    ← owner
-2  just migrate  (0013, additive) ← owner
-3  verify 0013                    ← agent, read-only
-   … phases 1–4 implement against the new schema …
-   … phase 5's withdrawal code is written and merged …
-4  just backup                    ← owner, a second, fresh dump
-5  confirm no dated funds         ← agent, read-only
-6  just migrate  (0014, drops)    ← owner
+✓ 1  just backup                       ← owner
+✓ 2  just migrate  (0013, additive)    ← owner
+✓ 3  verify 0013                       ← agent, read-only
+✓    phases 1–4 built against the new schema
+✓    0014 (cancelled_month) written and rehearsed
+✓    phase 5's withdrawal code is merged
+  4  just backup                       ← owner, a fresh dump
+  5  confirm no dated funds            ← agent, read-only
+  6  just migrate  (0014 + 0015)       ← owner
 ```
 
-**Nothing in Phase 1 begins until step 2 is checked off.** Acceptance scenarios
+**Steps 4 to 6 are the only ones left.** Nothing in Phase 1 began until step 2 was checked off. Acceptance scenarios
 for AC-1, AC-6 and AC-41 cannot claim green before the schema they read exists.
 
 ## If the api container is running

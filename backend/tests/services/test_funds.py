@@ -48,6 +48,11 @@ def _clear_trm(session):
     session.commit()
 
 
+def _cat_id(cat) -> int:
+    """The id, whether the fixture handed back the row or the id itself."""
+    return cat.id if hasattr(cat, "id") else cat
+
+
 def _category(session, name="Seguro", is_income=False):
     return categories.create_category(session, name, is_income=is_income).id
 
@@ -217,12 +222,11 @@ def test_a_fund_that_spent_every_peso_it_had_and_no_more_is_on_track(session):
 
 def test_a_fund_opening_at_zero_can_still_say_it_is_behind(session):
     cat = _category(session)
+    _obligation(session, _cat_id(cat), 8_000_000_00, date(2028, 12, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=8_000_000_00,
-        target_month="2028-12",
+        rule="from-recurring",
         start_month="2026-11",
     )
     _spend(session, cat, 2_000_000_00, date(2026, 11, 20))
@@ -352,12 +356,11 @@ def test_an_accumulating_fund_overspent_falls_to_zero_not_below(session):
 
 def test_the_opening_balance_counts_toward_what_the_fund_still_needs(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 3_000_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=3_000_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
         opening_balance=1_200_000_00,
     )
@@ -368,12 +371,11 @@ def test_the_opening_balance_counts_toward_what_the_fund_still_needs(session):
 
 def test_a_stated_opening_balance_still_seeds_the_fold_in_a_later_month(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 3_000_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=3_000_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
         opening_balance=1_200_000_00,
     )
@@ -385,12 +387,11 @@ def test_the_fund_never_reads_an_account_balance(session):
 
     accounts.create_account(session, "Ahorros", "savings", "COP", balance=9_000_000_00)
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 3_000_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=3_000_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
         opening_balance=1_200_000_00,
     )
@@ -399,12 +400,11 @@ def test_the_fund_never_reads_an_account_balance(session):
 
 def test_a_fund_saving_toward_a_date_accumulates_without_being_asked(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 3_000_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=3_000_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
     )
     status = funds.fund_status(session, fund.id, "2026-11")
@@ -451,12 +451,11 @@ def test_the_carry_never_goes_negative_however_far_the_month_overspends(session)
 
 def test_a_dated_fund_asks_next_month_against_what_it_will_hold_by_then(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 600_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=600_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
     )
     status = funds.fund_status(session, fund.id, "2026-11")
@@ -526,12 +525,11 @@ def test_a_balance_stated_on_a_fund_two_months_out_carries_nothing_yet(session):
 
 def test_a_fund_whose_target_falls_next_month_asks_the_whole_thing_and_is_on_track(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 600_000_00, date(2026, 12, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=600_000_00,
-        target_month="2026-12",
+        rule="from-recurring",
         start_month="2026-11",
     )
     status = funds.fund_status(session, fund.id, "2026-11")
@@ -574,9 +572,7 @@ def test_a_fund_saving_toward_a_date_refuses_to_reset(session):
         funds.create_fund(
             session,
             cat,
-            rule="target-by-date",
-            target_amount=3_000_000_00,
-            target_month="2027-05",
+            rule="from-recurring",
             start_month="2026-11",
             accumulates=False,
         )
@@ -618,12 +614,11 @@ def test_a_listed_fund_names_its_category(session):
 
 def test_an_implausible_target_is_announced_with_its_figure_before_the_fund_exists(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, cat, 10_000_000_00, date(2026, 8, 20), unit="year")
     preview = funds.preview_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=10_000_000_00,
-        target_month="2026-08",
+        rule="from-recurring",
         start_month="2026-08",
     )
     assert preview.would_ask == 10_000_000_00
@@ -633,12 +628,11 @@ def test_an_implausible_target_is_announced_with_its_figure_before_the_fund_exis
 
 def test_a_reachable_target_is_previewed_without_a_warning(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, cat, 3_000_000_00, date(2027, 8, 20), unit="year")
     preview = funds.preview_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=3_000_000_00,
-        target_month="2027-08",
+        rule="from-recurring",
         start_month="2026-08",
     )
     assert preview.would_ask == 250_000_00
@@ -944,36 +938,20 @@ def test_an_average_fund_may_look_back_a_single_month(session):
     assert status.averaged_over == 1
 
 
-def test_a_fund_saving_toward_a_date_with_no_target_at_all_is_refused(session):
-    cat = _category(session, "Ahorro Viaje")
-    with pytest.raises(ValidationError, match="above zero"):
-        funds.create_fund(session, cat, rule="target-by-date", target_month="2027-05", start_month="2026-11")
-
-
-def test_a_fund_saving_toward_a_date_with_a_target_of_zero_is_refused(session):
-    cat = _category(session, "Ahorro Viaje")
-    with pytest.raises(ValidationError, match="above zero"):
-        funds.create_fund(
-            session, cat, rule="target-by-date", target_amount=0, target_month="2027-05", start_month="2026-11"
-        )
-
-
 def test_a_fund_saving_toward_a_date_may_target_a_single_centavo(session):
     cat = _category(session, "Ahorro Viaje")
-    fund = funds.create_fund(
-        session, cat, rule="target-by-date", target_amount=1, target_month="2027-05", start_month="2026-11"
-    )
+    _obligation(session, _cat_id(cat), 1, date(2027, 5, 15), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
     assert funds.fund_status(session, fund.id, "2026-11").asks == 1
 
 
 def test_a_fund_already_holding_more_than_its_target_asks_for_nothing(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, _cat_id(cat), 1_000_000_00, date(2027, 5, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=1_000_000_00,
-        target_month="2027-05",
+        rule="from-recurring",
         start_month="2026-11",
         opening_balance=1_500_000_00,
     )
@@ -1000,12 +978,11 @@ def test_spending_on_the_very_first_day_of_the_start_month_is_not_history(sessio
 
 def test_a_target_the_month_after_the_start_is_warned_about_too(session):
     cat = _category(session, "Ahorro Viaje")
+    _obligation(session, cat, 1_000_000_00, date(2026, 12, 20), unit="year")
     preview = funds.preview_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=1_000_000_00,
-        target_month="2026-12",
+        rule="from-recurring",
         start_month="2026-11",
     )
     assert preview.would_ask == 1_000_000_00
@@ -1072,12 +1049,11 @@ def test_spending_before_a_fund_starts_is_uncovered_in_full(session):
 
 def test_a_target_fund_that_already_holds_its_target_asks_nothing(session):
     cat = _category(session, "Viaje")
+    _obligation(session, _cat_id(cat), 1_000_000_00, date(2027, 6, 15), unit="year")
     fund = funds.create_fund(
         session,
         cat,
-        rule="target-by-date",
-        target_amount=1_000_000_00,
-        target_month="2027-06",
+        rule="from-recurring",
         start_month="2026-11",
         opening_balance=1_000_000_00,
     )
@@ -1121,42 +1097,29 @@ def test_an_average_fund_takes_a_window_of_one_month(session):
     assert funds.fund_status(session, fund.id, "2026-11").asks == 300_000_00
 
 
-@pytest.mark.parametrize("target", [None, 0])
-def test_a_target_fund_refuses_a_target_that_is_not_above_zero(session, target):
-    cat = _category(session, f"Viaje {target}")
-    with pytest.raises(ValidationError, match="target above zero"):
-        funds.create_fund(
-            session, cat, rule="target-by-date", target_amount=target, target_month="2027-06", start_month="2026-11"
-        )
-
-
 @pytest.mark.parametrize("target", [1, 2])
 def test_a_target_fund_takes_the_smallest_target_above_zero(session, target):
     cat = _category(session, f"Viaje {target}")
-    fund = funds.create_fund(
-        session, cat, rule="target-by-date", target_amount=target, target_month="2027-06", start_month="2026-11"
-    )
+    _obligation(session, _cat_id(cat), target, date(2027, 6, 15), unit="year")
+    fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
     assert funds.fund_status(session, fund.id, "2026-11").asks == 1
 
 
-def test_a_target_two_months_out_is_the_first_that_is_not_warned_about(session):
+def _preview_against_a_charge_in(session, charge):
+    cat = _category(session, f"Viaje {charge:%Y%m}")
+    _obligation(session, cat, 600_000_00, charge, unit="year", name=f"Viaje {charge:%Y%m}")
+    return funds.preview_fund(session, cat, rule="from-recurring", start_month="2026-11")
+
+
+def test_a_charge_two_months_out_is_the_first_that_is_not_warned_about(session):
     """Two months out is the least runway that leaves a month to save in.
 
-    A target in December has to be whole by the end of November (AC-6), so a
+    A charge in December has to be whole by the end of November (AC-6), so a
     fund starting in November has November and nothing else — the same single
     month the warning exists to announce.
     """
-    cat = _category(session, "Viaje")
     warned, spread = (
-        funds.preview_fund(
-            session,
-            cat,
-            rule="target-by-date",
-            target_amount=600_000_00,
-            target_month=target,
-            start_month="2026-11",
-        )
-        for target in ("2026-12", "2027-01")
+        _preview_against_a_charge_in(session, charge) for charge in (date(2026, 12, 20), date(2027, 1, 20))
     )
     assert warned.warning is not None and warned.would_ask == 600_000_00
     assert spread.warning is None and spread.would_ask == 300_000_00

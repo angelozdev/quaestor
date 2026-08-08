@@ -23,7 +23,7 @@ from ...services import funds
 from .. import format
 from .core import _as_text, _resolve_category_by_name, _validate_month
 
-FundRuleName = Literal["fixed", "average", "from-recurring", "target-by-date"]
+FundRuleName = Literal["fixed", "average", "from-recurring"]
 
 
 class FundSpecInput(BaseModel):
@@ -34,8 +34,6 @@ class FundSpecInput(BaseModel):
     start_month: str = Field(description="First month the fund asks for anything, YYYY-MM")
     amount: int | None = Field(default=None, description="Cents asked each month (rule 'fixed')")
     window_months: int | None = Field(default=None, description="Months to average over (rule 'average')")
-    target_amount: int | None = Field(default=None, description="Cents to reach (rule 'target-by-date')")
-    target_month: str | None = Field(default=None, description="Month to reach it by, YYYY-MM")
     accumulates: bool | None = Field(default=None, description="Whether what is left over carries into next month")
     opening_balance: int | None = Field(default=None, description="Cents the fund already holds, as the owner states")
 
@@ -53,8 +51,6 @@ class SetFundInput(BaseModel):
     rule: FundRuleName | None = Field(default=None, description="A new rule for the fund")
     amount: int | None = Field(default=None, description="New cents asked each month (rule 'fixed')")
     window_months: int | None = Field(default=None, description="New window in months (rule 'average')")
-    target_amount: int | None = Field(default=None, description="New target in cents (rule 'target-by-date')")
-    target_month: str | None = Field(default=None, description="New month to reach it by, YYYY-MM")
     accumulates: bool | None = Field(default=None, description="Whether what is left over carries into next month")
     balance: int | None = Field(default=None, description="Cents the fund holds, as the owner states")
 

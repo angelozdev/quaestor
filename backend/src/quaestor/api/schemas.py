@@ -328,8 +328,6 @@ class FundCreate(BaseModel):
     accumulates: bool | None = None
     amount: int | None = None
     window_months: int | None = None
-    target_amount: int | None = None
-    target_month: str | None = None
     opening_balance: int | None = None
 
 
@@ -338,8 +336,6 @@ class FundUpdate(BaseModel):
     accumulates: bool | None = None
     amount: int | None = None
     window_months: int | None = None
-    target_amount: int | None = None
-    target_month: str | None = None
     balance: int | None = None
 
 
@@ -353,8 +349,6 @@ class FundOut(BaseModel):
     accumulates: bool
     amount: int | None
     window_months: int | None
-    target_amount: int | None
-    target_month: str | None
 
 
 class FundLineOut(BaseModel):

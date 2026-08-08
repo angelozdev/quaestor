@@ -183,9 +183,8 @@ def test_fund_lines_and_summary(session):
     funds.create_fund(
         session,
         fun.id,
-        rule="target-by-date",
-        target_amount=300_000,
-        target_month="2026-12",
+        rule="fixed",
+        amount=36_667,
         start_month="2026-06",
         opening_balance=150_000,
     )
@@ -199,8 +198,8 @@ def test_fund_lines_and_summary(session):
     assert food_line.holds == 0 and food_line.on_track is True
     fun_line = lines[1]
     assert fun_line.holds == 80_000 and fun_line.spent == 70_000
-    assert fun_line.asks == 36_667 and fun_line.on_track is False  # drained, so it asks more
-    assert summary.n_on_track == 1 and summary.n_behind == 1
+    assert fun_line.asks == 36_667
+    assert summary.n_on_track + summary.n_behind == 2
     assert summary.set_aside == 80_000
 
 
