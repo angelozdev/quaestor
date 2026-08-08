@@ -2,14 +2,14 @@
 slug: 009-named-goals
 checkpoint: 4
 created: 2026-08-08
-status: open
+status: partial
 steps:
   - id: backup-before-0013
     description: "Fresh pg_dump of the local production Postgres to iCloud, dated today (ADR-0030)"
     owner: human
     command: "just backup"
-    evidence: null
-    completed: false
+    evidence: "quaestor-local-2026-08-08.dump, 47K, in iCloud QuaestorBackups"
+    completed: true
     blocking_acs:
       - migration-0013
 
@@ -17,8 +17,8 @@ steps:
     description: "Additive migration — meta, meta_contribution, transaction.meta_id, category.counts_as_saving. Nothing dropped."
     owner: human
     command: "just migrate"
-    evidence: null
-    completed: false
+    evidence: "alembic_version 0012 -> 0013, applied 2026-08-08. Rehearsed up and down on a throwaway SQLite first; downgrade verified to remove all four objects."
+    completed: true
     blocking_acs:
       - AC-1
       - AC-6
@@ -28,8 +28,8 @@ steps:
     description: "Confirm the schema landed and no row moved: the four objects exist, fund still has 0 rows, transaction still has 635"
     owner: agent
     command: "docker exec -i quaestor-db-1 psql -U quaestor -d quaestor -c \"SET default_transaction_read_only = on; SELECT COUNT(*) AS metas FROM meta; SELECT COUNT(*) AS funds FROM fund; SELECT COUNT(*) AS movs FROM \\\"transaction\\\";\""
-    evidence: null
-    completed: false
+    evidence: "635 movements, 43 categories, 0 funds, 14 recurring items, 7 accounts — all unchanged. meta 0, meta_contribution 0, linked movements 0, saving-marked categories 0. `exclude_from_budget` still true on Payment/Transfer and Refund."
+    completed: true
     blocking_acs: []
 
   - id: backup-before-0014
