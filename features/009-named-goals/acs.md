@@ -1,6 +1,6 @@
 ---
-ac_count: 41
-high_priority_count: 29
+ac_count: 45
+high_priority_count: 31
 discovered: 2026-08-08
 revised: 2026-08-08
 ---
@@ -224,6 +224,28 @@ when there were two layers. Rejected outright: hiding it from the reports too,
 which would make the sum of every category's report smaller than what was
 actually spent. Rejected on cost: a separate line per category report, which
 buys a comparison the movement list already gives when the month is opened.
+
+## What the third adversary's gaps changed, 2026-08-08
+
+The reviewer that walked real use rather than re-reading the list found sixteen
+situations no criterion covered. Two turned out to be closed already, two were
+derivable from rules the app has, and three were put to the owner.
+
+**Already closed.** A phone bought on a **credit card** works without a new
+rule: product ADR-021 posts the expense on the purchase date, so the meta
+completes that month, and the statement payment in January is a *transfer*,
+which AC-23 already refuses to link. And a **contribution larger than what is
+missing** was AC-14 from the start.
+
+**Derived, not asked.** A **planned expense** may be pointed at a meta the day
+it is recorded and counts nothing toward it until it posts — `_uncovered` reads
+posted movements only, and ADR-0044's *"every posted expense counts once, at
+what left the account"* settles the rest (AC-43).
+
+**Put to the owner.** A contribution is a listed record he can remove (AC-42);
+the metas list puts what needs an answer first (AC-44); and the create form
+says what the meta will ask before he commits, reusing the warning the fund
+already has (AC-45).
 
 ## What the audits changed, 2026-08-08
 
@@ -949,3 +971,68 @@ close to nothing saved in the months he saves most.
 
 The mark is off by default, and a category that carries it needs no fund and no
 meta to be counted.
+
+## AC-42: A contribution is a listed record, and it can be removed
+
+- **Priority:** high
+- **Type:** edge-case
+
+Every contribution the owner makes is listed on its meta with its month and its
+amount, and any of them can be removed.
+
+Removing one puts the meta and that month back to what they were: the meta
+holds that much less, the instalments for the months that follow rise again,
+and the month it was made in gets its money back in the money available.
+
+Without this, a $2.000.000 contribution typed into the wrong meta has one
+remedy — cancelling that meta entirely (AC-15), which releases everything it
+held and loses its history.
+
+## AC-43: A planned expense may be pointed at a meta and counts nothing until it posts
+
+- **Priority:** medium
+- **Type:** edge-case
+
+An expense recorded as planned rather than posted can be pointed at a meta on
+the day it is written down. It changes nothing until it is actually paid: the
+meta does not complete, the category's fund is not relieved of it, and the
+month's uncovered term does not move.
+
+When it posts, everything happens at once and exactly as AC-6 through AC-13
+describe. Skipping or deleting it before it posts leaves the meta as it was.
+
+This follows the rule the app already runs — only posted movements count, each
+once, at what left the account (ADR-0044).
+
+## AC-44: The metas list puts what needs an answer first
+
+- **Priority:** medium
+- **Type:** cross-cutting
+
+Metas waiting on the owner come first: the ones completed by a purchase and not
+yet closed, and the ones whose month has passed unbought. Below them, the ones
+still running, nearest month first. Archived metas are not in the list.
+
+With eleven metas over two years — three completed and never closed, some
+sharing a month — a list ordered only by date buries the three that need him
+among the ones that need nothing.
+
+The screen reads on a phone without scrolling sideways.
+
+## AC-45: The form says what the meta will ask before it is created
+
+- **Priority:** high
+- **Type:** happy-path
+
+While the owner is filling in a meta, the form states what it would ask each
+month. When that is more than the month has, it says so and the button changes
+to offer going ahead anyway.
+
+*Casa, $80.000.000, septiembre* created in August asks $40.000.000 a month
+against a $5.000.000 income. Without the warning the dashboard simply drops to
+roughly −$36.000.000 with nothing said, before or after.
+
+The fund already does exactly this (AC-24 of feature 003): it computes what a
+rule would ask before the fund exists, and its create button reads *"Crear de
+todos modos"* when the figure is one the owner should see first. A meta uses
+the same warning rather than a second one.

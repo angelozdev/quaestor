@@ -1286,3 +1286,146 @@ Scenario: A category is not marked as saving unless the owner says so
   And an expense category "Restaurantes"
   Then spending in "Restaurantes" is not saving
 ```
+
+## AC-42 — A contribution is a listed record, and it can be removed
+
+```gherkin
+@backend
+Scenario: Every contribution is listed on its meta
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 500000.00 COP to "Celular" made 2026-09
+  When the user contributes 300000.00 COP to "Celular"
+  Then the meta "Celular" lists a contribution of 500000.00 COP made 2026-09
+  And the meta "Celular" lists a contribution of 300000.00 COP made 2026-10
+
+@backend
+Scenario: Removing a contribution puts the meta back
+  Given today is 2026-09-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 2000000.00 COP to "Celular" made 2026-09
+  When the user removes that contribution
+  Then the meta "Celular" holds 3200000.00 COP this month
+  And the meta "Celular" asks 1600000.00 COP this month
+
+@backend
+Scenario: Removing a contribution gives its month the money back
+  Given today is 2026-09-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 2000000.00 COP to "Celular" made 2026-09
+  When the user removes that contribution
+  Then the money available this month is 3400000.00 COP
+
+@backend
+Scenario: Removing a contribution raises the instalments that had dropped
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 2000000.00 COP to "Celular" made 2026-09
+  When the user removes that contribution
+  Then the meta "Celular" asks 1600000.00 COP this month
+```
+
+## AC-43 — A planned expense may be pointed at a meta and counts nothing until it posts
+
+```gherkin
+@backend
+Scenario: A planned purchase leaves the meta and the month alone
+  Given today is 2026-12-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a fund on "Tecnologia" that asks a fixed 100000.00 COP each month, starting 2026-12
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user plans an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the meta "Celular" is running
+  And the breakdown shows uncovered spending of 0.00 COP
+  And the fund on "Tecnologia" spent 0.00 COP this month
+
+@backend
+Scenario: Paying it makes everything happen at once
+  Given today is 2026-12-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a planned expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user confirms that payment
+  Then the meta "Celular" is complete
+
+@backend
+Scenario: Skipping it leaves the meta as it was
+  Given today is 2026-12-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a planned expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user skips that payment
+  Then the meta "Celular" is running
+  And the meta "Celular" holds 8000000.00 COP this month
+```
+
+## AC-44 — The metas list puts what needs an answer first
+
+```gherkin
+Scenario: The ones waiting on an answer come first
+  Given a meta "Celular" that was completed by its purchase
+  And a meta "Viaje" whose month passed with nothing bought
+  And a meta "Televisor" running toward diciembre 2027
+  And a meta "Camara" running toward marzo 2028
+  When the owner opens the "Metas" screen
+  Then the screen lists "Celular" and "Viaje" above "Televisor"
+  And the screen lists "Televisor" above "Camara"
+
+Scenario: Archived metas are not in the list
+  Given a meta "Celular" running toward diciembre 2027
+  And a meta "Moto" that has been cancelled
+  When the owner opens the "Metas" screen
+  Then the screen names "Celular"
+  And the screen does not name "Moto"
+
+Scenario: The list reads on a phone without scrolling sideways
+  Given a meta "Celular" of 8000000.00 COP by 2026-12 holding 4800000.00 COP and asking 1600000.00 COP
+  When the owner opens the "Metas" screen on a phone
+  Then the screen states it holds 4800000.00 COP
+  And the screen states it asks 1600000.00 COP this month
+  And the page does not scroll sideways
+```
+
+## AC-45 — The form says what the meta will ask before it is created
+
+```gherkin
+@backend
+Scenario: What a meta would ask is known before it exists
+  Given today is 2026-08-10
+  When the user asks what a meta of 8000000.00 COP by 2026-12 would ask
+  Then the answer is 1600000.00 COP a month
+
+@backend
+Scenario: A meta bigger than the month is announced with its figure
+  Given today is 2026-08-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  When the user asks what a meta of 80000000.00 COP by 2026-09 would ask
+  Then the user is warned it would ask 40000000.00 COP a month
+  And the user is warned that is more than the month has
+
+@backend
+Scenario: The owner may go ahead anyway
+  Given today is 2026-08-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And the user was warned a meta of 80000000.00 COP by 2026-09 would ask 40000000.00 COP a month
+  When the user goes ahead anyway
+  Then the meta "Casa" wants 80000000.00 COP by 2026-09
+
+Scenario: The create button says what it is about to do
+  Given the app is open
+  When the owner starts creating a meta of 80000000.00 COP by 2026-09
+  Then the form states it would ask 40000000.00 COP a month
+  And the button offers to create it anyway
+```
+
