@@ -104,7 +104,7 @@ export interface ToPay {
   total_base: number
 }
 
-export type FundRule = "fixed" | "average" | "from-recurring" | "target-by-date"
+export type FundRule = "fixed" | "average" | "from-recurring"
 
 /** A fund's stored rule. What it holds is never stored — it is derived. */
 export interface Fund {
@@ -424,4 +424,50 @@ export function applyApiErrorsToForm(form: any, err: unknown): void {
 export let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn
+}
+
+export interface MetaStatus {
+  meta_id: number
+  name: string
+  year_month: string
+  amount: number
+  currency: string
+  target_month: string
+  asks: number
+  holds: number
+  contributed: number
+  progress: number
+  complete: boolean
+  closed: boolean
+  waiting: boolean
+}
+
+export interface MetaCreate {
+  name: string
+  amount: number
+  target_month: string
+  currency?: string
+  stated_opening?: number | null
+}
+
+export interface MetaPreview {
+  asks: number
+  months_left: number
+  over_the_month: boolean
+}
+
+export interface MetaContribution {
+  id: number
+  meta_id: number
+  year_month: string
+  amount: number
+}
+
+export interface MonthSplit {
+  year_month: string
+  income: number
+  consumo: number
+  ahorro: number
+  libre: number
+  ahorro_share: number
 }

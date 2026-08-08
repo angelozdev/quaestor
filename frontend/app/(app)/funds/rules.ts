@@ -28,11 +28,6 @@ const FONDO_RULES: RuleOffer[] = [
     example:
       "Por ejemplo: Netflix cobra $600.000 en febrero. Desde agosto aparto $100.000 al mes, y cuando se paga empieza sola para el año siguiente.",
   },
-  {
-    rule: "target-by-date",
-    label: "Junto una cantidad para una fecha",
-    example: "Por ejemplo: $600.000 para febrero. Reparto lo que falta entre los meses que quedan.",
-  },
 ]
 
 const PRESUPUESTO_RULES: RuleOffer[] = [
@@ -94,9 +89,6 @@ export function ruleConsequence(
     return live.wouldAsk === 0
       ? `${live.categoryName} no tiene cobros registrados: pediría ${figure} al mes.`
       : `Aparto ${figure} al mes, y cuando se paga empieza sola para el año siguiente.`
-  }
-  if (rule === "target-by-date") {
-    return `Aparto ${figure} al mes. Reparto lo que falta entre los meses que quedan.`
   }
   return example
 }

@@ -269,10 +269,10 @@ Scenario: The form that opens already knows which shape it is making
 ## AC-5 — The rule picker names the job and carries a worked number
 
 ```gherkin
-Scenario: Four rules are offered for a fondo
+Scenario: Three rules are offered for a fondo
   Given an expense category "Servicios"
   When the owner starts creating a fondo
-  Then 4 rules are offered
+  Then 3 rules are offered
 
 Scenario: Every rule offered says what it is for
   Given an expense category "Servicios"
@@ -308,12 +308,6 @@ Scenario: The averaging rule works its figure from what the category cost
   And a recorded expense of 89000.00 COP in category "Restaurantes" 1 month ago
   When the owner starts creating a fondo on "Restaurantes", starting 2026-08
   Then the rule that averages what the category cost states that it asks 89000.00 COP each month
-
-Scenario: The rule that saves toward a date works its figure from the date
-  Given today is 2026-08-15
-  And an expense category "Mercado"
-  When the owner starts creating a fondo on "Mercado" saving 600000.00 COP by 2027-02, starting 2026-08
-  Then the rule that saves toward a date states that it asks 100000.00 COP each month
 
 Scenario: The subscription rule says so when the category has none
   Given today is 2026-08-15
@@ -376,16 +370,6 @@ Scenario: A fondo that reads recurring charges is filed as a fondo
   When the owner creates a fondo on "Servicios" asking what its recurring charges need, starting 2026-08
   Then "Servicios" appears under the fondos heading
 
-Scenario: A fondo saving toward a date is filed as a fondo
-  Given today is 2026-08-15
-  And an expense category "Mercado"
-  When the owner creates a fondo on "Mercado" saving 600000.00 COP by 2027-02, starting 2026-08
-  Then "Mercado" appears under the fondos heading
-```
-
-## AC-7 — Every screen carries the same "¿Cómo funciona esto?" control, in the same place
-
-```gherkin
 Scenario: The Dashboard offers to explain itself
   When the owner opens the "Dashboard" screen
   Then the screen offers "¿Cómo funciona esto?"
@@ -657,23 +641,22 @@ Scenario: The rule that reads recurring charges is not offered for a presupuesto
   When the owner starts creating a presupuesto
   Then the rule that reads recurring charges is not offered
 
-Scenario: The rule that saves toward a date is not offered for a presupuesto
+Scenario: Every rule offered to a presupuesto is one it can use
   Given an expense category "Servicios"
   When the owner starts creating a presupuesto
-  Then the rule that saves toward a date is not offered
+  Then every rule offered is one a presupuesto can use
 
-Scenario: Both rules are offered for a fondo
+Scenario: The rule that must carry money forward is offered for a fondo
   Given an expense category "Servicios"
   When the owner starts creating a fondo
   Then the rule that reads recurring charges is offered
-  And the rule that saves toward a date is offered
 
 Scenario: Switching to a presupuesto leaves a rule a presupuesto can use
   Given an expense category "Servicios"
   When the owner starts creating a fondo
-  And the owner chooses the rule that saves toward a date
+  And the owner chooses the rule that reads recurring charges
   And the owner switches to creating a presupuesto
-  Then the rule that saves toward a date is not chosen
+  Then the rule that reads recurring charges is not chosen
   And a rule a presupuesto can use is chosen
 ```
 
@@ -795,7 +778,7 @@ Scenario: A presupuesto with no amount is refused in the words the screen uses
 Scenario: The refusal that the vanished checkbox existed for is gone
   Given an expense category "Mercado"
   When the owner starts creating a fondo
-  And the owner chooses the rule that saves toward a date
+  And the owner chooses the rule that reads recurring charges
   Then nothing refuses it for not accumulating
 ```
 
@@ -830,13 +813,6 @@ Scenario: A fund that reads its recurring charges asks what it asked before
   And a recurring charge "Netflix" on "Servicios" of 600000.00 COP every year, next due 2027-02
   And a fund on "Servicios" that asks what its recurring charges need, starting 2026-08
   Then the fund on "Servicios" asks 100000.00 COP this month
-
-@backend
-Scenario: A fund saving toward a date asks what it asked before
-  Given today is 2026-08-15
-  And an expense category "Mercado"
-  And a fund on "Mercado" that saves 600000.00 COP by 2027-02, starting 2026-08
-  Then the fund on "Mercado" asks 100000.00 COP this month
 
 @backend
 Scenario: Whether a fund is behind is what it was before

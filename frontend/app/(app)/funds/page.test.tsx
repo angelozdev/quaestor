@@ -36,7 +36,7 @@ const MERCADO = { id: 10, name: "Mercado", is_income: false }
 const CATEGORIES = [RESTAURANTES, TECNOLOGIA, SERVICIOS, MERCADO]
 
 const THIS_MONTH = "2026-08"
-const ALWAYS_ACCUMULATES: FundRule[] = ["from-recurring", "target-by-date"]
+const ALWAYS_ACCUMULATES: FundRule[] = ["from-recurring"]
 
 function fund(over: Partial<FundStatus> = {}): FundStatus {
   return {
@@ -307,12 +307,12 @@ describe("AC-4 — creating starts from the job", () => {
 })
 
 describe("AC-5 — the rule picker names the job and carries a worked number", () => {
-  it("Four rules are offered for a fondo", async () => {
+  it("Three rules are offered for a fondo", async () => {
     const user = setup()
     renderPage()
     await startCreating(user, "fondo")
 
-    expect(screen.getAllByRole("radio")).toHaveLength(4)
+    expect(screen.getAllByRole("radio")).toHaveLength(3)
   })
 
   it("Every rule offered says what it is for", async () => {
@@ -375,23 +375,6 @@ describe("AC-5 — the rule picker names the job and carries a worked number", (
     expect(
       await screen.findByText(
         "Los últimos 3 meses gastaste $ 89.000 al mes en Restaurantes. Aparto eso, y lo que sobre se queda.",
-      ),
-    ).toBeInTheDocument()
-  })
-
-  it("The rule that saves toward a date works its figure from the date", async () => {
-    wouldAsk = { "target-by-date": 10_000_000 }
-    const user = setup()
-    renderPage()
-    await startCreating(user, "fondo")
-    await chooseCategory(user, "Mercado")
-    await chooseRule(user, "Junto una cantidad para una fecha")
-    await user.type(screen.getByLabelText("Objetivo * (COP)"), "600000")
-    await user.type(screen.getByLabelText("Mes objetivo *"), "2027-02")
-
-    expect(
-      await screen.findByText(
-        "Aparto $ 100.000 al mes. Reparto lo que falta entre los meses que quedan.",
       ),
     ).toBeInTheDocument()
   })
@@ -522,28 +505,6 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
       ),
     )
     expect((await under(/FONDOS/)).getByText("Servicios")).toBeInTheDocument()
-  })
-
-  it("A fondo saving toward a date is filed as a fondo", async () => {
-    const user = setup()
-    renderPage()
-    await startCreating(user, "fondo")
-    await chooseCategory(user, "Mercado")
-    await chooseRule(user, "Junto una cantidad para una fecha")
-    await user.type(screen.getByLabelText("Objetivo * (COP)"), "600000")
-    await user.type(screen.getByLabelText("Mes objetivo *"), "2027-02")
-    await user.click(screen.getByRole("button", { name: "Crear" }))
-
-    await waitFor(() =>
-      expect(createFund).toHaveBeenCalledWith(
-        expect.objectContaining({
-          rule: "target-by-date",
-          target_amount: 60_000_000,
-          target_month: "2027-02",
-        }),
-      ),
-    )
-    expect((await under(/FONDOS/)).getByText("Mercado")).toBeInTheDocument()
   })
 })
 
@@ -814,17 +775,17 @@ describe("AC-12 — a shape that must carry money forward is never a presupuesto
     ).not.toBeInTheDocument()
   })
 
-  it("The rule that saves toward a date is not offered for a presupuesto", async () => {
+  it("Every rule offered to a presupuesto is one it can use", async () => {
     const user = setup()
     renderPage()
     await startCreating(user, "presupuesto")
 
     expect(
-      screen.queryByRole("radio", { name: "Junto una cantidad para una fecha" }),
+      screen.queryByRole("radio", { name: "Pago mis suscripciones mes a mes" }),
     ).not.toBeInTheDocument()
   })
 
-  it("Both rules are offered for a fondo", async () => {
+  it("The rule that must carry money forward is offered for a fondo", async () => {
     const user = setup()
     renderPage()
     await startCreating(user, "fondo")
@@ -832,16 +793,13 @@ describe("AC-12 — a shape that must carry money forward is never a presupuesto
     expect(
       screen.getByRole("radio", { name: "Pago mis suscripciones mes a mes" }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole("radio", { name: "Junto una cantidad para una fecha" }),
-    ).toBeInTheDocument()
   })
 
   it("Switching to a presupuesto leaves a rule a presupuesto can use", async () => {
     const user = setup()
     renderPage()
     await startCreating(user, "fondo")
-    await chooseRule(user, "Junto una cantidad para una fecha")
+    await chooseRule(user, "Pago mis suscripciones mes a mes")
     await startCreating(user, "presupuesto")
 
     expect(
@@ -937,7 +895,7 @@ describe("AC-17 — a refusal is stated in the new vocabulary", () => {
     renderPage()
     await startCreating(user, "fondo")
     await chooseCategory(user, "Mercado")
-    await chooseRule(user, "Junto una cantidad para una fecha")
+    await chooseRule(user, "Pago mis suscripciones mes a mes")
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     expect(document.body.textContent).not.toMatch(/acumul/i)
@@ -959,12 +917,11 @@ describe("AC-20 — every control that decides the shape is named out loud", () 
     await startCreating(user, "fondo")
 
     const heard = screen.getAllByRole("radio").map((r) => r.getAttribute("id"))
-    expect(heard).toHaveLength(4)
+    expect(heard).toHaveLength(3)
     for (const label of [
       "Aparto un monto fijo cada mes",
       "Aparto lo que suelo gastar",
       "Pago mis suscripciones mes a mes",
-      "Junto una cantidad para una fecha",
     ]) {
       expect(screen.getByRole("radio", { name: label })).toBeInTheDocument()
     }
