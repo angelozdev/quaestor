@@ -13,6 +13,7 @@ import { FormField } from "@/components/form-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
+import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import { listAccounts } from "@/lib/api/accounts"
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/lib/api/recurring"
 import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { hasEnded } from "@/lib/date"
+import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 import { PendingDatesDialog } from "./pending-dates-dialog"
@@ -61,6 +63,38 @@ const UNIT_PLURAL: Record<IntervalUnit, string> = {
 function intervalLabel(unit: IntervalUnit, count: number): string {
   if (count === 1) return `Cada ${UNIT_SINGULAR[unit]}`
   return `Cada ${count} ${UNIT_PLURAL[unit]}`
+}
+
+const WHAT_A_RECURRING_CHARGE_IS = (
+  <p>
+    Un cobro recurrente es uno que vuelve solo — cada mes, cada año o cada cuantos días le digas. Lo
+    registras una vez y la app lo espera por ti en <strong>Por pagar</strong>.
+  </p>
+)
+
+/** What this screen is, said with the charges it is showing. */
+function RecurringHelp({ items }: { items: Recurring[] | undefined }) {
+  return (
+    <>
+      {WHAT_A_RECURRING_CHARGE_IS}
+      {items !== undefined && items.length > 0 ? (
+        <HelpSection lead="Los que tienes registrados:">
+          {items.map((item) => (
+            <li key={item.id}>
+              {`${item.name} — cobra ${formatCents(item.amount, item.currency)} ${intervalLabel(
+                item.interval_unit,
+                item.interval_count,
+              ).toLowerCase()}.`}
+            </li>
+          ))}
+        </HelpSection>
+      ) : (
+        <HelpExample>
+          <li>Por ejemplo: Netflix cobra $ 35.000 cada mes.</li>
+        </HelpExample>
+      )}
+    </>
+  )
 }
 
 export default function RecurringPage() {
@@ -239,6 +273,11 @@ export default function RecurringPage() {
       <PageHeader
         title="Recurrentes"
         action={<Button onClick={() => setCreating(true)}>Nuevo</Button>}
+        help={
+          <ScreenHelp screen="Recurrentes">
+            <RecurringHelp items={list.data} />
+          </ScreenHelp>
+        }
       />
 
       <label
@@ -259,7 +298,13 @@ export default function RecurringPage() {
           onRetry={() => list.refetch()}
         />
       )}
-      {list.data && list.data.length === 0 && <EmptyState message="Sin recurrentes" />}
+      {list.data && list.data.length === 0 && (
+        <EmptyState
+          message="Todavía no tienes cobros recurrentes."
+          description={WHAT_A_RECURRING_CHARGE_IS}
+          action={{ label: "Crear el primero", onClick: () => setCreating(true) }}
+        />
+      )}
 
       {list.data && list.data.length > 0 && (
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>

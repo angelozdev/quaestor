@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/empty-state"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
 import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import {
   archiveAccount,
@@ -48,6 +49,22 @@ const EDIT_FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
   { kind: "select", name: "type", label: "Tipo", options: TYPE_OPTIONS, required: true },
 ]
+
+const WHAT_AN_ACCOUNT_IS = (
+  <p>
+    Una cuenta es donde está la plata — el banco, la tarjeta de crédito, el efectivo, los ahorros.
+  </p>
+)
+
+const ACCOUNTS_HELP = (
+  <>
+    {WHAT_AN_ACCOUNT_IS}
+    <p>
+      Cada movimiento sale de una cuenta o entra a una, y el saldo se mueve solo: aquí no se edita a
+      mano. El saldo inicial se pone al crearla.
+    </p>
+  </>
+)
 
 export default function AccountsPage() {
   const qc = useQueryClient()
@@ -113,6 +130,7 @@ export default function AccountsPage() {
       <PageHeader
         title="Cuentas"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
+        help={<ScreenHelp screen="Cuentas">{ACCOUNTS_HELP}</ScreenHelp>}
       />
 
       <label
@@ -141,7 +159,13 @@ export default function AccountsPage() {
       {list.isError && (
         <ErrorState message="No se pudieron cargar las cuentas" onRetry={() => list.refetch()} />
       )}
-      {list.data && list.data.length === 0 && <EmptyState message="Sin cuentas" />}
+      {list.data && list.data.length === 0 && (
+        <EmptyState
+          message="Todavía no tienes cuentas."
+          description={WHAT_AN_ACCOUNT_IS}
+          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+        />
+      )}
 
       {list.data && list.data.length > 0 && (
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>

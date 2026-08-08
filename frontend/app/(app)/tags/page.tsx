@@ -8,12 +8,30 @@ import { EmptyState } from "@/components/empty-state"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
 import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { createTag, deleteTag, listTags, updateTag } from "@/lib/api/tags"
 import { ApiError, type Tag } from "@/lib/api/types"
 import { invalidate, qk } from "@/lib/query"
 import { Button } from "@/ui"
 
 const FIELDS: Field[] = [{ kind: "text", name: "name", label: "Nombre", required: true }]
+
+const WHAT_A_TAG_IS = (
+  <p>
+    Una etiqueta marca movimientos que van juntos aunque estén en categorías distintas — un viaje,
+    una reforma, un regalo.
+  </p>
+)
+
+const TAGS_HELP = (
+  <>
+    {WHAT_A_TAG_IS}
+    <p>
+      Un movimiento tiene una sola categoría, pero puede llevar varias etiquetas. En{" "}
+      <strong>Transacciones</strong> puedes filtrar por una y ver todo lo que costó eso.
+    </p>
+  </>
+)
 
 export default function TagsPage() {
   const qc = useQueryClient()
@@ -62,6 +80,7 @@ export default function TagsPage() {
       <PageHeader
         title="Etiquetas"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
+        help={<ScreenHelp screen="Etiquetas">{TAGS_HELP}</ScreenHelp>}
       />
 
       {list.isLoading && (
@@ -78,7 +97,13 @@ export default function TagsPage() {
       {list.isError && (
         <ErrorState message="No se pudieron cargar las etiquetas" onRetry={() => list.refetch()} />
       )}
-      {list.data && list.data.length === 0 && <EmptyState message="Sin etiquetas" />}
+      {list.data && list.data.length === 0 && (
+        <EmptyState
+          message="Todavía no tienes etiquetas."
+          description={WHAT_A_TAG_IS}
+          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+        />
+      )}
 
       {list.data && list.data.length > 0 && (
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>

@@ -13,6 +13,7 @@ import { FormField } from "@/components/form-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
@@ -36,6 +37,23 @@ function windowFor(scope: Scope) {
       : [startOfMonth(now), endOfMonth(now)]
   return { since: format(since, "yyyy-MM-dd"), until: format(until, "yyyy-MM-dd") }
 }
+
+const WHAT_IS_PENDING = (
+  <p>
+    Aquí aparecen los cobros que ya vencieron o vencen dentro del periodo y todavía no has pagado.
+  </p>
+)
+
+const TO_PAY_HELP = (
+  <>
+    {WHAT_IS_PENDING}
+    <p>
+      Salen de dos sitios: los cobros recurrentes que registraste, y los pagos sueltos que planeas
+      con <strong>Planear pago</strong>. Confirmas uno cuando lo pagas y lo omites cuando ese cobro
+      no llegó.
+    </p>
+  </>
+)
 
 const PLAN_DEFAULTS: PlanPaymentValues = {
   payee: "",
@@ -140,6 +158,7 @@ export default function ToPayPage() {
             Planear pago
           </Button>
         }
+        help={<ScreenHelp screen="Por pagar">{TO_PAY_HELP}</ScreenHelp>}
       />
 
       <div
@@ -173,7 +192,7 @@ export default function ToPayPage() {
             {formatCents(list.data.total_base, "COP")}
           </p>
           {list.data.overdue.length === 0 && list.data.upcoming.length === 0 ? (
-            <EmptyState message="Nada pendiente en este periodo." />
+            <EmptyState message="Nada pendiente en este periodo." description={WHAT_IS_PENDING} />
           ) : (
             <div className="space-y-4">
               {list.data.overdue.length > 0 && (

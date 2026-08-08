@@ -357,6 +357,9 @@ def fund_card(status) -> str:
         f"Fund on **{status.name}** ({status.rule}) — {status.year_month}",
         f"- Asks: {money(status.asks, 'COP')}",
         f"- Holds: {money(status.holds, 'COP')}",
+        f"- Spent this month: {money(status.spent, 'COP')}",
+        f"- Carries into next month: {money(status.carries, 'COP')}",
+        f"- Next month has: {money(status.next_month_has, 'COP')}",
         f"- {'On track' if status.on_track else 'Behind'}",
     ]
     if status.whole_by is not None:

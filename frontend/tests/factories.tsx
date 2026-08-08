@@ -1,5 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { HELP_LABEL } from "@/components/screen-help"
 import type { Transaction } from "@/lib/api/types"
+
+/**
+ * Open a screen's "¿Cómo funciona esto?" panel and hand back the panel.
+ *
+ * Ten screens carry the same control, so ten tests would otherwise write the
+ * same three lines. `user` is passed in only where the test drives fake timers.
+ */
+export async function openHelpPanel(screenName: string, user = userEvent.setup()) {
+  await user.click(await screen.findByRole("button", { name: HELP_LABEL }))
+  return screen.getByRole("dialog", { name: `¿Cómo funciona ${screenName}?` })
+}
 
 const CATEGORY_ID = 3
 

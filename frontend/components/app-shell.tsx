@@ -26,7 +26,7 @@ const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   },
   {
     title: "Planeación",
-    items: [{ href: "/funds", label: "Fondos" }],
+    items: [{ href: "/funds", label: "Fondos y presupuestos" }],
   },
   {
     title: "Configuración",

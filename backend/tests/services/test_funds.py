@@ -366,6 +366,20 @@ def test_the_opening_balance_counts_toward_what_the_fund_still_needs(session):
     assert status.asks == 300_000_00
 
 
+def test_a_stated_opening_balance_still_seeds_the_fold_in_a_later_month(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=3_000_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+        opening_balance=1_200_000_00,
+    )
+    assert funds.fund_status(session, fund.id, "2026-12").holds == 1_500_000_00
+
+
 def test_the_fund_never_reads_an_account_balance(session):
     from quaestor.services import accounts
 
@@ -396,6 +410,133 @@ def test_a_fund_saving_toward_a_date_accumulates_without_being_asked(session):
     status = funds.fund_status(session, fund.id, "2026-11")
     assert status.accumulates is True
     assert status.accumulation_is_implied is True
+
+
+# ------------------------------------------------------ what next month gets
+
+
+def test_a_fund_reports_what_its_category_spent_that_month(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    _spend(session, cat, 60_000_00, date(2026, 11, 10))
+    assert funds.fund_status(session, fund.id, "2026-11").spent == 60_000_00
+
+
+def test_an_accumulating_fund_carries_what_the_month_did_not_spend(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    _spend(session, cat, 60_000_00, date(2026, 11, 10))
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 40_000_00
+    assert status.next_month_has == 140_000_00
+
+
+def test_a_resetting_fund_carries_nothing_and_next_month_only_asks(session):
+    cat = _category(session, "Restaurantes")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11", accumulates=False)
+    _spend(session, cat, 60_000_00, date(2026, 11, 10))
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 0
+    assert status.next_month_has == 100_000_00
+
+
+def test_the_carry_never_goes_negative_however_far_the_month_overspends(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    _spend(session, cat, 500_000_00, date(2026, 11, 10))
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 0
+    assert status.next_month_has == 100_000_00
+
+
+def test_a_dated_fund_asks_next_month_against_what_it_will_hold_by_then(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=600_000_00,
+        target_month="2027-05",
+        start_month="2026-11",
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 100_000_00
+    assert status.carries == 100_000_00
+    assert status.next_month_has == 200_000_00
+
+
+def test_an_averaging_fund_looks_ahead_with_the_window_shifted_one_month(session):
+    cat = _category(session, "Mercado")
+    _spend(session, cat, 300_000_00, date(2026, 8, 10))
+    _spend(session, cat, 300_000_00, date(2026, 9, 10))
+    _spend(session, cat, 300_000_00, date(2026, 10, 10))
+    fund = funds.create_fund(session, cat, rule="average", window_months=3, start_month="2026-11")
+    _spend(session, cat, 100_000_00, date(2026, 11, 10))
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 300_000_00
+    assert status.carries == 200_000_00
+    assert status.next_month_has == 433_333_34
+
+
+def test_a_fund_that_has_not_started_reports_nothing_for_next_month_either(session):
+    cat = _category(session, "Seguro")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
+    status = funds.fund_status(session, fund.id, "2026-08")
+    assert status.carries == 0
+    assert status.next_month_has == 0
+
+
+def test_the_month_before_a_fund_starts_already_reports_what_it_will_have(session):
+    cat = _category(session, "Seguro")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
+    status = funds.fund_status(session, fund.id, "2026-12")
+    assert status.asks == 0
+    assert status.carries == 0
+    assert status.next_month_has == 100_000_00
+
+
+def test_a_stated_balance_is_what_next_month_builds_on(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
+    funds.set_fund(session, fund.id, balance=500_000_00)
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 600_000_00
+    assert status.next_month_has == 700_000_00
+
+
+def test_a_fund_that_starts_next_month_already_carries_the_balance_it_was_given(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(
+        session, cat, rule="fixed", amount=100_000_00, start_month="2026-12", opening_balance=500_000_00
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.holds == 0
+    assert status.carries == 500_000_00
+    assert status.next_month_has == 600_000_00
+
+
+def test_a_balance_stated_on_a_fund_two_months_out_carries_nothing_yet(session):
+    cat = _category(session, "Tecnologia")
+    fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
+    funds.set_fund(session, fund.id, balance=500_000_00)
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.carries == 0
+    assert status.next_month_has == 0
+
+
+def test_a_fund_whose_target_falls_next_month_asks_the_whole_thing_and_is_on_track(session):
+    cat = _category(session, "Ahorro Viaje")
+    fund = funds.create_fund(
+        session,
+        cat,
+        rule="target-by-date",
+        target_amount=600_000_00,
+        target_month="2026-12",
+        start_month="2026-11",
+    )
+    status = funds.fund_status(session, fund.id, "2026-11")
+    assert status.asks == 600_000_00
+    assert status.on_track is True
 
 
 # ----------------------------------------------------------------- refusing

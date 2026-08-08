@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/empty-state"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
 import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import {
   archiveCategory,
@@ -35,9 +36,25 @@ const FIELDS: Field[] = [
     allowNullLabel: "Sin grupo",
   },
   { kind: "checkbox", name: "is_income", label: "Es ingreso" },
-  { kind: "checkbox", name: "exclude_from_budget", label: "Excluir del presupuesto" },
   { kind: "checkbox", name: "exclude_from_totals", label: "Excluir de los totales" },
 ]
+
+const WHAT_A_CATEGORY_IS = (
+  <p>
+    Una categoría dice para qué fue un movimiento — mercado, arriendo, salario. Cada gasto y cada
+    ingreso lleva una.
+  </p>
+)
+
+const CATEGORIES_HELP = (
+  <>
+    {WHAT_A_CATEGORY_IS}
+    <p>
+      Es la unidad con la que trabaja el resto de la app: los reportes reparten el mes por
+      categoría, y un fondo o un presupuesto vigila exactamente una.
+    </p>
+  </>
+)
 
 export default function CategoriesPage() {
   const qc = useQueryClient()
@@ -67,7 +84,6 @@ export default function CategoriesPage() {
     name: String(v.name),
     group_id: (v.group_id as number | null) ?? null,
     is_income: Boolean(v.is_income),
-    exclude_from_budget: Boolean(v.exclude_from_budget),
     exclude_from_totals: Boolean(v.exclude_from_totals),
   })
 
@@ -111,6 +127,7 @@ export default function CategoriesPage() {
       <PageHeader
         title="Categorías"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
+        help={<ScreenHelp screen="Categorías">{CATEGORIES_HELP}</ScreenHelp>}
       />
 
       <label
@@ -139,7 +156,13 @@ export default function CategoriesPage() {
       {list.isError && (
         <ErrorState message="No se pudieron cargar las categorías" onRetry={() => list.refetch()} />
       )}
-      {list.data && list.data.length === 0 && <EmptyState message="Sin categorías" />}
+      {list.data && list.data.length === 0 && (
+        <EmptyState
+          message="Todavía no tienes categorías."
+          description={WHAT_A_CATEGORY_IS}
+          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+        />
+      )}
 
       {list.data && list.data.length > 0 && (
         <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
@@ -164,11 +187,7 @@ export default function CategoriesPage() {
                     {groupName(c.group_id)}
                   </td>
                   <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    {[
-                      c.is_income && "ingreso",
-                      c.exclude_from_budget && "no-presup.",
-                      c.exclude_from_totals && "no-totales",
-                    ]
+                    {[c.is_income && "ingreso", c.exclude_from_totals && "no-totales"]
                       .filter(Boolean)
                       .join(" · ") || "—"}
                   </td>
@@ -209,7 +228,6 @@ export default function CategoriesPage() {
           name: "",
           group_id: null,
           is_income: false,
-          exclude_from_budget: false,
           exclude_from_totals: false,
         }}
         pending={create.isPending}
@@ -224,7 +242,6 @@ export default function CategoriesPage() {
           name: editing?.name ?? "",
           group_id: editing?.group_id ?? null,
           is_income: editing?.is_income ?? false,
-          exclude_from_budget: editing?.exclude_from_budget ?? false,
           exclude_from_totals: editing?.exclude_from_totals ?? false,
         }}
         pending={update.isPending}

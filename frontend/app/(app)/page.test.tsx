@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { HELP_LABEL } from "@/components/screen-help"
+import { openHelpPanel } from "@/tests/factories"
 
 const { moneyAvailable, moneyRates, report, listAccounts, toPay } = vi.hoisted(() => ({
   moneyAvailable: vi.fn(),
@@ -82,6 +84,91 @@ describe("DashboardPage breakdown", () => {
   it("names each fund in the breakdown", async () => {
     renderPage()
     expect(await screen.findByText("Fondo · Restaurantes")).toBeInTheDocument()
+  })
+})
+
+describe("AC-21 — one vocabulary, everywhere", () => {
+  it("The Dashboard breakdown calls a presupuesto a presupuesto", async () => {
+    moneyAvailable.mockResolvedValue({
+      ...AVAILABLE,
+      income: 300_000_000,
+      funds: [{ ...AVAILABLE.funds[0], accumulates: false, asks: 10_000_000 }],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
+    expect(screen.queryByText("Fondo · Restaurantes")).not.toBeInTheDocument()
+  })
+})
+
+const ASKING_TOO_MUCH = {
+  ...AVAILABLE,
+  income: 300_000_000,
+  funds: [
+    { ...AVAILABLE.funds[0], fund_id: 1, category_id: 10, name: "Mercado", asks: 1_000_000_000 },
+    {
+      ...AVAILABLE.funds[0],
+      fund_id: 2,
+      category_id: 7,
+      name: "Restaurantes",
+      asks: 8_900_000,
+      accumulates: false,
+    },
+  ],
+  uncovered: 0,
+  free: -708_900_000,
+}
+
+const openHelp = () => openHelpPanel("Dashboard")
+
+describe("AC-7 — every screen carries the same control", () => {
+  it("The Dashboard offers to explain itself", async () => {
+    renderPage()
+
+    expect(await screen.findByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
+    expect(await openHelp()).toHaveTextContent("Esta pantalla resume el mes")
+  })
+})
+
+describe("AC-8 — the panel explains the screen using the owner's own figures", () => {
+  beforeEach(() => {
+    moneyAvailable.mockResolvedValue(ASKING_TOO_MUCH)
+  })
+
+  it("The panel states what came in and what each fund asked for", async () => {
+    renderPage()
+    const panel = await openHelp()
+
+    expect(panel).toHaveTextContent("Este mes entran $ 3.000.000.")
+    expect(panel).toHaveTextContent("Mercado (fondo) — pide $ 10.000.000")
+    expect(panel).toHaveTextContent("Restaurantes (presupuesto) — pide $ 89.000")
+  })
+
+  it("The panel singles out the one fund asking more than the month brings in", async () => {
+    renderPage()
+    const panel = await openHelp()
+
+    const flagged = within(panel)
+      .getByRole("list", { name: "Pide más de lo que entra este mes" })
+      .querySelectorAll("li")
+
+    expect(flagged).toHaveLength(1)
+    expect(flagged[0]).toHaveTextContent("Mercado")
+  })
+})
+
+describe("AC-10 — an empty screen teaches and offers the way in", () => {
+  it("An empty Dashboard teaches where its figures come from", async () => {
+    report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
+    renderPage()
+
+    expect(
+      await screen.findByText(/Las cifras de esta pantalla salen de los movimientos que registres/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Registrar el primero" })).toHaveAttribute(
+      "href",
+      "/transactions",
+    )
   })
 })
 

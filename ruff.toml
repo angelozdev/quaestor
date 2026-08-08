@@ -22,3 +22,4 @@ ignore = ["B008", "TRY003", "TRY301", "RUF012", "UP042", "RUF001", "RUF002", "PE
 "backend/src/quaestor/chat/mcp/schema.py" = ["PLW0603"]
 "backend/src/quaestor/chat/events.py" = ["S101"]
 "acceptance/generator.py" = ["T201"]
+"acceptance/spec_coverage.py" = ["T201"]

@@ -28,6 +28,11 @@ Dates are absolute here, unlike the other suites. Every fund rule is month
 arithmetic, and "2 months ago" cannot pin $74.550 the way a fixed calendar
 can. ``today is YYYY-MM-DD`` sets the scenario clock.
 
+Feature 010's ``@backend`` scenarios bind here too: their subject is the same
+record, so the vocabulary belongs in the same module. They add three figures a
+fund reports — what the category spent, what it carries, what next month has —
+and their own plain-language names for the four rules.
+
 Scratchpad keys this module puts on the :class:`World`: ``funds`` (name ->
 id), ``funds_view``, ``available_view``, ``rates_view``, ``fund_preview``,
 ``pending_fund``, ``goals_probe`` and ``history_start``.
@@ -40,7 +45,7 @@ from datetime import date as Date
 from datetime import timedelta
 
 from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
-from quaestor.domain.models import TxType
+from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
 from quaestor.domain.money import major_to_cents
 from quaestor.services import categories, recurring, transactions
 from sqlalchemy import text as sa_text
@@ -232,6 +237,20 @@ _TARGET = (
     r"(?P<roll>, accumulating|, resetting)?"
 )
 
+_FIXED_IN_PLAIN_WORDS = (
+    r" that asks a fixed (?P<amount>" + _DEC + r") COP each month without accumulating,"
+    r" starting (?P<start>" + _MONTH + r")"
+)
+_AVERAGE_IN_PLAIN_WORDS = (
+    r" that asks what the category averaged over the last (?P<window>\d+) months?,"
+    r" starting (?P<start>" + _MONTH + r")"
+)
+_OBLIGATIONS_IN_PLAIN_WORDS = r" that asks what its recurring charges need, starting (?P<start>" + _MONTH + r")"
+_TARGET_IN_PLAIN_WORDS = (
+    r" that saves (?P<target>" + _DEC + r") COP by (?P<by>" + _MONTH + r"),"
+    r" starting (?P<start>" + _MONTH + r")"
+)
+
 
 # -------------------------------------------------------------------- Given
 
@@ -281,21 +300,89 @@ def given_fund_fixed(world: World, name: str, amount: str, start: str, roll: str
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _AVERAGE)
+@step(r'a fund on "(?P<name>[^"]+)"' + _AVERAGE_IN_PLAIN_WORDS)
 def given_fund_average(world: World, name: str, window: str, start: str) -> None:
     _make_fund(world, name, rule="average", window_months=int(window), start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+@step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS_IN_PLAIN_WORDS)
 def given_fund_from_obligations(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _TARGET)
-def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening, roll) -> None:
+@step(r'a fund on "(?P<name>[^"]+)"' + _TARGET_IN_PLAIN_WORDS)
+def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening=None, roll=None) -> None:
     _make_fund(world, name, **_target_spec(target, by, start, opening, roll))
     world.require_clean(f"creating the fund on {name!r}")
+
+
+@step(r'a fund on "(?P<name>[^"]+)"' + _FIXED_IN_PLAIN_WORDS)
+def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str) -> None:
+    _make_fund(world, name, **_fixed_spec(amount, start, ", resetting"))
+    world.require_clean(f"creating the fund on {name!r}")
+
+
+@step(
+    r'a recurring charge "(?P<payee>[^"]+)" on "(?P<category>[^"]+)"'
+    r" of (?P<amount>" + _DEC + r") COP every (?P<unit>day|week|month|year),"
+    r" next due (?P<due>" + _MONTH + r")"
+)
+def given_recurring_charge(world: World, payee: str, category: str, amount: str, unit: str, due: str) -> None:
+    """A charge that repeats and whose next turn falls in a named month.
+
+    Declared as of that first turn, so nothing about it is waiting for the
+    owner's answer: what the fund reads is a live obligation, and a turn
+    offered for approval would be a different scenario.
+    """
+    first = Date.fromisoformat(f"{due}-05")
+    world.attempt(
+        recurring.create_recurring,
+        world.session,
+        name=payee,
+        payee=payee,
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=_cents(amount),
+        currency="COP",
+        category_id=_spending_category_id(world, category),
+        account_id=_default_account_id(world, "COP"),
+        interval_unit=IntervalUnit(unit),
+        interval_count=1,
+        start_date=first,
+        declared_on=first,
+    )
+    world.require_clean(f"declaring the recurring charge {payee!r}")
+
+
+@step(r"an income of (?P<amount>" + _DEC + r") COP is due this month")
+def given_income_due(world: World, amount: str) -> None:
+    """Money the month is owed and has not received yet (ADR-0044).
+
+    A repeating income landing inside the month, because *due* is what the
+    month is promised rather than what already arrived — the same figure while
+    nothing has posted, and a different one the moment something does.
+    """
+    world.attempt(
+        recurring.create_recurring,
+        world.session,
+        name="Ingreso",
+        payee="Ingreso",
+        type=TxType.income,
+        mode=RecurringMode.auto,
+        amount=_cents(amount),
+        currency="COP",
+        category_id=world.background_category(TxType.income),
+        account_id=_default_account_id(world, "COP"),
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=world.today,
+        declared_on=world.today,
+    )
+    world.require_clean("declaring the income due this month")
 
 
 @step(r'the fund on "(?P<name>[^"]+)" already holds (?P<amount>' + _DEC + r") COP")
@@ -609,6 +696,27 @@ def then_fund_asks(world: World, name: str, amount: str) -> None:
 def then_fund_holds(world: World, name: str, amount: str) -> None:
     holds = _attr(_status(world, name), "holds", f"the fund on {name!r}")
     assert holds == _cents(amount), f"the fund on {name!r} holds {holds}, expected {_cents(amount)}{_context(world)}"
+
+
+@step(r'the fund on "(?P<name>[^"]+)" spent (?P<amount>' + _DEC + r") COP this month")
+def then_fund_spent(world: World, name: str, amount: str) -> None:
+    world.require_clean(f"reading what the fund on {name!r} spent")
+    spent = _attr(_status(world, name), "spent", f"the fund on {name!r}")
+    assert spent == _cents(amount), f"the fund on {name!r} spent {spent}, expected {_cents(amount)}"
+
+
+@step(r'the fund on "(?P<name>[^"]+)" carries (?P<amount>' + _DEC + r") COP into next month")
+def then_fund_carries(world: World, name: str, amount: str) -> None:
+    world.require_clean(f"reading what the fund on {name!r} carries")
+    carries = _attr(_status(world, name), "carries", f"the fund on {name!r}")
+    assert carries == _cents(amount), f"the fund on {name!r} carries {carries}, expected {_cents(amount)}"
+
+
+@step(r'the fund on "(?P<name>[^"]+)" will have (?P<amount>' + _DEC + r") COP to spend next month")
+def then_fund_next_month_has(world: World, name: str, amount: str) -> None:
+    world.require_clean(f"reading what next month has on the fund on {name!r}")
+    ahead = _attr(_status(world, name), "next_month_has", f"the fund on {name!r}")
+    assert ahead == _cents(amount), f"the fund on {name!r} will have {ahead} next month, expected {_cents(amount)}"
 
 
 @step(r'the fund on "(?P<name>[^"]+)" is (?P<state>on track|behind)')

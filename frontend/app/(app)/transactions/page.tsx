@@ -9,6 +9,7 @@ import { type Column, DataTable, type RowAction } from "@/components/data-table"
 import { EntitySelect } from "@/components/entity-select"
 import { MoneyAmount } from "@/components/money-amount"
 import { PageHeader } from "@/components/page-header"
+import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import { TransactionCreateDialog } from "@/components/transaction-create-dialog"
 import { TransactionEditDialog } from "@/components/transaction-edit-dialog"
@@ -41,6 +42,27 @@ const STATUS_ITEMS = [
   { value: "posted", label: "Registrado" },
   { value: "skipped", label: "Omitido" },
 ]
+
+const WHAT_A_MOVEMENT_IS = (
+  <p>
+    Un movimiento es plata que entra o que sale — un gasto, un ingreso, o un traslado entre tus
+    cuentas.
+  </p>
+)
+
+const TRANSACTIONS_HELP = (
+  <>
+    {WHAT_A_MOVEMENT_IS}
+    <p>
+      Aquí queda registrado cada uno. La categoría que le pongas es lo que alimenta los reportes y
+      lo que un fondo o un presupuesto vigila.
+    </p>
+    <p>
+      Los filtros de arriba se guardan en la dirección del navegador, así que la lista que estás
+      viendo se puede volver a abrir tal cual.
+    </p>
+  </>
+)
 
 function deleteDescription(tx: Transaction | null): string {
   if (tx?.type !== "transfer")
@@ -329,6 +351,7 @@ export default function TransactionsPage() {
       <PageHeader
         title="Transacciones"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
+        help={<ScreenHelp screen="Transacciones">{TRANSACTIONS_HELP}</ScreenHelp>}
       />
       <DataTable
         rows={list.data}
@@ -340,6 +363,8 @@ export default function TransactionsPage() {
         isError={list.isError}
         onRetry={() => list.refetch()}
         emptyMessage="No hay transacciones para estos filtros"
+        emptyDescription={WHAT_A_MOVEMENT_IS}
+        emptyAction={{ label: "Registrar el primero", onClick: () => setCreating(true) }}
       />
       <TransactionCreateDialog open={creating} onOpenChange={setCreating} />
       <TransactionEditDialog

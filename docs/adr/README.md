@@ -58,3 +58,4 @@ New ADRs are created with the `adr` skill:
 | 0042 | A category belongs to one direction and one resolver answers which category a movement carries | accepted | 2026-08-03 |
 | 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted | 2026-08-04 |
 | 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | accepted | 2026-08-04 |
+| 0045 | Frontend acceptance criteria bind to vitest, and one Gherkin parser stays the single source | accepted | 2026-08-07 |

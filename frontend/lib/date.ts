@@ -27,3 +27,19 @@ export function isOverdue(value: string, now: Date = new Date()): boolean {
 export function hasEnded(endDate: string | null, now: Date = new Date()): boolean {
   return endDate !== null && isOverdue(endDate, now)
 }
+
+/** The month after a wire month ("2026-12" → "2027-01"). */
+export function nextYearMonth(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number)
+  const rolls = month === 12
+  return `${rolls ? year + 1 : year}-${String(rolls ? 1 : month + 1).padStart(2, "0")}`
+}
+
+const MONTH_IN_SPANISH = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
+
+/** A wire month as the sentence names it: "2026-09" → "Septiembre". */
+export function monthNameOf(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number)
+  const name = MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1)))
+  return name.charAt(0).toUpperCase() + name.slice(1)
+}

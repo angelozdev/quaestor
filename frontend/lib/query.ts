@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query"
-import type { TransactionFilters } from "@/lib/api/types"
+import type { FundCreate, TransactionFilters } from "@/lib/api/types"
 
 // Entity roots: single source of truth for query keys + invalidation groups.
 // `as const` keeps literal types so downstream key matching stays narrow.
@@ -37,6 +37,8 @@ export const qk = {
   moneyAvailable: (month: string) => [ROOTS.funds, "available", month] as const,
   moneyRates: (month: string) => [ROOTS.funds, "rates", month] as const,
   funds: () => [ROOTS.funds, "list"] as const,
+  fundPreview: (rule: string, body: FundCreate | null) =>
+    [ROOTS.funds, "preview", rule, body] as const,
   report: (month: string) => [ROOTS.reports, month] as const,
 }
 

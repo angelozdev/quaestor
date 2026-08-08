@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { Transaction } from "@/lib/api/types"
-import { makeTransaction, queryWrapper } from "@/tests/factories"
+import { makeTransaction, openHelpPanel, queryWrapper } from "@/tests/factories"
 import TransactionsPage from "./page"
 
 const listTransactions = vi.fn()
@@ -191,5 +191,36 @@ describe("TransactionsPage engine provenance", () => {
     render(<TransactionsPage />, { wrapper: queryWrapper })
     const row = (await screen.findByText("Tienda")).closest("tr") as HTMLElement
     expect(within(row).queryByText("Recurrente")).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-7 — every screen carries the same control", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([])
+    currentParams = new URLSearchParams("")
+  })
+
+  it("Transacciones offers to explain itself", async () => {
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    expect(await openHelpPanel("Transacciones")).toHaveTextContent(
+      "Un movimiento es plata que entra o que sale",
+    )
+  })
+})
+
+describe("AC-10 — an empty screen teaches and offers the way in", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([])
+    currentParams = new URLSearchParams("")
+  })
+
+  it("An empty Transacciones screen teaches and offers the way in", async () => {
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    expect(
+      await screen.findByText(/Un movimiento es plata que entra o que sale/),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Registrar el primero" })).toBeInTheDocument()
   })
 })
