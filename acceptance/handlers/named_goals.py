@@ -29,7 +29,7 @@ from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
 from quaestor.domain.money import major_to_cents
 from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
-from quaestor.services import transactions
+from quaestor.services import planned, transactions
 
 from . import step
 from .fx_read_time import _default_account_id
@@ -397,3 +397,38 @@ def then_none_waiting(world: World) -> None:
     agg = funds_service._month_view(world.session, _today(world))
     waiting = [found.name for found in service.statuses(agg) if found.waiting]
     assert not waiting, f"these metas are waiting: {waiting}"
+
+
+@step(
+    rf"the user plans an expense of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)"'
+)
+def when_plan_linked(world: World, amount: str, category: str, name: str) -> None:
+    given_planned_linked(world, amount, category, name)
+
+
+@step(
+    rf"a planned expense of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)" this month'
+)
+def given_planned_linked(world: World, amount: str, category: str, name: str) -> None:
+    world.last_planned_id = planned.plan_payment(
+        world.session,
+        payee="Compra",
+        amount=_cents(amount),
+        currency="COP",
+        due_date=world.today,
+        account_id=_default_account_id(world, "COP"),
+        category_id=_spending_category_id(world, category),
+        meta_id=_meta_id(world, name),
+    ).id
+
+
+@step(r"the user confirms that payment")
+def when_confirm_planned(world: World) -> None:
+    planned.confirm_payment(world.session, world.last_planned_id)
+
+
+@step(r"the user skips that payment")
+def when_skip_planned(world: World) -> None:
+    planned.skip_payment(world.session, world.last_planned_id)

@@ -57,6 +57,7 @@ def plan_payment(
     category_id: int | None = None,
     notes: str | None = None,
     new_category: str | None = None,
+    meta_id: int | None = None,
 ) -> Transaction:
     """Create a standalone `planned` expense due on `due_date`. No balance change.
 
@@ -87,6 +88,7 @@ def plan_payment(
         currency=currency,
         account_id=account_id,
         category_id=category_id,
+        meta_id=meta_id,
         source=Source.manual,
     )
     session.add(tx)

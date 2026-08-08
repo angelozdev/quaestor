@@ -171,7 +171,11 @@ def uncovered_total(agg: MonthAggregate) -> int:
 
 
 def _meta_uncovered(agg: MonthAggregate, meta: Meta) -> int:
-    spent = sum(agg.to_cop_cents(tx) for tx in agg.linked_to(meta.id) if year_month_of(tx.date) == agg.year_month)
+    spent = sum(
+        agg.to_cop_cents(tx)
+        for tx in agg.linked_to(meta.id, posted_only=False)
+        if year_month_of(tx.date) == agg.year_month
+    )
     if not spent:
         return 0
     walked = _walk(agg, meta)

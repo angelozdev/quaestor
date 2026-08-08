@@ -994,15 +994,25 @@ held and loses its history.
 - **Type:** edge-case
 
 An expense recorded as planned rather than posted can be pointed at a meta on
-the day it is written down. It changes nothing until it is actually paid: the
-meta does not complete, the category's fund is not relieved of it, and the
-month's uncovered term does not move.
+the day it is written down, and the month nets it against that meta exactly as
+it nets a purchase already paid: **only what the meta cannot cover costs the
+month.**
 
-When it posts, everything happens at once and exactly as AC-6 through AC-13
-describe. Skipping or deleting it before it posts leaves the meta as it was.
+A $8.000.000 phone left in *Por pagar* against a meta that already holds
+$8.000.000 costs December nothing beyond the instalment it was already asking.
+The same phone against a meta holding $4.800.000 costs the month the $3.200.000
+that was never put by — the figure a posted purchase would have produced.
 
-This follows the rule the app already runs — only posted movements count, each
-once, at what left the account (ADR-0044).
+*Revised 2026-08-08, during Phase 2.* This first said a planned link counts
+nothing until it posts. That was wrong in the one case it mattered: a category
+with no fund already has its planned expenses counted in the month's uncovered
+term, because a debt owed this month costs this month. Left alone, the owner
+would have been charged $8.000.000 for a phone he had already saved for over
+five months and had already been charged for, month by month.
+
+**What still waits for the payment** is the meta itself: it does not complete,
+it keeps asking, and skipping or deleting the planned expense leaves it exactly
+as it was. Only posted money completes a meta (ADR-0044).
 
 ## AC-44: The metas list puts what needs an answer first
 

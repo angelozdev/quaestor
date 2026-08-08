@@ -1328,26 +1328,45 @@ Scenario: Removing a contribution raises the instalments that had dropped
   Then the meta "Celular" asks 1600000.00 COP this month
 ```
 
-## AC-43 — A planned expense may be pointed at a meta and counts nothing until it posts
+## AC-43 — A planned expense is netted against its meta the same way
 
 ```gherkin
 @backend
-Scenario: A planned purchase leaves the meta and the month alone
+Scenario: A planned purchase a full meta covers costs the month nothing
   Given today is 2026-12-10
   And an income category "Salario"
   And an account "Banco" in COP with balance 30000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And an expense category "Tecnologia"
-  And a fund on "Tecnologia" that asks a fixed 100000.00 COP each month, starting 2026-12
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user plans an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
   And the user views the money available this month
-  Then the meta "Celular" is running
-  And the breakdown shows uncovered spending of 0.00 COP
-  And the fund on "Tecnologia" spent 0.00 COP this month
+  Then the breakdown shows uncovered spending of 0.00 COP
+  And the money available this month is 3400000.00 COP
 
 @backend
-Scenario: Paying it makes everything happen at once
+Scenario: A planned purchase the meta cannot cover costs the month the gap
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user plans an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows uncovered spending of 3200000.00 COP
+  And the money available this month is 200000.00 COP
+
+@backend
+Scenario: The meta keeps running until the payment is made
+  Given today is 2026-12-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user plans an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  Then the meta "Celular" is running
+
+@backend
+Scenario: Paying it completes the meta
   Given today is 2026-12-10
   And an expense category "Tecnologia"
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08

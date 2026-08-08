@@ -453,7 +453,9 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
         for item in agg.active_recurring
         if item.type == TxType.expense and item.category_id not in funded
     )
-    planned = sum(agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded)
+    planned = sum(
+        agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded and tx.meta_id is None
+    )
     excess = sum(_overspill(walked[fund.id]) for fund in agg.funds)
     return spent + obligations + planned + excess + metas.uncovered_total(agg)
 

@@ -114,9 +114,16 @@ class MonthAggregate:
             kept.append(tx)
         return kept
 
-    def linked_to(self, meta_id: int) -> list[Transaction]:
-        """Posted purchases pointed at one meta, on or before this month."""
-        return [tx for tx in self.linked if tx.meta_id == meta_id]
+    def linked_to(self, meta_id: int, *, posted_only: bool = True) -> list[Transaction]:
+        """Purchases pointed at one meta, on or before this month.
+
+        Posted by default: only money that left completes a meta. The month's
+        arithmetic asks for the planned ones too, because a debt owed this
+        month costs this month and must be netted against what the meta holds
+        (AC-43).
+        """
+        rows = [tx for tx in self.linked if tx.meta_id == meta_id]
+        return [tx for tx in rows if tx.status == TxStatus.posted] if posted_only else rows
 
     def month_expense(self) -> list[Transaction]:
         return self.posted_in_month(self.year_month, TxType.expense)
@@ -217,7 +224,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         session.exec(
             select(Transaction).where(
                 Transaction.meta_id.is_not(None),
-                Transaction.status == TxStatus.posted,
+                Transaction.status.in_([TxStatus.posted, TxStatus.planned]),
                 Transaction.date <= end,
             )
         ).all()
