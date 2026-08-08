@@ -1004,3 +1004,17 @@ describe("AC-21 — one vocabulary, everywhere", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Presupuesto eliminado"))
   })
 })
+
+describe("AC-40 — the fund no longer saves toward a date", () => {
+  it("The create form offers three ways, not four", async () => {
+    const user = setup()
+    renderPage()
+    await startCreating(user, "fondo")
+
+    const offered = screen.getAllByRole("radio").map((radio) => radio.getAttribute("aria-label"))
+    expect(offered).toHaveLength(3)
+    expect(offered).not.toContain("Junto una cantidad para una fecha")
+    expect(screen.queryByLabelText("Objetivo * (COP)")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Mes objetivo *")).not.toBeInTheDocument()
+  })
+})

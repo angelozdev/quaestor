@@ -8,7 +8,7 @@ import { useState } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { logout as apiLogout } from "@/lib/api/auth"
 
-const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
+export const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   {
     title: "Resumen",
     items: [
@@ -26,7 +26,10 @@ const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   },
   {
     title: "Planeación",
-    items: [{ href: "/funds", label: "Fondos y presupuestos" }],
+    items: [
+      { href: "/funds", label: "Fondos y presupuestos" },
+      { href: "/metas", label: "Metas" },
+    ],
   },
   {
     title: "Configuración",

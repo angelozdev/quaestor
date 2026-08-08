@@ -1,0 +1,168 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { beforeEach, describe, expect, it, vi } from "vitest"
+import { HELP_LABEL } from "@/components/screen-help"
+import type { MetaStatus } from "@/lib/api/types"
+import { openHelpPanel } from "@/tests/factories"
+
+const { listMetas, createMeta, previewMeta, toast } = vi.hoisted(() => ({
+  listMetas: vi.fn(),
+  createMeta: vi.fn(),
+  previewMeta: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn() },
+}))
+
+vi.mock("@/lib/api/metas", () => ({ listMetas, createMeta, previewMeta }))
+vi.mock("sonner", () => ({ toast }))
+
+import { GROUPS } from "@/components/app-shell"
+
+import MetasPage from "./page"
+
+function meta(over: Partial<MetaStatus> = {}): MetaStatus {
+  return {
+    meta_id: 1,
+    name: "Celular",
+    year_month: "2026-08",
+    amount: 800_000_000,
+    currency: "COP",
+    target_month: "2026-12",
+    asks: 160_000_000,
+    holds: 480_000_000,
+    contributed: 0,
+    progress: 60,
+    complete: false,
+    closed: false,
+    waiting: false,
+    ...over,
+  }
+}
+
+function renderPage() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MetasPage />
+    </QueryClientProvider>,
+  )
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  listMetas.mockResolvedValue([meta()])
+  previewMeta.mockResolvedValue({ asks: 160_000_000, months_left: 5, over_the_month: false })
+  createMeta.mockResolvedValue(meta())
+})
+
+describe("AC-5 — the metas have their own screen", () => {
+  it("The metas screen states each meta's amount, month, holdings, ask and progress", async () => {
+    renderPage()
+    expect(await screen.findByText("Celular")).toBeInTheDocument()
+    expect(screen.getByText(/8\.000\.000/)).toBeInTheDocument()
+    expect(screen.getByText(/diciembre/i)).toBeInTheDocument()
+    expect(screen.getByText(/4\.800\.000/)).toBeInTheDocument()
+    expect(screen.getByText(/1\.600\.000/)).toBeInTheDocument()
+    expect(screen.getByText(/60%/)).toBeInTheDocument()
+  })
+
+  it("The funds screen never lists a meta", async () => {
+    renderPage()
+    await screen.findByText("Celular")
+    expect(screen.queryByText(/Fondos y presupuestos/)).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-8 — completing offers three things to do next", () => {
+  it("Completing offers three things to do next", async () => {
+    listMetas.mockResolvedValue([meta({ complete: true, closed: false })])
+    renderPage()
+    expect(await screen.findByRole("button", { name: /Cerrar Celular/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /otro monto/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /otro mes/ })).toBeInTheDocument()
+  })
+})
+
+describe("AC-30 — the metas screen says what a meta is", () => {
+  it("The screen carries the same explaining panel every screen carries", async () => {
+    renderPage()
+    await screen.findByText("Celular")
+    expect(screen.getByRole("button", { name: HELP_LABEL })).toBeInTheDocument()
+  })
+
+  it("The panel separates the three words", async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText("Celular")
+    const panel = await openHelpPanel("las metas", user)
+    expect(within(panel).getByText(/no vive en ninguna categoría/)).toBeInTheDocument()
+    expect(within(panel).getByText(/va juntando lo que le sobra/)).toBeInTheDocument()
+    expect(within(panel).getByText(/lo que no gastes no se guarda/i)).toBeInTheDocument()
+  })
+
+  it("The empty screen says what a meta is and starts one", async () => {
+    listMetas.mockResolvedValue([])
+    renderPage()
+    expect(await screen.findByText(/una cosa con nombre y con final/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Crear mi primera meta" })).toBeInTheDocument()
+  })
+})
+
+describe("AC-44 — the metas list puts what needs an answer first", () => {
+  it("The ones waiting on an answer come first", async () => {
+    listMetas.mockResolvedValue([
+      meta({ meta_id: 1, name: "Celular", complete: true }),
+      meta({ meta_id: 2, name: "Viaje", waiting: true, target_month: "2026-11" }),
+      meta({ meta_id: 3, name: "Televisor", target_month: "2027-12" }),
+      meta({ meta_id: 4, name: "Camara", target_month: "2028-03" }),
+    ])
+    renderPage()
+    await screen.findByText("Celular")
+    const names = screen.getAllByRole("listitem").map((row) => row.textContent ?? "")
+    expect(names[0]).toContain("Celular")
+    expect(names[1]).toContain("Viaje")
+    expect(names[2]).toContain("Televisor")
+    expect(names[3]).toContain("Camara")
+  })
+
+  it("Archived metas are not in the list", async () => {
+    listMetas.mockResolvedValue([meta({ name: "Celular" })])
+    renderPage()
+    expect(await screen.findByText("Celular")).toBeInTheDocument()
+    expect(screen.queryByText("Moto")).not.toBeInTheDocument()
+  })
+
+  it("The list reads on a phone without scrolling sideways", async () => {
+    renderPage()
+    await screen.findByText("Celular")
+    const row = screen.getAllByRole("listitem")[0]
+    expect(row.querySelector("table")).toBeNull()
+    expect(screen.getByText(/4\.800\.000/)).toBeInTheDocument()
+    expect(screen.getByText(/1\.600\.000/)).toBeInTheDocument()
+  })
+})
+
+describe("AC-45 — the form says what the meta will ask before it is created", () => {
+  it("The create button says what it is about to do", async () => {
+    previewMeta.mockResolvedValue({ asks: 4_000_000_000, months_left: 1, over_the_month: true })
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText("Celular")
+    await user.click(screen.getByRole("button", { name: "Nueva meta" }))
+    await user.type(screen.getByLabelText("Nombre *"), "Casa")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "80000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-09")
+
+    await waitFor(() => expect(screen.getByText(/40\.000\.000 al mes/)).toBeInTheDocument())
+    expect(screen.getByRole("alert")).toHaveTextContent(/más de lo que tu mes tiene/)
+    expect(screen.getByRole("button", { name: "Crear de todos modos" })).toBeInTheDocument()
+  })
+})
+
+describe("AC-5 — the navigation offers Metas", () => {
+  it("The navigation offers Metas beside Fondos y presupuestos", () => {
+    const planning = GROUPS.find((group) => group.title === "Planeación")
+    expect(planning?.items.map((item) => item.label)).toEqual(["Fondos y presupuestos", "Metas"])
+    expect(planning?.items.map((item) => item.href)).toContain("/metas")
+  })
+})

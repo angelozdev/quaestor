@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query"
-import type { FundCreate, TransactionFilters } from "@/lib/api/types"
+import type { FundCreate, MetaCreate, TransactionFilters } from "@/lib/api/types"
 
 // Entity roots: single source of truth for query keys + invalidation groups.
 // `as const` keeps literal types so downstream key matching stays narrow.
@@ -15,6 +15,7 @@ const ROOTS = {
   fx: "fx",
   funds: "funds",
   reports: "reports",
+  metas: "metas",
 } as const
 
 const DETAIL = "detail" as const
@@ -37,6 +38,9 @@ export const qk = {
   moneyAvailable: (month: string) => [ROOTS.funds, "available", month] as const,
   moneyRates: (month: string) => [ROOTS.funds, "rates", month] as const,
   funds: () => [ROOTS.funds, "list"] as const,
+  metas: (month: string) => [ROOTS.metas, "list", month] as const,
+  metaSplit: (month: string) => [ROOTS.metas, "split", month] as const,
+  metaPreview: (body: MetaCreate | null) => [ROOTS.metas, "preview", body] as const,
   fundPreview: (rule: string, body: FundCreate | null) =>
     [ROOTS.funds, "preview", rule, body] as const,
   report: (month: string) => [ROOTS.reports, month] as const,
@@ -87,6 +91,7 @@ export const INVALIDATION = {
     [ROOTS.planned],
   ],
   fundWrite: [[ROOTS.funds], [ROOTS.reports]],
+  metaWrite: [[ROOTS.metas], [ROOTS.funds], [ROOTS.reports]],
   // Scoped invalidation triggered by ChatSection's `useChat` onFinish. The
   // MCP tools can mutate any of these entity roots; settings/categories/tags
   // are intentionally excluded (no chat tool mutates them in v1). Never call
