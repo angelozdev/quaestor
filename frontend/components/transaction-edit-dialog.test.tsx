@@ -22,6 +22,25 @@ vi.mock("@/lib/api/accounts", () => ({
     { id: 2, name: "Nequi", type: "debit", currency: "COP", balance: 0, archived: false },
   ]),
 }))
+vi.mock("@/lib/api/metas", () => ({
+  listMetas: vi.fn().mockResolvedValue([
+    {
+      meta_id: 4,
+      name: "Televisor",
+      year_month: "2026-07",
+      amount: 500_000_000,
+      currency: "COP",
+      target_month: "2026-12",
+      asks: 100_000_000,
+      holds: 100_000_000,
+      contributed: 0,
+      progress: 20,
+      complete: false,
+      closed: false,
+      waiting: false,
+    },
+  ]),
+}))
 
 function renderDialog(tx: Transaction) {
   return render(<TransactionEditDialog tx={tx} open onOpenChange={() => undefined} />, {
@@ -48,6 +67,41 @@ describe("TransactionEditDialog tags", () => {
     await user.click(screen.getByRole("button", { name: "Guardar" }))
     await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
     expect(updateTransaction).toHaveBeenCalledWith(1, expect.objectContaining({ tags: [] }))
+  })
+})
+
+describe("AC-28 — the link can be removed or moved", () => {
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+  })
+
+  it("gives the purchase back to its category by dropping the meta", async () => {
+    const user = userEvent.setup()
+    renderDialog(makeTransaction({ meta_id: 4 }))
+    await user.click(await screen.findByRole("combobox", { name: /Es la compra de una meta/ }))
+    await user.click(screen.getByRole("option", { name: "Ninguna" }))
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
+    expect(updateTransaction).toHaveBeenCalledWith(1, expect.objectContaining({ meta_id: null }))
+  })
+
+  it("points the purchase at another meta", async () => {
+    const user = userEvent.setup()
+    renderDialog(makeTransaction())
+    await user.click(await screen.findByRole("combobox", { name: /Es la compra de una meta/ }))
+    await user.click(await screen.findByRole("option", { name: "Televisor" }))
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
+    expect(updateTransaction).toHaveBeenCalledWith(1, expect.objectContaining({ meta_id: 4 }))
+  })
+
+  it("never asks a transfer which meta it is for", async () => {
+    renderDialog(makeTransaction({ type: "transfer", transfer_group_id: null }))
+    expect(await screen.findByRole("button", { name: "Guardar" })).toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: /Es la compra de una meta/ })).toBeNull()
   })
 })
 

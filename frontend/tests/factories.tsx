@@ -34,6 +34,7 @@ export function makeTransaction(overrides: Partial<Transaction> = {}): Transacti
     cop_equivalent: 5_000_000,
     account_id: 1,
     category_id: type === "transfer" ? null : CATEGORY_ID,
+    meta_id: null,
     transfer_group_id: null,
     transfer_direction: null,
     source: "manual",

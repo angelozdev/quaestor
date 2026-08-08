@@ -122,6 +122,7 @@ def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(
         "cop_equivalent",
         "account_id",
         "category_id",
+        "meta_id",
         "transfer_group_id",
         "transfer_direction",
         "source",

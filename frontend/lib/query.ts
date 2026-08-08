@@ -58,6 +58,7 @@ export const INVALIDATION = {
     [ROOTS.reports],
     [ROOTS.accounts],
     [ROOTS.funds],
+    [ROOTS.metas],
     [ROOTS.planned],
     [ROOTS.categories],
   ],

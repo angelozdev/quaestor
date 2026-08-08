@@ -20,6 +20,7 @@ export interface Transaction {
   cop_equivalent: number | null
   account_id: number
   category_id: number | null
+  meta_id: number | null
   transfer_group_id: string | null
   transfer_direction: TransferDirection | null
   source: string
@@ -287,6 +288,7 @@ export interface TransactionCreate {
   new_category?: string | null
   notes?: string | null
   tags?: string[]
+  meta_id?: number | null
 }
 export interface TransferCreate {
   from_account_id: number
@@ -303,6 +305,7 @@ export interface TransactionUpdate {
   category_id?: number | null
   date?: string
   tags?: string[]
+  meta_id?: number | null
 }
 export interface PlanPaymentCreate {
   payee: string

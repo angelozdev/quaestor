@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatDate, hasEnded, isOverdue, monthNameOf, nextYearMonth } from "./date"
+import { formatDate, hasEnded, isOverdue, monthNameOf, nextYearMonth, yearMonthOf } from "./date"
 
 const NOON = new Date("2026-08-02T12:00:00")
 
@@ -30,6 +30,17 @@ describe("hasEnded", () => {
 
   it("is true the day after the end date", () => {
     expect(hasEnded("2026-08-01", NOON)).toBe(true)
+  })
+})
+
+describe("yearMonthOf", () => {
+  it("keeps the month a date falls in", () => {
+    expect(yearMonthOf("2026-12-24")).toBe("2026-12")
+  })
+
+  it("refuses a date the owner has not finished typing", () => {
+    expect(yearMonthOf("2026-12")).toBeNull()
+    expect(yearMonthOf("")).toBeNull()
   })
 })
 

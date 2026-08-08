@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import { CategoryField } from "@/components/category-field"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
+import { MetaField } from "@/components/meta-field"
 import { MoneyInput } from "@/components/money-input"
 import { TagChipsInput } from "@/components/tag-chips-input"
 import {
@@ -18,6 +19,7 @@ import { TransferReceivedField } from "@/components/transfer-received-field"
 import { listAccounts } from "@/lib/api/accounts"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
 import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { yearMonthOf } from "@/lib/date"
 import { finiteOrNull } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useTagNames } from "@/lib/use-tag-names"
@@ -49,6 +51,7 @@ const NORMAL_DEFAULTS: TxNormalValues = {
   payee: "",
   notes: "",
   tags: [],
+  metaId: null,
 }
 
 const TRANSFER_DEFAULTS: TxTransferValues = {
@@ -143,6 +146,7 @@ export function TransactionCreateDialog({
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
         tags: values.tags.length > 0 ? values.tags : undefined,
+        meta_id: values.type === "expense" ? values.metaId : null,
       })
     },
     onSuccess: () => done("Transacción creada"),
@@ -210,6 +214,7 @@ export function TransactionCreateDialog({
                         field.handleChange(v as never)
                         normalForm.setFieldValue("categoryId", null)
                         normalForm.setFieldValue("newCategory", "")
+                        normalForm.setFieldValue("metaId", null)
                       }}
                       items={TYPE_ITEMS}
                     />
@@ -268,6 +273,24 @@ export function TransactionCreateDialog({
                   />
                 )}
               </normalForm.Field>
+              <normalForm.Subscribe
+                selector={(state) => ({
+                  type: state.values.type,
+                  month: yearMonthOf(state.values.date),
+                  metaId: state.values.metaId,
+                })}
+              >
+                {({ type, month, metaId }) =>
+                  type === "expense" && month !== null ? (
+                    <MetaField
+                      id="tx-create-meta"
+                      month={month}
+                      value={metaId}
+                      onChange={(chosen) => normalForm.setFieldValue("metaId", chosen)}
+                    />
+                  ) : null
+                }
+              </normalForm.Subscribe>
               <normalForm.Field name="tags">
                 {(field) => (
                   <TagChipsInput

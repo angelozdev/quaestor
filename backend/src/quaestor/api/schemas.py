@@ -143,6 +143,7 @@ class TransactionCreate(BaseModel):
     notes: str | None = None
     source: str = "manual"
     tags: list[str] | None = None
+    meta_id: int | None = None
 
 
 class TransferIn(BaseModel):
@@ -171,6 +172,7 @@ class TransactionOut(BaseModel):
     cop_equivalent: int | None = None
     account_id: int
     category_id: int | None
+    meta_id: int | None
     transfer_group_id: str | None
     transfer_direction: TransferDirection | None = None
     source: Source
@@ -220,11 +222,15 @@ class TransferOut(BaseModel):
 
 
 class TransactionUpdate(BaseModel):
+    """Edit of a movement. Omitting `meta_id` leaves the link alone; sending
+    null removes it, and the category's fund takes the purchase back (AC-28)."""
+
     payee: str | None = None
     notes: str | None = None
     category_id: int | None = None
     date: Date | None = None
     tags: list[str] | None = None
+    meta_id: int | None = None
 
 
 class RecurringCreate(BaseModel):
