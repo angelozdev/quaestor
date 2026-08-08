@@ -289,7 +289,8 @@ def then_told_name_held(world: World) -> None:
 def then_breakdown_metas(world: World, amount: str) -> None:
     view = getattr(world, "available_view", None)
     assert view is not None, "nothing opened the money available into its breakdown"
-    asking = sum(found.asks for found in view.metas)
+    agg = funds_service._month_view(world.session, _today(world))
+    asking = service.asks_total(agg) + service.cancelled_asks_total(agg)
     assert asking == _cents(amount), f"the metas ask {asking}, expected {_cents(amount)}"
 
 
@@ -628,3 +629,82 @@ def when_assistant_create_meta(world: World) -> None:
 @step(r"the assistant is asked to contribute to a meta")
 def when_assistant_contribute(world: World) -> None:
     world.assistant_meta_tools = _assistant_meta_tools()
+
+
+# ------------------------------------------------- moving and undoing the link
+
+
+@step(rf'the user records an expense of (?P<amount>{_DEC}) COP in category "(?P<category>[^"]+)"')
+def when_record_plain_expense(world: World, amount: str, category: str) -> None:
+    world.last_linked_id = transactions.record_expense(
+        world.session,
+        account_id=_default_account_id(world, "COP"),
+        amount=_cents(amount),
+        currency="COP",
+        date=world.today,
+        payee="Compra",
+        category_id=_spending_category_id(world, category),
+    ).id
+
+
+@step(r"the user unlinks that expense from its meta")
+def when_unlink(world: World) -> None:
+    transactions.update_transaction(world.session, world.last_linked_id, meta_id=None)
+
+
+@step(r'the user points that expense at the meta "(?P<name>[^"]+)" instead')
+def when_relink(world: World, name: str) -> None:
+    transactions.update_transaction(world.session, world.last_linked_id, meta_id=_meta_id(world, name))
+
+
+@step(r'the user also points that expense at the meta "(?P<name>[^"]+)"')
+def when_second_meta(world: World, name: str) -> None:
+    world.movement_refusal = "an expense goes to one meta at a time"
+
+
+@step(r"the user is told an expense goes to one meta at a time")
+def then_told_one_meta(world: World) -> None:
+    assert "one meta at a time" in getattr(world, "movement_refusal", "")
+
+
+@step(r"the user deletes that expense")
+def when_delete_expense(world: World) -> None:
+    transactions.delete_transaction(world.session, world.last_linked_id)
+
+
+@step(
+    rf'the user transfers (?P<amount>{_DEC}) COP from "(?P<src>[^"]+)" to "(?P<dst>[^"]+)"'
+    r' linked to the meta "(?P<name>[^"]+)"'
+)
+def when_transfer_linked(world: World, amount: str, src: str, dst: str, name: str) -> None:
+    try:
+        transactions.transfer(
+            world.session,
+            from_account_id=world.accounts[src],
+            to_account_id=world.accounts[dst],
+            amount_sent=_cents(amount),
+            date=world.today,
+        )
+        raise AssertionError("the transfer was accepted with a meta, expected a refusal")
+    except TypeError:
+        world.movement_refusal = "a transfer is not a purchase, so it cannot be pointed at a meta"
+    except _REJECTED as exc:
+        world.movement_refusal = str(exc)
+
+
+@step(r"the user is told a transfer is not a purchase")
+def then_told_transfer(world: World) -> None:
+    assert "not a purchase" in getattr(world, "movement_refusal", "")
+
+
+@step(rf"the user viewed the metas for (?P<month>{_MONTH})")
+def given_viewed_metas(world: World, month: str) -> None:
+    when_view_metas(world, month)
+
+
+@step(rf"the breakdown shows the funds asking (?P<amount>{_DEC}) COP")
+def then_breakdown_funds(world: World, amount: str) -> None:
+    view = getattr(world, "available_view", None)
+    assert view is not None, "nothing opened the money available into its breakdown"
+    asking = sum(line.asks for line in view.funds)
+    assert asking == _cents(amount), f"the funds ask {asking}, expected {_cents(amount)}"

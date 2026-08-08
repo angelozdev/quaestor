@@ -136,24 +136,33 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
 
 
 def _status(agg: MonthAggregate, meta: Meta) -> MetaStatus:
+    """What one meta reports for the month this aggregate holds.
+
+    A meta is **complete** when the thing was bought, or when the owner lowered
+    the amount below what it already held — strictly below, because a meta that
+    has exactly filled up has not finished: it is waiting for the purchase, and
+    AC-17 keeps it running while its sibling completes. What a full meta stops
+    doing is asking, and that falls out of the arithmetic rather than a flag.
+    """
     walked = _walk(agg, meta)
+    amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
-    complete = bought or walked.holds >= meta.amount
-    progress = min(round(walked.holds * 100 / meta.amount), 100) if meta.amount else 0
+    complete = bought or walked.holds > amount
+    progress = min(round(walked.holds * 100 / amount), 100) if amount else 0
     return MetaStatus(
         meta_id=meta.id,
         name=meta.name,
         year_month=agg.year_month,
-        amount=meta.amount,
+        amount=amount,
         currency=meta.currency,
-        target_month=meta.target_month,
+        target_month=target,
         asks=walked.ask,
         holds=walked.holds,
         contributed=walked.contributed,
         progress=progress,
         complete=complete,
         closed=meta.closed,
-        waiting=meta.target_month < agg.year_month and not bought and not meta.closed,
+        waiting=target < agg.year_month and not bought and not meta.closed,
     )
 
 

@@ -437,6 +437,7 @@ def update_transaction(
     notes=_UNSET,
     category_id=_UNSET,
     date=None,
+    meta_id=_UNSET,
 ) -> Transaction:
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
@@ -451,6 +452,11 @@ def update_transaction(
         ValidationError: Any refusal from `categories.resolve_for_movement` —
             clearing an expense's or income's category, giving one to a
             transfer, or a category missing, archived or of the wrong direction.
+            Also every refusal about the meta this purchase is pointed at —
+            money coming in, money moving between the owner's own accounts, or
+            a meta that was cancelled. Passing None here DOES clear it: unlinking
+            is a real act, and the category's fund takes the purchase back the
+            moment it happens (AC-28).
     """
     tx = get_transaction(session, tx_id)
     if payee is not None:
@@ -461,6 +467,9 @@ def update_transaction(
         tx.date = date
     if category_id is not _UNSET:
         tx.category_id = categories.resolve_for_movement(session, tx.type, category_id)
+    if meta_id is not _UNSET:
+        _refuse_bad_meta(session, tx.type, meta_id)
+        tx.meta_id = meta_id
     session.add(tx)
     session.commit()
     session.refresh(tx)
