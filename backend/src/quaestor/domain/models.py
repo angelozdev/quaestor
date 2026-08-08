@@ -160,6 +160,11 @@ class Meta(SQLModel, table=True):
 
     `amount` is cents in `currency`. A meta held in dollars reports every figure
     in dollars; only its peso cost converts, at the single scalar TRM.
+
+    `cancelled_month` is the month a cancellation released what the meta held
+    back into the money available (AC-15). It is read for that one month and
+    never again, which is why the release is a term of the month rather than a
+    stored adjustment.
     """
 
     __table_args__ = (UniqueConstraint("name", name="uq_meta_name"),)
@@ -172,6 +177,7 @@ class Meta(SQLModel, table=True):
     stated_opening: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
     closed: bool = False
     archived: bool = False
+    cancelled_month: str | None = None
 
 
 class MetaContribution(SQLModel, table=True):

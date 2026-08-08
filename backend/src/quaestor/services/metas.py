@@ -23,7 +23,7 @@ from sqlmodel import Session, select
 
 from ..domain.dtos import MetaStatus
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Meta
+from ..domain.models import Meta, MetaContribution
 from ..domain.money import to_cop_cents
 from ..domain.rules import (
     is_year_month,
@@ -33,7 +33,8 @@ from ..domain.rules import (
     next_year_month,
     year_month_of,
 )
-from .month_aggregate import MonthAggregate
+from . import fx as _fx
+from .month_aggregate import MonthAggregate, load_month_aggregate
 
 
 @dataclass(frozen=True)
@@ -196,6 +197,148 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
 def contributed_total(agg: MonthAggregate) -> int:
     """What the owner set aside by hand this month, in COP cents."""
     return sum(to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in agg.metas)
+
+
+def released_total(agg: MonthAggregate) -> int:
+    """What metas cancelled in this month handed back, in COP cents (AC-15).
+
+    Read for that one month and never again — November must not keep giving
+    back what October already gave.
+    """
+    return sum(_released_by(agg, meta) for meta in _cancelled_this_month(agg))
+
+
+def _cancelled_this_month(agg: MonthAggregate) -> list[Meta]:
+    return [m for m in agg.cancelled if m.cancelled_month == agg.year_month]
+
+
+def _released_by(agg: MonthAggregate, meta: Meta) -> int:
+    return to_cop_cents(_walk(agg, meta).holds, meta.currency, agg.trm)
+
+
+def cancelled_asks_total(agg: MonthAggregate) -> int:
+    """What a meta cancelled this month still asked of it.
+
+    The month always charges its instalment, and cancelling part-way through
+    does not give it back — releasing more than was ever taken would mint
+    money (product ADR-014).
+    """
+    return sum(_ask_in_cop(agg, meta) for meta in _cancelled_this_month(agg))
+
+
+def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> int:
+    """Set money aside by hand, on top of what the meta asks that month.
+
+    Trimmed to what is missing: a meta never holds more than the thing costs
+    (AC-14). Returns what was actually put in.
+
+    Raises:
+        NotFound: no such meta.
+        ValidationError: an amount at or below zero, or a cancelled meta.
+    """
+    meta = _require_meta(session, meta_id)
+    if meta.archived:
+        raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no contribution")
+    if amount <= 0:
+        raise ValidationError("a contribution needs an amount above zero")
+    room = _room_left(session, meta, year_month)
+    put_in = min(amount, room)
+    if put_in <= 0:
+        raise ValidationError(f"the meta {meta.name!r} needs nothing more")
+    session.add(MetaContribution(meta_id=meta.id, year_month=year_month, amount=put_in))
+    session.commit()
+    return put_in
+
+
+def _month_view(session: Session, year_month: str) -> MonthAggregate:
+    """The month, loaded once at the rate demanded on entry.
+
+    Deliberately not imported from `services.funds`, which imports this module:
+    the two nouns meet in `month_available` and nowhere else, and a circular
+    import would be the first crack in that.
+
+    Raises:
+        MissingRate: no TRM is set.
+    """
+    return load_month_aggregate(session, year_month, _fx.get_trm(session))
+
+
+def _room_left(session: Session, meta: Meta, year_month: str) -> int:
+    walked = _walk(_month_view(session, year_month), meta)
+    return meta.amount - walked.holds
+
+
+def remove_contribution(session: Session, contribution_id: int) -> None:
+    """Take back a contribution: the meta and its month return to what they were.
+
+    Raises:
+        NotFound: no such contribution.
+    """
+    row = session.get(MetaContribution, contribution_id)
+    if row is None:
+        raise NotFound(f"contribution {contribution_id} not found")
+    session.delete(row)
+    session.commit()
+
+
+def contributions_of(session: Session, meta_id: int) -> list[MetaContribution]:
+    """Every contribution made to one meta, oldest first (AC-42)."""
+    rows = session.exec(select(MetaContribution).where(MetaContribution.meta_id == meta_id)).all()
+    return sorted(rows, key=lambda r: (r.year_month, r.id))
+
+
+def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
+    """Stop a meta and hand back what it held, in this month (AC-15).
+
+    Cancelling is not closing. A meta whose purchase has been linked is
+    finished, not abandoned, and closing it releases nothing (AC-39).
+
+    Raises:
+        NotFound: no such meta.
+        ValidationError: the meta was already bought.
+    """
+    meta = _require_meta(session, meta_id)
+    if _bought(_month_view(session, year_month), meta):
+        raise ValidationError(f"the meta {meta.name!r} was bought, so it is closed rather than cancelled")
+    meta.archived = True
+    meta.cancelled_month = year_month
+    session.add(meta)
+    session.commit()
+    session.refresh(meta)
+    return meta
+
+
+def close_meta(session: Session, meta_id: int) -> Meta:
+    """Finish a meta whose purchase has been made. Releases nothing (AC-39).
+
+    Raises:
+        NotFound: no such meta.
+    """
+    meta = _require_meta(session, meta_id)
+    meta.closed = True
+    meta.archived = True
+    session.add(meta)
+    session.commit()
+    session.refresh(meta)
+    return meta
+
+
+def restore_meta(session: Session, meta_id: int) -> Meta:
+    """Bring a cancelled meta back, asking again from what it holds now.
+
+    Raises:
+        NotFound: no such meta.
+        ValidationError: a live meta has taken its name since (AC-22).
+    """
+    meta = _require_meta(session, meta_id)
+    _refuse_name_already_held(session, meta.name, excluding=meta.id)
+    meta.archived = False
+    meta.closed = False
+    meta.cancelled_month = None
+    session.add(meta)
+    session.commit()
+    session.refresh(meta)
+    return meta
 
 
 def create_meta(

@@ -472,7 +472,15 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
     lines = [_status(agg, fund, walked[fund.id]) for fund in agg.funds]
     income = _income(agg)
     uncovered = _uncovered(agg, walked)
-    claimed = sum(line.asks for line in lines) + metas.asks_total(agg) + metas.contributed_total(agg)
+    contributed = metas.contributed_total(agg)
+    released = metas.released_total(agg)
+    claimed = (
+        sum(line.asks for line in lines)
+        + metas.asks_total(agg)
+        + metas.cancelled_asks_total(agg)
+        + contributed
+        - released
+    )
     return MonthAvailable(
         year_month=year_month,
         income=income,
@@ -480,7 +488,8 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
         uncovered=uncovered,
         free=available_calc(income, claimed, uncovered),
         metas=metas.statuses(agg),
-        contributed=metas.contributed_total(agg),
+        contributed=contributed,
+        released=released,
     )
 
 

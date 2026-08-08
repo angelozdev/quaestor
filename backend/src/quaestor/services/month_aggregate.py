@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date as Date
 from decimal import Decimal
 
-from sqlalchemy import extract, func
+from sqlalchemy import extract, func, or_
 from sqlmodel import Session, select
 
 from ..domain.models import (
@@ -58,6 +58,7 @@ class MonthAggregate:
     month_planned_expense: list[Transaction]
     funds: list[Fund]
     metas: list[Meta]
+    cancelled: list[Meta]
     contributions: dict[int, dict[str, int]]
     linked: list[Transaction]
     first_movement_month: str | None
@@ -208,7 +209,13 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     )
 
     funds = list(session.exec(select(Fund)).all())
-    metas = list(session.exec(select(Meta).where(Meta.archived == False)).all())  # noqa: E712
+    every_meta = list(
+        session.exec(
+            select(Meta).where(or_(Meta.archived == False, Meta.cancelled_month == year_month))  # noqa: E712
+        ).all()
+    )
+    metas = [m for m in every_meta if not m.archived]
+    cancelled = [m for m in every_meta if m.cancelled_month == year_month]
     contributions: dict[int, dict[str, int]] = {}
     for meta_id, month, total in session.exec(
         select(
@@ -251,6 +258,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         month_planned_expense=month_planned_expense,
         funds=funds,
         metas=metas,
+        cancelled=cancelled,
         contributions=contributions,
         linked=linked,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,

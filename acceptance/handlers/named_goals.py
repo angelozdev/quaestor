@@ -26,10 +26,12 @@ from __future__ import annotations
 from datetime import date as Date
 
 from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
+from quaestor.domain.models import Meta as _Meta
 from quaestor.domain.money import major_to_cents
 from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
 from quaestor.services import planned, transactions
+from sqlmodel import select as _select
 
 from . import step
 from .fx_read_time import _default_account_id
@@ -432,3 +434,119 @@ def when_confirm_planned(world: World) -> None:
 @step(r"the user skips that payment")
 def when_skip_planned(world: World) -> None:
     planned.skip_payment(world.session, world.last_planned_id)
+
+
+# --------------------------------------------------------------- the acts
+
+
+@step(rf'the user contributes (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)"')
+def when_contribute(world: World, amount: str, name: str) -> None:
+    try:
+        world.last_contributed_to = _meta_id(world, name)
+        world.last_put_in = service.contribute(
+            world.session, world.last_contributed_to, year_month=_today(world), amount=_cents(amount)
+        )
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.contribution_refusal = str(exc)
+
+
+@step(rf'a contribution of (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
+def given_contribution(world: World, amount: str, name: str, month: str) -> None:
+    world.last_contributed_to = _meta_id(world, name)
+    service.contribute(world.session, world.last_contributed_to, year_month=month, amount=_cents(amount))
+
+
+@step(r"the contribution is rejected")
+def then_contribution_rejected(world: World) -> None:
+    assert getattr(world, "contribution_refusal", None), "the contribution was accepted, expected a refusal"
+
+
+@step(rf"the user is told (?P<amount>{_DEC}) COP was put in, which is what was missing")
+def then_told_trimmed(world: World, amount: str) -> None:
+    assert world.last_put_in == _cents(amount), f"put in {world.last_put_in}, expected {_cents(amount)}"
+
+
+@step(r"the user removes that contribution")
+def when_remove_contribution(world: World) -> None:
+    rows = service.contributions_of(world.session, world.last_contributed_to)
+    service.remove_contribution(world.session, rows[-1].id)
+
+
+@step(rf'the meta "(?P<name>[^"]+)" lists a contribution of (?P<amount>{_DEC}) COP made (?P<month>{_MONTH})')
+def then_lists_contribution(world: World, name: str, amount: str, month: str) -> None:
+    rows = service.contributions_of(world.session, _meta_id(world, name))
+    assert any(r.amount == _cents(amount) and r.year_month == month for r in rows), (
+        f"the meta {name!r} lists {[(r.year_month, r.amount) for r in rows]}"
+    )
+
+
+@step(r'the user cancels the meta "(?P<name>[^"]+)"')
+def when_cancel(world: World, name: str) -> None:
+    try:
+        service.cancel_meta(world.session, _meta_id(world, name), year_month=_today(world))
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.cancel_refusal = str(exc)
+
+
+@step(rf'the meta "(?P<name>[^"]+)" was cancelled (?P<month>{_MONTH})')
+def given_cancelled(world: World, name: str, month: str) -> None:
+    service.cancel_meta(world.session, _meta_id(world, name), year_month=month)
+
+
+@step(r"the cancellation is rejected")
+def then_cancel_rejected(world: World) -> None:
+    assert getattr(world, "cancel_refusal", None), "the cancellation was accepted, expected a refusal"
+
+
+@step(r"the user is told a meta that was bought is closed, not cancelled")
+def then_told_closed_not_cancelled(world: World) -> None:
+    assert "closed rather than cancelled" in getattr(world, "cancel_refusal", "")
+
+
+@step(r'the user closes the meta "(?P<name>[^"]+)"')
+def when_close(world: World, name: str) -> None:
+    service.close_meta(world.session, _meta_id(world, name))
+
+
+@step(r'the user restores the meta "(?P<name>[^"]+)"')
+def when_restore(world: World, name: str) -> None:
+    try:
+        service.restore_meta(world.session, _meta_id(world, name))
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.restore_refusal = str(exc)
+
+
+@step(rf"the user restores the meta cancelled in (?P<month>{_MONTH})")
+def when_restore_cancelled_in(world: World, month: str) -> None:
+    row = world.session.exec(_select(_Meta).where(_Meta.cancelled_month == month)).first()
+    try:
+        service.restore_meta(world.session, row.id)
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.restore_refusal = str(exc)
+
+
+@step(r"the restore is rejected")
+def then_restore_rejected(world: World) -> None:
+    assert getattr(world, "restore_refusal", None), "the restore was accepted, expected a refusal"
+
+
+@step(r"the user is told another meta already holds that name")
+def then_told_name_taken(world: World) -> None:
+    assert "already holds the name" in getattr(world, "restore_refusal", "")
+
+
+@step(r'the meta "(?P<name>[^"]+)" is not listed')
+def then_not_listed(world: World, name: str) -> None:
+    agg = funds_service._month_view(world.session, _today(world))
+    assert name not in [f.name for f in service.statuses(agg)], f"the meta {name!r} is still listed"
+
+
+@step(r'the meta "(?P<name>[^"]+)" can be restored')
+def then_can_be_restored(world: World, name: str) -> None:
+    service.restore_meta(world.session, _meta_id(world, name))
+    agg = funds_service._month_view(world.session, _today(world))
+    assert name in [f.name for f in service.statuses(agg)], f"the meta {name!r} did not come back"
