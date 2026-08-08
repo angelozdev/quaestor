@@ -12,6 +12,7 @@ import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
 import { moneyAvailable, moneyRates } from "@/lib/api/funds"
+import { monthSplit } from "@/lib/api/metas"
 import { report as fetchReport } from "@/lib/api/reports"
 import type { MonthAvailable } from "@/lib/api/types"
 import { labelOf, shapeOf } from "@/lib/funds"
@@ -112,6 +113,7 @@ export default function DashboardPage() {
     queryKey: qk.moneyAvailable(MONTH),
     queryFn: () => moneyAvailable(MONTH),
   })
+  const split = useQuery({ queryKey: qk.metaSplit(MONTH), queryFn: () => monthSplit(MONTH) })
   const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
   const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
   const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() })
@@ -306,6 +308,58 @@ export default function DashboardPage() {
                       {formatCents(data.free, "COP")}
                     </span>
                   </Row>
+                </div>
+              )}
+            </QueryBoundary>
+          </Card>
+        </div>
+
+        <div className="animate-fade-up" style={{ animationDelay: "140ms" }}>
+          <Card label="A dónde se va el mes">
+            <QueryBoundary
+              query={split}
+              skeleton={<SkeletonText lines={4} />}
+              errorMessage="No se pudo cargar el reparto del mes"
+            >
+              {(data) => (
+                <div className="space-y-2.5">
+                  <Row label="Ahorro · fondos y metas">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.ahorro, "COP")}
+                      <span
+                        className="ml-2 font-normal"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {data.ahorro_share}%
+                      </span>
+                    </span>
+                  </Row>
+                  <Row label="Consumo · lo que se gastó">
+                    <MoneyAmount
+                      cents={data.consumo}
+                      currency="COP"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <Row label="Libre · nadie lo reclamó">
+                    <MoneyAmount
+                      cents={data.libre}
+                      currency="COP"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <hr style={{ borderColor: "var(--border)" }} />
+                  <Row label="Ingreso del mes">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.income, "COP")}
+                    </span>
+                  </Row>
+                  {data.ahorro < 0 && (
+                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                      El ahorro es negativo porque este mes cancelaste una meta: lo que tenía
+                      guardado volvió a estar libre.
+                    </p>
+                  )}
                 </div>
               )}
             </QueryBoundary>

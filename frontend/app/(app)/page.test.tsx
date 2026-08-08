@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
 import { openHelpPanel } from "@/tests/factories"
 
-const { moneyAvailable, moneyRates, report, listAccounts, toPay } = vi.hoisted(() => ({
+const { moneyAvailable, moneyRates, report, listAccounts, toPay, monthSplit } = vi.hoisted(() => ({
   moneyAvailable: vi.fn(),
+  monthSplit: vi.fn(),
   moneyRates: vi.fn(),
   report: vi.fn(),
   listAccounts: vi.fn(),
@@ -13,6 +14,7 @@ const { moneyAvailable, moneyRates, report, listAccounts, toPay } = vi.hoisted((
 }))
 
 vi.mock("@/lib/api/funds", () => ({ moneyAvailable, moneyRates }))
+vi.mock("@/lib/api/metas", () => ({ monthSplit }))
 vi.mock("@/lib/api/reports", () => ({ report }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/planned", () => ({ toPay, confirmPayment: vi.fn() }))
@@ -67,6 +69,14 @@ beforeEach(() => {
   listAccounts.mockResolvedValue([])
   toPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
   report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
+  monthSplit.mockResolvedValue({
+    year_month: "2026-11",
+    income: 0,
+    consumo: 0,
+    ahorro: 0,
+    libre: 0,
+    ahorro_share: 0,
+  })
 })
 
 describe("DashboardPage breakdown", () => {
@@ -232,5 +242,50 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
     expect(await screen.findByText("Sin fondo que lo cubra")).toBeInTheDocument()
     expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
     expect(screen.queryByText("Devuelto por una meta cancelada")).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
+  const SPLIT = {
+    year_month: "2026-11",
+    income: 500_000_000,
+    consumo: 140_000_000,
+    ahorro: 320_000_000,
+    libre: 40_000_000,
+    ahorro_share: 64,
+  }
+
+  it("says what share of the month was saved, and adds up to the income", async () => {
+    monthSplit.mockResolvedValue(SPLIT)
+    renderPage()
+
+    expect(await screen.findByText("Ahorro · fondos y metas")).toBeInTheDocument()
+    expect(screen.getByText("$ 3.200.000")).toBeInTheDocument()
+    expect(screen.getByText("64%")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.400.000")).toBeInTheDocument()
+    expect(screen.getByText("$ 400.000")).toBeInTheDocument()
+    expect(SPLIT.consumo + SPLIT.ahorro + SPLIT.libre).toBe(SPLIT.income)
+  })
+
+  it("says why the ahorro is negative in a month a meta was cancelled", async () => {
+    monthSplit.mockResolvedValue({
+      ...SPLIT,
+      consumo: 0,
+      ahorro: -320_000_000,
+      libre: 820_000_000,
+      ahorro_share: -64,
+    })
+    renderPage()
+
+    expect(await screen.findByText("$ -3.200.000")).toBeInTheDocument()
+    expect(screen.getByText(/cancelaste una meta/)).toBeInTheDocument()
+  })
+
+  it("says nothing about cancelling in an ordinary month", async () => {
+    monthSplit.mockResolvedValue(SPLIT)
+    renderPage()
+
+    expect(await screen.findByText("Ahorro · fondos y metas")).toBeInTheDocument()
+    expect(screen.queryByText(/cancelaste una meta/)).not.toBeInTheDocument()
   })
 })
