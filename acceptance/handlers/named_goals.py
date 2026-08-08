@@ -29,8 +29,11 @@ from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
 from quaestor.domain.money import major_to_cents
 from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
+from quaestor.services import transactions
 
 from . import step
+from .fx_read_time import _default_account_id
+from .sinking_funds import _spending_category_id
 from .world import World
 
 _REJECTED = (ValidationError, NotFound, QuaestorError, TypeError, ValueError, AttributeError)
@@ -313,3 +316,84 @@ def then_warned_amount(world: World, amount: str) -> None:
 def then_warned_over(world: World) -> None:
     preview = world.meta_preview
     assert preview.over_the_month, "the meta was not announced as more than the month has"
+
+
+# --------------------------------------------------- the link on the movement
+
+
+def _record_linked(world: World, amount: str, category: str, name: str, when: Date, kind: str = "expense"):
+    write = transactions.record_expense if kind == "expense" else transactions.record_income
+    return write(
+        world.session,
+        account_id=_default_account_id(world, "COP"),
+        amount=_cents(amount),
+        currency="COP",
+        date=when,
+        payee="Compra",
+        category_id=_spending_category_id(world, category),
+        meta_id=_meta_id(world, name),
+    )
+
+
+@step(
+    rf"the user records an expense of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)"'
+)
+def when_record_linked(world: World, amount: str, category: str, name: str) -> None:
+    try:
+        world.last_linked_id = _record_linked(world, amount, category, name, world.today).id
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.movement_refusal = str(exc)
+
+
+@step(
+    rf"the user records an income of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)"'
+)
+def when_record_income_linked(world: World, amount: str, category: str, name: str) -> None:
+    try:
+        _record_linked(world, amount, category, name, world.today, kind="income")
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.movement_refusal = str(exc)
+
+
+@step(
+    rf"a recorded expense of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)" this month'
+)
+def given_linked_this_month(world: World, amount: str, category: str, name: str) -> None:
+    world.last_linked_id = _record_linked(world, amount, category, name, world.today).id
+
+
+@step(
+    rf"a recorded expense of (?P<amount>{_DEC}) COP"
+    rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)"'
+    r" on (?P<day>\d{4}-\d{2}-\d{2})"
+)
+def given_linked_on(world: World, amount: str, category: str, name: str, day: str) -> None:
+    world.last_linked_id = _record_linked(world, amount, category, name, Date.fromisoformat(day)).id
+
+
+@step(r"the movement is rejected")
+def then_movement_rejected(world: World) -> None:
+    assert getattr(world, "movement_refusal", None), "the movement was accepted, expected a refusal"
+
+
+@step(r"the user is told only money going out can be pointed at a meta")
+def then_told_only_expense(world: World) -> None:
+    assert "money going out" in getattr(world, "movement_refusal", "")
+
+
+@step(r'the meta "(?P<name>[^"]+)" is waiting on its purchase')
+def then_waiting(world: World, name: str) -> None:
+    found = _status(world, name)
+    assert found.waiting, f"the meta {name!r} is not waiting, expected it to be"
+
+
+@step(r"no meta is waiting on its purchase")
+def then_none_waiting(world: World) -> None:
+    agg = funds_service._month_view(world.session, _today(world))
+    waiting = [found.name for found in service.statuses(agg) if found.waiting]
+    assert not waiting, f"these metas are waiting: {waiting}"

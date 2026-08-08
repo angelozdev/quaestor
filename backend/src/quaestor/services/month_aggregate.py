@@ -79,9 +79,16 @@ class MonthAggregate:
     def spent_in(self, category_id: int, year_month: str) -> int:
         """A category's posted spending for one month, in COP cents.
 
-        This hides nothing: a fund covers whatever its category spent, and
-        money set aside that vanished from the figure would leave the fund
-        reporting a balance it does not have.
+        This hides nothing a fund is answerable for: a fund covers whatever its
+        category spent, and money set aside that vanished from the figure would
+        leave the fund reporting a balance it does not have.
+
+        A purchase pointed at a meta is the one exception, and it is not
+        hiding: the meta counted it, so counting it here too would count the
+        same money twice (ADR-0046). Only the *plan* reads this — the fund's
+        fold and the report's funds section. What was actually spent is read
+        from the movements themselves, and the spending report still shows the
+        purchase in full (AC-33).
         """
         return self._spent_by_cat_month.get((category_id, year_month), 0)
 
@@ -147,6 +154,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         .where(
             Transaction.type == TxType.expense,
             Transaction.status == TxStatus.posted,
+            Transaction.meta_id.is_(None),
         )
         .group_by(
             Transaction.category_id,

@@ -445,7 +445,7 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
     Every posted expense counts once, at what left the account.
     """
     funded = {fund.category_id for fund in agg.funds}
-    posted = [tx for tx in agg.month_expense() if tx.category_id not in funded]
+    posted = [tx for tx in agg.month_expense() if tx.category_id not in funded and tx.meta_id is None]
     spent = sum(agg.to_cop_cents(tx) for tx in posted)
     posted_turns = Counter(tx.recurring_id for tx in posted if tx.recurring_id is not None)
     obligations = sum(
@@ -455,7 +455,7 @@ def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
     )
     planned = sum(agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded)
     excess = sum(_overspill(walked[fund.id]) for fund in agg.funds)
-    return spent + obligations + planned + excess
+    return spent + obligations + planned + excess + metas.uncovered_total(agg)
 
 
 def month_available(agg: MonthAggregate) -> MonthAvailable:

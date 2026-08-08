@@ -28,8 +28,10 @@ from ..domain.money import to_cop_cents
 from ..domain.rules import (
     is_year_month,
     meta_ask_calc,
+    meta_uncovered_calc,
     months_to_meta,
     next_year_month,
+    year_month_of,
 )
 from .month_aggregate import MonthAggregate
 
@@ -155,6 +157,36 @@ def asks_total(agg: MonthAggregate) -> int:
 
 def _ask_in_cop(agg: MonthAggregate, meta: Meta) -> int:
     return to_cop_cents(_walk(agg, meta).ask, meta.currency, agg.trm)
+
+
+def uncovered_total(agg: MonthAggregate) -> int:
+    """What every linked purchase cost past what its meta had, in COP cents.
+
+    The seam where double counting would enter. A linked movement is out of its
+    category's spending entirely (`spent_in` drops it), so the only thing it
+    can cost the month is its own excess — what it cost, less what the meta
+    opened the month with, less what the meta asks now (AC-12).
+    """
+    return sum(_meta_uncovered(agg, meta) for meta in agg.metas)
+
+
+def _meta_uncovered(agg: MonthAggregate, meta: Meta) -> int:
+    spent = sum(agg.to_cop_cents(tx) for tx in agg.linked_to(meta.id) if year_month_of(tx.date) == agg.year_month)
+    if not spent:
+        return 0
+    walked = _walk(agg, meta)
+    return to_cop_cents(
+        meta_uncovered_calc(_to_meta_currency(agg, meta, spent), walked.opening, walked.ask),
+        meta.currency,
+        agg.trm,
+    )
+
+
+def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
+    """A purchase reaches its meta in the meta's own currency (AC-26)."""
+    if meta.currency == "COP":
+        return cop_cents
+    return round(cop_cents / float(agg.trm))
 
 
 def contributed_total(agg: MonthAggregate) -> int:
