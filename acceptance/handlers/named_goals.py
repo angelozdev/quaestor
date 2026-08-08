@@ -87,6 +87,7 @@ def _open(world: World, *, name: str, amount: str, currency: str, target: str, o
 
 # ------------------------------------------------------------------ given
 
+
 @step(rf'a meta "(?P<name>[^"]+)" of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH})')
 def given_meta(world: World, name: str, amount: str, currency: str, target: str) -> None:
     _open(world, name=name, amount=amount, currency=currency, target=target, opened=_today(world), held=None)
@@ -112,6 +113,7 @@ def given_meta_opened_holding(
 
 # ------------------------------------------------------------------- when
 
+
 @step(rf'the user creates a meta "(?P<name>[^"]+)" of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH})')
 def when_create(world: World, name: str, amount: str, currency: str, target: str) -> None:
     try:
@@ -134,9 +136,7 @@ def when_create_holding(world: World, name: str, amount: str, currency: str, tar
 @step(rf'the user creates a meta "(?P<name>[^"]+)" of (?P<amount>{_DEC}) (?:COP|USD) with no month')
 def when_create_without_month(world: World, name: str, amount: str) -> None:
     try:
-        service.create_meta(
-            world.session, name=name, amount=_cents(amount), target_month="", today=_today(world)
-        )
+        service.create_meta(world.session, name=name, amount=_cents(amount), target_month="", today=_today(world))
     except _REJECTED as exc:
         world.meta_refusal = str(exc)
 
@@ -176,9 +176,7 @@ def when_view_metas(world: World, month: str) -> None:
 def when_preview(world: World, amount: str, target: str) -> None:
     month = _today(world)
     income = funds_service.available(world.session, month).income
-    world.meta_preview = service.preview_meta(
-        amount=_cents(amount), target_month=target, today=month, income=income
-    )
+    world.meta_preview = service.preview_meta(amount=_cents(amount), target_month=target, today=month, income=income)
     world.pending_meta = (_cents(amount), target)
 
 
@@ -207,6 +205,7 @@ def when_create_anyway(world: World, name: str) -> None:
 
 
 # ------------------------------------------------------------------- then
+
 
 @step(r'the meta "(?P<name>[^"]+)" is running')
 def then_running(world: World, name: str) -> None:
