@@ -1,6 +1,6 @@
 ---
-ac_count: 35
-high_priority_count: 22
+ac_count: 38
+high_priority_count: 25
 discovered: 2026-08-08
 ---
 
@@ -122,6 +122,42 @@ owner mid-question: *"es raro que un celular cueste EXACTAMENTE 5M"*. What it
 asks recomputes from what is left and the months remaining. Lowering the amount
 below what is already saved completes the meta and frees the excess into that
 month, by decision 4's rule.
+
+**11. The report lists both, and groups neither into the other.** The owner
+asked whether any view shows, per category, the total of the funds *and* the
+metas the month asks of him. Two things came out of it.
+
+One was a plain miss: with thirty-five ACs the month's report would still have
+listed only the funds, understating what the month asks by every peso the metas
+take. AC-36 closes it, and was not put to him as a choice.
+
+The other was his question proper, and he decided it against itself. A meta
+carries **no category, not even as a label for grouping**. Two reasons, and the
+second is the one that decided it: the meta belongs to no category until the
+purchase names one, so any category on it beforehand is a guess the movement
+may contradict; and merging them would report *Tecnología* as asking $1.700.000
+when its budget is $100.000 — reading as a category that tripled, when what
+happened is that the owner started saving for a phone. The funds are listed by
+category, the metas by meta, and the total is given for both.
+
+**12. The month says what share of it is being saved.** The owner's own words:
+*"quiero … otra vista en donde yo pueda ver que en el mes estoy ahorrando para
+metas y para fondos cierto porcentaje o cierto monto. Eso para mí es importante
+como usuario."* Scope drift, put to him as such, and he chose to include it here
+rather than defer it — because without it a meta reads only as a line that
+*lowers* the money available, and never as the thing that is keeping it.
+
+It needs nothing new. Feature 010's vocabulary already separates the two shapes
+by the only thing that matters here: a *presupuesto* is a ceiling on spending
+and is consumo; a *fondo* carries its leftover forward and is ahorro; a meta is
+always ahorro. Split that way, the money-available equation opens into consumo,
+ahorro and libre and still sums to the income exactly (AC-37).
+
+**And it measures what was set aside, not what was left over** (AC-38). The
+month the phone is bought still reads 54%, because $2.700.000 of that month's
+$5.000.000 was set aside and that is true. Measuring the leftover instead would
+read −104% for that December and inflate every month before it — reporting the
+month he finally used his savings as the month he saved nothing.
 
 **10. The link changes the plan, never the history.** Found because the owner
 asked what a meta's relationship to a fund and a category actually is, and the
@@ -623,3 +659,75 @@ over the months that remain, and the category's fund takes back nothing — the
 movement is gone from both.
 
 The same holds when the movement is archived rather than deleted.
+
+## AC-36: The month's report lists the metas beside the funds, and totals both
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+The report that lists what each fund asks this month lists what each meta asks
+too, as its own section, and gives the total of the two together. A report that
+showed only the funds would understate what the month asks by every peso the
+metas take.
+
+The funds are listed **by category**, the metas **by meta**, and they are not
+merged into one per-category figure. *Tecnología* keeps saying $100.000 — what
+it normally costs — while the $1.600.000 the phone asks sits under *Metas*.
+Adding them would report a category as having tripled when what happened is
+that the owner started saving.
+
+This is why a meta carries no category, not even as a label for grouping: it
+belongs to none until the purchase names one, and until then any category on it
+is a guess that the movement may contradict.
+
+## AC-37: The month opens into consumo, ahorro and libre, and adds up exactly
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+The owner can read what share of a month's income is being set aside rather
+than spent, as an amount and as a percentage:
+
+```
+Income                        $5.000.000
+
+  consumo                     $1.400.000   28%
+    presupuestos                $600.000
+    spending no fund covers     $800.000
+
+  ahorro                      $2.700.000   54%
+    funds that accumulate       $600.000
+    metas                     $2.100.000
+
+  libre                         $900.000   18%
+                              ──────────  ────
+                              $5.000.000  100%
+```
+
+Nothing new is computed. It is the money-available equation already in place —
+income, less what every fund asks, less what nothing covers — split by the one
+thing that already distinguishes the two shapes: a **presupuesto** is a ceiling
+on spending and counts as consumo; a **fondo** carries its leftover forward and
+counts as ahorro; a **meta** always counts as ahorro (product ADR-042).
+
+The four terms sum to the income exactly, in every month. Any month can be
+read, so months can be compared.
+
+## AC-38: Ahorro is what was set aside, never what was left over
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+December is the month the $8.000.000 phone is bought with money put by since
+August, and December still reads **54%** — because $2.700.000 of December's
+$5.000.000 was set aside, and that is true.
+
+The purchase does not appear in this figure at all. That money was already
+counted, month by month, as it was saved; counting it again on the way out
+would report the month the owner finally used his savings as the month he saved
+nothing.
+
+Explicitly rejected: measuring what was left over, which reads −104% for that
+December and reads inflated in every month before it, when the money had not
+left yet. This figure belongs to the planning half of the app, and the spending
+reports (AC-33) are where what actually left is told.

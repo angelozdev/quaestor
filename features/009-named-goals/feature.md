@@ -46,6 +46,13 @@ move the date.
 - **It ends, and it says so.** Reaching the target stops the asking. Linking
   the purchase completes the meta and prompts for the next step: close, renew
   with a new amount, or renew with a new date.
+- **The month says what share of it is being saved.** *Added at CP2 on the
+  owner's decision, as stated scope drift.* What the month asks opens into
+  consumo, ahorro and libre — a presupuesto is consumo, a fondo that accumulates
+  is ahorro, a meta is always ahorro — as an amount and a percentage that sum to
+  the income exactly. It measures what was set aside, never what was left over.
+  Without it a meta reads only as a line that lowers the money available, and
+  never as the thing keeping it.
 - **Lifecycle** follows the project's uniform soft-delete + restore stance
   (ADR-0005).
 - **Out of scope:** any change to the fund's rules, its fold, or its
