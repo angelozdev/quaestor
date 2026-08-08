@@ -263,6 +263,35 @@ export default function DashboardPage() {
                       />
                     </Row>
                   ))}
+                  {data.metas.map((meta) => (
+                    <Row key={meta.meta_id} label={`Meta · ${meta.name}`}>
+                      <MoneyAmount
+                        cents={meta.asks}
+                        currency="COP"
+                        type="expense"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  ))}
+                  {data.contributed !== 0 && (
+                    <Row label="Puesto a mano en una meta">
+                      <MoneyAmount
+                        cents={data.contributed}
+                        currency="COP"
+                        type="expense"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  )}
+                  {data.released !== 0 && (
+                    <Row label="Devuelto por una meta cancelada">
+                      <MoneyAmount
+                        cents={-data.released}
+                        currency="COP"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  )}
                   <Row label="Sin fondo que lo cubra">
                     <MoneyAmount
                       cents={data.uncovered}

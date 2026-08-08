@@ -52,6 +52,9 @@ const RESTAURANTES_IS_A_CEILING: MonthlyReport = {
         whole_by: null,
       },
     ],
+    metas: [],
+    contributed: 0,
+    released: 0,
     uncovered: 0,
     free: 290_000_000,
   },
@@ -93,5 +96,63 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
       "href",
       "/transactions",
     )
+  })
+})
+
+describe("AC-4 — the breakdown states what the metas ask", () => {
+  const withMetas: MonthlyReport = {
+    ...RESTAURANTES_IS_A_CEILING,
+    available: {
+      ...RESTAURANTES_IS_A_CEILING.available,
+      income: 500_000_000,
+      metas: [
+        {
+          meta_id: 1,
+          name: "Celular",
+          year_month: "2026-08",
+          amount: 800_000_000,
+          currency: "COP",
+          target_month: "2026-12",
+          asks: 160_000_000,
+          holds: 160_000_000,
+          contributed: 0,
+          progress: 20,
+          complete: false,
+          closed: false,
+          waiting: false,
+        },
+      ],
+      contributed: 50_000_000,
+      released: 30_000_000,
+      uncovered: 0,
+      free: 310_000_000,
+    },
+  }
+
+  it("names each meta beside the funds, with what it asks", async () => {
+    report.mockResolvedValue(withMetas)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
+  })
+
+  it("names what was put by hand and what a cancelled meta gave back", async () => {
+    report.mockResolvedValue(withMetas)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("Puesto a mano en una meta")).toBeInTheDocument()
+    expect(screen.getByText("$ 500.000")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por una meta cancelada")).toBeInTheDocument()
+    expect(screen.getByText("$ -300.000")).toBeInTheDocument()
+  })
+
+  it("says nothing about hands or cancellations in a month that had neither", async () => {
+    report.mockResolvedValue(RESTAURANTES_IS_A_CEILING)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
+    expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
+    expect(screen.queryByText("Devuelto por una meta cancelada")).not.toBeInTheDocument()
   })
 })

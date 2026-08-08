@@ -441,55 +441,6 @@ class FundStatusOut(BaseModel):
     whole_by: str | None = None
 
 
-class MonthAvailableOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    year_month: str
-    income: int
-    funds: list[FundStatusOut]
-    uncovered: int
-    free: int
-
-
-class AccountBalanceOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    account: str
-    currency: str
-    balance: int
-
-
-class DriftMoMOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    prev_month: str
-    income_abs: int
-    income_pct: float | None
-    expense_abs: int
-    expense_pct: float | None
-    net_abs: int
-    net_pct: float | None
-
-
-class MonthlyReportOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    month: str
-    income: int
-    expense: int
-    net: int
-    funds_summary: FundsSummaryOut
-    funds: list[FundReportLineOut]
-    by_category: list[CategorySectionOut]
-    by_group: list[GroupSectionOut]
-    balances: list[AccountBalanceOut]
-    drift_mom: DriftMoMOut | None
-    usd_share: float
-    pending: list[str]
-    available: MonthAvailableOut
-    markdown: str
-
-
 class MetaCreate(BaseModel):
     name: str
     amount: int
@@ -565,3 +516,62 @@ class MonthSplitOut(BaseModel):
     ahorro: int
     libre: int
     ahorro_share: int
+
+
+class MonthAvailableOut(BaseModel):
+    """What the month has and what already has a claim on it.
+
+    `income` less every fund's and meta's ask, less what was put by hand, plus
+    what a cancelled meta released, less uncovered spending, is `free` — the
+    breakdown a screen shows has to add up, so every term travels (AC-4).
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    income: int
+    funds: list[FundStatusOut]
+    metas: list[MetaStatusOut]
+    contributed: int
+    released: int
+    uncovered: int
+    free: int
+
+
+class AccountBalanceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    account: str
+    currency: str
+    balance: int
+
+
+class DriftMoMOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    prev_month: str
+    income_abs: int
+    income_pct: float | None
+    expense_abs: int
+    expense_pct: float | None
+    net_abs: int
+    net_pct: float | None
+
+
+class MonthlyReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: str
+    income: int
+    expense: int
+    net: int
+    funds_summary: FundsSummaryOut
+    funds: list[FundReportLineOut]
+    by_category: list[CategorySectionOut]
+    by_group: list[GroupSectionOut]
+    balances: list[AccountBalanceOut]
+    drift_mom: DriftMoMOut | None
+    usd_share: float
+    pending: list[str]
+    available: MonthAvailableOut
+    markdown: str

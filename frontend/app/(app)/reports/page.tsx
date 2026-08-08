@@ -291,6 +291,36 @@ export default function ReportsPage() {
                       </span>
                     </Row>
                   ))}
+                  {data.available.metas.map((meta) => (
+                    <Row key={meta.meta_id} label={`Meta · ${meta.name}`} faint>
+                      <span
+                        className="text-sm tabular-nums"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {formatCents(meta.asks, "COP")}
+                      </span>
+                    </Row>
+                  ))}
+                  {data.available.contributed !== 0 && (
+                    <Row label="Puesto a mano en una meta" faint>
+                      <span
+                        className="text-sm tabular-nums"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {formatCents(data.available.contributed, "COP")}
+                      </span>
+                    </Row>
+                  )}
+                  {data.available.released !== 0 && (
+                    <Row label="Devuelto por una meta cancelada" faint>
+                      <span
+                        className="text-sm tabular-nums"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {formatCents(-data.available.released, "COP")}
+                      </span>
+                    </Row>
+                  )}
                   <Row label="Sin fondo que lo cubra" faint>
                     <span
                       className="text-sm tabular-nums"

@@ -40,6 +40,9 @@ const AVAILABLE = {
       whole_by: null,
     },
   ],
+  metas: [],
+  contributed: 0,
+  released: 0,
   uncovered: 15_000_000,
   free: 465_000_000,
 }
@@ -187,5 +190,47 @@ describe("DashboardPage keeps the money available and the rates apart", () => {
     expect(screen.getByText("$ 5.650.000")).toBeInTheDocument()
 
     expect(screen.getByText(/Una tasa no es el disponible/)).toBeInTheDocument()
+  })
+})
+
+describe("AC-4 — the breakdown states what the metas ask", () => {
+  it("names each meta, what was put by hand, and what a cancelled one gave back", async () => {
+    moneyAvailable.mockResolvedValue({
+      ...AVAILABLE,
+      metas: [
+        {
+          meta_id: 1,
+          name: "Celular",
+          year_month: "2026-11",
+          amount: 800_000_000,
+          currency: "COP",
+          target_month: "2026-12",
+          asks: 160_000_000,
+          holds: 160_000_000,
+          contributed: 0,
+          progress: 20,
+          complete: false,
+          closed: false,
+          waiting: false,
+        },
+      ],
+      contributed: 50_000_000,
+      released: 30_000_000,
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
+    expect(screen.getByText("Puesto a mano en una meta")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por una meta cancelada")).toBeInTheDocument()
+    expect(screen.getByText("$ -300.000")).toBeInTheDocument()
+  })
+
+  it("stays quiet about metas in a month that has none", async () => {
+    renderPage()
+
+    expect(await screen.findByText("Sin fondo que lo cubra")).toBeInTheDocument()
+    expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
+    expect(screen.queryByText("Devuelto por una meta cancelada")).not.toBeInTheDocument()
   })
 })

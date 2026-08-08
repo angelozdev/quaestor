@@ -116,6 +116,38 @@ def test_the_split_names_what_the_month_consumed_and_what_it_saved(client, auth)
     assert split["year_month"] == "2026-08"
 
 
+def test_the_available_breakdown_names_the_metas_and_adds_up(client, auth, account, income_category):
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "income",
+            "category_id": income_category,
+            "account_id": account["id"],
+            "amount": 500_000_000,
+            "currency": "COP",
+            "date": "2026-08-05",
+            "payee": "Empresa",
+        },
+    )
+    meta = _meta(client, auth)
+    client.post(f"/api/metas/{meta['id']}/contributions", headers=auth, params=MONTH, json={"amount": 50_000_000})
+
+    breakdown = client.get("/api/funds/available", headers=auth, params=MONTH).json()
+    assert [row["name"] for row in breakdown["metas"]] == ["Celular"]
+    assert breakdown["metas"][0]["asks"] == 160_000_000
+    assert breakdown["contributed"] == 50_000_000
+    assert breakdown["released"] == 0
+
+    claimed = (
+        sum(fund["asks"] for fund in breakdown["funds"])
+        + sum(meta["asks"] for meta in breakdown["metas"])
+        + breakdown["contributed"]
+        - breakdown["released"]
+    )
+    assert breakdown["income"] - claimed - breakdown["uncovered"] == breakdown["free"]
+
+
 def test_an_expense_reaches_the_meta_through_the_wire(client, auth, account, expense_category):
     meta = _meta(client, auth)
     created = _expense(client, auth, account, expense_category, meta_id=meta["id"])

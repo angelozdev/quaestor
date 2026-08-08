@@ -166,6 +166,9 @@ export interface MonthAvailable {
   year_month: string
   income: number
   funds: FundStatus[]
+  metas: MetaStatus[]
+  contributed: number
+  released: number
   uncovered: number
   free: number
 }

@@ -71,7 +71,16 @@ let startMonths: Record<number, string>
 let wouldAsk: Partial<Record<FundRule, number>>
 
 function showing(funds: FundStatus[]) {
-  month = { year_month: THIS_MONTH, income: 0, funds, uncovered: 0, free: 0 }
+  month = {
+    year_month: THIS_MONTH,
+    income: 0,
+    funds,
+    metas: [],
+    contributed: 0,
+    released: 0,
+    uncovered: 0,
+    free: 0,
+  }
 }
 
 function fundLinesOf(funds: FundStatus[]) {
