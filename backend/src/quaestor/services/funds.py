@@ -734,25 +734,36 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
     stored = _validated_spec(session, category, _rule_of(spec.get("rule")), spec)
     unsaved = Fund(category_id=category_id, **stored)
     start = unsaved.start_month
-    would_ask = _walk(_month_view(session, start), unsaved).ask.amount
-    return FundPreview(category_id=category_id, would_ask=would_ask, warning=_warning(unsaved, would_ask))
+    walked = _walk(_month_view(session, start), unsaved)
+    would_ask = walked.ask.amount
+    return FundPreview(
+        category_id=category_id,
+        would_ask=would_ask,
+        warning=_warning(unsaved, walked.ask.charge_month, would_ask),
+    )
 
 
-def _warning(fund: Fund, would_ask: int) -> str | None:
+def _warning(fund: Fund, charge_month: str | None, would_ask: int) -> str | None:
     """The refusal-shaped announcement AC-24 asks for, or nothing.
 
-    A target dated so close that no month is left to save in is the reachable
+    A charge dated so close that no month is left to save in is the reachable
     definition of a target that cannot be reached: the whole amount falls on
     one month. Asked of the very divisor the ask uses, so the warning cannot
-    stay silent on a month it lands on — a target the month after the start
+    stay silent on a month it lands on — a charge the month after the start
     still has to be whole by the end of the start month (AC-6).
+
+    The date comes from whichever rule has one. Feature 009 withdrew
+    `target-by-date`, so today that is the soonest obligation filed under the
+    category — and the warning had to follow it there, because the surprise
+    belongs to the date and not to the rule that carried it.
     """
-    if fund.target_month is None:
+    dated = fund.target_month or charge_month
+    if dated is None:
         return None
-    if months_to_fund(fund.start_month, fund.target_month) > 1:
+    if months_to_fund(fund.start_month, dated) > 1:
         return None
     return (
-        f"{fund.target_month} leaves no month to save in, so the whole target falls on "
+        f"{dated} leaves no month to save in, so the whole target falls on "
         f"{fund.start_month}: it would ask {would_ask} at once"
     )
 

@@ -628,8 +628,3 @@ def when_assistant_create_meta(world: World) -> None:
 @step(r"the assistant is asked to contribute to a meta")
 def when_assistant_contribute(world: World) -> None:
     world.assistant_meta_tools = _assistant_meta_tools()
-
-
-@step(r'the assistant\'s answer names "(?P<name>[^"]+)"')
-def then_assistant_names(world: World, name: str) -> None:
-    assert name in world.assistant_answer, f"the assistant did not name {name!r}"

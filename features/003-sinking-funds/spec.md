@@ -286,7 +286,9 @@ Scenario: A fund saving toward a date is not asked whether it accumulates
 Scenario: A fund saving toward a date refuses to reset
   Given today is 2026-11-10
   And an expense category "Ahorro Viaje"
-  When the user tries to create a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11, resetting
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  When the user tries to create a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11, resetting
   Then the fund is rejected
   And the user is told a fund saving toward a date must accumulate
 ```
@@ -698,23 +700,29 @@ Scenario: A yearly dollar obligation is brought to a month and to COP
 Scenario: The opening balance counts toward what the fund still needs
   Given today is 2026-11-10
   And an expense category "Ahorro Viaje"
-  When the user creates a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11, opening with 1200000.00 COP
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  When the user creates a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11, opening with 1200000.00 COP
   Then the fund on "Ahorro Viaje" holds 1200000.00 COP
   And the fund on "Ahorro Viaje" asks 300000.00 COP this month
 
 Scenario: The fund never reads an account balance
   Given today is 2026-11-10
   And an account "Ahorros" in COP with balance 9000000.00 COP
+  And an account "Banco" in COP with balance 20000000.00 COP
   And an expense category "Ahorro Viaje"
-  When the user creates a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11, opening with 1200000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  When the user creates a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11, opening with 1200000.00 COP
   Then the fund on "Ahorro Viaje" holds 1200000.00 COP
 
 Scenario: A later change to the account leaves the fund alone
   Given today is 2026-11-10
   And an income category "Salario"
   And an account "Ahorros" in COP with balance 9000000.00 COP
+  And an account "Banco" in COP with balance 20000000.00 COP
   And an expense category "Ahorro Viaje"
-  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11, opening with 1200000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  And a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11, opening with 1200000.00 COP
   When the user registers an income of 5000000.00 COP into "Ahorros" from "Empresa" in category "Salario"
   Then the fund on "Ahorro Viaje" holds 1200000.00 COP
 ```
@@ -834,7 +842,8 @@ Scenario: An implausible target warns before the fund is created
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And an expense category "Ahorro Viaje"
-  When the user starts creating a fund on "Ahorro Viaje" targeting 10000000.00 COP by 2026-08, starting 2026-08
+  And a repeating payment of 10000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2026-08-20 in category "Ahorro Viaje", waiting for approval
+  When the user starts creating a fund on "Ahorro Viaje" funded from its obligations, starting 2026-08
   Then the user is warned it would ask 10000000.00 COP this month
   And no fund is listed
 
@@ -844,7 +853,8 @@ Scenario: The owner may go ahead and the fund asks it in full
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And an expense category "Ahorro Viaje"
-  When the user starts creating a fund on "Ahorro Viaje" targeting 10000000.00 COP by 2026-08, starting 2026-08
+  And a repeating payment of 10000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2026-08-20 in category "Ahorro Viaje", waiting for approval
+  When the user starts creating a fund on "Ahorro Viaje" funded from its obligations, starting 2026-08
   And the user goes ahead anyway
   Then the fund on "Ahorro Viaje" asks 10000000.00 COP this month
   And the money available this month is -5000000.00 COP
@@ -855,7 +865,8 @@ Scenario: A reachable target is created without a warning
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And an expense category "Ahorro Viaje"
-  When the user creates a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-08, starting 2026-08
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-08-20 in category "Ahorro Viaje", waiting for approval
+  When the user creates a fund on "Ahorro Viaje" funded from its obligations, starting 2026-08
   Then the fund on "Ahorro Viaje" asks 250000.00 COP this month
   And the user was not warned
 ```
@@ -895,14 +906,18 @@ Scenario: The assistant offers no way to create a goal
 Scenario: A fund expresses the same intention without naming an account
   Given today is 2026-11-10
   And an expense category "Ahorro Viaje"
-  When the user creates a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  When the user creates a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11
   Then the fund on "Ahorro Viaje" asks 500000.00 COP this month
   And the fund on "Ahorro Viaje" names no account
 
 Scenario: The month end no longer proposes a contribution
   Given today is 2026-11-10
   And an expense category "Ahorro Viaje"
-  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  And a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11
   When the daily run happens
   Then the outstanding list for the next 60 days is empty
 ```
@@ -1040,14 +1055,17 @@ Scenario: A fund holding nothing yet still says it is behind when the month over
   Given today is 2026-11-10
   And an account "Banco" in COP with balance 20000000.00 COP
   And an expense category "Ahorro Viaje"
-  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  And a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11
   When the user registers an expense of 2000000.00 COP from "Banco" paying "Agencia" in category "Ahorro Viaje"
   Then the fund on "Ahorro Viaje" is behind
 
 Scenario: A fund saving toward a date that nothing was spent against is on track
   Given today is 2026-11-10
   And an expense category "Ahorro Viaje"
-  And a fund on "Ahorro Viaje" targeting 3000000.00 COP by 2027-05, starting 2026-11
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-05-02 in category "Ahorro Viaje", waiting for approval
+  And a fund on "Ahorro Viaje" funded from its obligations, starting 2026-11
   Then the fund on "Ahorro Viaje" is on track
 
 Scenario: A fund whose ask was pushed up by the spending says it is behind

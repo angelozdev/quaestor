@@ -229,7 +229,11 @@ _FIXED = (
     r" starting (?P<start>" + _MONTH + r")(?P<roll>, accumulating|, resetting)?"
 )
 _AVERAGE = r" averaging the last (?P<window>\d+) months, starting (?P<start>" + _MONTH + r")"
-_OBLIGATIONS = r" funded from its obligations, starting (?P<start>" + _MONTH + r")"
+_OBLIGATIONS = (
+    r" funded from its obligations, starting (?P<start>" + _MONTH + r")"
+    r"(?:, opening with (?P<opening>" + _DEC + r") COP)?"
+    r"(?P<roll>, accumulating|, resetting)?"
+)
 _TARGET = (
     r" targeting (?P<target>" + _DEC + r") COP by (?P<by>" + _MONTH + r"),"
     r" starting (?P<start>" + _MONTH + r")"
@@ -306,9 +310,31 @@ def given_fund_average(world: World, name: str, window: str, start: str) -> None
     world.require_clean(f"creating the fund on {name!r}")
 
 
+def _obligations_spec(start: str, opening=None, roll=None) -> dict:
+    """The obligations rule, with the two options every dated rule takes.
+
+    `opening with` and the rollover suffix moved here when feature 009 withdrew
+    `target-by-date`: the seven scenarios that used the dated rule as a vehicle
+    for *what a fund does with an account, an opening balance and a rollover*
+    now ride this one, which is dated for the same reason — a charge has a
+    date — and asks the same figures.
+    """
+    spec = {"rule": "from-recurring", "start_month": start}
+    if opening is not None:
+        spec["opening_balance"] = _cents(opening)
+    if roll:
+        spec["accumulates"] = roll.strip(", ") == "accumulating"
+    return spec
+
+
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+def given_fund_from_obligations(world: World, name: str, start: str, opening, roll) -> None:
+    _make_fund(world, name, **_obligations_spec(start, opening, roll))
+    world.require_clean(f"creating the fund on {name!r}")
+
+
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS_IN_PLAIN_WORDS)
-def given_fund_from_obligations(world: World, name: str, start: str) -> None:
+def given_fund_from_obligations_plainly(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
@@ -487,8 +513,17 @@ def when_create_fund_average(world: World, mode: str, name: str, window: str, st
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
-def when_create_fund_obligations(world: World, mode: str, name: str, start: str) -> None:
-    _make_fund(world, name, rule="from-recurring", start_month=start)
+def when_create_fund_obligations(world: World, mode: str, name: str, start: str, opening, roll) -> None:
+    _make_fund(world, name, **_obligations_spec(start, opening, roll))
+
+
+@step(r'the user starts creating a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+def when_start_creating_fund_obligations(world: World, name: str, start: str, opening, roll) -> None:
+    spec = _obligations_spec(start, opening, roll)
+    world.fund_preview = world.attempt(
+        _call, "preview_fund", world.session, category_id=_category_id(world, name), **spec
+    )
+    world.pending_fund = (name, spec)
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _TARGET)
