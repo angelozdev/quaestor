@@ -686,6 +686,14 @@ There is one rate, not one per month (ADR-0031, amended 2026-07-30: *"the TRM
 is a single scalar value, not a dated series"*). Production holds
 `usd_cop = 3133.00`.
 
+*Narrowed 2026-08-08, in Phase 6.* This first also promised that a meta would
+state **its own** figure in **its own** currency with no rate set at all. It
+will not, and it should not: the rate is demanded on entry to every read path,
+always, and the app never guesses one (product ADR-038). Carving out an
+exception for one figure would make the app's behaviour depend on which
+currency the data happened to be in — the alternative ADR-038 rejected by
+name.
+
 ## AC-25: A meta that no longer exists cannot be linked or contributed to
 
 - **Priority:** medium

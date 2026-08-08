@@ -176,6 +176,7 @@ class World:
             names = " | ".join(t.__name__ for t in expected)
             raise AssertionError(f"{what}: expected {names}, got {type(err).__name__}: {err}")
         self.errors.remove(err)
+        self.last_rejection = str(err)
         return err
 
     # -------------------------------------------------------------- engine

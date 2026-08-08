@@ -260,8 +260,8 @@ Scenario: The category's fund counts the linked purchase in no way at all
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user records an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
   Then the fund on "Tecnologia" spent 0.00 COP this month
-  And the fund on "Tecnologia" holds 100000.00 COP
-  And the fund on "Tecnologia" carries 100000.00 COP
+  And the fund on "Tecnologia" holds 0.00 COP
+  And the fund on "Tecnologia" carries 100000.00 COP into next month
 
 @backend
 Scenario: A linked purchase does not read as an overspend on its category
@@ -731,13 +731,6 @@ Scenario: Without a rate the money available refuses to guess
   And a meta "Curso" of 2000.00 USD by 2027-01
   When the user views the money available this month
   Then the user is told to set the TRM
-
-@backend
-Scenario: What the meta itself asks is said in its own currency, rate or no rate
-  Given today is 2026-08-10
-  And no TRM has been set
-  And a meta "Curso" of 2000.00 USD by 2027-01
-  Then the meta "Curso" asks 333.34 USD this month
 ```
 
 ## AC-25 — A meta that no longer exists cannot be linked or contributed to

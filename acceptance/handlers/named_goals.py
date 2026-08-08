@@ -757,5 +757,5 @@ def then_meta_not_under_category(world: World, name: str) -> None:
 
 @step(r"the user is told to make a meta instead")
 def then_told_make_a_meta(world: World) -> None:
-    said = "; ".join(str(e) for e in world.errors)
+    said = getattr(world, "last_rejection", "") or "; ".join(str(e) for e in world.errors)
     assert "make a meta instead" in said, f"the refusal said {said!r}"

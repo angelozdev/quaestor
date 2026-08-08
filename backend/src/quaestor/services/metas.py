@@ -98,6 +98,7 @@ class _Month:
     ask: int
     contributed: int
     holds: int
+    released: int = 0
 
 
 def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
@@ -123,6 +124,13 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
         return _Month(opening=0, ask=0, contributed=0, holds=0)
     while True:
         amount, target = _wanted_in(agg, meta, month)
+        if opening > amount:
+            freed = opening - amount
+            if month == year_month:
+                return _Month(opening=opening, ask=0, contributed=0, holds=amount, released=freed)
+            opening = amount
+            month = next_year_month(month)
+            continue
         ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
         contributed = _contributions_in(agg, meta, month)
         holds = opening + ask + contributed
@@ -147,7 +155,7 @@ def _status(agg: MonthAggregate, meta: Meta) -> MetaStatus:
     walked = _walk(agg, meta)
     amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
-    complete = bought or walked.holds > amount
+    complete = bought or walked.released > 0
     progress = min(round(walked.holds * 100 / amount), 100) if amount else 0
     return MetaStatus(
         meta_id=meta.id,
@@ -234,12 +242,15 @@ def contributed_total(agg: MonthAggregate) -> int:
 
 
 def released_total(agg: MonthAggregate) -> int:
-    """What metas cancelled in this month handed back, in COP cents (AC-15).
+    """What came back to the month: cancellations, and amounts lowered (AC-15, AC-16).
 
     Read for that one month and never again — November must not keep giving
-    back what October already gave.
+    back what October already gave. Lowering a meta below what it already held
+    releases the difference the same way, because the owner decided he needs
+    less than he has.
     """
-    return sum(_released_by(agg, meta) for meta in _cancelled_this_month(agg))
+    lowered = sum(to_cop_cents(_walk(agg, meta).released, meta.currency, agg.trm) for meta in agg.metas)
+    return lowered + sum(_released_by(agg, meta) for meta in _cancelled_this_month(agg))
 
 
 def _cancelled_this_month(agg: MonthAggregate) -> list[Meta]:

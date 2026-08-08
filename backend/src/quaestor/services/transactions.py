@@ -187,6 +187,7 @@ def record_income(
     notes: str | None = None,
     source: str = "manual",
     new_category: str | None = None,
+    meta_id: int | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -228,6 +229,7 @@ def record_income(
         notes,
         source,
         new_category,
+        meta_id,
     )
 
 
