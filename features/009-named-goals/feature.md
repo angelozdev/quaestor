@@ -56,10 +56,19 @@ move the date.
   never as the thing keeping it.
 - **Lifecycle** follows the project's uniform soft-delete + restore stance
   (ADR-0005).
-- **Out of scope:** any change to the fund's rules, its fold, or its
-  one-per-category constraint; any coupling of a meta to an account
-  (deliberately refused — see below); any assistant surface for metas (the
-  owner's decision at CP2 — see `acs.md` AC-32 and the deviation it records).
+- **The fund's fourth rule is withdrawn.** *Added at CP3 on the owner's
+  decision, after the audits.* Saving an amount by a date is said one way, as a
+  meta; the fund keeps a fixed amount, an average, and what its category's
+  obligations add up to. Production runs zero funds on the dated rule, so
+  nothing is converted — but it is still a migration, so CHARTER §7, the
+  `migrations/**` autonomy cap and ADR-0030's fresh backup all apply.
+- **A category can be marked as one where spending is saving.** *Added at CP3.*
+  Production shows US$2.000 at a time going to `📈 Inversión`, which the savings
+  split would otherwise report as consumo.
+- **Out of scope:** the fund's fold and its one-per-category constraint; any
+  coupling of a meta to an account (deliberately refused — see below); managing
+  metas through the assistant, which may name them when it explains the money
+  available and do nothing else (`acs.md` AC-32 and the deviation it records).
 
 *The fund-rule naming problem was parked here as its own roadmap item
 (`id:fund-vs-budget-vocabulary`). It shipped on 2026-08-07 as feature 010, so
@@ -122,13 +131,21 @@ against are in `acs.md`; this is the index.
 | Buying with less than the target saved | The uncovered part leaves that month's money available | AC-12 |
 | Cancelling a meta | What it held is released into the month it is cancelled | AC-15 |
 | A meta with no date | **There are none — the date is mandatory** | AC-1, AC-20 |
-| Can the assistant create metas | **No.** The owner intends to remove the assistant | AC-32 |
-| Metas in a currency other than COP | Yes, stored in their currency, converted at the month's rate | AC-26 |
+| Can the assistant create metas | **No** — but it names them when it explains the money available, or its own breakdown stops adding up | AC-32 |
+| Metas in a currency other than COP | Yes, stored in their currency; only the peso cost converts, at the app's single rate | AC-26 |
 | How metas and funds sit together | Their own screen, `Metas`, beside `Fondos y presupuestos` | AC-5 |
 
 A seventh, raised by the owner mid-discovery and answered the same way: a meta
 is editable while it runs — *"es raro que un celular cueste EXACTAMENTE 5M"* —
 and what it asks recomputes at once (AC-11).
+
+**Five more were settled at CP3**, after spec-guardian and four adversarial
+reviews returned the first spec *not fit as contract*: the month always charges
+its instalment (the rule everything else derives from), closing is not
+cancelling (AC-39), the assistant names metas when it explains a number
+(AC-32), the fund's fourth rule is withdrawn here rather than later (AC-40),
+and a category can declare that spending in it is saving (AC-41). The evidence
+and the figures are in `acs.md`.
 
 ## Charter signals
 

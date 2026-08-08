@@ -1,10 +1,46 @@
 ---
-ac_count: 38
-high_priority_count: 25
+ac_count: 41
+high_priority_count: 29
 discovered: 2026-08-08
+revised: 2026-08-08
 ---
 
 # Acceptance criteria — 009 named-goals
+
+**Second revision, 2026-08-08.** The first 38 were approved, formalized as 87
+Gherkin scenarios, and then audited by spec-guardian and four adversarial
+reviewers at the owner's request. The verdict was unanimous: **not fit as
+contract.** Twenty-three money figures were wrong across sixteen scenarios,
+fourteen contradictions with accepted decisions were found, and the root cause
+was a question these criteria never answered — *does a meta that stops asking
+mid-month still cost that month?* The first draft answered **no** in AC-10,
+AC-12, AC-14, AC-15 and AC-16 and **yes** in AC-37 and AC-38, which cannot both
+hold because AC-37 makes them one equation.
+
+The owner settled it, and four more decisions with it. Everything below is
+revised against **the one rule** stated in the next section. What the audits
+found clean is unchanged: there was no implementation leakage in any of the 87
+scenarios, and every figure in a month where no meta stopped asking was right.
+
+**Real production data was read on 2026-08-08, with the owner's permission and
+read-only**, and it moved three of these decisions. It is quoted where it did.
+
+## The one rule
+
+Everything a meta reports derives from this. Nothing is stored.
+
+```
+ask(M)   = ⌈ (amount − held entering M) ÷ months from M through the target ⌉
+held(M)  = held entering M + ask(M) + contributions made in M
+```
+
+**The month always charges its instalment.** Contributing, completing,
+cancelling or editing part-way through a month never gives that month's
+instalment back. A contribution is charged **on top** of it, and what drops is
+every instalment *after* it.
+
+Rounding is at the **cent**, as `fund_ask_calc` already rounds: $1.000.000 over
+three months asks **$333.333,34**, never $333.334,00.
 
 Discovered 2026-08-08 (Checkpoint 2), greenfield mode. Nothing specified here
 exists: migration `0012` dropped `goal`, `goal_contribution`, `budget` and
@@ -58,7 +94,8 @@ Three of these decided an AC below:
 
 ## Decisions taken during discovery
 
-Nine questions, each put with numbers, each answered by the owner.
+Nine questions at discovery, each put with numbers, each answered by the owner.
+Five more were settled after the audits and are recorded further down.
 
 **1. The month named is a saving month.** *Celular, $8.000.000, diciembre*,
 created in August, asks **$1.600.000** — August through December, five months —
@@ -104,9 +141,15 @@ month (that money is genuinely being set aside now), linked expenses **do not**
 
 **7. A meta may be held in dollars.** The consequence was derived rather than
 asked, because only one version works: the meta is **stored in its currency**
-and what it asks is converted at the month's rate, exactly as recurring items
-already are. USD 2.000 by June asks USD 333 a month; when the rate moves from
-$4.000 to $4.400 that same instalment costs $1.466.667 instead of $1.333.334.
+and only its peso cost is converted, exactly as recurring items already are.
+
+*Corrected 2026-08-08 by the audits.* As first written this said "converted at
+**the month's** rate" and illustrated it with a rate that differed between two
+months. There is no such thing: ADR-0031's amendment of 2026-07-30 states *"the
+TRM is a single scalar value, not a dated series"* and dropped the dated
+`fx_rate` table in the same migration. Production holds one value,
+`usd_cop = 3133.00`. The decision itself is unchanged and the reason below still
+holds — only the mechanism was wrong.
 Storing the peso figure instead would land the owner in June with the thing
 more expensive and the money short.
 
@@ -182,6 +225,63 @@ which would make the sum of every category's report smaller than what was
 actually spent. Rejected on cost: a separate line per category report, which
 buys a comparison the movement list already gives when the month is opened.
 
+## What the audits changed, 2026-08-08
+
+Five decisions, each put to the owner with the figures the audits produced.
+
+**13. The month always charges its instalment.** The rule at the top of this
+file. Put to him as September: a meta entering the month holding $1.600.000,
+its own $1.600.000 instalment, and a $2.000.000 contribution on top. He chose
+$3.600.000 set aside and $1.400.000 left, over the alternative where the
+contribution replaces the instalment. One rule covers contributing, completing,
+cancelling and editing, and it is what makes the four terms add up in every
+month. Sixteen of the twenty-three wrong figures were downstream of its
+absence.
+
+**14. Closing is not cancelling.** *Cancel*, before the purchase, releases what
+the meta held into that month (AC-15). *Close*, after the purchase, releases
+nothing — that money is in the phone. The first draft had one act, and combined
+with AC-25 it made a real purchase vanish: the month got its money back while
+the expense stayed excluded from both the fund and the uncovered term.
+
+**15. The assistant names metas when it explains a number, and does nothing
+else.** `mcp/format.py`'s money-available card renders *income, less each fund,
+less uncovered, equals available*. Once metas are a term of that number, the
+card's own arithmetic stops reaching its total — and feature 003's approved
+AC-10, *"the breakdown adds up to the money available"*, is bound at the
+services layer, so it would have stayed green while the card silently lied. The
+assistant now lists metas in that breakdown, read-only. It still cannot create,
+change, contribute to or delete one.
+
+**16. The fund's fourth rule is withdrawn inside this feature, not after it.**
+The owner reversed his earlier sequencing when two pieces of evidence arrived.
+
+The first is the shipped label. `frontend/app/(app)/funds/rules.ts:33` names the
+dated rule **`Junto una cantidad para una fecha`** and explains it as *"Por
+ejemplo: $600.000 para febrero. Reparto lo que falta entre los meses que
+quedan."* That is a meta's definition, word for word, and it is only reachable
+after pressing `+ Nuevo fondo` — the owner must commit to the noun before the
+evidence appears.
+
+The second is the production database, read on 2026-08-08:
+
+```
+SELECT rule, COUNT(*) FROM fund GROUP BY rule   →   (0 rows)
+```
+
+**There is nothing to migrate.** And the rule has no case left: the owner's only
+two dated charges — `Seguro del Carro` $7.000.000 a year and `SOAT carro`
+$447.300 a year, both on `🛡️ Auto Insurance` — are already declared as recurring
+obligations, which the `from-recurring` rule covers *and renews by itself*.
+
+**17. A category can say that spending in it is saving.** Production shows
+`📈 Inversión` receiving US$2.000 four times, to *DolarApp Wallet* and *To Wealth
+Account*. That is money the owner still owns, recorded as an expense in a
+category with no fund — so AC-37 as first written would have counted it as
+**consumo** and reported roughly 0% saved in the months he saves most. A
+category now carries a mark meaning *spending here is saving*, and what it takes
+joins ahorro. One checkbox, no new record.
+
 ## The overlap this feature creates, and where it is paid
 
 Found at review, when the owner asked what a meta's relationship to a fund and
@@ -211,17 +311,17 @@ It is squeezed from both sides: for a **recurring** charge the `from-recurring`
 rule is strictly better because it renews itself, and for a purchase the meta
 is better. One case is left — a dated charge that happens once, a tuition.
 
-**The owner decided to withdraw it, and to do it as its own feature after this
-one.** The ordering is forced: the funds using the rule today have nowhere to
-go until metas exist. It also needs an ADR superseding ADR-037's four-rule
-clause, and a destructive migration on real data — CHARTER §7 requires him in
-person, `migrations/**` is capped at autonomy `low`, and ADR-0030 requires a
-fresh `just backup` first. None of that belongs inside a feature whose own
-scope says the fund's rules do not change.
+**It is withdrawn inside this feature** (decision 16, AC-40). The count that
+was going to shape the migration was taken on 2026-08-08 and came back
+`(0 rows)`: no fund in production runs the rule, so there is nothing to convert
+and no destructive step. What remains is dropping the option from the create
+form and removing two unused columns — still a migration, so CHARTER §7 and the
+`migrations/**` autonomy cap and ADR-0030's fresh backup all still apply.
 
-**The count that shapes that migration is not yet taken.** How many funds run
-`target-by-date` in the real database decides how much there is to convert; it
-does not decide whether to withdraw the rule, which is already decided.
+The ADR this feature owes therefore supersedes **two** clauses of product
+ADR-037 rather than one: *"there is no separate goals feature"* and the
+four-rule list. That is a cleaner statement than shipping two dated-saving
+mechanisms and explaining the difference in a panel.
 
 ## What this feature must not do
 
@@ -332,8 +432,22 @@ The money-available figure already subtracts what every fund asks. It now also
 subtracts what every meta asks, as its own line, so the headline number the
 owner reads already accounts for what he is saving toward.
 
-The breakdown adds up exactly: income, less what the funds ask, less what the
-metas ask, less what nothing covers.
+The breakdown adds up exactly, and it has **six** terms in a month where the
+owner acts on a meta, not four:
+
+```
+income
+  − what the funds ask
+  − what the metas ask
+  − what the owner contributed by hand this month
+  + what a cancelled meta released this month
+  − what nothing covers
+  = the money available
+```
+
+The last two are zero in an ordinary month, and a term that is zero is still
+shown when it is not — an owner who cancels a meta must be able to see where
+the money came from.
 
 ## AC-5: The metas have their own screen
 
@@ -373,17 +487,24 @@ carries into next month.
 - **Priority:** high
 - **Type:** happy-path
 
-The meta counts the linked expense and closes. The app then offers three
+The meta counts the linked expense and completes. The app then offers three
 things: close it, keep it with a new amount, or keep it with a new month.
+
+The month the purchase happens still charges the meta's instalment for that
+month — the money was being set aside right up to the day it was spent. What
+stops is every instalment after it.
 
 ## AC-9: Reaching the amount stops the asking
 
 - **Priority:** high
 - **Type:** happy-path
 
-A meta that has put by everything it needs asks for nothing further, even with
-months still to run. It does not overshoot and it does not keep taking from the
-money available.
+A meta that has put by everything it needs asks for nothing in the months that
+follow, even with months still to run. It does not overshoot and it stops
+taking from the money available.
+
+The month in which it filled up still charged its own instalment — that is what
+filled it.
 
 ## AC-10: The owner may put in extra, and it costs that month
 
@@ -394,8 +515,10 @@ money available.
 month's money available, and what the meta asks for the remaining months drops
 accordingly.
 
-$2.000.000 put into a meta holding $3.200.000 takes it to $5.200.000, costs
-that month $2.000.000, and drops the instalment from $1.600.000 to $933.334.
+A meta entering September holding $1.600.000 asks its own $1.600.000 that
+month. A $2.000.000 contribution is charged **on top**: September costs
+$3.600.000 in all, the meta holds $5.200.000, and the instalment for October
+onward drops to $933.333,34.
 
 Contributions count against the month; linked expenses do not. The money a
 purchase spends was already counted when it was saved.
@@ -408,9 +531,10 @@ purchase spends was already counted when it was saved.
 Name, amount and month are all editable at any time, and what the meta asks
 recomputes at once from what is left and the months remaining.
 
-Raising a $8.000.000 meta to $9.000.000 in October with $4.800.000 put by moves
-the instalment from $1.600.000 to $1.400.000 — $4.200.000 over the three months
-that remain.
+A $8.000.000 meta entering October holding $3.200.000 asks $1.600.000 that
+month. Raised to $9.000.000, October asks $1.933.333,34 instead — $5.800.000
+over October, November and December. The month being edited is one of the
+months that remain, and it is charged once.
 
 ## AC-12: Buying before the money is whole leaves a visible gap
 
@@ -450,8 +574,16 @@ and leaves the rest in the month. A meta never holds more than the thing costs.
 - **Type:** edge-case
 
 A meta cancelled in October holding $4.800.000 releases all $4.800.000 into
-October's money available, and stops asking. The owner is not asked where the
-money should go and it is not moved to another meta.
+October's money available, and asks nothing from November on. The owner is not
+asked where the money should go and it is not moved to another meta.
+
+October is still charged the $1.600.000 instalment that put part of that
+$4.800.000 there. On a $5.000.000 income the month reads $8.200.000, never
+$9.800.000 — releasing more than was ever taken would mint money, which is what
+product ADR-014 exists to prevent.
+
+This is **cancelling**, before the purchase. Closing a completed meta is a
+different act and releases nothing (AC-39).
 
 ## AC-16: Lowering the amount below what is saved completes the meta
 
@@ -523,10 +655,14 @@ Pointing an income at a meta is refused. So is pointing one expense at two.
 - **Priority:** medium
 - **Type:** error
 
-A meta held in a currency other than the peso needs the month's rate to state
-what it asks. With no rate set, it says that plainly rather than showing a
-wrong figure or a zero — the behaviour the app already has for every other
-converted amount (ADR-0028).
+A meta held in a currency other than the peso needs the exchange rate to state
+what it costs in pesos. With no rate set at all, it says so plainly rather than
+showing a wrong figure or a zero — the behaviour the app already has for every
+other converted amount (product ADR-038).
+
+There is one rate, not one per month (ADR-0031, amended 2026-07-30: *"the TRM
+is a single scalar value, not a dated series"*). Production holds
+`usd_cop = 3133.00`.
 
 ## AC-25: A meta that no longer exists cannot be linked or contributed to
 
@@ -542,13 +678,17 @@ category's fund.
 - **Priority:** medium
 - **Type:** cross-cutting
 
-The amount is stored in the currency it was given in, and what the meta asks is
-converted at the rate of the month being read — never at a stored rate, and
-never at the rate of the month it was created.
+The amount is stored in the currency it was given in, and every figure the meta
+reports is worked out in that currency. Only the peso cost of a month is
+converted, at the app's single exchange rate as it stands when the figure is
+read — never at a rate stored when the meta was created.
 
-USD 2.000 by June asks USD 333 a month. At $4.000 that costs $1.333.334; when
-the rate moves to $4.400 the same instalment costs $1.466.667, and the owner
-still reaches June with the full USD 2.000.
+USD 2.000 by January, opened in August, asks **USD 333,34** a month. At a rate
+of 3.133 that instalment costs $1.044.554,22; change the rate and the peso cost
+of *every* month moves with it, because there is one rate.
+
+This is not a corner case: production carries 253 movements in dollars against
+382 in pesos, a US$3.800 monthly salary and a US$2.847 quarterly bonus.
 
 ## AC-27: Every figure is derived from the month being read
 
@@ -584,7 +724,7 @@ the project's uniform lifecycle for masters (ADR-0005).
 - **Type:** cross-cutting
 
 The screen carries a *¿Cómo funciona esto?* panel in the same place every other
-screen carries one (AC-9 of feature 010), and its empty state says what a meta
+screen carries one (AC-7 of feature 010), and its empty state says what a meta
 is and offers the button that creates the first one.
 
 It has to say the thing the vocabulary work of 010 left it: a **meta** is a
@@ -597,22 +737,35 @@ category's leftover money forward; a **presupuesto** is a ceiling that resets.
 - **Type:** cross-cutting
 
 The metas appear as their own line — not folded into what the funds ask, and
-not hidden. An owner reading the breakdown can tell which of the two nouns took
-his money.
+not hidden. An owner reading the breakdown can tell which of the nouns took his
+money.
 
-## AC-32: The assistant knows nothing about metas
+Every term is named, including the two that only appear when he acts: what he
+contributed by hand, and what a cancelled meta gave back. Nothing in the
+breakdown is unattributable, in any month.
 
-- **Priority:** medium
+## AC-32: The assistant names metas when it explains a number, and does nothing else
+
+- **Priority:** high
 - **Type:** cross-cutting
 
-There is no assistant surface for metas: none can be created, listed, changed
-or contributed to through the chat, and no fund answer mentions them.
+No meta can be created, changed, contributed to or deleted through the chat.
+The assistant does one thing with metas: **when it explains the money
+available, it names them**, each with what it asks, exactly as it names each
+fund.
 
-This is the owner's decision — *"quiero quitar el asistente más adelante"* —
-recorded rather than fixed. It stands against CHARTER §4, which names the
-agent-native MCP layer as a product differentiator (product ADR-001), and
-against the REST/MCP parity ADR-0006/0009 require. While the assistant exists
-it will see funds and not metas. Removing it belongs in its own discuss.
+That single exception is not a softening of the owner's decision — it keeps an
+existing promise. The assistant's money-available answer renders *income, less
+each fund, less uncovered, equals available*. Once metas are a term of that
+number, an answer that omits them shows terms that do not reach their own
+total, breaking feature 003's approved AC-10. Worse, that AC is checked at the
+services layer, so it would keep passing while the answer lied.
+
+The rest of the decision stands — *"quiero quitar el asistente más adelante"* —
+and so does the deviation it creates: no meta can be *managed* by chat, against
+CHARTER §4, which names the agent-native MCP layer as a product differentiator
+(product ADR-001), and against the write parity ADR-0006/0009 require. Removing
+the assistant belongs in its own discuss.
 
 ## AC-33: The link changes what the month plans, never what the reports say
 
@@ -704,14 +857,19 @@ Income                        $5.000.000
                               $5.000.000  100%
 ```
 
-Nothing new is computed. It is the money-available equation already in place —
-income, less what every fund asks, less what nothing covers — split by the one
-thing that already distinguishes the two shapes: a **presupuesto** is a ceiling
-on spending and counts as consumo; a **fondo** carries its leftover forward and
-counts as ahorro; a **meta** always counts as ahorro (product ADR-042).
+Nothing new is computed. It is the money-available equation already in place,
+split by the thing that already distinguishes the shapes: a **presupuesto** is
+a ceiling on spending and counts as consumo; a **fondo** carries its leftover
+forward and counts as ahorro; a **meta** always counts as ahorro (product
+ADR-042). Spending in a category marked as saving counts as ahorro too (AC-41);
+all other spending nothing covers is consumo.
 
-The four terms sum to the income exactly, in every month. Any month can be
-read, so months can be compared.
+Contributions made by hand are ahorro in the month they are made. What a
+cancelled meta releases is not ahorro and not consumo — it returns to libre.
+
+The terms sum to the income exactly, in every month, including the months the
+owner contributes, completes, cancels or edits. Any month can be read, so
+months can be compared.
 
 ## AC-38: Ahorro is what was set aside, never what was left over
 
@@ -731,3 +889,63 @@ Explicitly rejected: measuring what was left over, which reads −104% for that
 December and reads inflated in every month before it, when the money had not
 left yet. This figure belongs to the planning half of the app, and the spending
 reports (AC-33) are where what actually left is told.
+
+## AC-39: Closing a completed meta releases nothing
+
+- **Priority:** high
+- **Type:** edge-case
+
+A meta the owner closes after its purchase gives no money back to any month.
+That money is in the thing he bought.
+
+Closing and cancelling are two acts. **Cancelling** (AC-15) happens before the
+purchase and releases what the meta held, because that money is still his and
+nothing is claiming it any more. **Closing** happens after, and releases
+nothing.
+
+If they were one act, a meta closed in January would hand January the
+$8.000.000 it held while the linked expense stayed excluded from both its
+category's fund and the uncovered term (AC-25) — a real purchase would vanish
+from the month and its money would reappear.
+
+## AC-40: The fund no longer saves toward a date
+
+- **Priority:** high
+- **Type:** happy-path
+
+A fund offers three ways to work out what it asks: a fixed amount, the average
+of what the category has cost, and what the category's obligations add up to.
+Saving an amount by a date is said one way only, as a meta.
+
+The create form no longer offers it and nothing in the app names it. An owner
+who wants to save $8.000.000 for December has exactly one path to walk.
+
+This closes an overlap the app has today: the dated rule is labelled *"Junto una
+cantidad para una fecha"* and explained as *"reparto lo que falta entre los
+meses que quedan"*, which is a meta's own definition, reachable only after
+committing to the word *fondo*.
+
+Nothing in production uses it — the count was taken on 2026-08-08 and came back
+zero — so no fund changes and no figure moves. Dated **charges** are unaffected
+and keep the rule that fits them: the owner's `Seguro del Carro` and `SOAT
+carro` are recurring obligations, and a fund reading its category's obligations
+already covers them and renews itself each cycle.
+
+## AC-41: A category can say that spending in it is saving
+
+- **Priority:** high
+- **Type:** cross-cutting
+
+A category can be marked as one where spending is saving. What is spent there
+joins **ahorro** in the month's split (AC-37) instead of consumo, and nothing
+else about it changes — it is still an expense, still in its reports, still
+counted once.
+
+Without it the split misreads the owner's largest act of saving. Production
+shows `📈 Inversión` taking US$2.000 at a time to *DolarApp Wallet* and *To
+Wealth Account*: money he still owns, recorded as an expense in a category with
+no fund, and therefore counted as consumo. The view he asked for would report
+close to nothing saved in the months he saves most.
+
+The mark is off by default, and a category that carries it needs no fund and no
+meta to be counted.
