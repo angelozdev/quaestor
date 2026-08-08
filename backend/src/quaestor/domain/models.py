@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Numeric, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Numeric, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 
@@ -167,7 +167,15 @@ class Meta(SQLModel, table=True):
     stored adjustment.
     """
 
-    __table_args__ = (UniqueConstraint("name", name="uq_meta_name"),)
+    __table_args__ = (
+        Index(
+            "uq_meta_name",
+            "name",
+            unique=True,
+            sqlite_where=text("archived = 0"),
+            postgresql_where=text("NOT archived"),
+        ),
+    )
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     name: str
     amount: Annotated[int, Field(sa_type=BigInteger)]

@@ -171,6 +171,16 @@ def statuses(agg: MonthAggregate) -> list[MetaStatus]:
     return [_status(agg, meta) for meta in agg.metas]
 
 
+def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
+    """Metas cancelled in this month, as the month still reports them.
+
+    The month they were cancelled in is the last one that names them: it
+    charged their instalment and handed back what they held, and a breakdown
+    that omitted them would not add up.
+    """
+    return [_status(agg, meta) for meta in _cancelled_this_month(agg) if meta.archived]
+
+
 def asks_total(agg: MonthAggregate) -> int:
     """What every meta asks this month, in COP cents.
 
@@ -347,8 +357,13 @@ def close_meta(session: Session, meta_id: int) -> Meta:
     return meta
 
 
-def restore_meta(session: Session, meta_id: int) -> Meta:
-    """Bring a cancelled meta back, asking again from what it holds now.
+def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
+    """Bring a cancelled meta back, starting again from nothing.
+
+    Cancelling handed everything it held back to that month (AC-15), so there
+    is nothing left to resume from: a restored meta begins at the month it is
+    restored in and fills from zero. Resuming with the old holdings would give
+    the owner the same money twice.
 
     Raises:
         NotFound: no such meta.
@@ -359,6 +374,8 @@ def restore_meta(session: Session, meta_id: int) -> Meta:
     meta.archived = False
     meta.closed = False
     meta.cancelled_month = None
+    meta.start_month = today
+    meta.stated_opening = None
     session.add(meta)
     session.commit()
     session.refresh(meta)

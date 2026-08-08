@@ -483,7 +483,7 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
         funds=lines,
         uncovered=uncovered,
         free=available_calc(income, claimed, uncovered),
-        metas=metas.statuses(agg),
+        metas=metas.statuses(agg) + metas.cancelled_statuses(agg),
         contributed=contributed,
         released=released,
     )

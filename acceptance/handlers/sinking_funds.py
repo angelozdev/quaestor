@@ -927,7 +927,11 @@ def then_breakdown_adds_up(world: World) -> None:
     lines = _attr(view, "funds", "the breakdown")
     uncovered = _attr(view, "uncovered", "the breakdown")
     free = _attr(view, "free", "the breakdown")
-    total = income - sum(getattr(line, "asks", 0) for line in lines) - uncovered
+    metas = getattr(view, "metas", [])
+    contributed = getattr(view, "contributed", 0)
+    released = getattr(view, "released", 0)
+    claimed = sum(getattr(line, "asks", 0) for line in lines) + sum(getattr(m, "asks", 0) for m in metas)
+    total = income - claimed - contributed + released - uncovered
     assert total == free, f"the breakdown adds to {total} but the money available is {free}"
 
 

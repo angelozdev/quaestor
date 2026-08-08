@@ -212,11 +212,9 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
 
     funds = list(session.exec(select(Fund)).all())
     every_meta = list(
-        session.exec(
-            select(Meta).where(or_(Meta.archived == False, Meta.cancelled_month == year_month))  # noqa: E712
-        ).all()
+        session.exec(select(Meta).where(or_(Meta.archived.is_(False), Meta.cancelled_month >= year_month))).all()
     )
-    metas = [m for m in every_meta if not m.archived]
+    metas = [m for m in every_meta if not m.archived or (m.cancelled_month or "") > year_month]
     cancelled = [m for m in every_meta if m.cancelled_month == year_month]
     contributions: dict[int, dict[str, int]] = {}
     for meta_id, month, total in session.exec(

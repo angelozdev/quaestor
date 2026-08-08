@@ -38,9 +38,31 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 UNIQUE_MONTH = "uq_meta_amendment_month"
+NAME_INDEX = "uq_meta_name"
+
+
+def _free_the_name_of_a_cancelled_meta() -> None:
+    """Make the name unique among LIVE metas only (AC-22).
+
+    Revision 0013 made it unique outright, which contradicts the criterion it
+    was meant to enforce: a cancelled meta's name is free to reuse, and the
+    service already refuses only against live ones. The constraint was the
+    stricter of the two and won.
+    """
+    bind = op.get_bind()
+    where = "archived = 0" if bind.dialect.name == "sqlite" else "NOT archived"
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("meta") as batch_op:
+            batch_op.drop_constraint(NAME_INDEX, type_="unique")
+    else:
+        op.drop_constraint(NAME_INDEX, "meta", type_="unique")
+    op.create_index(
+        NAME_INDEX, "meta", ["name"], unique=True, postgresql_where=sa.text(where), sqlite_where=sa.text(where)
+    )
 
 
 def upgrade() -> None:
+    _free_the_name_of_a_cancelled_meta()
     op.create_table(
         "meta_amendment",
         sa.Column("id", sa.Integer(), nullable=False),
@@ -57,3 +79,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("meta_amendment")
+    bind = op.get_bind()
+    op.drop_index(NAME_INDEX, table_name="meta")
+    if bind.dialect.name == "sqlite":
+        with op.batch_alter_table("meta") as batch_op:
+            batch_op.create_unique_constraint(NAME_INDEX, ["name"])
+    else:
+        op.create_unique_constraint(NAME_INDEX, "meta", ["name"])

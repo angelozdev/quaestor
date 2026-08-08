@@ -260,8 +260,8 @@ Scenario: The category's fund counts the linked purchase in no way at all
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user records an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
   Then the fund on "Tecnologia" spent 0.00 COP this month
-  And the fund on "Tecnologia" holds 100000.00 COP this month
-  And the fund on "Tecnologia" carries 100000.00 COP into next month
+  And the fund on "Tecnologia" holds 100000.00 COP
+  And the fund on "Tecnologia" carries 100000.00 COP
 
 @backend
 Scenario: A linked purchase does not read as an overspend on its category

@@ -517,7 +517,7 @@ def when_close(world: World, name: str) -> None:
 @step(r'the user restores the meta "(?P<name>[^"]+)"')
 def when_restore(world: World, name: str) -> None:
     try:
-        service.restore_meta(world.session, _meta_id(world, name))
+        service.restore_meta(world.session, _meta_id(world, name), today=_today(world))
     except _REJECTED as exc:
         world.session.rollback()
         world.restore_refusal = str(exc)
@@ -527,7 +527,7 @@ def when_restore(world: World, name: str) -> None:
 def when_restore_cancelled_in(world: World, month: str) -> None:
     row = world.session.exec(_select(_Meta).where(_Meta.cancelled_month == month)).first()
     try:
-        service.restore_meta(world.session, row.id)
+        service.restore_meta(world.session, row.id, today=_today(world))
     except _REJECTED as exc:
         world.session.rollback()
         world.restore_refusal = str(exc)
@@ -551,7 +551,7 @@ def then_not_listed(world: World, name: str) -> None:
 
 @step(r'the meta "(?P<name>[^"]+)" can be restored')
 def then_can_be_restored(world: World, name: str) -> None:
-    service.restore_meta(world.session, _meta_id(world, name))
+    service.restore_meta(world.session, _meta_id(world, name), today=_today(world))
     agg = funds_service._month_view(world.session, _today(world))
     assert name in [f.name for f in service.statuses(agg)], f"the meta {name!r} did not come back"
 
@@ -708,3 +708,54 @@ def then_breakdown_funds(world: World, amount: str) -> None:
     assert view is not None, "nothing opened the money available into its breakdown"
     asking = sum(line.asks for line in view.funds)
     assert asking == _cents(amount), f"the funds ask {asking}, expected {_cents(amount)}"
+
+
+# ------------------------------------------------------------- the report
+
+
+def _month_number(world: World):
+    """The month's number, loaded fresh — the report step opens its own view."""
+    return funds_service.month_available(funds_service._month_view(world.session, _today(world)))
+
+
+@step(r'that expense is still linked to the meta "(?P<name>[^"]+)"')
+def then_still_linked(world: World, name: str) -> None:
+    tx = transactions.get_transaction(world.session, world.last_linked_id)
+    assert tx.meta_id == _meta_id(world, name), f"that expense points at {tx.meta_id}, expected {name!r}"
+
+
+@step(rf'the report lists the meta "(?P<name>[^"]+)" asking (?P<amount>{_DEC}) COP')
+def then_report_lists_meta(world: World, name: str, amount: str) -> None:
+    view = _month_number(world)
+    found = next((m for m in view.metas if m.name == name), None)
+    assert found is not None, f"the report lists no meta named {name!r}"
+    assert found.asks == _cents(amount), f"the report lists {name!r} asking {found.asks}"
+
+
+@step(rf'the report lists "(?P<name>[^"]+)" asking (?P<amount>{_DEC}) COP')
+def then_report_lists_fund(world: World, name: str, amount: str) -> None:
+    view = _month_number(world)
+    found = next((f for f in view.funds if f.name == name), None)
+    assert found is not None, f"the report lists no fund on {name!r}"
+    assert found.asks == _cents(amount), f"the report lists {name!r} asking {found.asks}"
+
+
+@step(rf"the report states the month asks (?P<amount>{_DEC}) COP in all")
+def then_report_total(world: World, amount: str) -> None:
+    agg = funds_service._month_view(world.session, _today(world))
+    view = funds_service.month_available(agg)
+    total = sum(f.asks for f in view.funds) + service.asks_total(agg)
+    assert total == _cents(amount), f"the month asks {total} in all, expected {_cents(amount)}"
+
+
+@step(r'the report lists the meta "(?P<name>[^"]+)" under the metas, not under a category')
+def then_meta_not_under_category(world: World, name: str) -> None:
+    view = _month_number(world)
+    assert any(m.name == name for m in view.metas), f"the report lists no meta named {name!r}"
+    assert not any(f.name == name for f in view.funds), f"{name!r} is listed among the funds"
+
+
+@step(r"the user is told to make a meta instead")
+def then_told_make_a_meta(world: World) -> None:
+    said = "; ".join(str(e) for e in world.errors)
+    assert "make a meta instead" in said, f"the refusal said {said!r}"
