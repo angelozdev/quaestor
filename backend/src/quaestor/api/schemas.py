@@ -482,3 +482,80 @@ class MonthlyReportOut(BaseModel):
     pending: list[str]
     available: MonthAvailableOut
     markdown: str
+
+
+class MetaCreate(BaseModel):
+    name: str
+    amount: int
+    target_month: str
+    currency: str = "COP"
+    stated_opening: int | None = None
+
+
+class MetaUpdate(BaseModel):
+    name: str | None = None
+    amount: int | None = None
+    target_month: str | None = None
+
+
+class MetaContributionIn(BaseModel):
+    amount: int
+
+
+class MetaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    amount: int
+    currency: str
+    start_month: str
+    target_month: str
+    closed: bool
+    archived: bool
+
+
+class MetaStatusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_id: int
+    name: str
+    year_month: str
+    amount: int
+    currency: str
+    target_month: str
+    asks: int
+    holds: int
+    contributed: int
+    progress: int
+    complete: bool
+    closed: bool
+    waiting: bool
+
+
+class MetaContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    meta_id: int
+    year_month: str
+    amount: int
+
+
+class MetaPreviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    asks: int
+    months_left: int
+    over_the_month: bool
+
+
+class MonthSplitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    income: int
+    consumo: int
+    ahorro: int
+    libre: int
+    ahorro_share: int

@@ -24,6 +24,7 @@ from .routers import (
     category_groups,
     funds,
     fx,
+    metas,
     planned,
     recurring,
     reports,
@@ -114,6 +115,7 @@ def _include_routers(app: FastAPI) -> None:
     app.include_router(tags.router, prefix="/api", dependencies=protected)
     app.include_router(fx.router, prefix="/api", dependencies=protected)
     app.include_router(funds.router, prefix="/api", dependencies=protected)
+    app.include_router(metas.router, prefix="/api", dependencies=protected)
     app.include_router(settings.router, prefix="/api", dependencies=protected)
     app.include_router(transactions.router, prefix="/api", dependencies=protected)
     app.include_router(recurring.router, prefix="/api", dependencies=protected)

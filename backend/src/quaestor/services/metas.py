@@ -189,6 +189,22 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     return [_status(agg, meta) for meta in _cancelled_this_month(agg) if meta.archived]
 
 
+def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
+    """Every live meta, as the month reports it.
+
+    Ordered the way the screen needs them (AC-44): the ones waiting on an
+    answer first — completed and not yet closed, then past their month — and
+    the ones still running below, nearest month first.
+
+    Raises:
+        ValidationError: malformed year_month.
+        MissingRate: no TRM is set.
+    """
+    _validate_year_month(year_month)
+    found = statuses(_month_view(session, year_month))
+    return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
+
+
 def asks_total(agg: MonthAggregate) -> int:
     """What every meta asks this month, in COP cents.
 
