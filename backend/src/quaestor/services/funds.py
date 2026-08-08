@@ -51,6 +51,7 @@ from ..domain.rules import (
     year_month_of,
 )
 from . import fx as _fx
+from . import metas
 from .month_aggregate import MonthAggregate, load_month_aggregate
 
 _DATED_RULES = (FundRule.from_recurring, FundRule.target_by_date)
@@ -469,12 +470,15 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
     lines = [_status(agg, fund, walked[fund.id]) for fund in agg.funds]
     income = _income(agg)
     uncovered = _uncovered(agg, walked)
+    claimed = sum(line.asks for line in lines) + metas.asks_total(agg) + metas.contributed_total(agg)
     return MonthAvailable(
         year_month=year_month,
         income=income,
         funds=lines,
         uncovered=uncovered,
-        free=available_calc(income, sum(line.asks for line in lines), uncovered),
+        free=available_calc(income, claimed, uncovered),
+        metas=metas.statuses(agg),
+        contributed=metas.contributed_total(agg),
     )
 
 

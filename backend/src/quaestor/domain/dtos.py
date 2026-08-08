@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -53,11 +53,59 @@ class FundStatus:
 
 
 @dataclass(frozen=True)
+class MetaStatus:
+    """What one meta asks and holds for one month (ADR-0046).
+
+    `holds` is what it opened the month with plus what it asks plus what the
+    owner contributed by hand in it. `progress` is that against the amount,
+    capped at one hundred.
+
+    `waiting` says the target month has passed with no purchase linked: the
+    meta asks nothing and is holding still until the owner links, closes or
+    moves it (AC-19).
+    """
+
+    meta_id: int
+    name: str
+    year_month: str
+    amount: int
+    currency: str
+    target_month: str
+    asks: int
+    holds: int
+    contributed: int
+    progress: int
+    complete: bool
+    closed: bool
+    waiting: bool
+
+
+@dataclass(frozen=True)
+class MonthSplit:
+    """What share of a month is spent, set aside, or left (AC-37).
+
+    `consumo + ahorro + libre == income` in every month, including the ones the
+    owner contributes, cancels or edits in — which is why `libre` is a
+    subtraction and never a second sum.
+    """
+
+    year_month: str
+    income: int
+    consumo: int
+    ahorro: int
+    libre: int
+    ahorro_share: int
+
+
+@dataclass(frozen=True)
 class MonthAvailable:
     """The money available for one month, opened into the terms that make it.
 
-    `income − Σ funds asks − uncovered = free` holds exactly, which is why
-    `uncovered` is one term and not three (AC-10, ADR-0044).
+    `income − Σ funds asks − Σ metas asks − contributed + released − uncovered
+    = free` holds exactly. `uncovered` is one term and not three (AC-10,
+    ADR-0044); `contributed` and `released` are their own because a month the
+    owner acted in must say so rather than fold it into another term
+    (ADR-0046).
     """
 
     year_month: str
@@ -65,6 +113,9 @@ class MonthAvailable:
     funds: list[FundStatus]
     uncovered: int
     free: int
+    metas: list[MetaStatus] = field(default_factory=list)
+    contributed: int = 0
+    released: int = 0
 
 
 @dataclass(frozen=True)

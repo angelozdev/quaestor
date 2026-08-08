@@ -135,6 +135,50 @@ def fund_ask_calc(missing: int, months_left: int) -> int:
     return _ceil_div(missing, max(months_left, 1))
 
 
+def months_to_meta(year_month: str, target_month: str) -> int:
+    """Months, counting this one and the target, left to fill a meta (ADR-0046).
+
+    Deliberately one more than `months_to_fund` gives a charge in the same
+    month, and the difference is the whole distinction between the two nouns: a
+    bill lands on the first of its month whether or not the owner is ready, so
+    the money is whole the month before; a purchase happens when he decides, so
+    the month he names is a month he saves in.
+
+    Never below one, so a target already behind still asks for what is missing
+    rather than dividing by zero.
+    """
+    return max(months_between(year_month, target_month) + 1, 1)
+
+
+def meta_ask_calc(amount: int, held: int, months_left: int) -> int:
+    """What a meta asks this month: what is missing over the months left.
+
+    Rounded up at the cent, so the last month never comes up short. Zero only
+    because nothing is missing — never because completing, cancelling or
+    contributing waived it (ADR-0046).
+    """
+    return fund_ask_calc(amount - held, months_left)
+
+
+def meta_uncovered_calc(spent: int, opening: int, ask: int) -> int:
+    """What a purchase cost past everything the meta had for the month.
+
+    The same shape as `uncovered_excess_calc`, and for the same reason: only
+    what goes past what was actually put by leaves the money available, never
+    the whole purchase (AC-12).
+    """
+    return uncovered_excess_calc(spent, opening, ask)
+
+
+def split_calc(consumo: int, ahorro: int, income: int) -> int:
+    """What the month leaves free once consumo and ahorro are named (AC-37).
+
+    One subtraction rather than a second sum, so `consumo + ahorro + libre`
+    equals the income by construction and cannot drift.
+    """
+    return income - consumo - ahorro
+
+
 def monthly_average_calc(spent: int, months_with_data: int) -> int:
     """A category's monthly average over the months the app holds data for.
 

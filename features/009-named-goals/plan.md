@@ -138,9 +138,13 @@ Small, last, and separate so the deviation stays visible.
 ## Performance budgets
 
 - **The month's read path stays bounded.** ADR-0028's statement count rises by
-  exactly **two** — the month's metas, and the contributions dated in it. No
-  new history query: `meta_id` rides on movements the aggregate already loads.
-  A test asserts the statement count rather than trusting the reading.
+  **three** — the live metas, the contributions dated on or before the month,
+  and the posted purchases carrying a `meta_id`. Aggregate loads go from 10 to
+  13, asserted by `test_load_issues_bounded_query_count` rather than trusted.
+
+  *Corrected in Phase 1.* This plan first said two; the third is the linked
+  purchases, and the window the aggregate already loads cannot supply them —
+  it holds two months, and a purchase four months back still completes a meta.
 - **The meta fold is arithmetic, not queries.** Walking a meta from its start
   month to the month asked about issues nothing; it is the same shape as
   `_walk`.

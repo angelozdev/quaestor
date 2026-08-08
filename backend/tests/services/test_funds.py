@@ -657,7 +657,7 @@ def test_a_fund_reading_stays_bounded_no_matter_how_many_months_it_folds(engine_
         _spend(session, cat, 1_000_00, date(2026, month, 10))
     with count_queries(engine) as counted:
         funds.fund_status(session, fund.id, "2026-12")
-    assert counted.count <= 13, f"fund_status issued {counted.count} queries"
+    assert counted.count <= 16, f"fund_status issued {counted.count} queries"
 
 
 # -------------------------------------------------------- the month's number
@@ -897,7 +897,7 @@ def test_the_month_number_stays_bounded_however_many_funds_it_walks(engine_sessi
         _spend(session, cat, 10_000_00, date(2026, 6, 10))
     with count_queries(engine) as counted:
         funds.available(session, "2026-11")
-    assert counted.count <= 13, f"available issued {counted.count} queries"
+    assert counted.count <= 16, f"available issued {counted.count} queries"
 
 
 # ---------------------------------------------- boundaries the mutation sweep found

@@ -120,10 +120,17 @@ the account, which is the clause this preserves rather than breaks.
 
 ### The read path
 
-The fold gains one query for the metas of the month and one for the
-contributions dated in it. ADR-0028's bound rises by two statements. No new
-history query: `meta_id` rides on the movements the aggregate already loads, and
-the meta fold walks months arithmetically the way `_walk` already does.
+The fold gains three queries: the live metas, the contributions dated on or
+before the month, and the posted purchases carrying a `meta_id`. **ADR-0028's
+bound rises by three statements**, from 10 aggregate loads to 13.
+
+*Corrected during implementation.* This ADR first said two. The third is the
+linked purchases, and it is not avoidable: the aggregate's transaction window
+holds only the report month and the one before it, while a meta must know
+whether it was ever bought — a purchase four months back still completes it.
+The row count is bounded by the number of linked purchases, which is at most
+one per meta. `test_load_issues_bounded_query_count` is what caught the wrong
+figure.
 
 ### Currency
 

@@ -26,6 +26,8 @@ from ..domain.models import (
     Category,
     CategoryGroup,
     Fund,
+    Meta,
+    MetaContribution,
     OccurrenceStatus,
     RecurringItem,
     RecurringOccurrence,
@@ -55,6 +57,9 @@ class MonthAggregate:
     active_recurring: list[RecurringItem]
     month_planned_expense: list[Transaction]
     funds: list[Fund]
+    metas: list[Meta]
+    contributions: dict[int, dict[str, int]]
+    linked: list[Transaction]
     first_movement_month: str | None
     skipped_turns: frozenset[tuple[int, Date]]
     _window_expense: list[Transaction]
@@ -101,6 +106,10 @@ class MonthAggregate:
                 continue
             kept.append(tx)
         return kept
+
+    def linked_to(self, meta_id: int) -> list[Transaction]:
+        """Posted purchases pointed at one meta, on or before this month."""
+        return [tx for tx in self.linked if tx.meta_id == meta_id]
 
     def month_expense(self) -> list[Transaction]:
         return self.posted_in_month(self.year_month, TxType.expense)
@@ -184,6 +193,27 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     )
 
     funds = list(session.exec(select(Fund)).all())
+    metas = list(session.exec(select(Meta).where(Meta.archived == False)).all())  # noqa: E712
+    contributions: dict[int, dict[str, int]] = {}
+    for meta_id, month, total in session.exec(
+        select(
+            MetaContribution.meta_id,
+            MetaContribution.year_month,
+            func.sum(MetaContribution.amount),
+        )
+        .where(MetaContribution.year_month <= year_month)
+        .group_by(MetaContribution.meta_id, MetaContribution.year_month)
+    ).all():
+        contributions.setdefault(meta_id, {})[month] = int(total)
+    linked = list(
+        session.exec(
+            select(Transaction).where(
+                Transaction.meta_id.is_not(None),
+                Transaction.status == TxStatus.posted,
+                Transaction.date <= end,
+            )
+        ).all()
+    )
     first_movement = session.exec(
         select(Transaction.date).where(Transaction.status == TxStatus.posted).order_by(Transaction.date).limit(1)
     ).first()
@@ -205,6 +235,9 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         active_recurring=active_recurring,
         month_planned_expense=month_planned_expense,
         funds=funds,
+        metas=metas,
+        contributions=contributions,
+        linked=linked,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
         skipped_turns=skipped_turns,
         _window_expense=window_expense,

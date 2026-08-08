@@ -1419,7 +1419,7 @@ Scenario: The owner may go ahead anyway
   And an account "Banco" in COP with balance 20000000.00 COP
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   And the user was warned a meta of 80000000.00 COP by 2026-09 would ask 40000000.00 COP a month
-  When the user goes ahead anyway
+  When the user creates the meta anyway, naming it "Casa"
   Then the meta "Casa" wants 80000000.00 COP by 2026-09
 
 Scenario: The create button says what it is about to do
