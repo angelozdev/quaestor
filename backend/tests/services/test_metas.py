@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import Account, AccountType, MetaAmendment
-from quaestor.services import fx, metas, transactions
+from quaestor.services import fx, metas, planned, transactions
 from quaestor.services.month_aggregate import load_month
 from sqlmodel import select
 
@@ -44,7 +44,7 @@ def _account(session):
     return account
 
 
-def _buy(session, meta, amount, on):
+def _buy(session, meta, amount, on, category="Compras"):
     return transactions.record_expense(
         session,
         _account(session).id,
@@ -52,7 +52,7 @@ def _buy(session, meta, amount, on):
         "COP",
         on,
         "Compra",
-        new_category="Compras",
+        new_category=category,
         meta_id=meta.id,
     )
 
@@ -442,3 +442,46 @@ def test_a_preview_with_nothing_already_put_by_asks_for_the_whole_thing(session)
     preview = metas.preview_meta(amount=8_000_000, target_month="2026-12", today="2026-08", income=0)
 
     assert preview.asks == 1_600_000
+
+
+def test_the_first_purchase_is_the_one_that_stops_the_meta(session):
+    """A second linked movement arrives after the meta already finished (AC-28).
+
+    The month a meta stops is the month the thing was bought, and pointing
+    another movement at it later — an accessory, a correction — cannot move
+    that forward. Read from November, where the fold has seen both: stopping
+    at the later one would have let the meta collect two more instalments it
+    no longer had a reason to ask for.
+    """
+    moto = _meta(session, amount=2_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 500_000, date(2026, 8, 10))
+    _buy(session, moto, 500_000, date(2026, 10, 10), category="Accesorios")
+
+    august = _reported(session, "2026-08", "Moto")
+    november = _reported(session, "2026-11", "Moto")
+    assert (november.asks, november.holds) == (0, august.holds)
+
+
+def test_a_purchase_owed_but_not_yet_paid_stops_the_meta_too(session):
+    """The month already charged the shortfall, so charging an instalment after it would charge twice.
+
+    A planned purchase is netted against what the meta holds in the month it
+    is due (AC-43), which is the same arithmetic a posted one gets. What it
+    does not do is complete the meta — only money that left does that.
+    """
+    moto = _meta(session, amount=2_000_000, today="2026-06", target="2026-12")
+    planned.plan_payment(
+        session,
+        payee="Compra",
+        amount=2_000_000,
+        currency="COP",
+        due_date=date(2026, 8, 10),
+        account_id=_account(session).id,
+        category_id=None,
+        new_category="Compras",
+        meta_id=moto.id,
+    )
+
+    september = _reported(session, "2026-09", "Moto")
+    assert september.asks == 0
+    assert september.complete is False
