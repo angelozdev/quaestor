@@ -699,4 +699,5 @@ def test_a_meta_lowered_by_one_centavo_below_what_it_holds_has_finished(session)
 
     metas.close_meta(session, moto.id, year_month="2026-12")
     assert [m.name for m in metas.list_metas(session, "2026-11")] == ["Moto"]
-    assert [m.name for m in metas.list_metas(session, "2026-12")] == []
+    for after in ("2026-12", "2027-01"):
+        assert [m.name for m in metas.list_metas(session, after)] == []

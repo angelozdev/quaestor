@@ -49,16 +49,16 @@ CP5 independently; it does not launder CP6.
 ## Where the code stands
 
 ```
-009        125 scenarios · unbound 0
+009        137 scenarios · unbound 0
 010        unbound 0
-acceptance 472 passed
-backend    1079 passed
+acceptance 484 passed
+backend    1082 passed
 vitest     55 files · 421 passed
 lint       exit 0 · Contracts 2 kept, 0 broken
 knip       0 findings
 dup        43 clones · 1.96%
 month load 13 bounded queries
-mutation   metas.py MUTATION_PCT · rules.py 98.4% · MUTATION_ADJ
+mutation   metas.py 95.9% · rules.py 98.4% · both 100% adjusted
 ```
 
 ## What the green suite did not catch
