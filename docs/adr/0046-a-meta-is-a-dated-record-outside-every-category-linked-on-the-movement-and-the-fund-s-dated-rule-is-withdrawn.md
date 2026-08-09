@@ -139,6 +139,15 @@ holds, and stores what the owner did to it.** Contributions, cancellations and
 amendments are the three acts. `test_load_issues_bounded_query_count` caught
 every wrong figure, which is why the bound is asserted rather than trusted.
 
+**Correction, 2026-08-09 — the bound is 13, not 14.** The four additions above
+stand and none was removed. What changed is elsewhere: refine (checkpoint 6)
+found the month's expense window and its income window issued two statements
+over the same two months, and merged them into one partitioned in memory. That
+is a saving on the pre-existing ten, not on the four this ADR adds. Aggregate
+loads go **10 → 13**; `BOUNDED_LOADS` in `test_month_aggregate.py` asserts it.
+The figures left above are what this decision claimed when it was taken, and
+are kept so the correction has something to correct.
+
 ### Currency
 
 A meta is held in its own currency and every figure it reports is in that
@@ -196,7 +205,10 @@ the rule list instead of the noun list.
 - **ADR-0044 is amended**, not superseded: its fold and its
   everything-adds-up property stand; its breakdown gains two terms and its
   `uncovered` clause gains the meta-netting rule above.
-- **ADR-0028's statement bound rises by two.**
+- **ADR-0028's statement bound rises from 10 to 13.** This bullet said *"by
+  two"* — a leftover from this ADR's first draft that survived the correction
+  in *The read path* and contradicted it. The meta fold adds four statements;
+  refine merged one pair of pre-existing window queries back out. Net: three.
 - **ADR-0005 is relied on** for the meta's lifecycle. Note it differs from the
   fund deliberately: ADR-0043 hard-deletes a fund because *"an archived fund
   would still have to answer what do you ask this month"*. An archived meta

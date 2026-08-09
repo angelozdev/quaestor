@@ -148,6 +148,14 @@ Small, last, and separate so the deviation stays visible.
   owner did to it** — contributions, cancellations, amendments. That is the
   boundary of ADR-0043's derive-everything stance, found by building against
   it.
+
+  **Settled at 13, not 14 (2026-08-09, after CP6.)** The four additions above
+  all landed. Refine then merged the month's expense window and its income
+  window — two statements over the same two months — into one, which is a
+  saving on the pre-existing ten rather than on the four this plan budgeted.
+  `BOUNDED_LOADS = 13` in `test_month_aggregate.py` is the asserted figure; the
+  budget above is what was planned, kept as written. See ADR-0046, *The read
+  path*.
 - **The meta fold is arithmetic, not queries.** Walking a meta from its start
   month to the month asked about issues nothing; it is the same shape as
   `_walk`.
