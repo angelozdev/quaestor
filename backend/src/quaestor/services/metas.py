@@ -165,19 +165,36 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
     return _Month(opening=opening, ask=ask, holds=opening + ask + contributed)
 
 
-def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
+@dataclass(frozen=True)
+class _Walked:
+    """A meta folded to one month, and whether it had finished by the end of it.
+
+    Two acts finish a meta and neither is a field on it: the purchase, which the
+    aggregate carries, and lowering the amount below what it already held
+    (AC-16), which only exists as a released month inside the fold. Both are
+    answered by the one walk that produced the figures, so nothing folds twice.
+    """
+
+    month: _Month
+    finished: bool
+
+
+def _walk(agg: MonthAggregate, meta: Meta) -> _Walked:
     """Fold the meta forward to the month this aggregate holds (ADR-0046).
 
     What a month holds is what the next one opens with — one rule, one line,
     rather than one per branch of the month.
     """
     if agg.year_month < meta.start_month:
-        return _Month(opening=0, ask=0, holds=0)
+        return _Walked(_Month(opening=0, ask=0, holds=0), finished=False)
+    finished = _bought_in(agg, meta) is not None
     month, opening = meta.start_month, meta.stated_opening or 0
     while month < agg.year_month:
-        opening = _month_of(agg, meta, month, opening).holds
-        month = next_year_month(month)
-    return _month_of(agg, meta, month, opening)
+        step = _month_of(agg, meta, month, opening)
+        finished = finished or step.released > 0
+        opening, month = step.holds, next_year_month(month)
+    last = _month_of(agg, meta, month, opening)
+    return _Walked(last, finished or last.released > 0)
 
 
 def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaStatus:
@@ -189,7 +206,7 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
     AC-17 keeps it running while its sibling completes. What a full meta stops
     doing is asking, and that falls out of the arithmetic rather than a flag.
     """
-    walked = _walk(agg, meta)
+    walked = _walk(agg, meta).month
     amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
     complete = bought or walked.released > 0
@@ -234,27 +251,6 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
 
 
-def _finished_by_now(agg: MonthAggregate, meta: Meta) -> bool:
-    """Whether the meta had finished by the month this aggregate holds.
-
-    Two acts finish one: the purchase, and lowering the amount below what it
-    already held (AC-16), which frees the excess and needs no purchase at all.
-    The first is a month the aggregate carries; the second only shows up in the
-    fold, so the fold is walked for it.
-    """
-    if _bought_in(agg, meta) is not None:
-        return True
-    if agg.year_month < meta.start_month:
-        return False
-    month, opening = meta.start_month, meta.stated_opening or 0
-    while month <= agg.year_month:
-        step = _month_of(agg, meta, month, opening)
-        if step.released > 0:
-            return True
-        opening, month = step.holds, next_year_month(month)
-    return False
-
-
 def _gone_from_the_list(agg: MonthAggregate, meta: Meta) -> bool:
     """Whether a closed meta has left the screen by the month being read.
 
@@ -263,7 +259,7 @@ def _gone_from_the_list(agg: MonthAggregate, meta: Meta) -> bool:
     every figure the screen shows is worked out from the month being read
     (AC-27).
     """
-    return meta.closed and _finished_by_now(agg, meta)
+    return meta.closed and _walk(agg, meta).finished
 
 
 def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
@@ -309,7 +305,7 @@ def asks_total(agg: MonthAggregate) -> int:
 
 
 def _ask_in_cop(agg: MonthAggregate, meta: Meta) -> int:
-    return to_cop_cents(_walk(agg, meta).ask, meta.currency, agg.trm)
+    return to_cop_cents(_walk(agg, meta).month.ask, meta.currency, agg.trm)
 
 
 def uncovered_total(agg: MonthAggregate) -> int:
@@ -331,7 +327,7 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta) -> int:
     )
     if not spent:
         return 0
-    walked = _walk(agg, meta)
+    walked = _walk(agg, meta).month
     return to_cop_cents(
         meta_uncovered_calc(_to_meta_currency(agg, meta, spent), walked.opening, walked.ask),
         meta.currency,
@@ -366,7 +362,7 @@ def released_total(agg: MonthAggregate) -> int:
     releases the difference the same way, because the owner decided he needs
     less than he has.
     """
-    lowered = sum(to_cop_cents(_walk(agg, meta).released, meta.currency, agg.trm) for meta in agg.metas)
+    lowered = sum(to_cop_cents(_walk(agg, meta).month.released, meta.currency, agg.trm) for meta in agg.metas)
     return lowered + sum(_released_by(agg, meta) for meta in _cancelled_this_month(agg))
 
 
@@ -375,7 +371,7 @@ def _cancelled_this_month(agg: MonthAggregate) -> list[Meta]:
 
 
 def _released_by(agg: MonthAggregate, meta: Meta) -> int:
-    return to_cop_cents(_walk(agg, meta).holds, meta.currency, agg.trm)
+    return to_cop_cents(_walk(agg, meta).month.holds, meta.currency, agg.trm)
 
 
 def cancelled_asks_total(agg: MonthAggregate) -> int:
@@ -417,7 +413,7 @@ def _room_left(session: Session, meta: Meta, year_month: str) -> int:
     if _finished_before(agg, meta, year_month):
         return 0
     wanted, _ = _wanted_in(agg, meta, year_month)
-    return wanted - _walk(agg, meta).holds
+    return wanted - _walk(agg, meta).month.holds
 
 
 def remove_contribution(session: Session, contribution_id: int) -> None:
