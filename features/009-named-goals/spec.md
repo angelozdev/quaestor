@@ -307,6 +307,23 @@ Scenario: Completing offers three things to do next
   Then the screen offers to close "Celular"
   And the screen offers to keep "Celular" with a new amount
   And the screen offers to keep "Celular" with a new month
+@backend
+Scenario: A meta nobody kept on asks nothing after its purchase
+  Given today is 2026-11-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a recorded expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-10-12
+  Then the meta "Celular" asks 0.00 COP this month
+  And the meta "Celular" holds 2000000.00 COP this month
+
+@backend
+Scenario: A meta kept on with a new amount asks again
+  Given today is 2026-11-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a recorded expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-10-12
+  When the user sets the meta "Celular" to want 8000000.00 COP
+  Then the meta "Celular" asks 3000000.00 COP this month
 ```
 
 ## AC-9 — Reaching the amount stops the asking
@@ -481,6 +498,15 @@ Scenario: The rest stays in the month
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user contributes 5000000.00 COP to "Celular"
   Then the money available this month is 200000.00 COP
+@backend
+Scenario: A meta that has finished takes no more money
+  Given today is 2026-11-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a recorded expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-10-12
+  When the user contributes 2000000.00 COP to "Celular"
+  Then the contribution is rejected
+  And the meta "Celular" holds 2000000.00 COP this month
 ```
 
 ## AC-15 — Cancelling gives back what was put by, in the month it is cancelled
@@ -514,6 +540,19 @@ Scenario: Nothing is carried from a cancelled meta into another one
   When the user cancels the meta "Celular"
   Then the meta "Televisor" holds 3000000.00 COP this month
   And the meta "Televisor" asks 1000000.00 COP this month
+@backend
+Scenario: Cancelling gives back what the meta held and not a peso more
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 2000000.00 COP to "Celular" made 2026-10
+  When the user cancels the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows 2000000.00 COP contributed by hand
+  And the breakdown shows 6800000.00 COP released by a cancelled meta
+  And the money available this month is 8200000.00 COP
 ```
 
 ## AC-16 — Lowering the amount below what is saved completes the meta
@@ -530,6 +569,13 @@ Scenario: The meta completes and the excess is released into the month
   Then the meta "Celular" is complete
   And the meta "Celular" asks 0.00 COP this month
   And the money available this month is 5200000.00 COP
+@backend
+Scenario: A meta closed after being lowered leaves the screen too
+  Given today is 2026-11-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user sets the meta "Celular" to want 3000000.00 COP
+  And the user closes the meta "Celular"
+  Then the meta "Celular" is not listed
 ```
 
 ## AC-17 — Several metas run at once without interfering
@@ -804,6 +850,16 @@ Scenario: The dollars still arrive whole
   And a meta "Curso" of 2000.00 USD by 2027-01, opened 2026-08
   Then the meta "Curso" asks 333.33 USD this month
   And the meta "Curso" holds 2000.00 USD this month
+@backend
+Scenario: What a dollar meta costs the month is saved in pesos like anything else
+  Given today is 2026-08-10
+  And the TRM is 4000.00
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Curso" of 2000.00 USD by 2027-01
+  Then the month reports 1333360.00 COP as ahorro
+  And consumo, ahorro and libre add up to the income this month
 ```
 
 ## AC-27 — Every figure is derived from the month being read
@@ -832,6 +888,15 @@ Scenario: A change made now does not move a month that came before it
   When the user contributes 1000000.00 COP to "Celular"
   And the user views the metas for 2026-09
   Then the meta "Celular" held 3200000.00 COP that month
+@backend
+Scenario: A month the meta ran through still names it after it is closed
+  Given today is 2026-12-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user closes the meta "Celular"
+  And the user views the metas for 2026-10
+  Then the meta "Celular" held 4800000.00 COP that month
 ```
 
 ## AC-28 — The link can be removed or moved
@@ -930,6 +995,21 @@ Scenario: The metas are their own term, never folded into the funds
   And the breakdown shows uncovered spending of 0.00 COP
   And the breakdown adds up to the money available
   And the money available this month is 3300000.00 COP
+@backend
+Scenario: Closing a meta leaves it in the breakdown that still charges it
+  Given today is 2026-12-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 9600000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user closes the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown names the meta "Celular"
+  And the breakdown shows the metas asking 1600000.00 COP
+  And the breakdown shows uncovered spending of 1600000.00 COP
+  And the money available this month is 1800000.00 COP
 ```
 
 ## AC-32 — The assistant names metas when it explains a number, and does nothing else
@@ -1064,6 +1144,25 @@ Scenario: The funds stay listed by category and the metas by meta
   When the user views the current month's report
   Then the report lists "Tecnologia" asking 100000.00 COP
   And the report lists the meta "Celular" under the metas, not under a category
+@backend
+Scenario: The report names a meta closed in the month it reports
+  Given today is 2026-12-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user closes the meta "Celular"
+  And the user views the current month's report
+  Then the report lists the meta "Celular" asking 1600000.00 COP
+  And the report states the month asks 1600000.00 COP in all
+
+@backend
+Scenario: The report totals what a meta cancelled this month still asked
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user cancels the meta "Celular"
+  And the user views the current month's report
+  Then the report lists the meta "Celular" asking 1600000.00 COP
+  And the report states the month asks 1600000.00 COP in all
 ```
 
 ## AC-37 — The month opens into consumo, ahorro and libre, and adds up exactly
@@ -1146,6 +1245,19 @@ Scenario: Any month can be read, so months can be compared
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user views the month's report for 2026-09
   Then that month reports 1600000.00 COP as ahorro
+@backend
+Scenario: Closing a meta moves nothing in the month's split
+  Given today is 2026-12-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user closes the meta "Celular"
+  Then the month reports 1600000.00 COP as ahorro
+  And the month reports 3400000.00 COP as libre
+  And consumo, ahorro and libre add up to the income this month
 ```
 
 ## AC-38 — Ahorro is what was set aside, never what was left over
@@ -1376,6 +1488,14 @@ Scenario: Skipping it leaves the meta as it was
   When the user skips that payment
   Then the meta "Celular" is running
   And the meta "Celular" holds 8000000.00 COP this month
+@backend
+Scenario: A purchase owed but not yet paid leaves the meta asking the month after
+  Given today is 2026-10-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a planned expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
+  When the user views the metas for 2026-11
+  Then the meta "Celular" held 4000000.00 COP that month
 ```
 
 ## AC-44 — The metas list puts what needs an answer first

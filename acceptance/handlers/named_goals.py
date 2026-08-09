@@ -546,8 +546,13 @@ def then_told_name_taken(world: World) -> None:
 
 @step(r'the meta "(?P<name>[^"]+)" is not listed')
 def then_not_listed(world: World, name: str) -> None:
-    agg = load_month(world.session, _today(world))
-    assert name not in [f.name for f in service.statuses(agg)], f"the meta {name!r} is still listed"
+    """The metas screen, which is no longer the same question as the month's arithmetic.
+
+    A closed meta leaves the screen and stays inside the sums that charge it, so
+    this binds to what the screen reads rather than to what the month folds.
+    """
+    listed = [f.name for f in service.list_metas(world.session, _today(world))]
+    assert name not in listed, f"the meta {name!r} is still listed"
 
 
 @step(r'the meta "(?P<name>[^"]+)" can be restored')
@@ -729,6 +734,14 @@ def _report(world: World):
 def then_still_linked(world: World, name: str) -> None:
     tx = transactions.get_transaction(world.session, world.last_linked_id)
     assert tx.meta_id == _meta_id(world, name), f"that expense points at {tx.meta_id}, expected {name!r}"
+
+
+@step(r'the breakdown names the meta "(?P<name>[^"]+)"')
+def then_breakdown_names_meta(world: World, name: str) -> None:
+    """A term the month charges and the column does not name is a total nobody can check."""
+    view = month_service.month_available(load_month(world.session, _today(world)))
+    listed = [m.name for m in view.metas]
+    assert name in listed, f"the breakdown names {listed}"
 
 
 @step(rf'the report lists the meta "(?P<name>[^"]+)" asking (?P<amount>{_DEC}) COP')

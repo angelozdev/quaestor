@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner decides whether `spec.md` gains the scenarios that would have caught round two, then runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner reviews the twelve scenarios drafted for `spec.md`, then runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -13,13 +13,18 @@ that shape.
 
 Refine found two bugs and left the acceptance stream red for twelve hours
 behind two green ones. Mutation found 54 behaviours the suite could not tell
-from the real thing. A first independent verifier traced all 45 ACs from a
-screen to a rule and found thirteen unreachable — three wrong figures, eight
-unbuilt. **A second verifier then found nine more in the code that closed the
-first thirteen**, seven of them collateral from ADR-0048, a decision taken the
-same hour. Four green streams saw none of them.
+from the real thing. Three independent verifiers have now traced all 45 ACs from a screen to a rule,
+each against the code the previous round's fixes produced:
 
-The count so far: round one found 13 of 45, round two found 9 of 45.
+```
+ronda 1   13 de 45 mal   3 cifras, 8 sin construir
+ronda 2    9 de 45 mal   7 causados por arreglar los 13
+ronda 3    6 de 45 mal   1 causado por arreglar los 9; los otros más viejos
+```
+
+Round three's worst was the app **minting money**: cancelling a meta the owner
+had contributed to handed that contribution back without ever having stopped
+charging it. Four green streams saw every one of the twenty-eight.
 
 ## Checkpoints
 
@@ -29,7 +34,7 @@ The count so far: round one found 13 of 45, round two found 9 of 45.
 | 2 | ACs | done | 2026-08-08T1215-discover-acs.md |
 | 3 | Spec | done | 2026-08-08T1610-atdd-redraft.md |
 | 4 | Plan | done | 2026-08-08T2000-plan.md |
-| 5 | Implement | **open** | 2026-08-08T2130-implement.md · 2026-08-09T1111-verify-implementation.md · 2026-08-09T1230-close-findings.md · 2026-08-09T1400-verify-round2.md · 2026-08-09T1510-close-round2.md |
+| 5 | Implement | **open** | 2026-08-08T2130-implement.md · three verify/close pairs, the last `2026-08-09T1640-verify-round3.md` + `2026-08-09T1745-close-round3.md` |
 | 6 | Refine | **open** | 2026-08-09T0758-refine.md |
 | 7 | Verify | **open** | 2026-08-09T0811-crap-analyzer.md |
 | 8 | Harden | **open** | 2026-08-09T0901-mutation.md |
@@ -47,13 +52,13 @@ CP5 independently; it does not launder CP6.
 009        125 scenarios · unbound 0
 010        unbound 0
 acceptance 472 passed
-backend    1074 passed
-vitest     55 files · 420 passed
+backend    1079 passed
+vitest     55 files · 421 passed
 lint       exit 0 · Contracts 2 kept, 0 broken
 knip       0 findings
 dup        43 clones · 1.96%
 month load 13 bounded queries
-mutation   metas.py 96.7% · rules.py 98.4% · both 100% adjusted
+mutation   metas.py MUTATION_PCT · rules.py 98.4% · MUTATION_ADJ
 ```
 
 ## What the green suite did not catch
@@ -77,6 +82,10 @@ Four screens, then three figures, then eight behaviours — one shape.
 | A planned purchase stopped the meta, which AC-43 says it must not | verifier 2 | 43a3fb7 |
 | A past month stopped naming a meta closed later (AC-27) | verifier 2 | 43a3fb7 |
 | A dollar meta's instalment was summed as pesos in three columns (AC-26) | verifier 2 | 43a3fb7 |
+| Cancelling a meta contributed to gave the contribution back twice (AC-15) | verifier 3 | eea63a1 |
+| The report totalled $0 over a table listing $1.600.000 (AC-36) | verifier 3 | eea63a1 |
+| A meta closed after being lowered never left the screen (AC-16, AC-29) | verifier 3 | eea63a1 |
+| `POST /planned` dropped `meta_id` and the form had no selector (AC-43) | verifier 1 and 3 | eea63a1 |
 
 ## Handoff log
 
@@ -97,22 +106,25 @@ Four screens, then three figures, then eight behaviours — one shape.
 | 2026-08-09T1230 | close-findings | main | all 13 closed; product ADR-044 + ADR-0048 |
 | 2026-08-09T1400 | verify-implementation (round 2) | subagent-verify-cp5-round2 | 34 of 45 correct; 9 wrong, 7 of them ADR-0048's collateral |
 | 2026-08-09T1510 | close-findings (round 2) | main | all 9 closed; ADR-0049 supersedes ADR-0048's implementation clauses |
+| 2026-08-09T1640 | verify-implementation (round 3) | subagent-verify-cp5-round3 | 36 of 45 correct; 6 wrong, 3 partial, 1 report rebutted |
+| 2026-08-09T1745 | close-findings (round 3) | main | 6 closed, 3 partials closed, 1 rebutted with its reproduction |
 
 ## Outstanding
 
 | What | Owner | How |
 |---|---|---|
-| Whether `spec.md` gains scenarios that close a meta where closing moves a figure | human | it is the owner's contract; no agent has modified it |
-| Whether a third verifier runs | human | round one found 13, round two found 9 |
+| Review the twelve scenarios drafted for `spec.md` | human | it is the owner's contract; no agent has modified it |
+| Whether a fourth verifier runs | human | 13, then 9, then 6 |
 | Migrations 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Merge to `main` | human (CHARTER §7) | — |
 
-**The acceptance suite cannot see any of round two's nine defects, and the
-reason is structural.** No scenario of AC-4, AC-31, AC-36 or AC-37 closes a
-meta. AC-39's only close is in January over a December purchase, where no
-figure can move. AC-27 cancels rather than closes. AC-43 asserts only *is
-running*. 472 green scenarios were blind to all nine, and will be blind to the
-next one of the same shape.
+**The acceptance suite saw none of the twenty-eight, and the reason is
+structural.** No scenario closes a meta in a month where closing can move a
+figure; AC-39's only close is in January over a December purchase. No scenario
+cancels a meta that was contributed to. AC-43 asserts only *is running*. Twelve
+scenarios that would have caught them are drafted, with every figure run rather
+than reasoned, and await the owner's review — `spec.md` is his contract and no
+agent has modified it.
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The
