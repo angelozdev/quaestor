@@ -36,6 +36,11 @@ def month_split(month: str, session: Session = Depends(get_session)):
     return funds.split(session, month)
 
 
+@router.get("/archived", response_model=list[MetaOut])
+def list_archived(session: Session = Depends(get_session)):
+    return metas.list_archived(session)
+
+
 @router.post("/preview", response_model=MetaPreviewOut)
 def preview_meta(body: MetaCreate, month: str, session: Session = Depends(get_session)):
     return metas.preview_meta(

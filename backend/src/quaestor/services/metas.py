@@ -207,6 +207,19 @@ def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
     return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
 
 
+def list_archived(session: Session) -> list[Meta]:
+    """Every meta the owner cancelled, newest cancellation first.
+
+    A cancelled meta is archived and never destroyed (AC-29), so the only way
+    the promise is worth anything is if the owner can still see it. It reports
+    no month's figures — it holds nothing and asks nothing — so this answers
+    with the metas themselves rather than a month's reading of them, and needs
+    no rate to do it.
+    """
+    found = session.exec(select(Meta).where(Meta.archived)).all()
+    return sorted(found, key=lambda meta: (meta.cancelled_month or "", meta.name), reverse=True)
+
+
 def asks_total(agg: MonthAggregate) -> int:
     """What every meta asks this month, in COP cents.
 

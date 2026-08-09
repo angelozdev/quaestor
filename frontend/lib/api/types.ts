@@ -444,6 +444,18 @@ export interface MetaStatus {
   released: number
 }
 
+/** A meta as it is stored — no month's reading of it, so a cancelled one still reads. */
+export interface Meta {
+  id: number
+  name: string
+  amount: number
+  currency: string
+  start_month: string
+  target_month: string
+  closed: boolean
+  archived: boolean
+}
+
 export interface MetaCreate {
   name: string
   amount: number

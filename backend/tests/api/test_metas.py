@@ -92,6 +92,18 @@ def test_a_cancelled_meta_leaves_the_list_and_comes_back_with_nothing(client, au
     assert restored[0]["holds"] == 200_000_000
 
 
+def test_a_cancelled_meta_is_still_reachable_so_it_can_be_restored(client, auth):
+    """Archived and never destroyed is worth nothing if it cannot be found."""
+    meta = _meta(client, auth)
+    assert client.get("/api/metas/archived", headers=auth).json() == []
+
+    client.delete(f"/api/metas/{meta['id']}", headers=auth, params=MONTH)
+    assert [row["name"] for row in client.get("/api/metas/archived", headers=auth).json()] == ["Celular"]
+
+    client.post(f"/api/metas/{meta['id']}/restore", headers=auth, params=MONTH)
+    assert client.get("/api/metas/archived", headers=auth).json() == []
+
+
 def test_a_contribution_is_listed_and_can_be_taken_back(client, auth):
     meta = _meta(client, auth)
     made = client.post(

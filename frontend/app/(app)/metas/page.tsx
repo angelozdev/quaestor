@@ -14,7 +14,9 @@ import { monthNameOf } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 import { Button } from "@/ui"
+import { ArchivedMetas } from "./archived-list"
 import { CreateMetaForm } from "./create-form"
+import { MetaActions } from "./meta-actions"
 
 const WHAT_A_META_IS =
   "una cosa con nombre y con final — un celular, un televisor — que no vive en ninguna categoría"
@@ -27,7 +29,7 @@ function waitingOn(meta: MetaStatus): string | null {
   return null
 }
 
-function MetaCard({ meta }: { meta: MetaStatus }) {
+function MetaCard({ meta, month }: { meta: MetaStatus; month: string }) {
   const waiting = waitingOn(meta)
   return (
     <li className="space-y-1 rounded-md border p-3" style={{ borderColor: "var(--border)" }}>
@@ -50,19 +52,7 @@ function MetaCard({ meta }: { meta: MetaStatus }) {
       <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
         {meta.progress}% del camino
       </p>
-      {meta.complete && !meta.closed && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          <Button variant="ghost" size="sm">
-            Cerrar {meta.name}
-          </Button>
-          <Button variant="ghost" size="sm">
-            Seguir con otro monto
-          </Button>
-          <Button variant="ghost" size="sm">
-            Seguir con otro mes
-          </Button>
-        </div>
-      )}
+      <MetaActions meta={meta} month={month} />
     </li>
   )
 }
@@ -121,11 +111,13 @@ export default function MetasPage() {
         {(rows) => (
           <ul className="space-y-2">
             {rows.map((meta) => (
-              <MetaCard key={meta.meta_id} meta={meta} />
+              <MetaCard key={meta.meta_id} meta={meta} month={month} />
             ))}
           </ul>
         )}
       </QueryBoundary>
+
+      <ArchivedMetas month={month} />
     </div>
   )
 }
