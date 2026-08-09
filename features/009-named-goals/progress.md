@@ -1,4 +1,4 @@
-> ▶ CP6 Refine — 5/6 criteria met | NEXT: the owner decides whether CP5 is verified by a fresh agent before CP7/CP8, then `just backup && just migrate` | BLOCKED: independence is partial — the three reviewers were fresh, the agent that applied their findings was the implementer
+> ▶ CP8 Harden — measured, not hardened | NEXT: the owner decides on `services/metas.py` at 56.3% mutation, on the CP5 independence question, and runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -18,8 +18,8 @@ while the other two streams reported green.
 | 4 | Plan | done | 2026-08-08T2000-plan.md |
 | 5 | Implement | **open** | 2026-08-08T2130-implement.md |
 | 6 | Refine | **open** | 2026-08-09T0758-refine.md |
-| 7 | Verify | not started | — |
-| 8 | Harden | not started | — |
+| 7 | Verify | **open** | 2026-08-09T0811-crap-analyzer.md |
+| 8 | Harden | **open** | 2026-08-09T0901-mutation.md |
 
 `dae_handoff.py --through 5` reports checkpoint 4 as the latest complete,
 which is correct: CP5's independence criterion is asserted `met: false`
@@ -66,6 +66,8 @@ report green over an app the owner cannot use.
 | 2026-08-08T2000 | plan | main | ADR-0046 + product ADR-043 accepted; runbook created |
 | 2026-08-08T2130 | implement | main | all streams green; independence NOT met |
 | 2026-08-09T0758 | refine | main + 3 fresh reviewers | 12 findings applied, 2 bugs, 1 regression of its own; independence partial |
+| 2026-08-09T0811 | crap-analyzer | subagent-crap-cp7 | 0 backend findings over 20; 11 lines no stream reaches, 4 of them 009's |
+| 2026-08-09T0901 | mutation | subagent-mutation-cp8 | rules.py 96.9% strong, metas.py 56.3% weak; 54 real survivors |
 
 ## Outstanding
 
@@ -73,8 +75,8 @@ report green over an app the owner cannot use.
 |---|---|---|
 | Migrations 0014, 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Decide how CP5/CP6 independence is closed | human | accept as documented, or send a fresh agent to verify CP5 against the 45 ACs |
-| CP7 crap-analyzer | fresh agent | |
-| CP8 mutation | fresh agent | `domain/rules.py` and `services/metas.py` only, per plan.md |
+| `services/metas.py` at 56.3% mutation | human | decide: write `backend/tests/services/test_metas.py`, or accept the score |
+| Eleven lines no test stream reaches | human | four are 009's own — `PATCH /metas/{id}`, `_amend`'s replace branch, AC-26's non-COP branch, two `NotFound` |
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The
