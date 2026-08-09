@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — measured, not hardened | NEXT: the owner decides on `services/metas.py` at 56.3% mutation, on the CP5 independence question, and runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP8 Harden — 6/7 criteria met | NEXT: the owner decides on `services/metas.py` at 56.3% mutation, on the CP5 independence question, and runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
