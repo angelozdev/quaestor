@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — reopened by an independent verifier and closed again | NEXT: the owner runs `just backup && just migrate` for 0015 and 0016 | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP5 Implement — 8/10 criteria met | NEXT: the owner runs `just backup && just migrate` for 0015 and 0016 | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
