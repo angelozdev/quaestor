@@ -116,6 +116,7 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           currency: "COP",
           target_month: "2026-12",
           asks: 160_000_000,
+          asks_cop: 160_000_000,
           holds: 160_000_000,
           progress: 20,
           complete: false,

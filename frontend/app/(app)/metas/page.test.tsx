@@ -64,6 +64,7 @@ function meta(over: Partial<MetaStatus> = {}): MetaStatus {
     currency: "COP",
     target_month: "2026-12",
     asks: 160_000_000,
+    asks_cop: 160_000_000,
     holds: 480_000_000,
     progress: 60,
     complete: false,
@@ -433,5 +434,22 @@ describe("AC-26 / AC-34 — the currency and what was already put by", () => {
 
     await waitFor(() => expect(createMeta).toHaveBeenCalledTimes(1))
     expect(createMeta.mock.calls[0][1]).toMatchObject({ stated_opening: null, currency: "COP" })
+  })
+})
+
+describe("AC-14 — a contribution says how much went in", () => {
+  it("The toast names the figure, because the amount offered is trimmed to fit", async () => {
+    listMetas.mockResolvedValue([meta()])
+    contribute.mockResolvedValue({ id: 3, meta_id: 1, year_month: THIS_MONTH, amount: 320_000_000 })
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Ponerle plata" }))
+
+    await user.type(screen.getByLabelText("Cuánto le pones (COP)"), "5000000")
+    await user.click(screen.getByRole("button", { name: "Ponerla" }))
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Le pusiste $ 3.200.000 a Celular."),
+    )
   })
 })

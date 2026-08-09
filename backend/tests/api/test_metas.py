@@ -359,3 +359,43 @@ def test_what_the_owner_says_he_already_has_lowers_the_preview_over_the_wire(cli
     ).json()
 
     assert (plain["asks"], stated["asks"]) == (160_000_000, 100_000_000)
+
+
+def test_a_dollar_metas_peso_cost_travels_beside_its_own_figure(client, auth):
+    """AC-26 over the wire: the breakdown is a peso column and the meta reports dollars."""
+    _meta(client, auth, name="Curso", amount=200_000, target="2027-01", currency="USD")
+
+    reported = client.get("/api/metas", headers=auth, params=MONTH).json()[0]
+
+    assert (reported["asks"], reported["currency"]) == (33_334, "USD")
+    assert reported["asks_cop"] == 33_334 * 4000
+
+
+def test_a_closed_meta_stays_in_the_breakdown_it_still_costs(client, auth):
+    """AC-4/AC-31: the month charges it, so the column has to name it or stop adding up."""
+    meta = _meta(client, auth, amount=800_000_000, target="2026-12")
+    account = client.post(
+        "/api/accounts", headers=auth, json={"name": "Banco", "type": "debit", "currency": "COP"}
+    ).json()
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "account_id": account["id"],
+            "amount": 800_000_000,
+            "currency": "COP",
+            "date": "2026-08-12",
+            "payee": "Compra",
+            "new_category": "Tecnologia",
+            "meta_id": meta["id"],
+        },
+    )
+    before = client.get("/api/funds/available", headers=auth, params=MONTH).json()
+
+    client.post(f"/api/metas/{meta['id']}/close", headers=auth, params=MONTH)
+
+    after = client.get("/api/funds/available", headers=auth, params=MONTH).json()
+    assert [m["name"] for m in after["metas"]] == ["Celular"]
+    assert after["free"] == before["free"]
+    assert client.get("/api/metas", headers=auth, params=MONTH).json() == []

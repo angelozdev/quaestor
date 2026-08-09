@@ -280,7 +280,8 @@ export function MetaActions({ meta, month }: { meta: MetaStatus; month: string }
   })
   const putIn = useMutation({
     mutationFn: (cents: number) => contribute(meta.meta_id, month, cents),
-    onSuccess: () => write.settled(`Le pusiste plata a ${meta.name}.`),
+    onSuccess: (made) =>
+      write.settled(`Le pusiste ${formatCents(made.amount, meta.currency)} a ${meta.name}.`),
     onError: write.refused,
   })
   const cancel = useMutation({

@@ -494,6 +494,7 @@ class MetaStatusOut(BaseModel):
     currency: str
     target_month: str
     asks: int
+    asks_cop: int
     holds: int
     progress: int
     complete: bool

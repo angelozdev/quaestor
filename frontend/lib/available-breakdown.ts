@@ -20,6 +20,10 @@ export interface BreakdownRow {
  *
  * A give-back is a negative claim: a cancelled meta and one whose amount was
  * lowered both hand money back to the month.
+ *
+ * Every figure here is pesos. A meta held in dollars reports what it asks in
+ * dollars and what it costs the month in pesos, and this column is the second
+ * one (AC-26).
  */
 export function availableRows(available: MonthAvailable): BreakdownRow[] {
   const rows: BreakdownRow[] = [
@@ -33,7 +37,7 @@ export function availableRows(available: MonthAvailable): BreakdownRow[] {
     ...available.metas.map((meta) => ({
       key: `meta-${meta.meta_id}`,
       label: metaLabelOf(meta),
-      cents: meta.asks,
+      cents: meta.asks_cop,
       kind: "claim" as const,
     })),
   ]

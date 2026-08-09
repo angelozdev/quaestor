@@ -39,6 +39,7 @@ const AVAILABLE = {
       year_month: "2026-11",
       rule: "fixed",
       asks: 20_000_000,
+      asks_cop: 20_000_000,
       holds: 0,
       accumulates: true,
       accumulation_is_implied: false,
@@ -225,6 +226,7 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           currency: "COP",
           target_month: "2026-12",
           asks: 160_000_000,
+          asks_cop: 160_000_000,
           holds: 160_000_000,
           progress: 20,
           complete: false,
@@ -263,6 +265,7 @@ const CELULAR = {
   currency: "COP",
   target_month: "2026-12",
   asks: 0,
+  asks_cop: 0,
   holds: 320_000_000,
   progress: 40,
   complete: false,
@@ -366,5 +369,49 @@ describe("AC-19 — the month arrives with nothing bought, and the app says so",
 
     await screen.findByText("Sin fondo que lo cubra")
     expect(screen.queryByText(/esperando/)).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-4 / AC-31 — the breakdown names every claim, closed metas included", () => {
+  it("A meta the owner closed is still named by the month that pays for it", async () => {
+    showing({
+      ...AVAILABLE,
+      metas: [
+        {
+          ...CELULAR,
+          closed: true,
+          cancelled: false,
+          released: 0,
+          asks: 160_000_000,
+          asks_cop: 160_000_000,
+        },
+      ],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
+  })
+
+  it("A meta held in dollars is named at what it costs the month in pesos", async () => {
+    showing({
+      ...AVAILABLE,
+      metas: [
+        {
+          ...CELULAR,
+          name: "Curso",
+          currency: "USD",
+          cancelled: false,
+          released: 0,
+          asks: 33_334,
+          asks_cop: 140_002_800,
+        },
+      ],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Curso")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.400.028")).toBeInTheDocument()
+    expect(screen.queryByText("$ 333")).not.toBeInTheDocument()
   })
 })

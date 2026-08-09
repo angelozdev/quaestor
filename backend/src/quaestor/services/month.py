@@ -141,7 +141,7 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
     fondo = sum(line.asks for line in view.funds if line.accumulates)
     saved_by_spending = _spent_where_spending_is_saving(agg)
     consumo = presupuesto + view.uncovered - saved_by_spending
-    set_aside = fondo + sum(line.asks for line in view.metas) + view.contributed + saved_by_spending
+    set_aside = fondo + sum(line.asks_cop for line in view.metas) + view.contributed + saved_by_spending
     ahorro = set_aside - view.released
     libre = split_calc(consumo, ahorro, view.income)
     return MonthSplit(

@@ -74,6 +74,13 @@ class MetaStatus:
     if it was cancelled, the excess if the owner lowered its amount below what
     it already had. Every meta carries its own, so a breakdown can name where
     each give-back came from and still add up.
+
+    Two currencies live here, and which is which is the point. `amount`,
+    `asks`, `holds` are the meta's own, because every figure a meta reports is
+    worked out in the currency it is held in (AC-26). `asks_cop` and `released`
+    are the month's pesos, converted at read time from the one rate
+    (ADR-0031) — a breakdown of the money available is a peso column and has to
+    add up as one.
     """
 
     meta_id: int
@@ -83,6 +90,7 @@ class MetaStatus:
     currency: str
     target_month: str
     asks: int
+    asks_cop: int
     holds: int
     progress: int
     complete: bool

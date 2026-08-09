@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import Account, AccountType, MetaAmendment
-from quaestor.services import fx, metas, planned, transactions
+from quaestor.services import fx, metas, month, planned, transactions
 from quaestor.services.month_aggregate import load_month
 from sqlmodel import select
 
@@ -388,8 +388,8 @@ def test_a_bought_meta_stops_asking_the_month_after_the_purchase(session):
     _buy(session, moto, 1_000_000, date(2026, 8, 10))
 
     assert _reported(session, "2026-08", "Moto").asks == august.asks
-    for month in ("2026-09", "2026-12"):
-        after = _reported(session, month, "Moto")
+    for later in ("2026-09", "2026-12"):
+        after = _reported(session, later, "Moto")
         assert (after.asks, after.holds) == (0, august.holds)
 
 
@@ -462,12 +462,13 @@ def test_the_first_purchase_is_the_one_that_stops_the_meta(session):
     assert (november.asks, november.holds) == (0, august.holds)
 
 
-def test_a_purchase_owed_but_not_yet_paid_stops_the_meta_too(session):
-    """The month already charged the shortfall, so charging an instalment after it would charge twice.
+def test_a_purchase_owed_but_not_yet_paid_leaves_the_meta_asking(session):
+    """AC-43 in its own words: it does not complete, IT KEEPS ASKING.
 
-    A planned purchase is netted against what the meta holds in the month it
-    is due (AC-43), which is the same arithmetic a posted one gets. What it
-    does not do is complete the meta — only money that left does that.
+    Written the other way round first, to kill a mutant that turned
+    `posted_only` on. The mutant was right and the test was wrong: netting a
+    debt against what the meta holds is the month's arithmetic (AC-12), and
+    stopping the meta is a different question that only posted money answers.
     """
     moto = _meta(session, amount=2_000_000, today="2026-06", target="2026-12")
     planned.plan_payment(
@@ -483,5 +484,89 @@ def test_a_purchase_owed_but_not_yet_paid_stops_the_meta_too(session):
     )
 
     september = _reported(session, "2026-09", "Moto")
-    assert september.asks == 0
+    assert september.asks > 0
     assert september.complete is False
+
+
+def test_a_closed_meta_is_still_named_by_the_month_that_pays_for_it(session):
+    """It is charged, so it has to be named: a breakdown that hid it would not add up.
+
+    Leaving the metas screen (AC-29) and leaving the month's arithmetic are
+    different acts. Closing is only the first.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    agg = load_month(session, "2026-08")
+    charged = metas.asks_total(agg)
+    assert charged > 0
+
+    metas.close_meta(session, moto.id, year_month="2026-08")
+
+    after = load_month(session, "2026-08")
+    assert metas.asks_total(after) == charged
+    assert [m.name for m in metas.statuses(after)] == ["Moto"]
+    assert [m.name for m in metas.list_metas(session, "2026-08")] == []
+
+
+def test_a_meta_kept_on_with_a_new_amount_asks_again(session):
+    """AC-8's second offer. Stopping is what the purchase said; the owner may say otherwise."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    held = _reported(session, "2026-08", "Moto").holds
+
+    metas.set_meta(session, moto.id, today="2026-09", amount=2_000_000)
+
+    september = _reported(session, "2026-09", "Moto")
+    assert september.asks > 0
+    assert september.holds == held + september.asks
+
+
+def test_a_meta_kept_on_with_a_new_month_asks_again(session):
+    """AC-8's third offer, which has to work the same way as the second."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 500_000, date(2026, 8, 10))
+
+    metas.set_meta(session, moto.id, today="2026-09", target_month="2027-06")
+
+    assert _reported(session, "2026-09", "Moto").asks > 0
+
+
+def test_a_finished_meta_takes_no_more_money_instead_of_swallowing_it(session):
+    """The contribution was accepted, cost the month, and raised nothing."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+
+    with pytest.raises(ValidationError):
+        metas.contribute(session, moto.id, year_month="2026-09", amount=500_000)
+
+
+def test_a_dollar_meta_says_what_it_costs_the_month_in_pesos(session):
+    """AC-26: only the peso cost is converted, and the breakdown is a peso column."""
+    curso = _meta(session, "Curso", amount=200_000, today="2026-08", target="2027-01", currency="USD")
+    assert curso.id is not None
+
+    reported = _reported(session, "2026-08", "Curso")
+    assert reported.asks == 33_334
+    assert reported.asks_cop == 33_334 * int(SEEDED_TRM)
+
+
+def test_a_month_the_meta_ran_through_still_names_it_after_it_is_closed(session):
+    """AC-27's own figures. Closing in December cannot empty September."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    before = _reported(session, "2026-09", "Moto")
+    _buy(session, moto, 1_000_000, date(2026, 12, 10))
+    metas.close_meta(session, moto.id, year_month="2026-12")
+
+    after = _reported(session, "2026-09", "Moto")
+    assert (after.holds, after.asks) == (before.holds, before.asks)
+    assert [m.name for m in metas.list_metas(session, "2026-12")] == []
+
+
+def test_a_dollar_meta_is_saved_in_pesos_like_everything_else_in_the_split(session):
+    """The split is a peso reading of the month, the same one `available` gives."""
+    curso = _meta(session, "Curso", amount=200_000, today="2026-08", target="2027-01", currency="USD")
+    assert curso.id is not None
+
+    split = month.month_split(load_month(session, "2026-08"))
+
+    assert split.set_aside == 33_334 * int(SEEDED_TRM)

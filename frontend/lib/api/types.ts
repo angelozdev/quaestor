@@ -437,7 +437,10 @@ export interface MetaStatus {
   amount: number
   currency: string
   target_month: string
+  /** In the meta's own currency (AC-26). */
   asks: number
+  /** What it costs the month, in pesos, converted at the one rate (ADR-0031). */
+  asks_cop: number
   holds: number
   progress: number
   complete: boolean

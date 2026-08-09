@@ -85,9 +85,33 @@ def _bought(agg: MonthAggregate, meta: Meta) -> bool:
 
 
 def _bought_in(agg: MonthAggregate, meta: Meta) -> str | None:
-    """The month the thing was first bought, if it was."""
-    months = [year_month_of(tx.date) for tx in agg.linked_to(meta.id, posted_only=False)]
+    """The month the thing was first bought, if it was.
+
+    Posted only. A debt owed this month is netted against what the meta holds
+    because it costs this month (AC-12), and that is the month's arithmetic; it
+    is not the meta finishing. A planned purchase leaves the meta asking until
+    the money leaves (AC-43).
+    """
+    months = [year_month_of(tx.date) for tx in agg.linked_to(meta.id)]
     return min(months) if months else None
+
+
+def _finished_before(agg: MonthAggregate, meta: Meta, month: str) -> bool:
+    """Whether the meta had already finished when this month began.
+
+    A purchase ends the series as of the month it was made: that month still
+    asks, because what it asks is part of what covered the purchase, and every
+    month after it does not (AC-8).
+
+    Saying the meta wants more — a new amount, or a new month — is AC-8's
+    second and third offers, and it starts a new series from the month the
+    owner said it. So an amendment after the purchase resumes the meta, and it
+    stays resumed.
+    """
+    bought_in = _bought_in(agg, meta)
+    if bought_in is None or month <= bought_in:
+        return False
+    return not any(bought_in < row.year_month <= month for row in agg.amendments.get(meta.id, []))
 
 
 @dataclass(frozen=True)
@@ -126,8 +150,7 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
     never overfills either — a contribution larger than what is missing is
     taken only up to the amount.
     """
-    bought_in = _bought_in(agg, meta)
-    if bought_in is not None and month > bought_in:
+    if _finished_before(agg, meta, month):
         return _Month(opening=opening, ask=0, holds=opening)
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
@@ -174,6 +197,7 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
         currency=meta.currency,
         target_month=target,
         asks=walked.ask,
+        asks_cop=to_cop_cents(walked.ask, meta.currency, agg.trm),
         holds=walked.holds,
         progress=progress,
         complete=complete,
@@ -185,13 +209,14 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
 
 
 def statuses(agg: MonthAggregate) -> list[MetaStatus]:
-    """Every live meta, as the month reports it. No DB access.
+    """Every meta the month charges, as the month reports it. No DB access.
 
-    A closed meta is off the list (AC-29) and still inside the month's
-    arithmetic: closing releases nothing, so the gap its purchase left has to
-    keep costing the month it was bought in (AC-39).
+    A closed meta is among them. Closing releases nothing (AC-39), so the month
+    the purchase was made in goes on charging its instalment, and a breakdown
+    that named every other claim but not that one would not add up. Leaving the
+    metas screen is a different act, and `list_metas` is where it happens.
     """
-    return [_status(agg, meta) for meta in agg.metas if not meta.closed]
+    return [_status(agg, meta) for meta in agg.metas]
 
 
 def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
@@ -202,6 +227,18 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     that omitted them would not add up.
     """
     return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
+
+
+def _gone_from_the_list(agg: MonthAggregate, meta: Meta) -> bool:
+    """Whether a closed meta has left the screen by the month being read.
+
+    It leaves from the month its purchase was made, and not one month earlier:
+    a month the meta ran through still names it with what it held and what it
+    asked, because every figure the screen shows is worked out from the month
+    being read (AC-27). The aggregate only carries purchases on or before its
+    own month, so this needs no date arithmetic.
+    """
+    return meta.closed and _bought_in(agg, meta) is not None
 
 
 def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
@@ -216,7 +253,8 @@ def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
         MissingRate: no TRM is set.
     """
     require_year_month(year_month)
-    found = statuses(load_month(session, year_month))
+    agg = load_month(session, year_month)
+    found = [_status(agg, meta) for meta in agg.metas if not _gone_from_the_list(agg, meta)]
     return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
 
 
@@ -344,6 +382,8 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
 
 def _room_left(session: Session, meta: Meta, year_month: str) -> int:
     agg = load_month(session, year_month)
+    if _finished_before(agg, meta, year_month):
+        return 0
     wanted, _ = _wanted_in(agg, meta, year_month)
     return wanted - _walk(agg, meta).holds
 
