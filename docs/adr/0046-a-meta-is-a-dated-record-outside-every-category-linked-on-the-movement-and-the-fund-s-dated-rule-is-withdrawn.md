@@ -4,7 +4,7 @@
 - **Date:** 2026-08-08
 - **Deciders:** Angelo
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** [0048](0048-a-purchase-stops-the-meta-and-closing-it-moves-no-figure.md), on one clause only — *"an instalment of zero happens only because nothing is missing, never because completing, cancelling or editing waived it"*. A purchase now ends the series from the following month. Everything else here stands.
 
 Product side: product ADR-043, which supersedes ADR-037's *"there is no separate
 goals feature"* clause and its four-rule list. This ADR is the mechanism.

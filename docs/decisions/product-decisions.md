@@ -865,3 +865,40 @@ Two things decided that, and the second is the one that matters:
 - **A destructive migration on real data**, though nothing is converted. Behind a fresh backup and explicit human authorisation (charter §7, ADR-0030).
 - **The assistant reads metas and cannot manage them.** A stated deviation from CHARTER §4 and ADR-001, recorded in `docs/adr/0046` rather than left in a feature folder.
 
+
+---
+
+## ADR-044 — A meta stops the month after its purchase, and closing it moves no figure
+
+**Status:** accepted (feature 009, 2026-08-09) · Extends ADR-043 and 009's AC-39 · Technical detail in `docs/adr/0046`
+
+**Context.** A fresh agent verified feature 009 against its 45 acceptance criteria and reproduced three wrong figures. One of them was the button the owner presses most often on a meta that worked: `Cerrar`.
+
+Closing archived the meta with no cancellation month, and the month's read path kept an archived meta visible only through that month. So a closed meta vanished from **every** month, past ones included:
+
+```
+A. meta abierta, $6.400.000 guardados        disponible 4.680.000   sin cubrir 0
+B. celular de $8.000.000 comprado en agosto  disponible 3.400.000   sin cubrir 1.280.000
+C. el dueño oprime "Cerrar Celular"          disponible 5.000.000   sin cubrir 0
+```
+
+August read as though nothing had happened. That is the exact failure AC-39's own text says it exists to prevent: *"una compra real desaparecería del mes y su plata reaparecería"*. It also emptied the past — a September that reported `lleva 3.200.000 · pide 1.600.000` reported nothing once the meta was closed in December, contradicting AC-27.
+
+**And behind it sat a larger one.** A meta went on asking for its instalment every month after the thing was bought. A $8.000.000 phone bought in October against a meta holding $4.800.000 kept asking $1.600.000 in November and December — saving toward a phone already in the owner's pocket. Closing was the only way to stop it, and closing was what erased the past. The two defects were holding each other up.
+
+**Decision.** **Buying stops the meta; closing only takes it off the screen.**
+
+- A meta **asks nothing from the month after its purchase**, and keeps what it had. The purchase month itself still asks, because what it asks that month is part of what covered the purchase (AC-12).
+- **Closing releases nothing and moves no figure.** The meta leaves the metas screen; the month it was bought in goes on reporting the gap the purchase left, forever.
+- A closed meta is **not listed among the cancelled ones** and cannot be brought back. Cancelling hands money back and is reversible; closing hands nothing back and is not.
+
+**Alternatives rejected.**
+
+- **(A) Record the month a meta was closed and stop it from there.** The obvious fix, and it needs a new column and a fourth migration on real data while three are already outstanding. It also leaves the underlying defect alive: a meta the owner forgets to close still saves for a thing he owns. Rejected on both counts.
+- **(B) Leave a closed meta on the screen forever.** Keeping it inside the arithmetic and inside the list are separate questions, and AC-29 already answers the second: an archived meta is out of the list. The screen's own copy was built for this — a closed meta renders with no badge and no actions.
+
+**Consequences.**
+
+- **No migration.** The behaviour falls out of the purchase the owner already recorded; nothing new is stored.
+- **The `Cerrar` button becomes honest.** It says the meta is finished, and finishing changes no number — which is the only reading of AC-39 that does not contradict AC-27.
+- **A meta bought before it filled stops asking anyway**, whether or not the owner closes it. The gap between what it held and what the thing cost is charged once, in the month of the purchase, and never again.

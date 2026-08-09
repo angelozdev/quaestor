@@ -61,3 +61,4 @@ New ADRs are created with the `adr` skill:
 | 0045 | Frontend acceptance criteria bind to vitest, and one Gherkin parser stays the single source | accepted | 2026-08-07 |
 | 0046 | A meta is a dated record outside every category, linked on the movement, and the fund's dated rule is withdrawn | accepted | 2026-08-08 |
 | 0047 | The module boundaries are enforced, the dead code and the copies are reported | accepted | 2026-08-09 |
+| 0048 | A purchase stops the meta, and closing it moves no figure | accepted | 2026-08-09 |
