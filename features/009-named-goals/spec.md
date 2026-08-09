@@ -405,6 +405,24 @@ Scenario: Renaming a meta keeps everything it holds
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user renames the meta "Celular" to "Telefono"
   Then the meta "Telefono" holds 4800000.00 COP this month
+
+@backend
+Scenario: Moving the month after raising the amount keeps the new amount
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user sets the meta "Celular" to want 9000000.00 COP
+  And the user sets the meta "Celular" to be wanted by 2027-03
+  Then the meta "Celular" wants 9000000.00 COP by 2027-03
+  And the meta "Celular" asks 966666.67 COP this month
+
+@backend
+Scenario: Raising the amount after moving the month keeps the new month
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user sets the meta "Celular" to be wanted by 2027-03
+  And the user sets the meta "Celular" to want 9000000.00 COP
+  Then the meta "Celular" wants 9000000.00 COP by 2027-03
+  And the meta "Celular" asks 966666.67 COP this month
 ```
 
 ## AC-12 — Buying before the money is whole leaves a visible gap
