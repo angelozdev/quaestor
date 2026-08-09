@@ -81,7 +81,12 @@ report green over an app the owner cannot use.
 | Migrations 0014, 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Decide how CP5/CP6 independence is closed | human | accept as documented, or send a fresh agent to verify CP5 against the 45 ACs |
 | `PATCH /metas/{meta_id}`, reached by no stream | open | both ends are tested and the middle is not; a wrong query param stays green |
-| `_Month.contributed` is written in three places and read in none | open | dead field CP8 surfaced; removing it is a refactor, not a test |
+
+Closed since: `_Month.contributed` deleted (`2a3e2ee`, mutation 93.3% → 96.2%);
+the contributions history decided as **delete** — `listContributions` and
+`removeContribution` are gone from the client (`761eed7`), while the service,
+the endpoints and AC-42's scenarios stand, so building the view later costs
+two lines back rather than a feature.
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The
