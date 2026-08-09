@@ -45,8 +45,8 @@ steps:
     description: "Re-confirm no fund uses the dated rule immediately before dropping it. Read-only. Expected: 0 rows."
     owner: agent
     command: "docker exec -i quaestor-db-1 psql -U quaestor -d quaestor -c \"SET default_transaction_read_only = on; SELECT rule, COUNT(*) FROM fund GROUP BY rule;\""
-    evidence: null
-    completed: false
+    evidence: "2026-08-08, read-only: `SELECT count(*) FROM fund` = 0 and `SELECT count(*) FROM fund WHERE rule = 'target_by_date'` = 0. 0015 will not refuse. Re-run on the day it is applied — this is a same-day check, and the SQLite sandbox proves the guard bites: it holds one dated fund and 0015 aborted that container's startup with the intended message."
+    completed: true
     blocking_acs:
       - migration-0015
 

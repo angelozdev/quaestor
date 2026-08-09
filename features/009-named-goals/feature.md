@@ -2,7 +2,7 @@
 title: "Metas: named savings goals that live beside the fund, not inside it"
 slug: named-goals
 number: 009
-status: ready
+status: in-progress
 autonomy_level: medium
 branch: named-goals
 area: budget
