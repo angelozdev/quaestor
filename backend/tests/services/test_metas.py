@@ -356,3 +356,74 @@ def test_a_month_earning_one_centavo_still_announces_a_meta_bigger_than_it(sessi
     preview = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=1)
 
     assert preview.over_the_month is True
+
+
+def test_closing_a_bought_meta_leaves_the_purchase_costing_the_month_it_was_made_in(session):
+    """AC-39's own sentence, asked of the month it names rather than the next one.
+
+    Closing releases nothing, so the gap the purchase left keeps costing August
+    after the meta is off the screen. Nothing else asks this: AC-39's scenario
+    closes in January a purchase made in December, where the meta asks nothing
+    and the expense is not that month's, so closing moves no figure there.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    before = metas.uncovered_total(load_month(session, "2026-08"))
+    assert before > 0
+
+    metas.close_meta(session, moto.id, year_month="2026-08")
+
+    assert metas.uncovered_total(load_month(session, "2026-08")) == before
+    assert [m.name for m in metas.list_metas(session, "2026-08")] == []
+
+
+def test_a_bought_meta_stops_asking_the_month_after_the_purchase(session):
+    """The money went into the thing; asking again would save for it twice.
+
+    The purchase month still asks, because what it asks is part of what covered
+    the purchase (AC-12).
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    august = _reported(session, "2026-08", "Moto")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+
+    assert _reported(session, "2026-08", "Moto").asks == august.asks
+    for month in ("2026-09", "2026-12"):
+        after = _reported(session, month, "Moto")
+        assert (after.asks, after.holds) == (0, august.holds)
+
+
+def test_a_contribution_is_trimmed_against_the_amount_the_meta_wants_now(session):
+    """AC-14 after AC-11: raising the amount opens the room the raise created.
+
+    Every other read path folds the amendments; the trim was the one that did
+    not, so a contribution of what is genuinely missing lost the difference in
+    silence.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-06", amount=2_000_000)
+    walked = _reported(session, "2026-06", "Moto")
+
+    put_in = metas.contribute(session, moto.id, year_month="2026-06", amount=2_000_000 - walked.holds)
+
+    assert put_in == 2_000_000 - walked.holds
+    assert _reported(session, "2026-06", "Moto").holds == 2_000_000
+
+
+def test_a_closed_meta_is_not_listed_among_the_cancelled_ones(session):
+    """AC-29 is about cancelling. A closed meta gave nothing back and is not restorable."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    metas.close_meta(session, moto.id, year_month="2026-08")
+
+    assert [m.name for m in metas.list_archived(session)] == []
+
+
+def test_a_closed_meta_cannot_be_brought_back(session):
+    """Restoring one would ask the month for an instalment toward a thing already owned."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    metas.close_meta(session, moto.id, year_month="2026-08")
+
+    with pytest.raises(ValidationError):
+        metas.restore_meta(session, moto.id, today="2026-09")

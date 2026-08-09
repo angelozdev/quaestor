@@ -84,6 +84,12 @@ def _bought(agg: MonthAggregate, meta: Meta) -> bool:
     return bool(agg.linked_to(meta.id))
 
 
+def _bought_in(agg: MonthAggregate, meta: Meta) -> str | None:
+    """The month the thing was first bought, if it was."""
+    months = [year_month_of(tx.date) for tx in agg.linked_to(meta.id, posted_only=False)]
+    return min(months) if months else None
+
+
 @dataclass(frozen=True)
 class _Month:
     opening: int
@@ -109,11 +115,20 @@ def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
 def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Month:
     """What one month does to a meta that entered it holding `opening`.
 
+    A meta stops the month after its purchase and keeps what it had: the thing
+    is bought, and asking again would set money aside for something the owner
+    already owns. The purchase month itself still asks, because what it asks is
+    part of what covered the purchase (AC-12). Nothing is freed either — that
+    money is in the thing (AC-39).
+
     Holding more than the meta wants means the owner lowered the amount below
     what it already had: the excess is freed and the meta asks nothing. A month
     never overfills either — a contribution larger than what is missing is
     taken only up to the amount.
     """
+    bought_in = _bought_in(agg, meta)
+    if bought_in is not None and month > bought_in:
+        return _Month(opening=opening, ask=0, holds=opening)
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
         return _Month(opening=opening, ask=0, holds=amount, released=opening - amount)
@@ -170,8 +185,13 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
 
 
 def statuses(agg: MonthAggregate) -> list[MetaStatus]:
-    """Every live meta, as the month reports it. No DB access."""
-    return [_status(agg, meta) for meta in agg.metas]
+    """Every live meta, as the month reports it. No DB access.
+
+    A closed meta is off the list (AC-29) and still inside the month's
+    arithmetic: closing releases nothing, so the gap its purchase left has to
+    keep costing the month it was bought in (AC-39).
+    """
+    return [_status(agg, meta) for meta in agg.metas if not meta.closed]
 
 
 def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
@@ -208,8 +228,11 @@ def list_archived(session: Session) -> list[Meta]:
     no month's figures — it holds nothing and asks nothing — so this answers
     with the metas themselves rather than a month's reading of them, and needs
     no rate to do it.
+
+    A closed meta is archived too and belongs to none of this: it handed nothing
+    back, and restoring it would charge the month a purchase already made.
     """
-    found = session.exec(select(Meta).where(Meta.archived)).all()
+    found = session.exec(select(Meta).where(Meta.archived, Meta.closed == False)).all()  # noqa: E712
     return sorted(found, key=lambda meta: (meta.cancelled_month or "", meta.name), reverse=True)
 
 
@@ -320,8 +343,9 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
 
 
 def _room_left(session: Session, meta: Meta, year_month: str) -> int:
-    walked = _walk(load_month(session, year_month), meta)
-    return meta.amount - walked.holds
+    agg = load_month(session, year_month)
+    wanted, _ = _wanted_in(agg, meta, year_month)
+    return wanted - _walk(agg, meta).holds
 
 
 def remove_contribution(session: Session, contribution_id: int) -> None:
@@ -399,14 +423,20 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     month and drops what the owner stated it already had, which on a running
     meta would throw away the history every figure is derived from.
 
+    A closed meta is refused for the same reason: its purchase was made, and
+    bringing it back would charge the month an instalment toward a thing the
+    owner already owns.
+
     Raises:
         NotFound: no such meta.
-        ValidationError: the meta is not archived, or a live meta has taken its
-            name since (AC-22).
+        ValidationError: the meta is not archived, it was closed rather than
+            cancelled, or a live meta has taken its name since (AC-22).
     """
     meta = _require_meta(session, meta_id)
     if not meta.archived:
         raise ValidationError(f"the meta {meta.name!r} is still running, so there is nothing to bring back")
+    if meta.closed:
+        raise ValidationError(f"the meta {meta.name!r} was bought and closed, so there is nothing to bring back")
     _refuse_name_already_held(session, meta.name, excluding=meta.id)
     meta.archived = False
     meta.closed = False
