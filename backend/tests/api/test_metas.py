@@ -286,3 +286,76 @@ def test_an_edit_that_never_mentions_the_meta_leaves_the_link_alone(client, auth
     tx = _expense(client, auth, account, expense_category, meta_id=meta["id"]).json()
     edited = client.patch(f"/api/transactions/{tx['id']}", headers=auth, json={"payee": "Otra tienda"})
     assert edited.json()["meta_id"] == meta["id"]
+
+
+def test_a_running_meta_is_renamed_over_the_wire(client, auth):
+    """The screen's `Cambiarle el nombre`. Nothing reached this body before."""
+    meta = _meta(client, auth)
+
+    changed = client.patch(f"/api/metas/{meta['id']}", headers=auth, params=MONTH, json={"name": "Telefono"})
+
+    assert changed.status_code == 200
+    assert changed.json()["name"] == "Telefono"
+    assert [m["name"] for m in client.get("/api/metas", headers=auth, params=MONTH).json()] == ["Telefono"]
+
+
+def test_a_running_metas_amount_and_month_move_over_the_wire(client, auth):
+    """AC-11's own figures: raised to 9.000.000, October asks 1.933.333,34."""
+    meta = _meta(client, auth, amount=800_000_000, target="2026-12")
+
+    client.patch(
+        f"/api/metas/{meta['id']}",
+        headers=auth,
+        params={"month": "2026-10"},
+        json={"amount": 900_000_000, "target_month": "2026-12"},
+    )
+
+    reported = client.get("/api/metas", headers=auth, params={"month": "2026-10"}).json()[0]
+    assert reported["amount"] == 900_000_000
+    assert reported["asks"] == 193_333_334
+
+
+def test_lowering_a_meta_below_what_it_holds_completes_it_over_the_wire(client, auth):
+    """AC-16's own figures: holding 4.800.000, lowered to 4.000.000, 800.000 comes back."""
+    meta = _meta(client, auth, amount=800_000_000, target="2026-12")
+
+    client.patch(
+        f"/api/metas/{meta['id']}",
+        headers=auth,
+        params={"month": "2026-11"},
+        json={"amount": 400_000_000},
+    )
+
+    reported = client.get("/api/metas", headers=auth, params={"month": "2026-11"}).json()[0]
+    assert reported["complete"] is True
+    assert reported["released"] == 80_000_000
+
+
+def test_a_meta_is_created_in_dollars_over_the_wire(client, auth):
+    """AC-26's own figure — the create form had no selector for this."""
+    meta = _meta(client, auth, name="Curso", amount=200_000, target="2027-01", currency="USD")
+
+    reported = client.get("/api/metas", headers=auth, params=MONTH).json()[0]
+    assert meta["currency"] == "USD"
+    assert reported["asks"] == 33_334
+
+
+def test_a_meta_is_told_what_it_already_holds_over_the_wire(client, auth):
+    """AC-34's own figure — the create form had no field for this."""
+    _meta(client, auth, amount=800_000_000, target="2026-12", stated_opening=300_000_000)
+
+    reported = client.get("/api/metas", headers=auth, params=MONTH).json()[0]
+    assert reported["asks"] == 100_000_000
+    assert reported["holds"] == 400_000_000
+
+
+def test_what_the_owner_says_he_already_has_lowers_the_preview_over_the_wire(client, auth):
+    """The figure the create form shows before the meta exists."""
+    body = {"name": "Celular", "amount": 800_000_000, "target_month": "2026-12"}
+
+    plain = client.post("/api/metas/preview", headers=auth, params=MONTH, json=body).json()
+    stated = client.post(
+        "/api/metas/preview", headers=auth, params=MONTH, json={**body, "stated_opening": 300_000_000}
+    ).json()
+
+    assert (plain["asks"], stated["asks"]) == (160_000_000, 100_000_000)
