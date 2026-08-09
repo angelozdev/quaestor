@@ -6,6 +6,7 @@ import pytest
 from quaestor.db import init_db, make_engine
 from quaestor.domain.errors import MissingRate, NotFound, ValidationError
 from quaestor.services import categories, funds, fx, planned, recurring, transactions
+from quaestor.services import month as month_service
 from sqlmodel import Session
 
 from tests.support.query_counter import count_queries
@@ -689,35 +690,35 @@ def _salario(session):
 
 def test_an_income_category_with_nothing_recorded_counts_what_it_promises(session):
     _salario(session)
-    assert funds.available(session, "2026-11").income == 5_000_000_00
+    assert month_service.available(session, "2026-11").income == 5_000_000_00
 
 
 def test_what_arrived_replaces_what_the_category_promised(session):
     cat = _salario(session)
     _earn(session, cat, 4_200_000_00, date(2026, 11, 20))
-    assert funds.available(session, "2026-11").income == 4_200_000_00
+    assert month_service.available(session, "2026-11").income == 4_200_000_00
 
 
 def test_a_category_stops_guessing_for_every_obligation_it_holds(session):
     """The declared boundary of ADR-0044: per category, never per obligation."""
     cat = _salario(session)
     _income_obligation(session, cat, 2_000_000_00, date(2026, 1, 5), name="Socio")
-    assert funds.available(session, "2026-11").income == 7_000_000_00
+    assert month_service.available(session, "2026-11").income == 7_000_000_00
     _earn(session, cat, 4_200_000_00, date(2026, 11, 20))
-    assert funds.available(session, "2026-11").income == 4_200_000_00
+    assert month_service.available(session, "2026-11").income == 4_200_000_00
 
 
 def test_money_with_no_obligation_behind_it_counts_from_the_moment_it_is_recorded(session):
     cat = _category(session, "Rendimientos", is_income=True)
     _earn(session, cat, 250_000_00, date(2026, 11, 10), payee="Banco")
-    assert funds.available(session, "2026-11").income == 250_000_00
+    assert month_service.available(session, "2026-11").income == 250_000_00
 
 
 def test_a_quarterly_income_counts_nothing_until_the_month_it_is_due(session):
     cat = _category(session, "Bonos", is_income=True)
     _income_obligation(session, cat, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
-    assert funds.available(session, "2026-08").free == 0
-    assert funds.available(session, "2026-09").free == 3_000_000_00
+    assert month_service.available(session, "2026-08").free == 0
+    assert month_service.available(session, "2026-09").free == 3_000_000_00
 
 
 def test_only_the_excess_past_a_fund_leaves_the_money_available(session):
@@ -725,7 +726,7 @@ def test_only_the_excess_past_a_fund_leaves_the_money_available(session):
     cat = _category(session, "Restaurantes")
     funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
     _spend(session, cat, 350_000_00, date(2026, 11, 12))
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 150_000_00
     assert view.free == 4_650_000_00
 
@@ -734,14 +735,14 @@ def test_spending_no_fund_covers_comes_straight_out_of_the_money_available(sessi
     _salario(session)
     loose = _category(session, "Transporte")
     _spend(session, loose, 150_000_00, date(2026, 11, 12))
-    assert funds.available(session, "2026-11").free == 4_850_000_00
+    assert month_service.available(session, "2026-11").free == 4_850_000_00
 
 
 def test_an_obligation_no_fund_covers_is_uncovered_too(session):
     _salario(session)
     cat = _category(session, "Arriendo")
     _obligation(session, cat, 1_000_000_00, date(2026, 1, 5), name="Arrendador")
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 1_000_000_00
     assert view.free == 4_000_000_00
 
@@ -751,7 +752,7 @@ def test_a_charge_that_posts_above_its_promise_costs_the_month_what_it_really_wa
     cat = _category(session, "Servicios")
     _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
     _post_the_charge(session, "EPM", date(2026, 11, 12), amount=250_000_00)
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 250_000_00
     assert view.free == 4_750_000_00
 
@@ -761,7 +762,7 @@ def test_a_charge_that_posts_below_its_promise_gives_the_difference_back(session
     cat = _category(session, "Servicios")
     _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
     _post_the_charge(session, "EPM", date(2026, 11, 12), amount=150_000_00)
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 150_000_00
     assert view.free == 4_850_000_00
 
@@ -772,7 +773,7 @@ def test_an_obligation_switched_off_after_paying_still_costs_the_month(session):
     _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
     _post_the_charge(session, "EPM", date(2026, 11, 12))
     recurring.deactivate_recurring(session, _recurring_id(session, "EPM"))
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 200_000_00
     assert view.free == 4_800_000_00
 
@@ -781,7 +782,7 @@ def test_a_charge_still_ahead_keeps_counting_what_it_promised(session):
     _salario(session)
     cat = _category(session, "Servicios")
     _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 200_000_00
     assert view.free == 4_800_000_00
 
@@ -791,7 +792,7 @@ def test_a_posted_charge_is_counted_once_not_twice(session):
     cat = _category(session, "Servicios")
     _obligation(session, cat, 200_000_00, date(2026, 11, 5), name="EPM")
     _post_the_charge(session, "EPM", date(2026, 11, 12))
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert view.uncovered == 200_000_00
 
 
@@ -805,7 +806,7 @@ def test_only_the_turn_that_posted_stops_being_promised(session):
     _post_the_charge(session, "Aseo", date(2026, 11, 3), amount=120_000_00)
     turns = len(due_dates(date(2026, 11, 3), None, IntervalUnit.week, 1, date(2026, 11, 1), date(2026, 11, 30)))
     assert turns > 1
-    assert funds.available(session, "2026-11").uncovered == 120_000_00 + (turns - 1) * 100_000_00
+    assert month_service.available(session, "2026-11").uncovered == 120_000_00 + (turns - 1) * 100_000_00
 
 
 def test_the_breakdown_names_every_fund_and_adds_up_exactly(session):
@@ -815,7 +816,7 @@ def test_the_breakdown_names_every_fund_and_adds_up_exactly(session):
     funds.create_fund(session, restaurantes, rule="fixed", amount=200_000_00, start_month="2026-11")
     funds.create_fund(session, mercado, rule="fixed", amount=300_000_00, start_month="2026-11")
     _spend(session, _category(session, "Transporte"), 150_000_00, date(2026, 11, 12))
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert {line.name: line.asks for line in view.funds} == {"Restaurantes": 200_000_00, "Mercado": 300_000_00}
     assert view.income - sum(line.asks for line in view.funds) - view.uncovered == view.free
     assert view.free == 4_350_000_00
@@ -824,7 +825,7 @@ def test_the_breakdown_names_every_fund_and_adds_up_exactly(session):
 def test_a_fund_asking_nothing_this_month_is_still_named(session):
     cat = _category(session, "Seguro")
     funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
-    view = funds.available(session, "2026-11")
+    view = month_service.available(session, "2026-11")
     assert [(line.name, line.asks) for line in view.funds] == [("Seguro", 0)]
 
 
@@ -832,23 +833,23 @@ def test_the_money_available_cannot_be_read_without_a_rate_even_in_pure_cop(sess
     _category(session, "Gimnasio")
     _clear_trm(session)
     with pytest.raises(MissingRate):
-        funds.available(session, "2026-11")
+        month_service.available(session, "2026-11")
 
 
 def test_the_earning_rate_smooths_a_quarterly_income_across_its_cycle(session):
     _salario(session)
     bonos = _category(session, "Bonos", is_income=True)
     _income_obligation(session, bonos, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
-    assert funds.rates(session, "2026-08").earning == 6_000_000_00
-    assert funds.rates(session, "2026-09").earning == 6_000_000_00
+    assert month_service.rates(session, "2026-08").earning == 6_000_000_00
+    assert month_service.rates(session, "2026-09").earning == 6_000_000_00
 
 
 def test_the_rate_and_the_balance_differ_when_a_quarterly_income_has_not_landed(session):
     _salario(session)
     bonos = _category(session, "Bonos", is_income=True)
     _income_obligation(session, bonos, 3_000_000_00, date(2026, 9, 30), count=3, name="Bono")
-    assert funds.rates(session, "2026-08").earning == 6_000_000_00
-    assert funds.available(session, "2026-08").free == 5_000_000_00
+    assert month_service.rates(session, "2026-08").earning == 6_000_000_00
+    assert month_service.available(session, "2026-08").free == 5_000_000_00
 
 
 def test_the_cost_rate_is_every_fund_ask_plus_the_obligations_no_fund_covers(session):
@@ -856,30 +857,30 @@ def test_the_cost_rate_is_every_fund_ask_plus_the_obligations_no_fund_covers(ses
     funds.create_fund(session, restaurantes, rule="fixed", amount=200_000_00, start_month="2026-11")
     arriendo = _category(session, "Arriendo")
     _obligation(session, arriendo, 1_000_000_00, date(2026, 1, 5), name="Arrendador")
-    assert funds.rates(session, "2026-11").cost == 1_200_000_00
+    assert month_service.rates(session, "2026-11").cost == 1_200_000_00
 
 
 def test_an_obligation_a_fund_covers_is_not_counted_in_the_cost_rate_twice(session):
     cat = _category(session, "Internet")
     _obligation(session, cat, 85_000_00, date(2026, 1, 5), name="Internet Hogar")
     funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
-    assert funds.rates(session, "2026-11").cost == 85_000_00
+    assert month_service.rates(session, "2026-11").cost == 85_000_00
 
 
 def test_the_margin_is_what_the_earning_rate_leaves_after_the_cost_rate(session):
     _salario(session)
     cat = _category(session, "Restaurantes")
     funds.create_fund(session, cat, rule="fixed", amount=200_000_00, start_month="2026-11")
-    rates = funds.rates(session, "2026-11")
+    rates = month_service.rates(session, "2026-11")
     assert (rates.earning, rates.cost, rates.margin) == (5_000_000_00, 200_000_00, 4_800_000_00)
 
 
 def test_the_month_number_reads_the_month_asked_about_not_a_stored_one(session):
     cat = _salario(session)
     _income_obligation(session, cat, 2_000_000_00, date(2026, 1, 5), name="Socio")
-    funds.available(session, "2026-09")
+    month_service.available(session, "2026-09")
     recurring.deactivate_recurring(session, _recurring_id(session, "Socio"))
-    assert funds.available(session, "2026-09").income == 5_000_000_00
+    assert month_service.available(session, "2026-09").income == 5_000_000_00
 
 
 def test_the_month_number_stays_bounded_however_many_funds_it_walks(engine_session):
@@ -890,7 +891,7 @@ def test_the_month_number_stays_bounded_however_many_funds_it_walks(engine_sessi
         funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-01")
         _spend(session, cat, 10_000_00, date(2026, 6, 10))
     with count_queries(engine) as counted:
-        funds.available(session, "2026-11")
+        month_service.available(session, "2026-11")
     assert counted.count <= 16, f"available issued {counted.count} queries"
 
 
@@ -993,7 +994,7 @@ def test_a_planned_payment_no_fund_covers_leaves_the_money_available(session):
     salario = _salario(session)
     assert salario is not None
     cat = _category(session, "Impuestos")
-    before = funds.available(session, "2026-11")
+    before = month_service.available(session, "2026-11")
     planned.plan_payment(
         session,
         payee="DIAN",
@@ -1003,7 +1004,7 @@ def test_a_planned_payment_no_fund_covers_leaves_the_money_available(session):
         account_id=_default_account(session),
         category_id=cat,
     )
-    after = funds.available(session, "2026-11")
+    after = month_service.available(session, "2026-11")
     assert after.uncovered == before.uncovered + 300_000_00
     assert after.free == before.free - 300_000_00
 
@@ -1012,7 +1013,7 @@ def test_a_planned_payment_a_fund_already_covers_is_not_counted_twice(session):
     _salario(session)
     cat = _category(session, "Impuestos")
     funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
-    before = funds.available(session, "2026-11")
+    before = month_service.available(session, "2026-11")
     planned.plan_payment(
         session,
         payee="DIAN",
@@ -1022,7 +1023,7 @@ def test_a_planned_payment_a_fund_already_covers_is_not_counted_twice(session):
         account_id=_default_account(session),
         category_id=cat,
     )
-    after = funds.available(session, "2026-11")
+    after = month_service.available(session, "2026-11")
     assert after.uncovered == before.uncovered
     assert after.free == before.free
 
@@ -1044,7 +1045,7 @@ def test_spending_before_a_fund_starts_is_uncovered_in_full(session):
     cat = _category(session, "Tecnologia")
     funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-12")
     _spend(session, cat, 50_000_00, date(2026, 11, 10))
-    assert funds.available(session, "2026-11").uncovered == 50_000_00
+    assert month_service.available(session, "2026-11").uncovered == 50_000_00
 
 
 def test_a_target_fund_that_already_holds_its_target_asks_nothing(session):
@@ -1154,5 +1155,5 @@ def test_everything_no_fund_covers_lands_in_one_term(session):
     funds.create_fund(session, mercado, rule="fixed", amount=50_000_00, start_month="2026-11")
     _spend(session, mercado, 850_000_00, date(2026, 11, 6))
 
-    available = funds.available(session, "2026-11")
+    available = month_service.available(session, "2026-11")
     assert available.uncovered == 100_000_00 + 200_000_00 + 400_000_00 + 800_000_00

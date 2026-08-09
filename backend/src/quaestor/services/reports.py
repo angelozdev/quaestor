@@ -14,7 +14,6 @@ from decimal import Decimal
 
 from sqlmodel import Session
 
-from ..domain.errors import ValidationError
 from ..domain.models import Account, Transaction
 from ..domain.money import to_cop_cents
 from ..domain.report_markdown import money, render_markdown
@@ -28,17 +27,11 @@ from ..domain.report_types import (
     MonthAvailable,
     MonthlyReport,
 )
-from ..domain.rules import is_year_month, prev_year_month
+from ..domain.rules import prev_year_month
 from . import accounts as _accounts
-from . import fx as _fx
+from . import month as month_service
 from . import planned as _planned
-from .funds import month_available
-from .month_aggregate import MonthAggregate, load_month_aggregate
-
-
-def _validate_month(month: str) -> None:
-    if not is_year_month(month):
-        raise ValidationError(f"malformed month (expected YYYY-MM): {month!r}")
+from .month_aggregate import MonthAggregate, load_month, require_year_month
 
 
 def _usd_share(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> float:
@@ -188,14 +181,14 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         ValidationError: malformed month.
         MissingRate: no TRM set (005 AC-9 — even for all-COP data).
     """
-    _validate_month(month)
-    trm = _fx.get_trm(session)
-    agg = load_month_aggregate(session, month, trm)
+    require_year_month(month, "month")
+    agg = load_month(session, month)
+    trm = agg.trm
     start, end = agg.start, agg.end
 
     expenses = agg.month_expense()
     income, expense, net = agg.totals_for(month)
-    available: MonthAvailable = month_available(agg)
+    available: MonthAvailable = month_service.month_available(agg)
     funds, funds_summary = _fund_lines(agg, available.funds)
     report = MonthlyReport(
         month=month,

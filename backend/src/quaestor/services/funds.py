@@ -20,41 +20,32 @@ switching an obligation off in October gives August without it.
 
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 from datetime import date as Date
 from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import FundLine, FundPreview, FundStatus, MonthAvailable, MonthRates, MonthSplit
+from ..domain.dtos import FundLine, FundPreview, FundStatus
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, Fund, FundRule, RecurringItem, Transaction, TxStatus, TxType
 from ..domain.money import to_cop_cents
-from ..domain.recurrence import due_dates, next_due_on_or_after
+from ..domain.recurrence import next_due_on_or_after
 from ..domain.rules import (
-    available_calc,
     claim_holdings,
     fund_ask_calc,
     fund_holds_calc,
     fund_next_opening_calc,
-    is_year_month,
-    margin_calc,
     month_bounds,
     monthly_average_calc,
-    monthly_rate_calc,
     months_to_fund,
     next_year_month,
     prev_year_month,
-    share_calc,
     shift_year_month,
-    split_calc,
     uncovered_excess_calc,
     year_month_of,
 )
-from . import fx as _fx
-from . import metas
-from .month_aggregate import MonthAggregate, load_month_aggregate
+from .month_aggregate import MonthAggregate, load_month, require_year_month
 
 _DATED_RULES = (FundRule.from_recurring,)
 
@@ -84,29 +75,6 @@ class _Month:
 class _Obligation:
     required: int
     charge_month: str
-
-
-def _validate_year_month(year_month: str, what: str = "year_month") -> str:
-    if not is_year_month(year_month):
-        raise ValidationError(f"malformed {what} (expected YYYY-MM): {year_month!r}")
-    return year_month
-
-
-def _month_view(session: Session, year_month: str) -> MonthAggregate:
-    """The month, loaded once at the rate demanded on entry.
-
-    Reading anything in COP needs the rate, even a month in pure pesos: the
-    app never guesses one (ADR-0031, product ADR-038).
-
-    Raises:
-        MissingRate: no TRM is set.
-    """
-    return load_month_aggregate(session, year_month, _fx.get_trm(session))
-
-
-def _turns_this_month(item: RecurringItem, year_month: str) -> list[Date]:
-    start, end = month_bounds(year_month)
-    return due_dates(item.start_date, item.end_date, item.interval_unit, item.interval_count, start, end)
 
 
 def _settled_by_spending(
@@ -163,7 +131,7 @@ def _obligations(agg: MonthAggregate, fund: Fund, year_month: str) -> list[_Obli
     both readers: which turns the spending settled, and which charge the fund is
     filling for.
     """
-    turns = [(item, _turns_this_month(item, year_month)) for item in agg.obligations_in(fund.category_id)]
+    turns = [(item, agg.turns_in(item, year_month)) for item in agg.obligations_in(fund.category_id)]
     settled = _settled_by_spending(agg, fund, year_month, turns)
     found = []
     for item, dues in turns:
@@ -360,15 +328,38 @@ def fund_status(session: Session, fund_id: int, year_month: str) -> FundStatus:
         ValidationError: malformed year_month.
         MissingRate: no TRM is set.
     """
-    _validate_year_month(year_month)
+    require_year_month(year_month)
     fund = _require_fund(session, fund_id)
-    agg = _month_view(session, year_month)
+    agg = load_month(session, year_month)
     return _status(agg, fund, _walk(agg, fund))
 
 
 def fund_on_category(session: Session, category_id: int) -> Fund | None:
     """The one fund a category carries, or nothing at all (AC-25)."""
     return session.exec(select(Fund).where(Fund.category_id == category_id)).first()
+
+
+@dataclass(frozen=True)
+class FundFold:
+    """What every fund does to one month, folded once.
+
+    `lines` is what each fund reports; `overspill` is what they spent past what
+    they had, which is the only part of a fund's month that leaves the money
+    available (AC-13). Both come out of one walk, because walking the funds is
+    the dominant cost of the whole read path.
+    """
+
+    lines: list[FundStatus]
+    overspill: int
+
+
+def fold(agg: MonthAggregate) -> FundFold:
+    """Every fund's month, walked once. The seam `services.month` reads."""
+    walked = {fund.id: _walk(agg, fund) for fund in agg.funds}
+    return FundFold(
+        lines=[_status(agg, fund, walked[fund.id]) for fund in agg.funds],
+        overspill=sum(_overspill(walked[fund.id]) for fund in agg.funds),
+    )
 
 
 def list_funds(session: Session) -> list[FundLine]:
@@ -385,214 +376,6 @@ def list_funds(session: Session) -> list[FundLine]:
         )
         for fund in session.exec(select(Fund).order_by(Fund.id)).all()
     ]
-
-
-def _live_turns(agg: MonthAggregate, item: RecurringItem) -> list[Date]:
-    """The turns this obligation still has in the month — a skipped one is none."""
-    return [due for due in _turns_this_month(item, agg.year_month) if not agg.was_skipped(item.id, due)]
-
-
-def _promised(agg: MonthAggregate, item: RecurringItem) -> int:
-    return len(_live_turns(agg, item)) * to_cop_cents(item.amount, item.currency, agg.trm)
-
-
-def _income(agg: MonthAggregate) -> int:
-    """What the month actually has, reconciled per income category (ADR-0044).
-
-    Once money lands in an income category, that category stops guessing: what
-    its obligations promised is dropped whole and the month counts what
-    arrived, so a salary expecting 5.000.000 where 4.200.000 was recorded
-    counts 4.200.000 rather than both (AC-14c). The boundary is per category
-    and not per obligation — chosen, not overlooked, and ADR-0044 says why.
-    """
-    arrived: dict[int | None, int] = {}
-    for tx in agg.month_income():
-        arrived[tx.category_id] = arrived.get(tx.category_id, 0) + agg.to_cop_cents(tx)
-    promised: dict[int | None, int] = {}
-    for item in agg.active_recurring:
-        if item.type == TxType.income and item.category_id not in arrived:
-            promised[item.category_id] = promised.get(item.category_id, 0) + _promised(agg, item)
-    return sum(arrived.values()) + sum(promised.values())
-
-
-def _unsettled_promise(agg: MonthAggregate, item: RecurringItem, posted_turns: int) -> int:
-    """What an obligation still promises, after the turns that already posted.
-
-    A turn that posted is not promised any more — it happened, and the money
-    that left is counted at its real figure instead (product ADR-039). Only the
-    turns still ahead carry the declared amount.
-    """
-    remaining = max(len(_live_turns(agg, item)) - posted_turns, 0)
-    return remaining * to_cop_cents(item.amount, item.currency, agg.trm)
-
-
-def _uncovered(agg: MonthAggregate, walked: dict[int, _Month]) -> int:
-    """Everything the month owes that no fund covers (ADR-0044).
-
-    One term on purpose: spending in categories with no fund, obligations in
-    categories with no fund, and the excess past what a fund had — only the
-    excess leaves the money available, never the whole amount (AC-13).
-    Splitting it would stop the breakdown adding up (AC-10).
-
-    An obligation stops guessing the moment its charge posts, the same way an
-    income category does (product ADR-039, mirroring D5): a bill declaring
-    200.000 that posts at 250.000 costs the month 250.000, and one whose
-    obligation is switched off after posting still costs what it really did.
-    Every posted expense counts once, at what left the account.
-    """
-    funded = {fund.category_id for fund in agg.funds}
-    posted = [tx for tx in agg.month_expense() if tx.category_id not in funded and tx.meta_id is None]
-    spent = sum(agg.to_cop_cents(tx) for tx in posted)
-    posted_turns = Counter(tx.recurring_id for tx in posted if tx.recurring_id is not None)
-    obligations = sum(
-        _unsettled_promise(agg, item, posted_turns[item.id])
-        for item in agg.active_recurring
-        if item.type == TxType.expense and item.category_id not in funded
-    )
-    planned = sum(
-        agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded and tx.meta_id is None
-    )
-    excess = sum(_overspill(walked[fund.id]) for fund in agg.funds)
-    return spent + obligations + planned + excess + metas.uncovered_total(agg)
-
-
-def month_available(agg: MonthAggregate) -> MonthAvailable:
-    """The money available for the month this aggregate already holds.
-
-    The entry point for a caller that has loaded the month already — the
-    monthly report — so the fund is folded once per read and not twice.
-    `available` is the same answer for a caller holding only a session.
-    """
-    year_month = agg.year_month
-    walked = {fund.id: _walk(agg, fund) for fund in agg.funds}
-    lines = [_status(agg, fund, walked[fund.id]) for fund in agg.funds]
-    income = _income(agg)
-    uncovered = _uncovered(agg, walked)
-    contributed = metas.contributed_total(agg)
-    released = metas.released_total(agg)
-    claimed = (
-        sum(line.asks for line in lines)
-        + metas.asks_total(agg)
-        + metas.cancelled_asks_total(agg)
-        + contributed
-        - released
-    )
-    return MonthAvailable(
-        year_month=year_month,
-        income=income,
-        funds=lines,
-        uncovered=uncovered,
-        free=available_calc(income, claimed, uncovered),
-        metas=metas.statuses(agg) + metas.cancelled_statuses(agg),
-        contributed=contributed,
-        released=released,
-    )
-
-
-def month_split(agg: MonthAggregate) -> MonthSplit:
-    """What share of the month was spent, set aside, or left (AC-37).
-
-    Nothing new is computed: it is `month_available`'s own terms, split by the
-    one thing that already tells the two shapes apart. A *presupuesto* is a
-    ceiling and counts as consumo; a *fondo* carries its leftover forward and
-    counts as ahorro; a meta is always ahorro; and spending in a category the
-    owner marked as saving is ahorro too (AC-41).
-
-    `ahorro` is net and may be negative — a month a meta is cancelled is a
-    month savings come back out. That is what keeps `consumo + ahorro + libre`
-    equal to the income in every month, which is the property AC-37 exists for.
-    `saved` is the same month before the give-back, so a month that both set
-    money aside and cancelled a meta can say so twice instead of once.
-    """
-    view = month_available(agg)
-    presupuesto = sum(line.asks for line in view.funds if not line.accumulates)
-    fondo = sum(line.asks for line in view.funds if line.accumulates)
-    saved_by_spending = _spent_where_spending_is_saving(agg)
-    consumo = presupuesto + view.uncovered - saved_by_spending
-    saved = fondo + sum(line.asks for line in view.metas) + view.contributed + saved_by_spending
-    ahorro = saved - view.released
-    libre = split_calc(consumo, ahorro, view.income)
-    return MonthSplit(
-        year_month=agg.year_month,
-        income=view.income,
-        consumo=consumo,
-        ahorro=ahorro,
-        libre=libre,
-        ahorro_share=share_calc(ahorro, view.income),
-        saved=saved,
-        saved_share=share_calc(saved, view.income),
-        released=view.released,
-        gave_back=[line for line in view.metas if line.released > 0],
-    )
-
-
-def _spent_where_spending_is_saving(agg: MonthAggregate) -> int:
-    """Spending the owner declared to be saving, out of the uncovered term.
-
-    Only the uncovered part: spending a fund already covers is the fund's
-    business, and the mark moves what nothing else claims (AC-41).
-    """
-    funded = {fund.category_id for fund in agg.funds}
-    saving = {cid for cid, cat in agg.categories.items() if cat.counts_as_saving}
-    return sum(
-        agg.to_cop_cents(tx)
-        for tx in agg.month_expense()
-        if tx.category_id in saving and tx.category_id not in funded and tx.meta_id is None
-    )
-
-
-def split(session: Session, year_month: str) -> MonthSplit:
-    """What share of a month is spent, set aside, or left.
-
-    Raises:
-        ValidationError: malformed year_month.
-        MissingRate: no TRM is set.
-    """
-    _validate_year_month(year_month)
-    return month_split(_month_view(session, year_month))
-
-
-def available(session: Session, year_month: str) -> MonthAvailable:
-    """The money available for a month, opened into the terms that make it.
-
-    A balance, never a rate: it counts income the month is actually owed and
-    nothing that has not arrived yet (AC-14). Every figure is derived from the
-    month asked about and from what is known now, never from a stored snapshot
-    (AC-16) — so no clock is needed.
-
-    Raises:
-        ValidationError: malformed year_month.
-        MissingRate: no TRM is set.
-    """
-    _validate_year_month(year_month)
-    return month_available(_month_view(session, year_month))
-
-
-def rates(session: Session, year_month: str) -> MonthRates:
-    """What the owner earns a month, what the owner costs a month, and the gap.
-
-    Rates, never the money available: each cycle is spread across its own
-    months, so a quarterly income counts here in every month of its cycle and
-    there only in the month it is due (AC-14b).
-
-    Raises:
-        ValidationError: malformed year_month.
-        MissingRate: no TRM is set.
-    """
-    _validate_year_month(year_month)
-    agg = _month_view(session, year_month)
-    funded = {fund.category_id for fund in agg.funds}
-    earning = 0
-    cost = sum(_walk(agg, fund).ask.amount for fund in agg.funds)
-    for item in agg.active_recurring:
-        share = monthly_rate_calc(
-            to_cop_cents(item.amount, item.currency, agg.trm), item.interval_unit, item.interval_count
-        )
-        if item.type == TxType.income:
-            earning += share
-        elif item.category_id not in funded:
-            cost += share
-    return MonthRates(year_month=year_month, earning=earning, cost=cost, margin=margin_calc(earning, cost))
 
 
 def _require_fund(session: Session, fund_id: int) -> Fund:
@@ -661,7 +444,7 @@ def _rule_of(rule: str | FundRule) -> FundRule:
 
 def _validated_spec(session: Session, category: Category, rule: FundRule, spec: dict) -> dict:
     """The stored shape of one rule, or the refusal that stops it."""
-    start_month = _validate_year_month(spec.get("start_month"), "start_month")
+    start_month = require_year_month(spec.get("start_month"), "start_month")
     accumulates = spec.get("accumulates")
     stored = {"rule": rule, "start_month": start_month, "accumulates": True if accumulates is None else accumulates}
     if rule == FundRule.fixed:
@@ -737,7 +520,7 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
     stored = _validated_spec(session, category, _rule_of(spec.get("rule")), spec)
     unsaved = Fund(category_id=category_id, **stored)
     start = unsaved.start_month
-    walked = _walk(_month_view(session, start), unsaved)
+    walked = _walk(load_month(session, start), unsaved)
     would_ask = walked.ask.amount
     return FundPreview(
         category_id=category_id,

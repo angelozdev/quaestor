@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 from quaestor.db import init_db, make_engine
+from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import (
     Account,
     AccountType,
@@ -11,7 +12,7 @@ from quaestor.domain.models import (
     TxStatus,
     TxType,
 )
-from quaestor.services.month_aggregate import load_month_aggregate
+from quaestor.services.month_aggregate import load_month_aggregate, require_year_month
 from sqlmodel import Session
 
 from tests.support.query_counter import count_queries
@@ -68,6 +69,15 @@ def test_a_month_the_category_never_spent_in_is_zero(session):
     _, cat = _setup(session)
     agg = load_month_aggregate(session, "2026-06", TRM)
     assert agg.spent_in(cat.id, "2026-06") == 0
+
+
+def test_a_malformed_month_is_refused_and_names_the_field_it_came_from():
+    """One guard for three services, so a bad month reads the same everywhere."""
+    with pytest.raises(ValidationError, match="target_month"):
+        require_year_month("2026-13", "target_month")
+    with pytest.raises(ValidationError):
+        require_year_month("June")
+    assert require_year_month("2026-06") == "2026-06"
 
 
 BOUNDED_LOADS = 14

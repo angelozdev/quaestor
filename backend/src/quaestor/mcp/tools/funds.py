@@ -20,6 +20,7 @@ from sqlmodel import Session
 from ...domain.errors import NotFound
 from ...domain.models import Category
 from ...services import funds
+from ...services import month as month_service
 from .. import format
 from .core import _as_text, _resolve_category_by_name, _validate_month
 
@@ -121,10 +122,10 @@ def delete_fund(session: Session, inp: FundInput) -> str:
 @_as_text
 def money_available(session: Session, inp: MonthInput) -> str:
     _validate_month(inp.month)
-    return format.money_available_card(funds.available(session, inp.month))
+    return format.money_available_card(month_service.available(session, inp.month))
 
 
 @_as_text
 def money_rates(session: Session, inp: MonthInput) -> str:
     _validate_month(inp.month)
-    return format.money_rates_card(funds.rates(session, inp.month))
+    return format.money_rates_card(month_service.rates(session, inp.month))

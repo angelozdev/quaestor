@@ -10,9 +10,9 @@ meta opened the month with and nothing else; contributing, completing,
 cancelling and editing are separate terms in the month, never adjustments to
 the instalment. An instalment of zero happens only because nothing is missing.
 
-This module does not import `services.funds`. Both read the same
-`MonthAggregate` and hand their asks to `month_available`, which is the one
-place the two nouns meet.
+This module does not import `services.funds`, and `services.funds` does not
+import this. Both read the same `MonthAggregate` and hand their folds to
+`services.month`, which is the one place the two nouns meet.
 """
 
 from __future__ import annotations
@@ -26,15 +26,13 @@ from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Meta, MetaAmendment, MetaContribution
 from ..domain.money import to_cop_cents
 from ..domain.rules import (
-    is_year_month,
     meta_ask_calc,
     meta_uncovered_calc,
     months_to_meta,
     next_year_month,
     year_month_of,
 )
-from . import fx as _fx
-from .month_aggregate import MonthAggregate, load_month_aggregate
+from .month_aggregate import MonthAggregate, load_month, require_year_month
 
 
 @dataclass(frozen=True)
@@ -47,12 +45,6 @@ class MetaPreview:
     asks: int
     months_left: int
     over_the_month: bool
-
-
-def _validate_year_month(year_month: str, what: str = "year_month") -> str:
-    if not is_year_month(year_month):
-        raise ValidationError(f"malformed {what} (expected YYYY-MM): {year_month!r}")
-    return year_month
 
 
 def _require_meta(session: Session, meta_id: int) -> Meta:
@@ -78,7 +70,7 @@ def _validate_spec(name: str, amount: int, target_month: str, today_month: str) 
         raise ValidationError("a meta needs a name")
     if amount <= 0:
         raise ValidationError("a meta needs an amount above zero")
-    _validate_year_month(target_month, "target_month")
+    require_year_month(target_month, "target_month")
     if target_month < today_month:
         raise ValidationError(f"there is no way to save into the past: {target_month} is behind {today_month}")
 
@@ -202,8 +194,8 @@ def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
         ValidationError: malformed year_month.
         MissingRate: no TRM is set.
     """
-    _validate_year_month(year_month)
-    found = statuses(_month_view(session, year_month))
+    require_year_month(year_month)
+    found = statuses(load_month(session, year_month))
     return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
 
 
@@ -326,21 +318,8 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
     return put_in
 
 
-def _month_view(session: Session, year_month: str) -> MonthAggregate:
-    """The month, loaded once at the rate demanded on entry.
-
-    Deliberately not imported from `services.funds`, which imports this module:
-    the two nouns meet in `month_available` and nowhere else, and a circular
-    import would be the first crack in that.
-
-    Raises:
-        MissingRate: no TRM is set.
-    """
-    return load_month_aggregate(session, year_month, _fx.get_trm(session))
-
-
 def _room_left(session: Session, meta: Meta, year_month: str) -> int:
-    walked = _walk(_month_view(session, year_month), meta)
+    walked = _walk(load_month(session, year_month), meta)
     return meta.amount - walked.holds
 
 
@@ -374,7 +353,7 @@ def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
         ValidationError: the meta was already bought.
     """
     meta = _require_meta(session, meta_id)
-    if _bought(_month_view(session, year_month), meta):
+    if _bought(load_month(session, year_month), meta):
         raise ValidationError(f"the meta {meta.name!r} was bought, so it is closed rather than cancelled")
     meta.archived = True
     meta.cancelled_month = year_month
@@ -397,7 +376,7 @@ def close_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
         ValidationError: the meta is still running.
     """
     meta = _require_meta(session, meta_id)
-    if not _status(_month_view(session, year_month), meta).complete:
+    if not _status(load_month(session, year_month), meta).complete:
         raise ValidationError(f"the meta {meta.name!r} is still running, so it is cancelled rather than closed")
     meta.closed = True
     meta.archived = True

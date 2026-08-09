@@ -10,7 +10,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from ...services import funds, metas
+from ...services import metas
+from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
     MetaContributionIn,
@@ -33,7 +34,7 @@ def list_metas(month: str, session: Session = Depends(get_session)):
 
 @router.get("/split", response_model=MonthSplitOut)
 def month_split(month: str, session: Session = Depends(get_session)):
-    return funds.split(session, month)
+    return month_service.split(session, month)
 
 
 @router.get("/archived", response_model=list[MetaOut])
@@ -47,7 +48,7 @@ def preview_meta(body: MetaCreate, month: str, session: Session = Depends(get_se
         amount=body.amount,
         target_month=body.target_month,
         today=month,
-        income=funds.available(session, month).income,
+        income=month_service.available(session, month).income,
     )
 
 

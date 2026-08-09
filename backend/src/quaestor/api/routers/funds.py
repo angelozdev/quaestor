@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from ...services import funds
+from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
     FundCreate,
@@ -28,12 +29,12 @@ router = APIRouter(prefix="/funds", tags=["funds"])
 
 @router.get("/available", response_model=MonthAvailableOut)
 def money_available(month: str, session: Session = Depends(get_session)):
-    return funds.available(session, month)
+    return month_service.available(session, month)
 
 
 @router.get("/rates", response_model=MonthRatesOut)
 def money_rates(month: str, session: Session = Depends(get_session)):
-    return funds.rates(session, month)
+    return month_service.rates(session, month)
 
 
 @router.get("", response_model=list[FundLineOut])

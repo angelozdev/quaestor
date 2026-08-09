@@ -22,6 +22,7 @@ from decimal import Decimal
 from sqlalchemy import extract, func, or_
 from sqlmodel import Session, select
 
+from ..domain.errors import ValidationError
 from ..domain.models import (
     Category,
     CategoryGroup,
@@ -37,7 +38,9 @@ from ..domain.models import (
     TxType,
 )
 from ..domain.money import to_cop_cents
-from ..domain.rules import month_bounds, prev_year_month, year_month_of
+from ..domain.recurrence import due_dates
+from ..domain.rules import is_year_month, month_bounds, prev_year_month, year_month_of
+from . import fx as _fx
 
 
 @dataclass
@@ -103,6 +106,20 @@ class MonthAggregate:
         """Whether the owner said this turn will not happen (AC-17)."""
         return (recurring_id, due_date) in self.skipped_turns
 
+    def turns_in(self, item: RecurringItem, year_month: str) -> list[Date]:
+        """Every turn this obligation falls due on inside one month.
+
+        The month is named rather than assumed: a fold walks months behind the
+        one the aggregate was loaded for, and reading this month's turns for
+        all of them would make a skipped charge skip every earlier month too.
+        """
+        start, end = month_bounds(year_month)
+        return due_dates(item.start_date, item.end_date, item.interval_unit, item.interval_count, start, end)
+
+    def live_turns(self, item: RecurringItem) -> list[Date]:
+        """This month's turns that are still going to happen (AC-17)."""
+        return [due for due in self.turns_in(item, self.year_month) if not self.was_skipped(item.id, due)]
+
     def posted_in_month(self, year_month: str, tx_type: TxType) -> list[Transaction]:
         """Posted rows of the month, minus excluded categories. Valid ONLY
         for the report month and its previous month (the loaded window)."""
@@ -142,6 +159,29 @@ class MonthAggregate:
         income = sum(self.to_cop_cents(t) for t in self.posted_in_month(year_month, TxType.income))
         expense = sum(self.to_cop_cents(t) for t in self.posted_in_month(year_month, TxType.expense))
         return income, expense, income - expense
+
+
+def require_year_month(year_month: str, what: str = "year_month") -> str:
+    """The month a caller asked for, or a refusal naming the field it came from.
+
+    Month knowledge, not fund or meta knowledge: three services were each
+    keeping their own copy of this guard.
+    """
+    if not is_year_month(year_month):
+        raise ValidationError(f"malformed {what} (expected YYYY-MM): {year_month!r}")
+    return year_month
+
+
+def load_month(session: Session, year_month: str) -> MonthAggregate:
+    """The month, loaded once at the rate demanded on entry.
+
+    Reading anything in COP needs the rate, even a month in pure pesos: the
+    app never guesses one (ADR-0031, product ADR-038).
+
+    Raises:
+        MissingRate: no TRM is set.
+    """
+    return load_month_aggregate(session, year_month, _fx.get_trm(session))
 
 
 def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> MonthAggregate:
