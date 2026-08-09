@@ -83,8 +83,20 @@ dev-test:
 lint:
 	uv run --project backend ruff check backend/src backend/tests acceptance
 	uv run --project backend ruff format --check backend/src backend/tests acceptance
+	cd backend && uv run lint-imports
 	cd frontend && pnpm biome check .
 	cd frontend && pnpm tsc --noEmit
+
+# What no module imports and no screen renders (ADR-0047). Reported, never
+# enforced: a dead export is a decision about the product, not a lint error.
+dead:
+	cd frontend && pnpm knip --no-exit-code
+
+# Copy-paste across both halves (ADR-0047). Every flag lives in .jscpd.json at
+# the root, which dae_dup.py reads too — so `just dup` and the Refine
+# checkpoint answer with the same findings rather than two calibrations.
+dup:
+	frontend/node_modules/.bin/jscpd . --reporters consoleFull
 
 # Apply every fix the linters can make on their own, then re-check.
 lint-fix:

@@ -18,6 +18,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.13",
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "pyyaml>=6",
@@ -27,6 +28,29 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["src", ".."]
 testpaths = ["tests"]
+
+[tool.importlinter]
+root_package = "quaestor"
+
+[[tool.importlinter.contracts]]
+name = "A layer answers only to the ones below it"
+type = "layers"
+layers = [
+    "quaestor.api",
+    "quaestor.chat",
+    "quaestor.mcp | quaestor.jobs",
+    "quaestor.services",
+    "quaestor.domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "The month is folded above the fund and the meta, and they do not know each other"
+type = "layers"
+layers = [
+    "quaestor.services.month",
+    "quaestor.services.funds | quaestor.services.metas",
+    "quaestor.services.month_aggregate",
+]
 
 [build-system]
 requires = ["hatchling"]
