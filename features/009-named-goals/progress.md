@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 8/10 criteria met | NEXT: the owner runs `just backup && just migrate` for 0015 and 0016 | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner decides whether `spec.md` gains the scenarios that would have caught round two, then runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -6,14 +6,20 @@ Metas: named savings goals beside the fund, not inside it. 45 ACs, 125
 scenarios, all bound and green. Three migrations still outstanding and
 human-owned.
 
-The green suite has now been wrong four times in this feature, and each time
-the same way: a behaviour reachable from Python and from no screen, pinned by
-an `@backend` scenario bound at the services layer. 112 of the 125 scenarios
-are that shape. Refine found two bugs and left the acceptance stream red for
-twelve hours behind two green ones. Mutation found 54 behaviours the suite
-could not tell from the real thing. An independent verifier then traced all 45
-ACs from a screen to a rule and found thirteen that could not be reached —
-three of them wrong figures, eight of them unbuilt.
+The green suite has been wrong five times in this feature, always the same
+way: a behaviour reachable from Python and from no screen, pinned by an
+`@backend` scenario bound at the services layer. 112 of the 125 scenarios are
+that shape.
+
+Refine found two bugs and left the acceptance stream red for twelve hours
+behind two green ones. Mutation found 54 behaviours the suite could not tell
+from the real thing. A first independent verifier traced all 45 ACs from a
+screen to a rule and found thirteen unreachable — three wrong figures, eight
+unbuilt. **A second verifier then found nine more in the code that closed the
+first thirteen**, seven of them collateral from ADR-0048, a decision taken the
+same hour. Four green streams saw none of them.
+
+The count so far: round one found 13 of 45, round two found 9 of 45.
 
 ## Checkpoints
 
@@ -23,7 +29,7 @@ three of them wrong figures, eight of them unbuilt.
 | 2 | ACs | done | 2026-08-08T1215-discover-acs.md |
 | 3 | Spec | done | 2026-08-08T1610-atdd-redraft.md |
 | 4 | Plan | done | 2026-08-08T2000-plan.md |
-| 5 | Implement | **open** | 2026-08-08T2130-implement.md · 2026-08-09T1111-verify-implementation.md · 2026-08-09T1230-close-findings.md |
+| 5 | Implement | **open** | 2026-08-08T2130-implement.md · 2026-08-09T1111-verify-implementation.md · 2026-08-09T1230-close-findings.md · 2026-08-09T1400-verify-round2.md · 2026-08-09T1510-close-round2.md |
 | 6 | Refine | **open** | 2026-08-09T0758-refine.md |
 | 7 | Verify | **open** | 2026-08-09T0811-crap-analyzer.md |
 | 8 | Harden | **open** | 2026-08-09T0901-mutation.md |
@@ -41,13 +47,13 @@ CP5 independently; it does not launder CP6.
 009        125 scenarios · unbound 0
 010        unbound 0
 acceptance 472 passed
-backend    1063 passed
-vitest     55 files · 417 passed
+backend    1074 passed
+vitest     55 files · 420 passed
 lint       exit 0 · Contracts 2 kept, 0 broken
 knip       0 findings
 dup        43 clones · 1.96%
 month load 13 bounded queries
-mutation   metas.py 96.5% · rules.py 98.4% · both 100% adjusted
+mutation   metas.py 96.7% · rules.py 98.4% · both 100% adjusted
 ```
 
 ## What the green suite did not catch
@@ -66,6 +72,11 @@ Four screens, then three figures, then eight behaviours — one shape.
 | A closed meta was listed as cancelled, with a button that charged the month | verifier | 2eb1d13 |
 | Eight behaviours in Python and on no screen (AC-11, 16, 19, 26, 34, 36, 41, 42) | verifier | 13253a8 |
 | `PATCH /metas/{id}` reached by no stream | crap-analyzer | 60aca13 |
+| A closed meta was charged by the month and named by nothing (AC-4, 31, 32, 36, 37, 38) | verifier 2 | 43a3fb7 |
+| A meta kept on with a new amount or month moved no figure, and took contributions that vanished (AC-8) | verifier 2 | 43a3fb7 |
+| A planned purchase stopped the meta, which AC-43 says it must not | verifier 2 | 43a3fb7 |
+| A past month stopped naming a meta closed later (AC-27) | verifier 2 | 43a3fb7 |
+| A dollar meta's instalment was summed as pesos in three columns (AC-26) | verifier 2 | 43a3fb7 |
 
 ## Handoff log
 
@@ -84,13 +95,24 @@ Four screens, then three figures, then eight behaviours — one shape.
 | 2026-08-09T1005 | kill-mutants | main | `tests/services/test_metas.py` written; every real survivor dead |
 | 2026-08-09T1111 | verify-implementation | subagent-verify-cp5 | 32 of 45 ACs reachable; 3 wrong figures reproduced, 8 unbuilt |
 | 2026-08-09T1230 | close-findings | main | all 13 closed; product ADR-044 + ADR-0048 |
+| 2026-08-09T1400 | verify-implementation (round 2) | subagent-verify-cp5-round2 | 34 of 45 correct; 9 wrong, 7 of them ADR-0048's collateral |
+| 2026-08-09T1510 | close-findings (round 2) | main | all 9 closed; ADR-0049 supersedes ADR-0048's implementation clauses |
 
 ## Outstanding
 
 | What | Owner | How |
 |---|---|---|
+| Whether `spec.md` gains scenarios that close a meta where closing moves a figure | human | it is the owner's contract; no agent has modified it |
+| Whether a third verifier runs | human | round one found 13, round two found 9 |
 | Migrations 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Merge to `main` | human (CHARTER §7) | — |
+
+**The acceptance suite cannot see any of round two's nine defects, and the
+reason is structural.** No scenario of AC-4, AC-31, AC-36 or AC-37 closes a
+meta. AC-39's only close is in January over a December purchase, where no
+figure can move. AC-27 cancels rather than closes. AC-43 asserts only *is
+running*. 472 green scenarios were blind to all nine, and will be blind to the
+next one of the same shape.
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The

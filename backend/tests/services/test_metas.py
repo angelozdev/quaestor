@@ -570,3 +570,28 @@ def test_a_dollar_meta_is_saved_in_pesos_like_everything_else_in_the_split(sessi
     split = month.month_split(load_month(session, "2026-08"))
 
     assert split.set_aside == 33_334 * int(SEEDED_TRM)
+
+
+def test_the_answer_given_in_the_month_of_the_purchase_counts(session):
+    """AC-8 puts the two offers on the completed meta, which is the purchase month's screen.
+
+    Ignoring an edit made there would be the same failure the offers exist to
+    prevent: the owner presses the button and no figure moves.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+
+    metas.set_meta(session, moto.id, today="2026-08", amount=2_000_000)
+
+    assert _reported(session, "2026-09", "Moto").asks > 0
+
+
+def test_an_answer_given_later_does_not_reach_back_into_an_earlier_month(session):
+    """AC-27: a past month answers as that month stood."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2027-06")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+
+    metas.set_meta(session, moto.id, today="2026-12", amount=2_000_000)
+
+    assert _reported(session, "2026-09", "Moto").asks == 0
+    assert _reported(session, "2026-12", "Moto").asks > 0

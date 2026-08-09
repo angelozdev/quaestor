@@ -4,7 +4,7 @@
 - **Date:** 2026-08-09
 - **Deciders:** Angelo
 - **Supersedes:** one clause of [0046](0046-a-meta-is-a-named-thing-to-save-for.md) — *"an instalment of zero happens only because nothing is missing, never because completing, cancelling or editing waived it"*
-- **Superseded by:** —
+- **Superseded by:** [0049](0049-closing-leaves-the-screen-not-the-month-and-a-purchase-stops-only-what-the-owner-has-not-restarted.md), on its three implementation clauses only — where the closed meta is filtered, whether the stop is unconditional, and whether a planned purchase counts. The decision above stands.
 
 ## Context and problem statement
 

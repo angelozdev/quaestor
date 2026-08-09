@@ -105,13 +105,18 @@ def _finished_before(agg: MonthAggregate, meta: Meta, month: str) -> bool:
 
     Saying the meta wants more — a new amount, or a new month — is AC-8's
     second and third offers, and it starts a new series from the month the
-    owner said it. So an amendment after the purchase resumes the meta, and it
-    stays resumed.
+    owner said it. So an amendment resumes the meta and it stays resumed.
+
+    The purchase month counts as one where the owner may say it. That is where
+    the screen puts the two offers: a meta completes the moment its purchase is
+    linked, and the answer is given on the same screen, in the same month. An
+    amendment later than the month being read never reaches back into it — a
+    past month answers as that month stood (AC-27).
     """
     bought_in = _bought_in(agg, meta)
     if bought_in is None or month <= bought_in:
         return False
-    return not any(bought_in < row.year_month <= month for row in agg.amendments.get(meta.id, []))
+    return not any(bought_in <= row.year_month <= month for row in agg.amendments.get(meta.id, []))
 
 
 @dataclass(frozen=True)
