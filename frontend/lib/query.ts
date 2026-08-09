@@ -20,6 +20,12 @@ const ROOTS = {
 
 const DETAIL = "detail" as const
 
+/** The fields the preview's answer actually depends on. The meta's name is not
+ * one of them, so keying on it would refetch for a figure that cannot change. */
+function whatThePreviewReads(body: MetaCreate | null) {
+  return body && { amount: body.amount, target_month: body.target_month }
+}
+
 // Query-key factory. First element is the entity root used for broad invalidation.
 export const qk = {
   transactions: (filters: TransactionFilters = {}) => [ROOTS.transactions, filters] as const,
@@ -41,7 +47,8 @@ export const qk = {
   metas: (month: string) => [ROOTS.metas, "list", month] as const,
   metaSplit: (month: string) => [ROOTS.metas, "split", month] as const,
   metasArchived: () => [ROOTS.metas, "archived"] as const,
-  metaPreview: (body: MetaCreate | null) => [ROOTS.metas, "preview", body] as const,
+  metaPreview: (body: MetaCreate | null) =>
+    [ROOTS.metas, "preview", whatThePreviewReads(body)] as const,
   fundPreview: (rule: string, body: FundCreate | null) =>
     [ROOTS.funds, "preview", rule, body] as const,
   report: (month: string) => [ROOTS.reports, month] as const,

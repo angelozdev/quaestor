@@ -5,7 +5,7 @@ is folded forward from the owner's own anchor over the spending the month
 aggregate already carries, so a configured fund costs nothing per month
 forever — there is no ritual to run and nothing to advance.
 
-The two dated rules are one division: *what is still missing ÷ the months from
+The dated rule is one division: *what is still missing ÷ the months from
 this one through the month before the charge*, floored at one month
 (`rules.fund_ask_calc`). The two undated ones never look at what the fund
 holds — a fixed rule asks its amount, an average rule asks the window's

@@ -73,11 +73,11 @@ def test_a_month_the_category_never_spent_in_is_zero(session):
 BOUNDED_LOADS = 14
 """The ceiling one month load is held under (ADR-0028), asserted with `<=`.
 
-The ceiling was already ten before feature 003 and has not moved. What moved
-is the measured count: eight before, ten now — three statements added and one
-dropped with the `budget` table, the +2 the plan budgeted. So there is no
-headroom left, and the next query added to `load_month_aggregate` fails this
-test on purpose. Raising the number is a decision about the read path, not a
+Eight before feature 003, ten after it, fourteen after 009 — which added the
+metas, their contributions, their amendments and the movements linked to them.
+The measured count equals the ceiling, so there is no headroom left and the
+next query added to `load_month_aggregate` fails this test on purpose. Raising
+the number is a decision about the read path, not a
 repair to the test.
 
 The ten: the categories, the groups, the per-category-and-month spending

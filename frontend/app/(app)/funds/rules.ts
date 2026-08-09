@@ -46,8 +46,8 @@ const PRESUPUESTO_RULES: RuleOffer[] = [
 /**
  * The rules a shape may use.
  *
- * Reading the owner's recurring charges and saving toward a date both have to
- * carry money forward, so neither is ever offered as a presupuesto (AC-12).
+ * Reading the owner's recurring charges has to carry money forward, so it is
+ * never offered as a presupuesto (AC-12).
  */
 export function rulesFor(shape: FundShape): RuleOffer[] {
   return shape === "fondo" ? FONDO_RULES : PRESUPUESTO_RULES

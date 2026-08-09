@@ -263,13 +263,15 @@ def uncovered_excess_calc(spent: int, opening: int, asks: int) -> int:
     return max(spent - opening - asks, 0)
 
 
-def available_calc(income: int, asks_total: int, uncovered: int) -> int:
-    """The money available: income, less every fund's ask, less what no fund covers.
+def available_calc(income: int, claimed: int, uncovered: int) -> int:
+    """The money available: income, less everything already claimed, less what
+    no fund covers.
 
-    One uncovered term rather than three, so the breakdown adds up exactly
-    (AC-10).
+    `claimed` gathers every fund's and meta's ask, what the owner set aside by
+    hand and what a cancelled meta gave back (ADR-0046). One uncovered term
+    rather than three, so the breakdown adds up exactly (AC-10).
     """
-    return income - asks_total - uncovered
+    return income - claimed - uncovered
 
 
 def margin_calc(earning: int, cost: int) -> int:
