@@ -251,14 +251,19 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
 
 
-def _gone_from_the_list(agg: MonthAggregate, meta: Meta) -> bool:
-    """Whether a closed meta has left the screen by the month being read.
+def _off_the_screen(agg: MonthAggregate, meta: Meta) -> bool:
+    """Whether the metas screen leaves this meta out of the month being read.
 
-    It leaves from the month it finished, and not one month earlier: a month the
-    meta ran through still names it with what it held and what it asked, because
-    every figure the screen shows is worked out from the month being read
-    (AC-27).
+    A meta that had not been created yet is no part of that month, and listing
+    it would put `lleva 0 · pide 0 · 0%` in every month before it existed.
+
+    A closed one leaves from the month it finished, and not one month earlier:
+    a month it ran through still names it with what it held and what it asked,
+    because every figure the screen shows is worked out from the month being
+    read (AC-27).
     """
+    if agg.year_month < meta.start_month:
+        return True
     return meta.closed and _walk(agg, meta).finished
 
 
@@ -275,7 +280,7 @@ def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
     """
     require_year_month(year_month)
     agg = load_month(session, year_month)
-    found = [_status(agg, meta) for meta in agg.metas if not _gone_from_the_list(agg, meta)]
+    found = [_status(agg, meta) for meta in agg.metas if not _off_the_screen(agg, meta)]
     return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
 
 

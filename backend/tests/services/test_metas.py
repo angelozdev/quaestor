@@ -217,14 +217,19 @@ def test_a_new_edit_is_compared_against_the_latest_one_not_the_oldest(session):
     ]
 
 
-def test_a_month_before_the_meta_existed_reports_it_asking_and_holding_nothing(session):
-    """`_walk`'s first branch — the whole of it was unreached."""
+def test_a_month_before_the_meta_existed_charges_nothing_for_it(session):
+    """`_walk`'s first branch — the whole of it was unreached.
+
+    Asked of the month's arithmetic, not of the screen: the screen leaves the
+    meta out of a month it did not exist in, and the sums still have to fold it
+    to nothing rather than to a first instalment.
+    """
     _meta(session, today="2026-08", target="2026-12")
 
-    reported = _reported(session, "2026-07", "Moto")
-    assert reported.asks == 0
-    assert reported.holds == 0
-    assert reported.progress == 0
+    agg = load_month(session, "2026-07")
+    reported = next(m for m in metas.statuses(agg) if m.name == "Moto")
+    assert (reported.asks, reported.holds, reported.progress) == (0, 0, 0)
+    assert metas.asks_total(agg) == 0
 
 
 def test_a_purchase_dated_before_its_meta_existed_costs_the_month_all_of_itself(session):
@@ -666,3 +671,32 @@ def test_a_meta_closed_after_being_lowered_leaves_the_screen_too(session):
     assert [m.name for m in metas.list_metas(session, "2026-09")] == ["Moto"]
     for later in ("2026-11", "2026-12", "2027-03"):
         assert [m.name for m in metas.list_metas(session, later)] == []
+
+
+def test_a_meta_is_not_listed_in_a_month_it_did_not_exist_in(session):
+    """Reading April for a meta opened in June listed it at `lleva 0 · pide 0`."""
+    _meta(session, today="2026-06", target="2026-12")
+
+    assert [m.name for m in metas.list_metas(session, "2026-04")] == []
+    assert [m.name for m in metas.list_metas(session, "2026-06")] == ["Moto"]
+
+
+def test_a_meta_that_says_nothing_was_already_put_by_asks_for_the_whole_thing(session):
+    """The fold opens at zero, and a centavo of slack there moves the first instalment."""
+    _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+
+    first = _reported(session, "2026-06", "Moto")
+    assert (first.asks, first.holds) == (142_858, 142_858)
+
+
+def test_a_meta_lowered_by_one_centavo_below_what_it_holds_has_finished(session):
+    """The release that finishes a meta is any release, not a large one (AC-16)."""
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-12", amount=857_142)
+
+    december = _reported(session, "2026-12", "Moto")
+    assert (december.released, december.complete) == (1, True)
+
+    metas.close_meta(session, moto.id, year_month="2026-12")
+    assert [m.name for m in metas.list_metas(session, "2026-11")] == ["Moto"]
+    assert [m.name for m in metas.list_metas(session, "2026-12")] == []

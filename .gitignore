@@ -55,3 +55,6 @@ lunchmoney-transactions.csv
 
 # DAE build artifacts (spec IR, generated pipelines)
 .build/
+
+# The mutation sweep copies its target here so a kill signal cannot lose the source.
+*.py.orig
