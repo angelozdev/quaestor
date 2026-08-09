@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
 import { FormField } from "@/components/form-field"
+import { MetaField } from "@/components/meta-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
@@ -55,6 +56,11 @@ const TO_PAY_HELP = (
   </>
 )
 
+/** The month a debt belongs to is the month it is due, so that is the month whose metas it may point at. */
+function monthOf(dueDate: string): string {
+  return /^\d{4}-\d{2}/.test(dueDate) ? dueDate.slice(0, 7) : format(new Date(), "yyyy-MM")
+}
+
 const PLAN_DEFAULTS: PlanPaymentValues = {
   payee: "",
   accountId: null,
@@ -62,6 +68,7 @@ const PLAN_DEFAULTS: PlanPaymentValues = {
   dueDate: "",
   categoryId: null,
   newCategory: "",
+  metaId: null,
   notes: undefined,
 }
 
@@ -124,6 +131,7 @@ export default function ToPayPage() {
         account_id: values.accountId as number,
         category_id: values.categoryId,
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
+        meta_id: values.metaId,
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
       })
     },
@@ -365,6 +373,16 @@ export default function ToPayPage() {
                   />
                 )
               }}
+            </planForm.Field>
+            <planForm.Field name="metaId">
+              {(field) => (
+                <MetaField
+                  id={field.name}
+                  month={monthOf(planForm.state.values.dueDate)}
+                  value={field.state.value as number | null}
+                  onChange={(metaId) => field.handleChange(metaId as never)}
+                />
+              )}
             </planForm.Field>
             <planForm.Field name="notes">
               {(field) => {

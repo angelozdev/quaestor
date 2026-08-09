@@ -315,6 +315,7 @@ export interface PlanPaymentCreate {
   category_id?: number | null
   new_category?: string | null
   notes?: string | null
+  meta_id?: number | null
 }
 export interface ConfirmPaymentBody {
   amount?: number

@@ -313,6 +313,7 @@ class PlanPaymentIn(BaseModel):
     category_id: int | None = None
     new_category: str | None = None
     notes: str | None = None
+    meta_id: int | None = None
 
 
 class ConfirmPaymentIn(BaseModel):

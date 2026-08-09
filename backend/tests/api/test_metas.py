@@ -399,3 +399,63 @@ def test_a_closed_meta_stays_in_the_breakdown_it_still_costs(client, auth):
     assert [m["name"] for m in after["metas"]] == ["Celular"]
     assert after["free"] == before["free"]
     assert client.get("/api/metas", headers=auth, params=MONTH).json() == []
+
+
+def test_a_planned_purchase_is_pointed_at_a_meta_when_it_is_written_down(client, auth, account):
+    """AC-43 over the wire: the link was accepted, returned 201 and dropped in silence."""
+    meta = _meta(client, auth)
+
+    planned = client.post(
+        "/api/planned",
+        headers=auth,
+        json={
+            "payee": "Compra",
+            "amount": 800_000_000,
+            "currency": "COP",
+            "due_date": "2026-08-12",
+            "account_id": account["id"],
+            "new_category": "Tecnologia",
+            "meta_id": meta["id"],
+        },
+    )
+
+    assert planned.status_code == 201
+    assert planned.json()["meta_id"] == meta["id"]
+
+
+def test_a_closed_meta_is_told_apart_from_a_cancelled_one_when_a_purchase_is_pointed_at_it(client, auth, account):
+    """Closing hands nothing back, so telling the owner it was cancelled is false."""
+    meta = _meta(client, auth, amount=800_000_000, target="2026-12")
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "account_id": account["id"],
+            "amount": 800_000_000,
+            "currency": "COP",
+            "date": "2026-08-12",
+            "payee": "Compra",
+            "new_category": "Tecnologia",
+            "meta_id": meta["id"],
+        },
+    )
+    client.post(f"/api/metas/{meta['id']}/close", headers=auth, params=MONTH)
+
+    refused = client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "expense",
+            "account_id": account["id"],
+            "amount": 100_000,
+            "currency": "COP",
+            "date": "2026-08-20",
+            "payee": "Otra",
+            "new_category": "Accesorios",
+            "meta_id": meta["id"],
+        },
+    )
+
+    assert refused.status_code == 422
+    assert "was closed" in refused.json()["detail"]

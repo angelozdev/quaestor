@@ -24,6 +24,9 @@ export interface BreakdownRow {
  * Every figure here is pesos. A meta held in dollars reports what it asks in
  * dollars and what it costs the month in pesos, and this column is the second
  * one (AC-26).
+ *
+ * A meta asking nothing claims nothing, so it gets no line. A finished one
+ * would otherwise sit at $0 in every month for the rest of the app's life.
  */
 export function availableRows(available: MonthAvailable): BreakdownRow[] {
   const rows: BreakdownRow[] = [
@@ -34,12 +37,14 @@ export function availableRows(available: MonthAvailable): BreakdownRow[] {
       cents: fund.asks,
       kind: "claim" as const,
     })),
-    ...available.metas.map((meta) => ({
-      key: `meta-${meta.meta_id}`,
-      label: metaLabelOf(meta),
-      cents: meta.asks_cop,
-      kind: "claim" as const,
-    })),
+    ...available.metas
+      .filter((meta) => meta.asks_cop !== 0)
+      .map((meta) => ({
+        key: `meta-${meta.meta_id}`,
+        label: metaLabelOf(meta),
+        cents: meta.asks_cop,
+        kind: "claim" as const,
+      })),
   ]
   if (available.contributed !== 0) {
     rows.push({

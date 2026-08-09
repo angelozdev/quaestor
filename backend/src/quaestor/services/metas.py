@@ -234,16 +234,36 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
 
 
+def _finished_by_now(agg: MonthAggregate, meta: Meta) -> bool:
+    """Whether the meta had finished by the month this aggregate holds.
+
+    Two acts finish one: the purchase, and lowering the amount below what it
+    already held (AC-16), which frees the excess and needs no purchase at all.
+    The first is a month the aggregate carries; the second only shows up in the
+    fold, so the fold is walked for it.
+    """
+    if _bought_in(agg, meta) is not None:
+        return True
+    if agg.year_month < meta.start_month:
+        return False
+    month, opening = meta.start_month, meta.stated_opening or 0
+    while month <= agg.year_month:
+        step = _month_of(agg, meta, month, opening)
+        if step.released > 0:
+            return True
+        opening, month = step.holds, next_year_month(month)
+    return False
+
+
 def _gone_from_the_list(agg: MonthAggregate, meta: Meta) -> bool:
     """Whether a closed meta has left the screen by the month being read.
 
-    It leaves from the month its purchase was made, and not one month earlier:
-    a month the meta ran through still names it with what it held and what it
-    asked, because every figure the screen shows is worked out from the month
-    being read (AC-27). The aggregate only carries purchases on or before its
-    own month, so this needs no date arithmetic.
+    It leaves from the month it finished, and not one month earlier: a month the
+    meta ran through still names it with what it held and what it asked, because
+    every figure the screen shows is worked out from the month being read
+    (AC-27).
     """
-    return meta.closed and _bought_in(agg, meta) is not None
+    return meta.closed and _finished_by_now(agg, meta)
 
 
 def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
@@ -327,8 +347,15 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
 
 
 def contributed_total(agg: MonthAggregate) -> int:
-    """What the owner set aside by hand this month, in COP cents."""
-    return sum(to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in agg.metas)
+    """What the owner set aside by hand this month, in COP cents.
+
+    A meta cancelled this month counts here. The month it is cancelled in is the
+    last one that names it: it charged the contribution and it hands back what
+    the meta held, contribution included. Charging one side and not the other
+    would give the owner that money twice (ADR-014).
+    """
+    counted = list(agg.metas) + _cancelled_this_month(agg)
+    return sum(to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in counted)
 
 
 def released_total(agg: MonthAggregate) -> int:

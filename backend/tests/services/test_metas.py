@@ -15,7 +15,7 @@ from datetime import date
 import pytest
 from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import Account, AccountType, MetaAmendment
-from quaestor.services import fx, metas, month, planned, transactions
+from quaestor.services import fx, metas, month, planned, reports, transactions
 from quaestor.services.month_aggregate import load_month
 from sqlmodel import select
 
@@ -595,3 +595,74 @@ def test_an_answer_given_later_does_not_reach_back_into_an_earlier_month(session
 
     assert _reported(session, "2026-09", "Moto").asks == 0
     assert _reported(session, "2026-12", "Moto").asks > 0
+
+
+def _salaried(session, monthly=5_000_000):
+    from datetime import date as _date
+
+    from quaestor.domain.models import IntervalUnit, TxType
+    from quaestor.services import accounts, categories, recurring
+
+    account = accounts.create_account(session, name="Banco", type=AccountType.debit, currency="COP", balance=30_000_000)
+    salario = categories.create_category(session, name="Salario", is_income=True)
+    recurring.create_recurring(
+        session,
+        name="Sueldo",
+        payee="Empresa",
+        type=TxType.income,
+        mode="auto",
+        amount=monthly,
+        currency="COP",
+        category_id=salario.id,
+        account_id=account.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=_date(2026, 1, 5),
+    )
+
+
+def test_cancelling_a_meta_gives_back_what_it_held_and_not_a_peso_more(session):
+    """AC-15's arithmetic. Releasing more than was ever taken mints money (ADR-014).
+
+    The month the owner cancels is the last one that names the meta: it charged
+    the instalment, it charged the contribution, and it hands back what the meta
+    held. Dropping the contribution from one side of that and leaving it in the
+    other is a peso the app invents.
+    """
+    _salaried(session)
+    moto = _meta(session, amount=8_000_000, today="2026-08", target="2026-12")
+    metas.contribute(session, moto.id, year_month="2026-10", amount=2_000_000)
+    before = month.month_available(load_month(session, "2026-10")).free
+
+    metas.cancel_meta(session, moto.id, year_month="2026-10")
+
+    after = month.month_available(load_month(session, "2026-10"))
+    assert (before, after.contributed, after.released) == (1_400_000, 2_000_000, 6_800_000)
+    assert after.free == 8_200_000
+
+
+def test_the_report_totals_what_a_cancelled_meta_still_asked(session):
+    """A table that lists a claim over a total that omits it does not add up (AC-36)."""
+    _salaried(session)
+    moto = _meta(session, amount=8_000_000, today="2026-08", target="2026-12")
+    metas.cancel_meta(session, moto.id, year_month="2026-10")
+
+    report = reports.monthly_report(session, "2026-10")
+
+    assert [(line.meta_name, line.asks) for line in report.metas] == [("Moto", 1_600_000)]
+    assert report.asked == 1_600_000
+
+
+def test_a_meta_closed_after_being_lowered_leaves_the_screen_too(session):
+    """AC-16 completes a meta without any purchase, and AC-29 takes it off the list.
+
+    Reading the finish off the purchase alone left this one listed for ever,
+    offered by the movement dialogs, and refused by the server when picked.
+    """
+    moto = _meta(session, amount=8_000_000, today="2026-08", target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-11", amount=3_000_000)
+    metas.close_meta(session, moto.id, year_month="2026-11")
+
+    assert [m.name for m in metas.list_metas(session, "2026-09")] == ["Moto"]
+    for later in ("2026-11", "2026-12", "2027-03"):
+        assert [m.name for m in metas.list_metas(session, later)] == []

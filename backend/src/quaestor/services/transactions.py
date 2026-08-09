@@ -68,6 +68,8 @@ def _refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> 
     meta = session.get(Meta, meta_id)
     if meta is None:
         raise NotFound(f"meta {meta_id} not found")
+    if meta.closed:
+        raise ValidationError(f"the meta {meta.name!r} was closed and takes no new link")
     if meta.archived:
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no new link")
 

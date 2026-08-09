@@ -10,6 +10,7 @@ export const planPaymentSchema = z
     dueDate: isoDate,
     categoryId: z.number().nullable(),
     newCategory: z.string().trim().max(120, messages.max120),
+    metaId: z.number().nullable(),
     notes: z.string().max(500, messages.max500).optional(),
   })
   .refine((d) => d.accountId !== null, {
