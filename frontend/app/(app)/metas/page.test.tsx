@@ -59,7 +59,6 @@ function meta(over: Partial<MetaStatus> = {}): MetaStatus {
     target_month: "2026-12",
     asks: 160_000_000,
     holds: 480_000_000,
-    contributed: 0,
     progress: 60,
     complete: false,
     closed: false,

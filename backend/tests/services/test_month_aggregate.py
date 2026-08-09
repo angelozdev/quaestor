@@ -80,11 +80,13 @@ def test_a_malformed_month_is_refused_and_names_the_field_it_came_from():
     assert require_year_month("2026-06") == "2026-06"
 
 
-BOUNDED_LOADS = 14
+BOUNDED_LOADS = 13
 """The ceiling one month load is held under (ADR-0028), asserted with `<=`.
 
 Eight before feature 003, ten after it, fourteen after 009 — which added the
-metas, their contributions, their amendments and the movements linked to them.
+metas, their contributions, their amendments and the movements linked to them —
+and thirteen once the month's expense and income windows became one statement
+split in memory, which is the slot 009 bought back.
 The measured count equals the ceiling, so there is no headroom left and the
 next query added to `load_month_aggregate` fails this test on purpose. Raising
 the number is a decision about the read path, not a

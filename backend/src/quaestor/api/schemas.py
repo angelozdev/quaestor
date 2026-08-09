@@ -483,7 +483,6 @@ class MetaStatusOut(BaseModel):
     target_month: str
     asks: int
     holds: int
-    contributed: int
     progress: int
     complete: bool
     closed: bool
@@ -518,8 +517,8 @@ class MonthSplitOut(BaseModel):
     ahorro: int
     libre: int
     ahorro_share: int
-    saved: int
-    saved_share: int
+    set_aside: int
+    set_aside_share: int
     released: int
     gave_back: list[MetaStatusOut]
 

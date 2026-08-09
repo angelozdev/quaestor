@@ -1,11 +1,23 @@
 "use client"
 
-import { useQuery } from "@tanstack/react-query"
+import { EntitySelect } from "@/components/entity-select"
 import { listMetas } from "@/lib/api/metas"
 import { qk } from "@/lib/query"
-import { Label, Select } from "@/ui"
+import { Label } from "@/ui"
 
-const NONE = "__none__"
+/**
+ * The metas of one month, shaped for a picker.
+ *
+ * Its own cache entry under the metas root: the month's list is cached as
+ * `MetaStatus[]` for the screen that reads holdings and progress, and two
+ * shapes under one key would hand whichever mounted second the wrong one.
+ * Both still answer to a `metaWrite` invalidation, which matches by prefix.
+ */
+const metaOptions = (month: string) => ({
+  queryKey: [...qk.metas(month), "options"] as const,
+  queryFn: async () =>
+    (await listMetas(month)).map((meta) => ({ id: meta.meta_id, name: meta.name })),
+})
 
 /**
  * Point a purchase at one of the metas running in the month it happened.
@@ -25,26 +37,16 @@ export function MetaField({
   value: number | null
   onChange: (metaId: number | null) => void
 }) {
-  const metas = useQuery({
-    queryKey: qk.metas(month),
-    queryFn: () => listMetas(month),
-  })
-
-  const items = [
-    { value: NONE, label: "Ninguna" },
-    ...(metas.data ?? []).map((meta) => ({ value: String(meta.meta_id), label: meta.name })),
-  ]
-
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>¿Es la compra de una meta?</Label>
-      <Select
+      <EntitySelect
         id={id}
-        value={value === null ? NONE : String(value)}
-        onValueChange={(chosen) => onChange(!chosen || chosen === NONE ? null : Number(chosen))}
-        items={items}
-        placeholder={metas.isLoading ? "Cargando…" : "Ninguna"}
-        disabled={metas.isLoading}
+        value={value}
+        onChange={onChange}
+        allowNullLabel="Ninguna"
+        placeholder="Ninguna"
+        {...metaOptions(month)}
       />
       <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
         Si eliges una, esta compra la completa y deja de contar contra el fondo de su categoría.

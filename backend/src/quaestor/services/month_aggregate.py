@@ -218,20 +218,16 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         key = (cat_id, f"{int(y):04d}-{int(m):02d}")
         spent_by_cat_month[key] = spent_by_cat_month.get(key, 0) + to_cop_cents(int(total), currency, trm)
 
-    def _window(tx_type: TxType) -> list[Transaction]:
-        return list(
-            session.exec(
-                select(Transaction).where(
-                    Transaction.type == tx_type,
-                    Transaction.status == TxStatus.posted,
-                    Transaction.date >= prev_start,
-                    Transaction.date <= end,
-                )
-            ).all()
+    windowed = session.exec(
+        select(Transaction).where(
+            Transaction.type.in_([TxType.expense, TxType.income]),
+            Transaction.status == TxStatus.posted,
+            Transaction.date >= prev_start,
+            Transaction.date <= end,
         )
-
-    window_expense = _window(TxType.expense)
-    window_income = _window(TxType.income)
+    ).all()
+    window_expense = [tx for tx in windowed if tx.type == TxType.expense]
+    window_income = [tx for tx in windowed if tx.type == TxType.income]
 
     active_recurring = list(
         session.exec(

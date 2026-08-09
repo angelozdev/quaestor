@@ -57,8 +57,9 @@ class MetaStatus:
     """What one meta asks and holds for one month (ADR-0046).
 
     `holds` is what it opened the month with plus what it asks plus what the
-    owner contributed by hand in it. `progress` is that against the amount,
-    capped at one hundred.
+    owner contributed by hand in it — the contribution is inside `holds` and is
+    not reported apart, because the figure a screen shows is the month-level
+    one. `progress` is `holds` against the amount, capped at one hundred.
 
     `waiting` says the target month has passed with no purchase linked: the
     meta asks nothing and is holding still until the owner links, closes or
@@ -83,7 +84,6 @@ class MetaStatus:
     target_month: str
     asks: int
     holds: int
-    contributed: int
     progress: int
     complete: bool
     closed: bool
@@ -101,11 +101,12 @@ class MonthSplit:
     subtraction and never a second sum.
 
     `ahorro` is net: a month a meta is cancelled is a month savings come back
-    out, so it can be negative. `saved` is the same month before the give-back,
-    which is what the owner actually put by, and `released` is what came back —
-    `saved - released == ahorro`. Both travel because a month that had one of
-    each would otherwise report a negative ahorro and hide the money that was
-    genuinely set aside beside it.
+    out, so it can be negative. `set_aside` is the same month before the
+    give-back — what the owner actually put by — and `released` is what came
+    back: `set_aside - released == ahorro`. The second name says the ACT rather
+    than the noun, so it cannot be read as a synonym for the first. Both travel
+    because a month that had one of each would otherwise report a negative
+    ahorro and hide the money that was genuinely set aside beside it.
 
     `gave_back` is every meta that returned money this month, cancelled or
     lowered, each carrying its own share, so `Σ gave_back[].released` is
@@ -118,8 +119,8 @@ class MonthSplit:
     ahorro: int
     libre: int
     ahorro_share: int
-    saved: int
-    saved_share: int
+    set_aside: int
+    set_aside_share: int
     released: int
     gave_back: list[MetaStatus]
 

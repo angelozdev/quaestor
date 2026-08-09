@@ -435,7 +435,6 @@ export interface MetaStatus {
   target_month: string
   asks: number
   holds: number
-  contributed: number
   progress: number
   complete: boolean
   closed: boolean
@@ -484,8 +483,8 @@ export interface MonthSplit {
   ahorro: number
   libre: number
   ahorro_share: number
-  saved: number
-  saved_share: number
+  set_aside: number
+  set_aside_share: number
   released: number
   gave_back: MetaStatus[]
 }

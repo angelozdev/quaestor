@@ -162,8 +162,8 @@ def test_the_split_names_what_the_month_consumed_and_what_it_saved(client, auth)
 def test_a_month_that_saved_and_cancelled_says_both_and_names_the_meta(client, auth, account, income_category):
     """The month the owner both set money aside and called a meta off.
 
-    `ahorro` nets the two and goes negative; `saved` is what was genuinely put
-    by. A screen showing only the net would report a month of saving as a month
+    `ahorro` nets the two and goes negative; `set_aside` is what was genuinely
+    put by. A screen showing only the net would report a month of saving as a month
     of spending.
     """
     client.post(
@@ -185,8 +185,8 @@ def test_a_month_that_saved_and_cancelled_says_both_and_names_the_meta(client, a
     client.delete(f"/api/metas/{celular['id']}", headers=auth, params=MONTH)
 
     split = client.get("/api/metas/split", headers=auth, params=MONTH).json()
-    assert split["saved"] > 0
-    assert split["ahorro"] == split["saved"] - split["released"]
+    assert split["set_aside"] > 0
+    assert split["ahorro"] == split["set_aside"] - split["released"]
     assert split["consumo"] + split["ahorro"] + split["libre"] == split["income"]
 
     assert [row["name"] for row in split["gave_back"]] == ["Celular"]

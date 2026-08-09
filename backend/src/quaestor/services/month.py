@@ -133,7 +133,7 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
     `ahorro` is net and may be negative — a month a meta is cancelled is a
     month savings come back out. That is what keeps `consumo + ahorro + libre`
     equal to the income in every month, which is the property AC-37 exists for.
-    `saved` is the same month before the give-back, so a month that both set
+    `set_aside` is the same month before the give-back, so a month that both set
     money aside and cancelled a meta can say so twice instead of once.
     """
     view = month_available(agg)
@@ -141,8 +141,8 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
     fondo = sum(line.asks for line in view.funds if line.accumulates)
     saved_by_spending = _spent_where_spending_is_saving(agg)
     consumo = presupuesto + view.uncovered - saved_by_spending
-    saved = fondo + sum(line.asks for line in view.metas) + view.contributed + saved_by_spending
-    ahorro = saved - view.released
+    set_aside = fondo + sum(line.asks for line in view.metas) + view.contributed + saved_by_spending
+    ahorro = set_aside - view.released
     libre = split_calc(consumo, ahorro, view.income)
     return MonthSplit(
         year_month=agg.year_month,
@@ -151,8 +151,8 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
         ahorro=ahorro,
         libre=libre,
         ahorro_share=share_calc(ahorro, view.income),
-        saved=saved,
-        saved_share=share_calc(saved, view.income),
+        set_aside=set_aside,
+        set_aside_share=share_calc(set_aside, view.income),
         released=view.released,
         gave_back=[line for line in view.metas if line.released > 0],
     )
@@ -182,6 +182,21 @@ def split(session: Session, year_month: str) -> MonthSplit:
     """
     require_year_month(year_month)
     return month_split(load_month(session, year_month))
+
+
+def income_of(session: Session, year_month: str) -> int:
+    """What the month has coming in, without folding anything that claims it.
+
+    The whole `available` answer costs a fund fold and a meta fold; a caller
+    that only needs the income — the meta preview asking whether an instalment
+    is more than the month can take — should not pay for either.
+
+    Raises:
+        ValidationError: malformed year_month.
+        MissingRate: no TRM is set.
+    """
+    require_year_month(year_month)
+    return _income(load_month(session, year_month))
 
 
 def available(session: Session, year_month: str) -> MonthAvailable:

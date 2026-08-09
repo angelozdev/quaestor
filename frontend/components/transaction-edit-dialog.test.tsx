@@ -33,7 +33,6 @@ vi.mock("@/lib/api/metas", () => ({
       target_month: "2026-12",
       asks: 100_000_000,
       holds: 100_000_000,
-      contributed: 0,
       progress: 20,
       complete: false,
       closed: false,

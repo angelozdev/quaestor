@@ -1,8 +1,6 @@
 import { z } from "zod"
 import { messages, minNumberMessage } from "@/lib/schemas/messages"
-import { positiveCents } from "@/lib/schemas/primitives"
-
-const yearMonth = z.string().regex(/^\d{4}-\d{2}$/, messages.mesInvalido)
+import { positiveCents, yearMonth } from "@/lib/schemas/primitives"
 
 /**
  * The form's own check: a rule needs the parameter that rule is made of.

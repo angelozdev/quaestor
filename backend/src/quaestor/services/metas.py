@@ -107,32 +107,35 @@ def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
     return amount, target
 
 
+def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Month:
+    """What one month does to a meta that entered it holding `opening`.
+
+    Holding more than the meta wants means the owner lowered the amount below
+    what it already had: the excess is freed and the meta asks nothing. A month
+    never overfills either — a contribution larger than what is missing is
+    taken only up to the amount.
+    """
+    amount, target = _wanted_in(agg, meta, month)
+    if opening > amount:
+        return _Month(opening=opening, ask=0, contributed=0, holds=amount, released=opening - amount)
+    ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
+    contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
+    return _Month(opening=opening, ask=ask, contributed=contributed, holds=opening + ask + contributed)
+
+
 def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
-    """Fold the meta forward to the month this aggregate holds (ADR-0046)."""
-    year_month = agg.year_month
-    month = meta.start_month
-    opening = meta.stated_opening or 0
-    if year_month < month:
+    """Fold the meta forward to the month this aggregate holds (ADR-0046).
+
+    What a month holds is what the next one opens with — one rule, one line,
+    rather than one per branch of the month.
+    """
+    if agg.year_month < meta.start_month:
         return _Month(opening=0, ask=0, contributed=0, holds=0)
-    while True:
-        amount, target = _wanted_in(agg, meta, month)
-        if opening > amount:
-            freed = opening - amount
-            if month == year_month:
-                return _Month(opening=opening, ask=0, contributed=0, holds=amount, released=freed)
-            opening = amount
-            month = next_year_month(month)
-            continue
-        ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
-        contributed = _contributions_in(agg, meta, month)
-        holds = opening + ask + contributed
-        if holds > amount:
-            contributed = max(amount - opening - ask, 0)
-            holds = opening + ask + contributed
-        if month == year_month:
-            return _Month(opening=opening, ask=ask, contributed=contributed, holds=holds)
-        opening = holds
+    month, opening = meta.start_month, meta.stated_opening or 0
+    while month < agg.year_month:
+        opening = _month_of(agg, meta, month, opening).holds
         month = next_year_month(month)
+    return _month_of(agg, meta, month, opening)
 
 
 def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaStatus:
@@ -158,7 +161,6 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
         target_month=target,
         asks=walked.ask,
         holds=walked.holds,
-        contributed=walked.contributed,
         progress=progress,
         complete=complete,
         closed=meta.closed,

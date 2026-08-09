@@ -115,7 +115,6 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           target_month: "2026-12",
           asks: 160_000_000,
           holds: 160_000_000,
-          contributed: 0,
           progress: 20,
           complete: false,
           closed: false,

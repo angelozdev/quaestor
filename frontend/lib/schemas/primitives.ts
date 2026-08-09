@@ -26,6 +26,9 @@ export const fxRate = z
   .positive(messages.debeSerPositivo)
   .max(100_000, maxNumberMessage(100_000))
 
+/** Wire month YYYY-MM. Native <input type="month"> produces this. */
+export const yearMonth = z.string().regex(/^\d{4}-\d{2}$/, messages.mesInvalido)
+
 /** ISO date string YYYY-MM-DD. Native <input type="date"> produces this. */
 export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, messages.fechaInvalida)
 

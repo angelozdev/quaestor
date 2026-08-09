@@ -48,7 +48,7 @@ def preview_meta(body: MetaCreate, month: str, session: Session = Depends(get_se
         amount=body.amount,
         target_month=body.target_month,
         today=month,
-        income=month_service.available(session, month).income,
+        income=month_service.income_of(session, month),
     )
 
 

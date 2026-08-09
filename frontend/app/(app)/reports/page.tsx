@@ -10,8 +10,7 @@ import { QueryBoundary } from "@/components/query-boundary"
 import { ScreenHelp } from "@/components/screen-help"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
-import { labelOf } from "@/lib/funds"
-import { gaveBackLabelOf, metaLabelOf } from "@/lib/metas"
+import { availableRows } from "@/lib/available-breakdown"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -274,64 +273,16 @@ export default function ReportsPage() {
                 </p>
                 <hr style={{ borderColor: "var(--border)" }} />
                 <div className="space-y-1">
-                  <Row label="Ingreso del mes" faint>
-                    <span
-                      className="text-sm tabular-nums"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {formatCents(data.available.income, "COP")}
-                    </span>
-                  </Row>
-                  {data.available.funds.map((f) => (
-                    <Row key={f.fund_id} label={labelOf(f)} faint>
+                  {availableRows(data.available).map((row) => (
+                    <Row key={row.key} label={row.label} faint>
                       <span
                         className="text-sm tabular-nums"
                         style={{ color: "var(--muted-foreground)" }}
                       >
-                        {formatCents(f.asks, "COP")}
+                        {formatCents(row.cents, "COP")}
                       </span>
                     </Row>
                   ))}
-                  {data.available.metas.map((meta) => (
-                    <Row key={meta.meta_id} label={metaLabelOf(meta)} faint>
-                      <span
-                        className="text-sm tabular-nums"
-                        style={{ color: "var(--muted-foreground)" }}
-                      >
-                        {formatCents(meta.asks, "COP")}
-                      </span>
-                    </Row>
-                  ))}
-                  {data.available.contributed !== 0 && (
-                    <Row label="Puesto a mano en una meta" faint>
-                      <span
-                        className="text-sm tabular-nums"
-                        style={{ color: "var(--muted-foreground)" }}
-                      >
-                        {formatCents(data.available.contributed, "COP")}
-                      </span>
-                    </Row>
-                  )}
-                  {data.available.metas
-                    .filter((meta) => meta.released > 0)
-                    .map((meta) => (
-                      <Row key={`back-${meta.meta_id}`} label={gaveBackLabelOf(meta)} faint>
-                        <span
-                          className="text-sm tabular-nums"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {formatCents(-meta.released, "COP")}
-                        </span>
-                      </Row>
-                    ))}
-                  <Row label="Sin fondo que lo cubra" faint>
-                    <span
-                      className="text-sm tabular-nums"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {formatCents(data.available.uncovered, "COP")}
-                    </span>
-                  </Row>
                 </div>
               </div>
             </Section>

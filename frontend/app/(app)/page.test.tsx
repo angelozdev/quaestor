@@ -14,6 +14,12 @@ const { moneyAvailable, moneyRates, report, listAccounts, toPay, monthSplit } = 
 }))
 
 vi.mock("@/lib/api/funds", () => ({ moneyAvailable, moneyRates }))
+
+/** The dashboard reads the month's terms out of the report payload — the same
+ * MonthAvailable the /funds/available endpoint answers with, embedded. */
+function showing(available: unknown) {
+  report.mockResolvedValue({ income: 0, expense: 0, net: 0, available })
+}
 vi.mock("@/lib/api/metas", () => ({ monthSplit }))
 vi.mock("@/lib/api/reports", () => ({ report }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
@@ -64,11 +70,10 @@ const hero = (container: HTMLElement) => container.querySelector('[data-slot="mo
 
 beforeEach(() => {
   vi.clearAllMocks()
-  moneyAvailable.mockResolvedValue(AVAILABLE)
+  showing(AVAILABLE)
   moneyRates.mockResolvedValue(RATES)
   listAccounts.mockResolvedValue([])
   toPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
-  report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
   monthSplit.mockResolvedValue({
     year_month: "2026-11",
     income: 0,
@@ -76,8 +81,8 @@ beforeEach(() => {
     ahorro: 0,
     libre: 0,
     ahorro_share: 0,
-    saved: 0,
-    saved_share: 0,
+    set_aside: 0,
+    set_aside_share: 0,
     released: 0,
     gave_back: [],
   })
@@ -106,7 +111,7 @@ describe("DashboardPage breakdown", () => {
 
 describe("AC-21 — one vocabulary, everywhere", () => {
   it("The Dashboard breakdown calls a presupuesto a presupuesto", async () => {
-    moneyAvailable.mockResolvedValue({
+    showing({
       ...AVAILABLE,
       income: 300_000_000,
       funds: [{ ...AVAILABLE.funds[0], accumulates: false, asks: 10_000_000 }],
@@ -149,7 +154,7 @@ describe("AC-7 — every screen carries the same control", () => {
 
 describe("AC-8 — the panel explains the screen using the owner's own figures", () => {
   beforeEach(() => {
-    moneyAvailable.mockResolvedValue(ASKING_TOO_MUCH)
+    showing(ASKING_TOO_MUCH)
   })
 
   it("The panel states what came in and what each fund asked for", async () => {
@@ -176,7 +181,7 @@ describe("AC-8 — the panel explains the screen using the owner's own figures",
 
 describe("AC-10 — an empty screen teaches and offers the way in", () => {
   it("An empty Dashboard teaches where its figures come from", async () => {
-    report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
+    report.mockResolvedValue({ income: 0, expense: 0, net: 0, available: AVAILABLE })
     renderPage()
 
     expect(
@@ -209,7 +214,7 @@ describe("DashboardPage keeps the money available and the rates apart", () => {
 
 describe("AC-4 — the breakdown states what the metas ask", () => {
   it("names each meta, what was put by hand, and what a cancelled one gave back", async () => {
-    moneyAvailable.mockResolvedValue({
+    showing({
       ...AVAILABLE,
       metas: [
         {
@@ -221,7 +226,6 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           target_month: "2026-12",
           asks: 160_000_000,
           holds: 160_000_000,
-          contributed: 0,
           progress: 20,
           complete: false,
           closed: false,
@@ -260,7 +264,6 @@ const CELULAR = {
   target_month: "2026-12",
   asks: 0,
   holds: 320_000_000,
-  contributed: 0,
   progress: 40,
   complete: false,
   closed: false,
@@ -277,8 +280,8 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
     ahorro: 320_000_000,
     libre: 40_000_000,
     ahorro_share: 64,
-    saved: 320_000_000,
-    saved_share: 64,
+    set_aside: 320_000_000,
+    set_aside_share: 64,
     released: 0,
     gave_back: [],
   }
@@ -302,8 +305,8 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
       ahorro: -220_000_000,
       libre: 720_000_000,
       ahorro_share: -44,
-      saved: 100_000_000,
-      saved_share: 20,
+      set_aside: 100_000_000,
+      set_aside_share: 20,
       released: 320_000_000,
       gave_back: [CELULAR],
     }
@@ -314,7 +317,7 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
     expect(screen.getByText("20%")).toBeInTheDocument()
     expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
     expect(screen.getByText("$ -3.200.000")).toBeInTheDocument()
-    expect(MIXED.saved - MIXED.released).toBe(MIXED.ahorro)
+    expect(MIXED.set_aside - MIXED.released).toBe(MIXED.ahorro)
     expect(MIXED.consumo + MIXED.ahorro + MIXED.libre).toBe(MIXED.income)
   })
 

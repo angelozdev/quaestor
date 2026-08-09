@@ -11,12 +11,13 @@ import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
-import { moneyAvailable, moneyRates } from "@/lib/api/funds"
+import { moneyRates } from "@/lib/api/funds"
 import { monthSplit } from "@/lib/api/metas"
 import { report as fetchReport } from "@/lib/api/reports"
 import type { MonthAvailable } from "@/lib/api/types"
-import { labelOf, shapeOf } from "@/lib/funds"
-import { gaveBackLabelOf, metaLabelOf } from "@/lib/metas"
+import { availableRows } from "@/lib/available-breakdown"
+import { shapeOf } from "@/lib/funds"
+import { gaveBackLabelOf } from "@/lib/metas"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -110,13 +111,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export default function DashboardPage() {
-  const available = useQuery({
-    queryKey: qk.moneyAvailable(MONTH),
-    queryFn: () => moneyAvailable(MONTH),
-  })
+  const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
   const split = useQuery({ queryKey: qk.metaSplit(MONTH), queryFn: () => monthSplit(MONTH) })
   const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
-  const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
   const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() })
 
   return (
@@ -126,7 +123,7 @@ export default function DashboardPage() {
         titleHidden
         help={
           <ScreenHelp screen="Dashboard">
-            <DashboardHelp available={available.data} />
+            <DashboardHelp available={report.data?.available} />
           </ScreenHelp>
         }
       />
@@ -137,7 +134,7 @@ export default function DashboardPage() {
           Disponible este mes · {MONTH}
         </p>
         <QueryBoundary
-          query={available}
+          query={report}
           skeleton={<SkeletonBlock className="h-14 w-64" />}
           errorMessage="No se pudo cargar el disponible"
         >
@@ -146,7 +143,7 @@ export default function DashboardPage() {
               data-slot="money-available"
               className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
             >
-              {formatCents(data.free, "COP")}
+              {formatCents(data.available.free, "COP")}
             </p>
           )}
         </QueryBoundary>
@@ -242,69 +239,22 @@ export default function DashboardPage() {
         <div className="animate-fade-up" style={{ animationDelay: "130ms" }}>
           <Card label="De dónde sale el disponible">
             <QueryBoundary
-              query={available}
+              query={report}
               skeleton={<SkeletonText lines={3} />}
               errorMessage="No se pudo cargar el desglose"
             >
-              {(data) => (
+              {({ available: data }) => (
                 <div className="space-y-2.5">
-                  <Row label="Ingreso del mes">
-                    <MoneyAmount
-                      cents={data.income}
-                      currency="COP"
-                      type="income"
-                      className="text-sm font-medium"
-                    />
-                  </Row>
-                  {data.funds.map((fund) => (
-                    <Row key={fund.fund_id} label={labelOf(fund)}>
+                  {availableRows(data).map((row) => (
+                    <Row key={row.key} label={row.label}>
                       <MoneyAmount
-                        cents={fund.asks}
+                        cents={row.cents}
                         currency="COP"
-                        type="expense"
+                        type={row.kind === "income" ? "income" : "expense"}
                         className="text-sm font-medium"
                       />
                     </Row>
                   ))}
-                  {data.metas.map((meta) => (
-                    <Row key={meta.meta_id} label={metaLabelOf(meta)}>
-                      <MoneyAmount
-                        cents={meta.asks}
-                        currency="COP"
-                        type="expense"
-                        className="text-sm font-medium"
-                      />
-                    </Row>
-                  ))}
-                  {data.contributed !== 0 && (
-                    <Row label="Puesto a mano en una meta">
-                      <MoneyAmount
-                        cents={data.contributed}
-                        currency="COP"
-                        type="expense"
-                        className="text-sm font-medium"
-                      />
-                    </Row>
-                  )}
-                  {data.metas
-                    .filter((meta) => meta.released > 0)
-                    .map((meta) => (
-                      <Row key={`back-${meta.meta_id}`} label={gaveBackLabelOf(meta)}>
-                        <MoneyAmount
-                          cents={-meta.released}
-                          currency="COP"
-                          className="text-sm font-medium"
-                        />
-                      </Row>
-                    ))}
-                  <Row label="Sin fondo que lo cubra">
-                    <MoneyAmount
-                      cents={data.uncovered}
-                      currency="COP"
-                      type="expense"
-                      className="text-sm font-medium"
-                    />
-                  </Row>
                   <hr style={{ borderColor: "var(--border)" }} />
                   <Row label="Disponible">
                     <span className="text-sm font-semibold tabular-nums">
@@ -328,12 +278,12 @@ export default function DashboardPage() {
                 <div className="space-y-2.5">
                   <Row label="Ahorro · fondos y metas">
                     <span className="text-sm font-semibold tabular-nums">
-                      {formatCents(data.saved, "COP")}
+                      {formatCents(data.set_aside, "COP")}
                       <span
                         className="ml-2 font-normal"
                         style={{ color: "var(--muted-foreground)" }}
                       >
-                        {data.saved_share}%
+                        {data.set_aside_share}%
                       </span>
                     </span>
                   </Row>
