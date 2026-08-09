@@ -217,6 +217,46 @@ def test_a_new_edit_is_compared_against_the_latest_one_not_the_oldest(session):
     ]
 
 
+def test_changing_the_month_after_the_amount_keeps_the_amount(session):
+    """Two edits in one month, one field each, and neither undoes the other.
+
+    The screen offers *Cambiarle el monto* and *Cambiarle el mes* as separate
+    acts, so the owner arrives here by using both. The field left alone has to
+    default to what the meta wants now — its own column is the original spec and
+    every amendment since has moved past it.
+    """
+    moto = _meta(session, amount=1_000_000, target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-07", amount=2_000_000)
+
+    metas.set_meta(session, moto.id, today="2026-07", target_month="2027-02")
+
+    reported = _reported(session, "2026-07", "Moto")
+    assert (reported.amount, reported.target_month) == (2_000_000, "2027-02")
+
+
+def test_changing_the_amount_after_the_month_keeps_the_month(session):
+    """The same pair in the other order."""
+    moto = _meta(session, amount=1_000_000, target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-07", target_month="2027-02")
+
+    metas.set_meta(session, moto.id, today="2026-07", amount=2_000_000)
+
+    reported = _reported(session, "2026-07", "Moto")
+    assert (reported.amount, reported.target_month) == (2_000_000, "2027-02")
+
+
+def test_renaming_a_meta_leaves_what_it_wants_alone(session):
+    """A name is not part of what the meta wants, so it must amend nothing."""
+    moto = _meta(session, amount=1_000_000, target="2026-12")
+    metas.set_meta(session, moto.id, today="2026-07", amount=2_000_000, target_month="2027-02")
+
+    metas.set_meta(session, moto.id, today="2026-07", name="Moto nueva")
+
+    reported = _reported(session, "2026-07", "Moto nueva")
+    assert (reported.amount, reported.target_month) == (2_000_000, "2027-02")
+    assert [(a.amount, a.target_month) for a in _amendments(session, moto)] == [(2_000_000, "2027-02")]
+
+
 def test_a_month_before_the_meta_existed_charges_nothing_for_it(session):
     """`_walk`'s first branch — the whole of it was unreached.
 

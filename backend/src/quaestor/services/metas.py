@@ -564,19 +564,26 @@ def set_meta(session: Session, meta_id: int, *, today: str, **changes) -> Meta:
     What it asks recomputes at once, from what it holds now over the months
     from this one through the target — the month being edited is one of them.
 
+    A field left out of `changes` keeps what the meta wants *now*, which is the
+    last amendment rather than the columns: those hold the original spec and
+    stop moving the moment the first edit is made. Defaulting from them would
+    let one edit silently undo an earlier one, since a month's amendment carries
+    both halves and the last one written wins.
+
     Raises:
         NotFound: no such meta.
         ValidationError: every refusal `create_meta` raises.
     """
     meta = _require_meta(session, meta_id)
+    wanted = _wanted_now(session, meta, today)
     name = changes.get("name", meta.name)
-    amount = changes.get("amount", meta.amount)
-    target_month = changes.get("target_month", meta.target_month)
+    amount = changes.get("amount", wanted[0])
+    target_month = changes.get("target_month", wanted[1])
     _validate_spec(name, amount, target_month, today)
     _refuse_name_already_held(session, name, excluding=meta.id)
     meta.name = name.strip()
     session.add(meta)
-    if (amount, target_month) != _wanted_now(session, meta, today):
+    if (amount, target_month) != wanted:
         _amend(session, meta, today, amount, target_month)
     session.commit()
     session.refresh(meta)
