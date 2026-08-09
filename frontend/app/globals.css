@@ -135,32 +135,35 @@
   animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Hero treatment — mint-tinted gradient number + soft radial glow behind it. */
-.text-gradient-mint {
+/* Hero treatment — accent-tinted gradient number + soft radial glow behind it. */
+.text-gradient-hero {
   background: linear-gradient(
     160deg,
     var(--foreground),
-    color-mix(in oklch, var(--primary) 65%, var(--foreground))
+    color-mix(in oklch, var(--hero-accent) 65%, var(--foreground))
   );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 .hero-glow {
+  --hero-accent: var(--primary);
   position: relative;
   isolation: isolate;
+}
+.hero-glow[data-tone="negative"] {
+  --hero-accent: var(--expense);
 }
 .hero-glow::before {
   content: "";
   position: absolute;
-  inset: -60% -10% auto -8%;
-  height: 280px;
+  inset: -60% 0;
   z-index: -1;
   pointer-events: none;
   background: radial-gradient(
-    55% 100% at 28% 0%,
-    color-mix(in oklch, var(--primary) 20%, transparent),
-    transparent 72%
+    closest-side at 22% 50%,
+    color-mix(in oklch, var(--hero-accent) 18%, transparent),
+    transparent
   );
 }
 

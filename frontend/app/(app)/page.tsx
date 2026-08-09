@@ -115,6 +115,7 @@ export default function DashboardPage() {
   const split = useQuery({ queryKey: qk.metaSplit(MONTH), queryFn: () => monthSplit(MONTH) })
   const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
   const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() })
+  const heroTone = (report.data?.available.free ?? 0) < 0 ? "negative" : "positive"
 
   return (
     <div className="space-y-8">
@@ -129,7 +130,7 @@ export default function DashboardPage() {
       />
 
       {/* Hero */}
-      <div className="hero-glow animate-fade-up space-y-1">
+      <div className="hero-glow animate-fade-up space-y-1" data-tone={heroTone}>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Disponible este mes · {MONTH}
         </p>
@@ -141,7 +142,7 @@ export default function DashboardPage() {
           {(data) => (
             <p
               data-slot="money-available"
-              className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
+              className="font-display text-gradient-hero text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
             >
               {formatCents(data.available.free, "COP")}
             </p>
