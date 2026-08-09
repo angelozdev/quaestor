@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 6/7 criteria met | NEXT: the owner decides on `services/metas.py` at 56.3% mutation, on the CP5 independence question, and runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP8 Harden — 6/7 criteria met | NEXT: the owner decides the CP5 independence question and runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -6,7 +6,9 @@ Metas: named savings goals beside the fund, not inside it. 45 ACs, 125
 scenarios, all bound and green. Three migrations still outstanding and
 human-owned. Refine has run — twelve findings, two real bugs, and one
 regression of its own that left the acceptance stream red for twelve hours
-while the other two streams reported green.
+while the other two streams reported green. Mutation then found 54 more
+behaviours the suite could not tell from the real thing; the service now has
+the unit test file it never had, and every real survivor is dead.
 
 ## Checkpoints
 
@@ -30,10 +32,12 @@ rather than papered over.
 ```
 009        125 scenarios · unbound 0
 010        unbound 0
-backend    1010 passed
+acceptance 472 passed
+backend    1042 passed
 vitest     55 files · 397 passed
-lint       clean
-month load 14 bounded queries
+lint       exit 0
+month load 13 bounded queries
+mutation   metas.py 93.3% · rules.py 98.4% · 100% adjusted
 ```
 
 ## What the green suite did not catch
@@ -68,6 +72,7 @@ report green over an app the owner cannot use.
 | 2026-08-09T0758 | refine | main + 3 fresh reviewers | 12 findings applied, 2 bugs, 1 regression of its own; independence partial |
 | 2026-08-09T0811 | crap-analyzer | subagent-crap-cp7 | 0 backend findings over 20; 11 lines no stream reaches, 4 of them 009's |
 | 2026-08-09T0901 | mutation | subagent-mutation-cp8 | rules.py 96.9% strong, metas.py 56.3% weak; 54 real survivors |
+| 2026-08-09T1005 | kill-mutants | main | `tests/services/test_metas.py` written; metas 93.3%, rules 98.4%; every real survivor dead |
 
 ## Outstanding
 
@@ -75,8 +80,8 @@ report green over an app the owner cannot use.
 |---|---|---|
 | Migrations 0014, 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Decide how CP5/CP6 independence is closed | human | accept as documented, or send a fresh agent to verify CP5 against the 45 ACs |
-| `services/metas.py` at 56.3% mutation | human | decide: write `backend/tests/services/test_metas.py`, or accept the score |
-| Eleven lines no test stream reaches | human | four are 009's own — `PATCH /metas/{id}`, `_amend`'s replace branch, AC-26's non-COP branch, two `NotFound` |
+| `PATCH /metas/{meta_id}`, reached by no stream | open | both ends are tested and the middle is not; a wrong query param stays green |
+| `_Month.contributed` is written in three places and read in none | open | dead field CP8 surfaced; removing it is a refactor, not a test |
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The
