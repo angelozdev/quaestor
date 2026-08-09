@@ -59,3 +59,7 @@ New ADRs are created with the `adr` skill:
 | 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted | 2026-08-04 |
 | 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | accepted | 2026-08-04 |
 | 0045 | Frontend acceptance criteria bind to vitest, and one Gherkin parser stays the single source | accepted | 2026-08-07 |
+| 0046 | A meta is a dated record outside every category, linked on the movement, and the fund's dated rule is withdrawn | accepted | 2026-08-08 |
+| 0047 | The module boundaries are enforced, the dead code and the copies are reported | accepted | 2026-08-09 |
+| 0048 | A purchase stops the meta, and closing it moves no figure | accepted | 2026-08-09 |
+| 0049 | Closing leaves the screen, not the month, and a purchase stops only what the owner has not restarted | accepted | 2026-08-09 |

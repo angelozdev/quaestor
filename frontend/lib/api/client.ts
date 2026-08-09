@@ -40,8 +40,6 @@ export const post = <T>(url: string, data?: unknown) =>
   http.post<T>(url, data) as unknown as Promise<T>
 export const patch = <T>(url: string, data?: unknown) =>
   http.patch<T>(url, data) as unknown as Promise<T>
-export const put = <T>(url: string, data?: unknown) =>
-  http.put<T>(url, data) as unknown as Promise<T>
 export const del = <T>(url: string) => http.delete<T>(url) as unknown as Promise<T>
 
 export function qs(params: Record<string, string | number | boolean | undefined>): string {

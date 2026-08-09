@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
+import Link from "next/link"
 import { ChatSection } from "@/components/chat/chat-section"
 import { EmptyState } from "@/components/empty-state"
 import { MoneyAmount } from "@/components/money-amount"
@@ -11,16 +12,41 @@ import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { SkeletonBlock, SkeletonText } from "@/components/skeleton"
 import { ToPayWidget } from "@/components/to-pay-widget"
 import { listAccounts } from "@/lib/api/accounts"
-import { moneyAvailable, moneyRates } from "@/lib/api/funds"
+import { moneyRates } from "@/lib/api/funds"
+import { monthSplit } from "@/lib/api/metas"
 import { report as fetchReport } from "@/lib/api/reports"
-import type { MonthAvailable } from "@/lib/api/types"
-import { labelOf, shapeOf } from "@/lib/funds"
+import type { MetaStatus, MonthAvailable } from "@/lib/api/types"
+import { availableRows } from "@/lib/available-breakdown"
+import { shapeOf } from "@/lib/funds"
+import { gaveBackLabelOf } from "@/lib/metas"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
 const MONTH = format(new Date(), "yyyy-MM")
 
 const ASKS_MORE_THAN_COMES_IN = "Pide más de lo que entra este mes"
+
+/**
+ * The metas whose month has passed with nothing bought (AC-19).
+ *
+ * They are full and asking for nothing, so no figure on this screen moves for
+ * them — which is exactly why the screen has to name them: the owner is the one
+ * being waited on, to link the purchase, close the meta or move its date.
+ */
+function WaitingMetas({ metas }: { metas: MetaStatus[] }) {
+  const waiting = metas.filter((meta) => meta.waiting)
+  if (waiting.length === 0) return null
+  return (
+    <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+      {waiting.map((meta) => meta.name).join(", ")}{" "}
+      {waiting.length === 1 ? "está esperando" : "están esperando"}: su mes ya pasó y no le
+      {waiting.length === 1 ? "" : "s"} has enlazado la compra.{" "}
+      <Link href="/metas" className="underline">
+        Ir a metas
+      </Link>
+    </p>
+  )
+}
 
 const NO_MOVEMENTS_YET = (
   <p>
@@ -108,13 +134,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export default function DashboardPage() {
-  const available = useQuery({
-    queryKey: qk.moneyAvailable(MONTH),
-    queryFn: () => moneyAvailable(MONTH),
-  })
-  const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
   const report = useQuery({ queryKey: qk.report(MONTH), queryFn: () => fetchReport(MONTH) })
+  const split = useQuery({ queryKey: qk.metaSplit(MONTH), queryFn: () => monthSplit(MONTH) })
+  const rates = useQuery({ queryKey: qk.moneyRates(MONTH), queryFn: () => moneyRates(MONTH) })
   const accounts = useQuery({ queryKey: qk.accounts(), queryFn: () => listAccounts() })
+  const heroTone = (report.data?.available.free ?? 0) < 0 ? "negative" : "positive"
 
   return (
     <div className="space-y-8">
@@ -123,31 +147,33 @@ export default function DashboardPage() {
         titleHidden
         help={
           <ScreenHelp screen="Dashboard">
-            <DashboardHelp available={available.data} />
+            <DashboardHelp available={report.data?.available} />
           </ScreenHelp>
         }
       />
 
       {/* Hero */}
-      <div className="hero-glow animate-fade-up space-y-1">
+      <div className="hero-glow animate-fade-up space-y-1" data-tone={heroTone}>
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Disponible este mes · {MONTH}
         </p>
         <QueryBoundary
-          query={available}
+          query={report}
           skeleton={<SkeletonBlock className="h-14 w-64" />}
           errorMessage="No se pudo cargar el disponible"
         >
           {(data) => (
             <p
               data-slot="money-available"
-              className="font-display text-gradient-mint text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
+              className="font-display text-gradient-hero text-5xl font-bold tabular-nums tracking-tight sm:text-6xl"
             >
-              {formatCents(data.free, "COP")}
+              {formatCents(data.available.free, "COP")}
             </p>
           )}
         </QueryBoundary>
       </div>
+
+      {report.data && <WaitingMetas metas={report.data.available.metas} />}
 
       <hr style={{ borderColor: "var(--border)" }} />
 
@@ -239,42 +265,81 @@ export default function DashboardPage() {
         <div className="animate-fade-up" style={{ animationDelay: "130ms" }}>
           <Card label="De dónde sale el disponible">
             <QueryBoundary
-              query={available}
+              query={report}
               skeleton={<SkeletonText lines={3} />}
               errorMessage="No se pudo cargar el desglose"
             >
-              {(data) => (
+              {({ available: data }) => (
                 <div className="space-y-2.5">
-                  <Row label="Ingreso del mes">
-                    <MoneyAmount
-                      cents={data.income}
-                      currency="COP"
-                      type="income"
-                      className="text-sm font-medium"
-                    />
-                  </Row>
-                  {data.funds.map((fund) => (
-                    <Row key={fund.fund_id} label={labelOf(fund)}>
+                  {availableRows(data).map((row) => (
+                    <Row key={row.key} label={row.label}>
                       <MoneyAmount
-                        cents={fund.asks}
+                        cents={row.cents}
                         currency="COP"
-                        type="expense"
+                        type={row.kind === "income" ? "income" : "expense"}
                         className="text-sm font-medium"
                       />
                     </Row>
                   ))}
-                  <Row label="Sin fondo que lo cubra">
-                    <MoneyAmount
-                      cents={data.uncovered}
-                      currency="COP"
-                      type="expense"
-                      className="text-sm font-medium"
-                    />
-                  </Row>
                   <hr style={{ borderColor: "var(--border)" }} />
                   <Row label="Disponible">
                     <span className="text-sm font-semibold tabular-nums">
                       {formatCents(data.free, "COP")}
+                    </span>
+                  </Row>
+                </div>
+              )}
+            </QueryBoundary>
+          </Card>
+        </div>
+
+        <div className="animate-fade-up" style={{ animationDelay: "140ms" }}>
+          <Card label="A dónde se va el mes">
+            <QueryBoundary
+              query={split}
+              skeleton={<SkeletonText lines={4} />}
+              errorMessage="No se pudo cargar el reparto del mes"
+            >
+              {(data) => (
+                <div className="space-y-2.5">
+                  <Row label="Ahorro · fondos y metas">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.set_aside, "COP")}
+                      <span
+                        className="ml-2 font-normal"
+                        style={{ color: "var(--muted-foreground)" }}
+                      >
+                        {data.set_aside_share}%
+                      </span>
+                    </span>
+                  </Row>
+                  {data.gave_back.map((meta) => (
+                    <Row key={meta.meta_id} label={gaveBackLabelOf(meta)}>
+                      <MoneyAmount
+                        cents={-meta.released}
+                        currency="COP"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  ))}
+                  <Row label="Consumo · lo que se gastó">
+                    <MoneyAmount
+                      cents={data.consumo}
+                      currency="COP"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <Row label="Libre · nadie lo reclamó">
+                    <MoneyAmount
+                      cents={data.libre}
+                      currency="COP"
+                      className="text-sm font-medium"
+                    />
+                  </Row>
+                  <hr style={{ borderColor: "var(--border)" }} />
+                  <Row label="Ingreso del mes">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {formatCents(data.income, "COP")}
                     </span>
                   </Row>
                 </div>

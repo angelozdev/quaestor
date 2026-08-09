@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query"
-import type { FundCreate, TransactionFilters } from "@/lib/api/types"
+import type { FundCreate, MetaCreate, TransactionFilters } from "@/lib/api/types"
 
 // Entity roots: single source of truth for query keys + invalidation groups.
 // `as const` keeps literal types so downstream key matching stays narrow.
@@ -15,9 +15,16 @@ const ROOTS = {
   fx: "fx",
   funds: "funds",
   reports: "reports",
+  metas: "metas",
 } as const
 
 const DETAIL = "detail" as const
+
+/** The fields the preview's answer actually depends on. The meta's name is not
+ * one of them, so keying on it would refetch for a figure that cannot change. */
+function whatThePreviewReads(body: MetaCreate | null) {
+  return body && { amount: body.amount, target_month: body.target_month }
+}
 
 // Query-key factory. First element is the entity root used for broad invalidation.
 export const qk = {
@@ -37,6 +44,12 @@ export const qk = {
   moneyAvailable: (month: string) => [ROOTS.funds, "available", month] as const,
   moneyRates: (month: string) => [ROOTS.funds, "rates", month] as const,
   funds: () => [ROOTS.funds, "list"] as const,
+  metas: (month: string) => [ROOTS.metas, "list", month] as const,
+  metaSplit: (month: string) => [ROOTS.metas, "split", month] as const,
+  metasArchived: () => [ROOTS.metas, "archived"] as const,
+  metaContributions: (id: number) => [ROOTS.metas, "contributions", id] as const,
+  metaPreview: (body: MetaCreate | null) =>
+    [ROOTS.metas, "preview", whatThePreviewReads(body)] as const,
   fundPreview: (rule: string, body: FundCreate | null) =>
     [ROOTS.funds, "preview", rule, body] as const,
   report: (month: string) => [ROOTS.reports, month] as const,
@@ -45,7 +58,7 @@ export const qk = {
 // Each mutation declares the entity roots it must invalidate so derived numbers
 // (balances, dashboard, reports) refresh instantly. Roots reference ROOTS so a
 // rename forces tsc to flag every invalidation group that needs updating.
-export const INVALIDATION = {
+const INVALIDATION = {
   // `categories` is in all three because a movement can create the category it
   // is filed under, in the same request (ADR-0042) — a list that still holds
   // the old set renders the new one as a bare id.
@@ -54,6 +67,7 @@ export const INVALIDATION = {
     [ROOTS.reports],
     [ROOTS.accounts],
     [ROOTS.funds],
+    [ROOTS.metas],
     [ROOTS.planned],
     [ROOTS.categories],
   ],
@@ -86,7 +100,8 @@ export const INVALIDATION = {
     [ROOTS.transactions],
     [ROOTS.planned],
   ],
-  fundWrite: [[ROOTS.funds], [ROOTS.reports]],
+  fundWrite: [[ROOTS.funds], [ROOTS.reports], [ROOTS.metas]],
+  metaWrite: [[ROOTS.metas], [ROOTS.funds], [ROOTS.reports]],
   // Scoped invalidation triggered by ChatSection's `useChat` onFinish. The
   // MCP tools can mutate any of these entity roots; settings/categories/tags
   // are intentionally excluded (no chat tool mutates them in v1). Never call

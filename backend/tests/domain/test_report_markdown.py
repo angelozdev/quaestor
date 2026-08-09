@@ -7,6 +7,7 @@ from quaestor.domain.report_types import (
     FundReportLine,
     FundsSummary,
     GroupSection,
+    MetaReportLine,
     MonthlyReport,
 )
 
@@ -22,6 +23,11 @@ def _full_report():
             FundReportLine("Food", 1_000_000, 200_000, 800_000, True),
             FundReportLine("Fun", 200_000, 0, 250_000, False),
         ],
+        metas=[
+            MetaReportLine("Celular", "COP", 1_600_000, 3_200_000),
+            MetaReportLine("Curso", "USD", 33_334, 66_668),
+        ],
+        asked=2_800_000,
         by_category=[
             CategorySection("Food", "Essentials", 800_000, 26.666666666666668),
             CategorySection("Uncategorized", None, 100_000, 3.3333333333333335),
@@ -55,7 +61,8 @@ def test_render_headline_and_section_order():
     assert "2 on track / 1 behind" in out
     # section ordering: net before funds before categories before closing
     assert out.index("Net:") < out.index("## Funds")
-    assert out.index("## Funds") < out.index("## Expense by category")
+    assert out.index("## Funds") < out.index("## Metas")
+    assert out.index("## Metas") < out.index("## Expense by category")
     assert out.index("## Expense by category") < out.index("## Account balances")
     assert out.index("## Account balances") < out.index("## Month-over-month")
     assert out.index("## Month-over-month") < out.index("## Closing")
@@ -89,6 +96,8 @@ def test_render_empty_sections_do_not_crash():
         net=0,
         funds_summary=FundsSummary(0, 0, 0),
         funds=[],
+        metas=[],
+        asked=0,
         by_category=[],
         by_group=[],
         balances=[],
@@ -101,3 +110,23 @@ def test_render_empty_sections_do_not_crash():
     out = render_markdown(report)
     assert "# Monthly report — 2026-06" in out
     assert "## Closing" in out
+
+
+def test_render_names_every_meta_by_meta_and_in_its_own_currency():
+    """AC-36: the metas are their own section, never folded into a category."""
+    out = render_markdown(_full_report())
+
+    assert "| Celular | $16,000.00 COP | $32,000.00 COP |" in out
+    assert "| Curso | $333.34 USD | $666.68 USD |" in out
+
+
+def test_render_states_what_the_month_asks_in_all():
+    """A report that showed only the funds would understate the month (AC-36)."""
+    assert "**The month asks $28,000.00 COP in all**" in render_markdown(_full_report())
+
+
+def test_render_a_month_with_no_metas_says_so():
+    report = _full_report()
+    report.metas = []
+
+    assert "_No metas this month._" in render_markdown(report)

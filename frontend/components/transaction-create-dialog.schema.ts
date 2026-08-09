@@ -13,6 +13,7 @@ export const txNormalSchema = z
     payee: z.string().trim().max(500, messages.max500).optional().or(z.literal("")),
     notes: optionalString,
     tags: z.array(z.string()),
+    metaId: z.number().nullable(),
   })
   .refine((d) => d.accountId !== null, {
     message: messages.required,

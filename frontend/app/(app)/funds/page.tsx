@@ -60,8 +60,6 @@ const NOTHING_YET = (
 function whyItAsks(fund: FundStatus, shape: FundShape): string {
   if (fund.rule === "average") return "porque es el promedio de lo que gastaste antes"
   if (fund.rule === "from-recurring") return "porque es lo que piden sus cobros registrados"
-  if (fund.rule === "target-by-date")
-    return "porque es lo que falta, repartido entre los meses que quedan"
   return shape === "presupuesto"
     ? "porque ese es el tope que pusiste"
     : "porque ese es el monto que decidiste apartar"

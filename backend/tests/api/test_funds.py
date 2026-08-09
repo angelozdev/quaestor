@@ -15,6 +15,32 @@ def _category(client, auth, name="Restaurantes", is_income=False):
     ).json()["id"]
 
 
+def _charge_due(client, auth, category_id, amount, on):
+    """One yearly obligation, so a fund reading its category has a date."""
+    account = client.post(
+        "/api/accounts",
+        json={"name": "Banco", "type": "debit", "currency": "COP"},
+        headers=auth,
+    ).json()["id"]
+    return client.post(
+        "/api/recurring",
+        json={
+            "name": "Cobro",
+            "payee": "Cobro",
+            "type": "expense",
+            "mode": "manual",
+            "amount": amount,
+            "currency": "COP",
+            "category_id": category_id,
+            "account_id": account,
+            "interval_unit": "year",
+            "interval_count": 1,
+            "start_date": on,
+        },
+        headers=auth,
+    )
+
+
 def _fixed_fund(client, auth, category_id, amount=20_000_000, start="2026-11"):
     return client.post(
         "/api/funds",
@@ -59,13 +85,12 @@ def test_a_second_fund_on_the_same_category_is_refused(client, auth):
 def test_the_preview_warns_before_the_fund_exists(client, auth):
     _set_trm(client, auth)
     category = _category(client, auth)
+    _charge_due(client, auth, category, 300_000_000, "2026-11-20")
     resp = client.post(
         "/api/funds/preview",
         json={
             "category_id": category,
-            "rule": "target-by-date",
-            "target_amount": 300_000_000,
-            "target_month": "2026-11",
+            "rule": "from-recurring",
             "start_month": "2026-11",
         },
         headers=auth,

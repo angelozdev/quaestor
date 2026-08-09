@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from ..domain.errors import NotFound, TransferImbalance, ValidationError
 from ..domain.models import (
     Account,
+    Meta,
     Source,
     Tag,
     Transaction,
@@ -53,6 +54,26 @@ def _require_account(session: Session, account_id: int) -> Account:
     return acc
 
 
+def _refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
+    """A meta is pointed at by a purchase, and by nothing else (AC-23, AC-25).
+
+    Money coming in is not a purchase, and money moving between the owner's own
+    accounts is not either — the card statement payment included. A meta that
+    has been cancelled takes no new link.
+    """
+    if meta_id is None:
+        return
+    if tx_type is not TxType.expense:
+        raise ValidationError("only money going out can be pointed at a meta")
+    meta = session.get(Meta, meta_id)
+    if meta is None:
+        raise NotFound(f"meta {meta_id} not found")
+    if meta.closed:
+        raise ValidationError(f"the meta {meta.name!r} was closed and takes no new link")
+    if meta.archived:
+        raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no new link")
+
+
 def _record(
     session: Session,
     tx_type: TxType,
@@ -65,6 +86,7 @@ def _record(
     notes: str | None,
     source: str,
     new_category: str | None = None,
+    meta_id: int | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     if amount <= 0:
@@ -75,6 +97,7 @@ def _record(
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
     category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
+    _refuse_bad_meta(session, tx_type, meta_id)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -85,6 +108,7 @@ def _record(
         currency=currency,
         account_id=account_id,
         category_id=category_id,
+        meta_id=meta_id,
         source=Source(source),
     )
     acc.balance += delta_balance(tx_type, amount)
@@ -106,6 +130,7 @@ def record_expense(
     notes: str | None = None,
     source: str = "manual",
     new_category: str | None = None,
+    meta_id: int | None = None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
 
@@ -124,6 +149,8 @@ def record_expense(
         source: Origin of the transaction ("manual", "agent", or "import").
         new_category: Name of an expense category to create and file this
             expense under, in the same action.
+        meta_id: The meta this purchase was for, named once on the day it
+            happens (ADR-0046). Optional, and the ordinary case is None.
 
     Returns:
         The persisted Transaction.
@@ -147,6 +174,7 @@ def record_expense(
         notes,
         source,
         new_category,
+        meta_id,
     )
 
 
@@ -161,6 +189,7 @@ def record_income(
     notes: str | None = None,
     source: str = "manual",
     new_category: str | None = None,
+    meta_id: int | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -202,6 +231,7 @@ def record_income(
         notes,
         source,
         new_category,
+        meta_id,
     )
 
 
@@ -411,6 +441,7 @@ def update_transaction(
     notes=_UNSET,
     category_id=_UNSET,
     date=None,
+    meta_id=_UNSET,
 ) -> Transaction:
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
@@ -425,6 +456,11 @@ def update_transaction(
         ValidationError: Any refusal from `categories.resolve_for_movement` —
             clearing an expense's or income's category, giving one to a
             transfer, or a category missing, archived or of the wrong direction.
+            Also every refusal about the meta this purchase is pointed at —
+            money coming in, money moving between the owner's own accounts, or
+            a meta that was cancelled. Passing None here DOES clear it: unlinking
+            is a real act, and the category's fund takes the purchase back the
+            moment it happens (AC-28).
     """
     tx = get_transaction(session, tx_id)
     if payee is not None:
@@ -435,6 +471,9 @@ def update_transaction(
         tx.date = date
     if category_id is not _UNSET:
         tx.category_id = categories.resolve_for_movement(session, tx.type, category_id)
+    if meta_id is not _UNSET:
+        _refuse_bad_meta(session, tx.type, meta_id)
+        tx.meta_id = meta_id
     session.add(tx)
     session.commit()
     session.refresh(tx)

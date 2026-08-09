@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 from quaestor.db import init_db, make_engine
+from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import (
     Account,
     AccountType,
@@ -11,7 +12,7 @@ from quaestor.domain.models import (
     TxStatus,
     TxType,
 )
-from quaestor.services.month_aggregate import load_month_aggregate
+from quaestor.services.month_aggregate import load_month_aggregate, require_year_month
 from sqlmodel import Session
 
 from tests.support.query_counter import count_queries
@@ -70,14 +71,25 @@ def test_a_month_the_category_never_spent_in_is_zero(session):
     assert agg.spent_in(cat.id, "2026-06") == 0
 
 
-BOUNDED_LOADS = 10
+def test_a_malformed_month_is_refused_and_names_the_field_it_came_from():
+    """One guard for three services, so a bad month reads the same everywhere."""
+    with pytest.raises(ValidationError, match="target_month"):
+        require_year_month("2026-13", "target_month")
+    with pytest.raises(ValidationError):
+        require_year_month("June")
+    assert require_year_month("2026-06") == "2026-06"
+
+
+BOUNDED_LOADS = 13
 """The ceiling one month load is held under (ADR-0028), asserted with `<=`.
 
-The ceiling was already ten before feature 003 and has not moved. What moved
-is the measured count: eight before, ten now — three statements added and one
-dropped with the `budget` table, the +2 the plan budgeted. So there is no
-headroom left, and the next query added to `load_month_aggregate` fails this
-test on purpose. Raising the number is a decision about the read path, not a
+Eight before feature 003, ten after it, fourteen after 009 — which added the
+metas, their contributions, their amendments and the movements linked to them —
+and thirteen once the month's expense and income windows became one statement
+split in memory, which is the slot 009 bought back.
+The measured count equals the ceiling, so there is no headroom left and the
+next query added to `load_month_aggregate` fails this test on purpose. Raising
+the number is a decision about the read path, not a
 repair to the test.
 
 The ten: the categories, the groups, the per-category-and-month spending

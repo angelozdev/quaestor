@@ -14,7 +14,6 @@ from decimal import Decimal
 
 from sqlmodel import Session
 
-from ..domain.errors import ValidationError
 from ..domain.models import Account, Transaction
 from ..domain.money import to_cop_cents
 from ..domain.report_markdown import money, render_markdown
@@ -25,20 +24,16 @@ from ..domain.report_types import (
     FundReportLine,
     FundsSummary,
     GroupSection,
+    MetaReportLine,
     MonthAvailable,
     MonthlyReport,
 )
-from ..domain.rules import is_year_month, prev_year_month
+from ..domain.rules import prev_year_month
 from . import accounts as _accounts
-from . import fx as _fx
+from . import metas as metas_service
+from . import month as month_service
 from . import planned as _planned
-from .funds import month_available
-from .month_aggregate import MonthAggregate, load_month_aggregate
-
-
-def _validate_month(month: str) -> None:
-    if not is_year_month(month):
-        raise ValidationError(f"malformed month (expected YYYY-MM): {month!r}")
+from .month_aggregate import MonthAggregate, load_month, require_year_month
 
 
 def _usd_share(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> float:
@@ -137,6 +132,26 @@ def _fund_lines(agg: MonthAggregate, statuses: list) -> tuple[list[FundReportLin
     )
 
 
+def _meta_lines(statuses: list) -> list[MetaReportLine]:
+    """One MetaReportLine per meta the month reports, by name (AC-36).
+
+    The metas come from the same walk that produced the closing line, so a meta
+    is folded forward once per report and not twice.
+    """
+    return sorted(
+        (
+            MetaReportLine(
+                meta_name=status.name,
+                currency=status.currency,
+                asks=status.asks,
+                holds=status.holds,
+            )
+            for status in statuses
+        ),
+        key=lambda m: m.meta_name,
+    )
+
+
 def _balance_lines(session: Session) -> list[AccountBalance]:
     """Balance per non-archived account (account's own currency), sorted by name."""
     accs = _accounts.list_accounts(session, include_archived=False)
@@ -188,14 +203,14 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         ValidationError: malformed month.
         MissingRate: no TRM set (005 AC-9 — even for all-COP data).
     """
-    _validate_month(month)
-    trm = _fx.get_trm(session)
-    agg = load_month_aggregate(session, month, trm)
+    require_year_month(month, "month")
+    agg = load_month(session, month)
+    trm = agg.trm
     start, end = agg.start, agg.end
 
     expenses = agg.month_expense()
     income, expense, net = agg.totals_for(month)
-    available: MonthAvailable = month_available(agg)
+    available: MonthAvailable = month_service.month_available(agg)
     funds, funds_summary = _fund_lines(agg, available.funds)
     report = MonthlyReport(
         month=month,
@@ -204,6 +219,8 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         net=net,
         funds_summary=funds_summary,
         funds=funds,
+        metas=_meta_lines(available.metas),
+        asked=sum(f.asks for f in funds) + metas_service.asks_total(agg) + metas_service.cancelled_asks_total(agg),
         by_category=_category_sections(agg, expenses, expense),
         by_group=_group_sections(agg, expenses, expense),
         balances=_balance_lines(session),

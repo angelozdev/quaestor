@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Numeric, UniqueConstraint
+from sqlalchemy import BigInteger, CheckConstraint, Column, Index, Numeric, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 
@@ -97,6 +97,7 @@ class Category(SQLModel, table=True):
     is_income: bool = False
     exclude_from_budget: bool = False
     exclude_from_totals: bool = False
+    counts_as_saving: bool = False
     archived: bool = False
 
 
@@ -108,6 +109,11 @@ class Transaction(SQLModel, table=True):
     requires one on an expense or income and forbids one on a transfer
     (ADR-0041). Declared here as well as in revision 0010 so the model and the
     schema cannot drift.
+
+    `meta_id` is the owner naming, once, which purchase a meta was for
+    (ADR-0046). A CHECK confines it to expenses the same way `category_id` is
+    confined by direction: money coming in and money moving between the owner's
+    own accounts are not purchases.
     """
 
     __table_args__ = (
@@ -116,6 +122,10 @@ class Transaction(SQLModel, table=True):
             "(type IN ('expense', 'income') AND category_id IS NOT NULL)"
             " OR (type = 'transfer' AND category_id IS NULL)",
             name="ck_transaction_category_by_type",
+        ),
+        CheckConstraint(
+            "meta_id IS NULL OR type = 'expense'",
+            name="ck_transaction_meta_only_on_expense",
         ),
     )
 
@@ -130,9 +140,93 @@ class Transaction(SQLModel, table=True):
     account_id: Annotated[int, Field(foreign_key="account.id")]
     category_id: Annotated[int | None, Field(default=None, foreign_key="category.id")] = None
     recurring_id: Annotated[int | None, Field(default=None, foreign_key="recurring_item.id")] = None
+    meta_id: Annotated[int | None, Field(default=None, foreign_key="meta.id")] = None
     transfer_group_id: Annotated[str | None, Field(default=None, index=True)] = None
     transfer_direction: Annotated[TransferDirection | None, Field(default=None)] = None
     source: Source = Source.manual
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class Meta(SQLModel, table=True):
+    """A named thing to save for, belonging to no category (ADR-0046).
+
+    No balance column, the same constraint ADR-0043 put on the fund and for the
+    same reason: what a meta holds is folded forward from its start month, so a
+    past month answers as that month stood and cancelling now cannot rewrite it.
+
+    `stated_opening` is the owner's own statement of what he had already put by
+    before the meta existed. It costs no month — unlike a contribution, which is
+    money set aside now — and it is read for the start month only.
+
+    `amount` is cents in `currency`. A meta held in dollars reports every figure
+    in dollars; only its peso cost converts, at the single scalar TRM.
+
+    `cancelled_month` is the month a cancellation released what the meta held
+    back into the money available (AC-15). It is read for that one month and
+    never again, which is why the release is a term of the month rather than a
+    stored adjustment.
+    """
+
+    __table_args__ = (
+        Index(
+            "uq_meta_name",
+            "name",
+            unique=True,
+            sqlite_where=text("archived = 0"),
+            postgresql_where=text("NOT archived"),
+        ),
+    )
+    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
+    name: str
+    amount: Annotated[int, Field(sa_type=BigInteger)]
+    currency: str = "COP"
+    start_month: str
+    target_month: str
+    stated_opening: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
+    closed: bool = False
+    archived: bool = False
+    cancelled_month: str | None = None
+
+
+class MetaContribution(SQLModel, table=True):
+    """Money the owner set aside by hand, on top of what the meta asks.
+
+    A row exists only because he pressed the button, and he can delete it
+    (AC-42). Nothing generates these: there is no month-end routine, no
+    proposal to confirm and no source account — which is what separates this
+    from the `goal_contribution` table migration 0012 removed.
+    """
+
+    __tablename__ = "meta_contribution"
+    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
+    meta_id: Annotated[int, Field(foreign_key="meta.id")]
+    year_month: str
+    amount: Annotated[int, Field(sa_type=BigInteger)]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class MetaAmendment(SQLModel, table=True):
+    """What a meta was changed to, and the month the change starts (AC-11).
+
+    Everything else a meta reports is folded forward and needs nothing stored.
+    An edit is not: raising the amount in October must leave August and
+    September saying what they said, and no arithmetic can recover that from a
+    single current value. The same reason `cancelled_month` exists — some facts
+    are known only to the act.
+
+    A row holds the values effective **from** its month. The meta's own
+    `amount` and `target_month` are the values effective from its start month
+    and are never rewritten, which is what keeps AC-27 true: a past month
+    answers as that month stood.
+    """
+
+    __tablename__ = "meta_amendment"
+    __table_args__ = (UniqueConstraint("meta_id", "year_month", name="uq_meta_amendment_month"),)
+    id: Annotated[int | None, Field(default=None, primary_key=True)] = None
+    meta_id: Annotated[int, Field(foreign_key="meta.id")]
+    year_month: str
+    amount: Annotated[int, Field(sa_type=BigInteger)]
+    target_month: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -197,7 +291,6 @@ class FundRule(StrEnum):
     fixed = "fixed"
     average = "average"
     from_recurring = "from-recurring"
-    target_by_date = "target-by-date"
 
 
 class Fund(SQLModel, table=True):
@@ -218,7 +311,5 @@ class Fund(SQLModel, table=True):
     accumulates: bool = True
     amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
     window_months: int | None = None
-    target_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None
-    target_month: str | None = None
     anchor_month: str | None = None
     anchor_amount: Annotated[int | None, Field(default=None, sa_type=BigInteger)] = None

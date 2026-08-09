@@ -75,3 +75,32 @@ def test_creating_a_category_whose_name_is_taken_is_422(client, auth):
     assert resp.status_code == 422
     assert "already exists" in resp.json()["detail"]
     assert len(client.get("/api/categories", headers=auth).json()) == 1
+
+
+def test_a_category_can_be_created_marked_as_one_where_spending_is_saving(client, auth):
+    """AC-41 over the wire: the field existed everywhere but here, so it was dropped."""
+    created = client.post("/api/categories", headers=auth, json={"name": "Inversion", "counts_as_saving": True})
+
+    assert created.status_code == 201
+    assert created.json()["counts_as_saving"] is True
+    assert client.get("/api/categories", headers=auth).json()[0]["counts_as_saving"] is True
+
+
+def test_a_category_is_not_saving_unless_it_says_so(client, auth):
+    created = client.post("/api/categories", headers=auth, json={"name": "Restaurantes"})
+
+    assert created.json()["counts_as_saving"] is False
+
+
+def test_the_mark_can_be_put_on_a_category_that_already_exists(client, auth):
+    category_id = client.post("/api/categories", headers=auth, json={"name": "Inversion"}).json()["id"]
+
+    changed = client.patch(f"/api/categories/{category_id}", headers=auth, json={"counts_as_saving": True})
+
+    assert changed.json()["counts_as_saving"] is True
+    assert (
+        client.patch(f"/api/categories/{category_id}", headers=auth, json={"counts_as_saving": False}).json()[
+            "counts_as_saving"
+        ]
+        is False
+    )

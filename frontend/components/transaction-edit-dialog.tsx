@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
+import { MetaField } from "@/components/meta-field"
 import { TagChipsInput } from "@/components/tag-chips-input"
 import {
   type TransactionEditValues,
@@ -14,6 +15,7 @@ import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { listTransactions, updateTransaction } from "@/lib/api/transactions"
 import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import { yearMonthOf } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { findCounterpart } from "@/lib/transfers"
@@ -27,6 +29,7 @@ function valuesFromTx(tx: Transaction): TransactionEditValues {
     date: tx.date,
     notes: tx.notes ?? "",
     tags: tx.tags,
+    metaId: tx.meta_id,
   }
 }
 
@@ -67,6 +70,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const tagSuggestions = useTagNames()
   const isTransfer = tx.type === "transfer"
   const isIncome = tx.type === "income"
+  const monthOfPurchase = tx.type === "expense" ? yearMonthOf(tx.date) : null
 
   const form = useTanStackForm({
     defaultValues: valuesFromTx(tx),
@@ -84,6 +88,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         category_id: values.categoryId,
         notes: values.notes && values.notes.length > 0 ? values.notes : null,
         tags: values.tags,
+        meta_id: values.metaId,
       }),
     onSuccess: () => {
       toast.success("Transacción actualizada")
@@ -139,6 +144,18 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
                 </p>
               )}
             </div>
+          )}
+        </form.Field>
+      )}
+      {monthOfPurchase !== null && (
+        <form.Field name="metaId">
+          {(field) => (
+            <MetaField
+              id="tx-edit-meta"
+              month={monthOfPurchase}
+              value={field.state.value as number | null}
+              onChange={(chosen) => field.handleChange(chosen as never)}
+            />
           )}
         </form.Field>
       )}

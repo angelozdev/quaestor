@@ -10,7 +10,7 @@ import { QueryBoundary } from "@/components/query-boundary"
 import { ScreenHelp } from "@/components/screen-help"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
-import { labelOf } from "@/lib/funds"
+import { availableRows } from "@/lib/available-breakdown"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -211,6 +211,48 @@ export default function ReportsPage() {
               )}
             </Section>
 
+            <Section title="Metas">
+              {data.metas.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ color: "var(--muted-foreground)" }}>
+                      <th className="text-left pb-3 font-medium text-xs">Meta</th>
+                      <th className="text-right pb-3 font-medium text-xs">Pidió</th>
+                      <th className="text-right pb-3 font-medium text-xs">Lleva</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.metas.map((m) => (
+                      <tr
+                        key={m.meta_name}
+                        className="border-t"
+                        style={{ borderColor: "var(--border)" }}
+                      >
+                        <td className="py-2.5 text-sm">{m.meta_name}</td>
+                        <td
+                          className="py-2.5 text-right tabular-nums text-sm"
+                          style={{ color: "var(--muted-foreground)" }}
+                        >
+                          {formatCents(m.asks, m.currency)}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums text-sm font-medium">
+                          {formatCents(m.holds, m.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <EmptyState
+                  message="Sin metas este mes"
+                  action={{ label: "Ir a metas", href: "/metas" }}
+                />
+              )}
+              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                Entre fondos y metas, el mes pide {formatCents(data.asked, "COP")}.
+              </p>
+            </Section>
+
             {/* Por categoría */}
             <Section title="Por categoría">
               {data.by_category.length > 0 ? (
@@ -273,32 +315,16 @@ export default function ReportsPage() {
                 </p>
                 <hr style={{ borderColor: "var(--border)" }} />
                 <div className="space-y-1">
-                  <Row label="Ingreso del mes" faint>
-                    <span
-                      className="text-sm tabular-nums"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {formatCents(data.available.income, "COP")}
-                    </span>
-                  </Row>
-                  {data.available.funds.map((f) => (
-                    <Row key={f.fund_id} label={labelOf(f)} faint>
+                  {availableRows(data.available).map((row) => (
+                    <Row key={row.key} label={row.label} faint>
                       <span
                         className="text-sm tabular-nums"
                         style={{ color: "var(--muted-foreground)" }}
                       >
-                        {formatCents(f.asks, "COP")}
+                        {formatCents(row.cents, "COP")}
                       </span>
                     </Row>
                   ))}
-                  <Row label="Sin fondo que lo cubra" faint>
-                    <span
-                      className="text-sm tabular-nums"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {formatCents(data.available.uncovered, "COP")}
-                    </span>
-                  </Row>
                 </div>
               </div>
             </Section>

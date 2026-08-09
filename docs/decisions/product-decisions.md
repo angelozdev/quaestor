@@ -591,7 +591,7 @@ Money invisible to every report, posted and confirmed: **$2.072.854 COP + US$7.4
 
 ## ADR-037 — Envelopes and goals collapse into one thing, the fund; and the month shows two numbers, not one
 
-**Status:** accepted (feature 003, 2026-08-04), **amended by ADR-042** (feature 010, 2026-08-07) — vocabulary only: the fund that does not accumulate is named *presupuesto*, and every mechanism below stands unchanged · **Supersedes** ADR-003 (safe-to-spend = unassigned money) and ADR-006 (flexible goals) · **Amends** ADR-002 and ADR-016 · Technical detail in `docs/adr/0043` and `docs/adr/0044`
+**Status:** accepted (feature 003, 2026-08-04), **amended by ADR-042** (feature 010, 2026-08-07) — vocabulary only: the fund that does not accumulate is named *presupuesto*, and every mechanism below stands unchanged, **and partly superseded by ADR-043** (feature 009, 2026-08-08) — the *"no separate goals feature"* clause and the four-rule list are replaced; everything else below stands · **Supersedes** ADR-003 (safe-to-spend = unassigned money) and ADR-006 (flexible goals) · **Amends** ADR-002 and ADR-016 · Technical detail in `docs/adr/0043` and `docs/adr/0044`
 
 **Context.** ADR-002 gave Quaestor two layers: per-category envelopes with rollover, and a global safe-to-spend on top. ADR-006 added a third mechanism, the goal, with its own table, its own screen and a savings account it forced the user to link.
 
@@ -824,3 +824,81 @@ The screen shows them as two labelled groups, creating one starts from which of 
 - **The vocabulary is now load-bearing for anything new.** Feature 009 (named goals) was deliberately sequenced behind this one so it would inherit settled words instead of adding a fourth invisible surface.
 
 **Confirmation.** Decided at feature 010's Checkpoint 2 on 2026-08-07, after the two shapes were put to the owner as behaviour with the September figures above. Not built: it ships with 010.
+
+---
+
+## ADR-043 — There is a second noun after all, and the fund gives up its fourth rule
+
+**Status:** accepted (feature 009, 2026-08-08) · **Supersedes** two clauses of ADR-037: *"there is no separate goals feature"* and its four-rule list · Technical detail in `docs/adr/0046`
+
+**Context.** ADR-037 collapsed envelopes and goals into one noun four days ago, on evidence that was overwhelming: zero envelopes had ever been created, and the one goal in the app read `$0 of $10.000.000` while the account it demanded held `$14.659.572`. Its decision sentence is *"One noun: the fund … A goal is a fund with a target and a date … There is no separate goals feature and no separate envelope."*
+
+Feature 009 was promoted on 2026-08-05 to let the owner save for named things — a phone, a television — several at a time. Its `feature.md` claimed this was compatible with ADR-037 because the rejected alternative (A), *"keep envelopes and add funds beside them"*, concerned two mechanisms **on the same category**, and a meta belongs to none.
+
+**That defence does not survive.** An adversarial review at Checkpoint 3 showed why: ADR-037's *"the same headline"* is the money available, not a per-category figure, and the duplication (A) named is of *mechanism*, not of category. A `target-by-date` fund and a meta are both an amount by a month, asked monthly, subtracted from the same number. Writing that the distinction holds would have been convenient and false.
+
+**Decision.** **Two nouns, and only two.**
+
+- **The fund** is what a category costs: a fixed amount, the average of what it has cost, or what its obligations add up to. Three rules, not four.
+- **The meta** is a named thing with an end, belonging to no category: an amount, a month, and a purchase that closes it.
+
+**And saving toward a date is said one way.** The fund's `target-by-date` rule is withdrawn in the same feature that introduces the meta.
+
+Two things decided that, and the second is the one that matters:
+
+1. **The label was already the meta's own words.** The dated rule ships as *"Junto una cantidad para una fecha"*, explained as *"Por ejemplo: $600.000 para febrero. Reparto lo que falta entre los meses que quedan."* It is only visible after pressing `+ Nuevo fondo` — the owner must commit to the noun *fondo* before the evidence appears that he may have wanted the other one. That is the exact failure feature 010 existed to fix, and ADR-042 had just spent a feature making two nouns tellable apart.
+2. **The rule has no users and no case left.** Read from production on 2026-08-08, read-only, with the owner's permission: `SELECT rule, COUNT(*) FROM fund` returns **zero rows**. And his only two dated charges — `Seguro del Carro` at $7.000.000 a year and `SOAT carro` at $447.300 a year — are already recurring obligations, which the `from-recurring` rule covers **and renews by itself each cycle**, which `target-by-date` never did.
+
+**What did not change, and is the reason this is not ADR-006 returning.** No savings account, anywhere (product ADR-015 stays dead, Firefly III's coupling stays refused). No monthly ritual: a meta fills itself, and not opening the app for a month still advances it. No proposal to confirm. What the old goal needed a month-end routine and a forced transfer to express, the owner now says once, on the day he buys the thing, by pointing the expense at the meta.
+
+**Alternatives rejected.**
+
+- **(A) Keep both and explain the difference in a panel.** The owner's own first choice, reversed at CP3 when the label above was put in front of him. It is 010's diagnosis — capability built and never announced — applied to a distinction rather than a feature, and there is no evidence a panel fixes what a four-option dropdown breaks.
+- **(B) Withdraw `target-by-date` as a later feature.** Also the owner's first sequencing, and defensible while the migration looked expensive. The zero-row count removed the cost, and shipping both for even one release is what makes it a reversal rather than a replacement.
+- **(C) Drop the meta and keep the dated fund.** Rejected on the constraint the roadmap item recorded from the start: one fund per category means one dated saving per category, which is YNAB's limit and the reason its users create a category per goal.
+
+**Consequences.**
+
+- **ADR-037's collapse stands where it was right.** One record shape for what a category costs, one screen for it, one form, zero monthly ritual. What is added is a second *kind of thing*, not a second way to do the same thing — which is precisely why the fourth rule cannot survive alongside it.
+- **A third word enters the app**, after ADR-042 settled two. *Presupuesto* is a ceiling that resets, *fondo* carries its leftover forward, *meta* is a named thing with an end and no category. The metas screen must say all three (009's AC-30).
+- **The month splits into consumo, ahorro and libre.** A presupuesto is consumo, a fondo that accumulates is ahorro, a meta is always ahorro — and a category may be marked as one where spending is saving, because production shows US$2.000 at a time going to `📈 Inversión` and the split would otherwise have reported near-zero saved in the months the owner saves most.
+- **A destructive migration on real data**, though nothing is converted. Behind a fresh backup and explicit human authorisation (charter §7, ADR-0030).
+- **The assistant reads metas and cannot manage them.** A stated deviation from CHARTER §4 and ADR-001, recorded in `docs/adr/0046` rather than left in a feature folder.
+
+
+---
+
+## ADR-044 — A meta stops the month after its purchase, and closing it moves no figure
+
+**Status:** accepted (feature 009, 2026-08-09) · Extends ADR-043 and 009's AC-39 · Technical detail in `docs/adr/0046`
+
+**Context.** A fresh agent verified feature 009 against its 45 acceptance criteria and reproduced three wrong figures. One of them was the button the owner presses most often on a meta that worked: `Cerrar`.
+
+Closing archived the meta with no cancellation month, and the month's read path kept an archived meta visible only through that month. So a closed meta vanished from **every** month, past ones included:
+
+```
+A. meta abierta, $6.400.000 guardados        disponible 4.680.000   sin cubrir 0
+B. celular de $8.000.000 comprado en agosto  disponible 3.400.000   sin cubrir 1.280.000
+C. el dueño oprime "Cerrar Celular"          disponible 5.000.000   sin cubrir 0
+```
+
+August read as though nothing had happened. That is the exact failure AC-39's own text says it exists to prevent: *"una compra real desaparecería del mes y su plata reaparecería"*. It also emptied the past — a September that reported `lleva 3.200.000 · pide 1.600.000` reported nothing once the meta was closed in December, contradicting AC-27.
+
+**And behind it sat a larger one.** A meta went on asking for its instalment every month after the thing was bought. A $8.000.000 phone bought in October against a meta holding $4.800.000 kept asking $1.600.000 in November and December — saving toward a phone already in the owner's pocket. Closing was the only way to stop it, and closing was what erased the past. The two defects were holding each other up.
+
+**Decision.** **Buying stops the meta; closing only takes it off the screen.**
+
+- A meta **asks nothing from the month after its purchase**, and keeps what it had. The purchase month itself still asks, because what it asks that month is part of what covered the purchase (AC-12).
+- **Closing releases nothing and moves no figure.** The meta leaves the metas screen; the month it was bought in goes on reporting the gap the purchase left, forever.
+- A closed meta is **not listed among the cancelled ones** and cannot be brought back. Cancelling hands money back and is reversible; closing hands nothing back and is not.
+
+**Alternatives rejected.**
+
+- **(A) Record the month a meta was closed and stop it from there.** The obvious fix, and it needs a new column and a fourth migration on real data while three are already outstanding. It also leaves the underlying defect alive: a meta the owner forgets to close still saves for a thing he owns. Rejected on both counts.
+- **(B) Leave a closed meta on the screen forever.** Keeping it inside the arithmetic and inside the list are separate questions, and AC-29 already answers the second: an archived meta is out of the list. The screen's own copy was built for this — a closed meta renders with no badge and no actions.
+
+**Consequences.**
+
+- **No migration.** The behaviour falls out of the purchase the owner already recorded; nothing new is stored.
+- **The `Cerrar` button becomes honest.** It says the meta is finished, and finishing changes no number — which is the only reading of AC-39 that does not contradict AC-27.
+- **A meta bought before it filled stops asking anyway**, whether or not the owner closes it. The gap between what it held and what the thing cost is charged once, in the month of the purchase, and never again.

@@ -330,7 +330,6 @@ def fund_saved(fund, category_name: str) -> str:
         "fixed": lambda: f"{money(fund.amount or 0, 'COP')} each month",
         "average": lambda: f"the average of the last {fund.window_months} months",
         "from-recurring": lambda: "what its obligations come to",
-        "target-by-date": lambda: f"{money(fund.target_amount or 0, 'COP')} by {fund.target_month}",
     }[fund.rule.value]()
     carries = "accumulating" if fund.accumulates else "resetting"
     return f"✅ Fund on **{category_name}** — asks {detail}, from {fund.start_month}, {carries}. id={fund.id}"
@@ -375,13 +374,26 @@ def fund_preview_card(preview, category_name: str) -> str:
 
 
 def money_available_card(view) -> str:
-    """The month's number opened into the terms that make it (AC-10)."""
+    """The month's number opened into the terms that make it (AC-10).
+
+    Metas are named here and nowhere else in the assistant (AC-32 of feature
+    009). The owner decided the assistant does not manage them; naming them in
+    this one answer is not a softening of that but what keeps it honest — once
+    a meta is a term of this number, an answer that omits it shows terms that
+    do not reach their own total.
+    """
     lines = [
         f"# Money available — {view.year_month}",
         f"- Income: {money(view.income, 'COP')}",
     ]
     for fund in view.funds:
         lines.append(f"- Fund {fund.name}: −{money(fund.asks, 'COP')}")
+    for meta in view.metas:
+        lines.append(f"- Meta {meta.name}: −{money(meta.asks_cop, 'COP')}")
+    if view.contributed:
+        lines.append(f"- Set aside by hand: −{money(view.contributed, 'COP')}")
+    if view.released:
+        lines.append(f"- Given back by a cancelled meta: +{money(view.released, 'COP')}")
     lines.append(f"- Uncovered: −{money(view.uncovered, 'COP')}")
     lines.append(f"- **Available: {money(view.free, 'COP')}**")
     return "\n".join(lines)

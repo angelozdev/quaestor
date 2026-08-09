@@ -37,6 +37,7 @@ def create_category(body: CategoryCreate, session: Session = Depends(get_session
         is_income=body.is_income,
         exclude_from_budget=body.exclude_from_budget,
         exclude_from_totals=body.exclude_from_totals,
+        counts_as_saving=body.counts_as_saving,
     )
 
 

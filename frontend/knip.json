@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["ui/index.ts"],
+  "ignoreDependencies": ["jscpd", "shadcn", "tw-animate-css"],
+  "ignoreExportsUsedInFile": { "interface": true, "type": true }
+}

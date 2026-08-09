@@ -25,8 +25,6 @@ function defaults(month: string): CreateFundValues {
     startMonth: month,
     amount: null,
     windowMonths: DEFAULT_WINDOW,
-    targetAmount: null,
-    targetMonth: "",
   }
 }
 
@@ -39,10 +37,6 @@ function bodyOf(values: CreateFundValues, shape: FundShape): FundCreate {
   }
   if (values.rule === "fixed") body.amount = values.amount
   if (values.rule === "average") body.window_months = values.windowMonths
-  if (values.rule === "target-by-date") {
-    body.target_amount = values.targetAmount
-    body.target_month = values.targetMonth
-  }
   return body
 }
 
@@ -68,12 +62,6 @@ function previewBody(
   if (rule === "from-recurring") return base
   if (rule === "average") {
     return values.windowMonths === null ? null : { ...base, window_months: values.windowMonths }
-  }
-  if (rule === "target-by-date") {
-    const dated = /^\d{4}-\d{2}$/.test(values.targetMonth)
-    return values.targetAmount === null || !dated
-      ? null
-      : { ...base, target_amount: values.targetAmount, target_month: values.targetMonth }
   }
   return null
 }
@@ -304,37 +292,6 @@ export function CreateFundForm({
             </div>
           )}
         </form.Field>
-      )}
-
-      {values.rule === "target-by-date" && (
-        <>
-          <form.Field name="targetAmount">
-            {(field) => (
-              <div className="space-y-1.5">
-                <Label htmlFor="fund-target">Objetivo * (COP)</Label>
-                <MoneyInput
-                  id="fund-target"
-                  currency="COP"
-                  value={field.state.value}
-                  onChange={(cents) => field.handleChange(cents)}
-                />
-              </div>
-            )}
-          </form.Field>
-          <form.Field name="targetMonth">
-            {(field) => (
-              <div className="space-y-1.5">
-                <Label htmlFor="fund-target-month">Mes objetivo *</Label>
-                <Input
-                  id="fund-target-month"
-                  type="month"
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                />
-              </div>
-            )}
-          </form.Field>
-        </>
       )}
 
       <form.Field name="startMonth">

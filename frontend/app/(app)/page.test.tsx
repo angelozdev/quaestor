@@ -4,8 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
 import { openHelpPanel } from "@/tests/factories"
 
-const { moneyAvailable, moneyRates, report, listAccounts, toPay } = vi.hoisted(() => ({
+const { moneyAvailable, moneyRates, report, listAccounts, toPay, monthSplit } = vi.hoisted(() => ({
   moneyAvailable: vi.fn(),
+  monthSplit: vi.fn(),
   moneyRates: vi.fn(),
   report: vi.fn(),
   listAccounts: vi.fn(),
@@ -13,6 +14,13 @@ const { moneyAvailable, moneyRates, report, listAccounts, toPay } = vi.hoisted((
 }))
 
 vi.mock("@/lib/api/funds", () => ({ moneyAvailable, moneyRates }))
+
+/** The dashboard reads the month's terms out of the report payload — the same
+ * MonthAvailable the /funds/available endpoint answers with, embedded. */
+function showing(available: unknown) {
+  report.mockResolvedValue({ income: 0, expense: 0, net: 0, available })
+}
+vi.mock("@/lib/api/metas", () => ({ monthSplit }))
 vi.mock("@/lib/api/reports", () => ({ report }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/planned", () => ({ toPay, confirmPayment: vi.fn() }))
@@ -31,6 +39,7 @@ const AVAILABLE = {
       year_month: "2026-11",
       rule: "fixed",
       asks: 20_000_000,
+      asks_cop: 20_000_000,
       holds: 0,
       accumulates: true,
       accumulation_is_implied: false,
@@ -40,6 +49,9 @@ const AVAILABLE = {
       whole_by: null,
     },
   ],
+  metas: [],
+  contributed: 0,
+  released: 0,
   uncovered: 15_000_000,
   free: 465_000_000,
 }
@@ -59,11 +71,22 @@ const hero = (container: HTMLElement) => container.querySelector('[data-slot="mo
 
 beforeEach(() => {
   vi.clearAllMocks()
-  moneyAvailable.mockResolvedValue(AVAILABLE)
+  showing(AVAILABLE)
   moneyRates.mockResolvedValue(RATES)
   listAccounts.mockResolvedValue([])
   toPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
-  report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
+  monthSplit.mockResolvedValue({
+    year_month: "2026-11",
+    income: 0,
+    consumo: 0,
+    ahorro: 0,
+    libre: 0,
+    ahorro_share: 0,
+    set_aside: 0,
+    set_aside_share: 0,
+    released: 0,
+    gave_back: [],
+  })
 })
 
 describe("DashboardPage breakdown", () => {
@@ -89,7 +112,7 @@ describe("DashboardPage breakdown", () => {
 
 describe("AC-21 — one vocabulary, everywhere", () => {
   it("The Dashboard breakdown calls a presupuesto a presupuesto", async () => {
-    moneyAvailable.mockResolvedValue({
+    showing({
       ...AVAILABLE,
       income: 300_000_000,
       funds: [{ ...AVAILABLE.funds[0], accumulates: false, asks: 10_000_000 }],
@@ -132,7 +155,7 @@ describe("AC-7 — every screen carries the same control", () => {
 
 describe("AC-8 — the panel explains the screen using the owner's own figures", () => {
   beforeEach(() => {
-    moneyAvailable.mockResolvedValue(ASKING_TOO_MUCH)
+    showing(ASKING_TOO_MUCH)
   })
 
   it("The panel states what came in and what each fund asked for", async () => {
@@ -159,7 +182,7 @@ describe("AC-8 — the panel explains the screen using the owner's own figures",
 
 describe("AC-10 — an empty screen teaches and offers the way in", () => {
   it("An empty Dashboard teaches where its figures come from", async () => {
-    report.mockResolvedValue({ income: 0, expense: 0, net: 0 })
+    report.mockResolvedValue({ income: 0, expense: 0, net: 0, available: AVAILABLE })
     renderPage()
 
     expect(
@@ -187,5 +210,208 @@ describe("DashboardPage keeps the money available and the rates apart", () => {
     expect(screen.getByText("$ 5.650.000")).toBeInTheDocument()
 
     expect(screen.getByText(/Una tasa no es el disponible/)).toBeInTheDocument()
+  })
+})
+
+describe("AC-4 — the breakdown states what the metas ask", () => {
+  it("names each meta, what was put by hand, and what a cancelled one gave back", async () => {
+    showing({
+      ...AVAILABLE,
+      metas: [
+        {
+          meta_id: 1,
+          name: "Celular",
+          year_month: "2026-11",
+          amount: 800_000_000,
+          currency: "COP",
+          target_month: "2026-12",
+          asks: 160_000_000,
+          asks_cop: 160_000_000,
+          holds: 160_000_000,
+          progress: 20,
+          complete: false,
+          closed: false,
+          waiting: false,
+          cancelled: true,
+          released: 30_000_000,
+        },
+      ],
+      contributed: 50_000_000,
+      released: 30_000_000,
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Celular (la cancelaste)")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
+    expect(screen.getByText("Puesto a mano en una meta")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
+    expect(screen.getByText("$ -300.000")).toBeInTheDocument()
+  })
+
+  it("stays quiet about metas in a month that has none", async () => {
+    renderPage()
+
+    expect(await screen.findByText("Sin fondo que lo cubra")).toBeInTheDocument()
+    expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
+    expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
+  })
+})
+
+const CELULAR = {
+  meta_id: 1,
+  name: "Celular",
+  year_month: "2026-11",
+  amount: 800_000_000,
+  currency: "COP",
+  target_month: "2026-12",
+  asks: 0,
+  asks_cop: 0,
+  holds: 320_000_000,
+  progress: 40,
+  complete: false,
+  closed: false,
+  waiting: false,
+  cancelled: true,
+  released: 320_000_000,
+}
+
+describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
+  const SPLIT = {
+    year_month: "2026-11",
+    income: 500_000_000,
+    consumo: 140_000_000,
+    ahorro: 320_000_000,
+    libre: 40_000_000,
+    ahorro_share: 64,
+    set_aside: 320_000_000,
+    set_aside_share: 64,
+    released: 0,
+    gave_back: [],
+  }
+
+  it("says what share of the month was saved, and adds up to the income", async () => {
+    monthSplit.mockResolvedValue(SPLIT)
+    renderPage()
+
+    expect(await screen.findByText("Ahorro · fondos y metas")).toBeInTheDocument()
+    expect(screen.getByText("$ 3.200.000")).toBeInTheDocument()
+    expect(screen.getByText("64%")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.400.000")).toBeInTheDocument()
+    expect(screen.getByText("$ 400.000")).toBeInTheDocument()
+    expect(SPLIT.consumo + SPLIT.ahorro + SPLIT.libre).toBe(SPLIT.income)
+  })
+
+  it("keeps what was set aside visible in a month a meta was also cancelled", async () => {
+    const MIXED = {
+      ...SPLIT,
+      consumo: 0,
+      ahorro: -220_000_000,
+      libre: 720_000_000,
+      ahorro_share: -44,
+      set_aside: 100_000_000,
+      set_aside_share: 20,
+      released: 320_000_000,
+      gave_back: [CELULAR],
+    }
+    monthSplit.mockResolvedValue(MIXED)
+    renderPage()
+
+    expect(await screen.findByText("$ 1.000.000")).toBeInTheDocument()
+    expect(screen.getByText("20%")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
+    expect(screen.getByText("$ -3.200.000")).toBeInTheDocument()
+    expect(MIXED.set_aside - MIXED.released).toBe(MIXED.ahorro)
+    expect(MIXED.consumo + MIXED.ahorro + MIXED.libre).toBe(MIXED.income)
+  })
+
+  it("names a meta that gave money back because its amount was lowered", async () => {
+    monthSplit.mockResolvedValue({
+      ...SPLIT,
+      gave_back: [{ ...CELULAR, cancelled: false, released: 50_000_000 }],
+    })
+    renderPage()
+
+    expect(
+      await screen.findByText("Devuelto por Celular (le bajaste el monto)"),
+    ).toBeInTheDocument()
+  })
+
+  it("names no give-back in an ordinary month", async () => {
+    monthSplit.mockResolvedValue(SPLIT)
+    renderPage()
+
+    expect(await screen.findByText("Ahorro · fondos y metas")).toBeInTheDocument()
+    expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-19 — the month arrives with nothing bought, and the app says so", () => {
+  const IS_WAITING = { ...CELULAR, waiting: true, cancelled: false, released: 0, asks: 0 }
+
+  it("The meta whose month passed unbought is named on the dashboard", async () => {
+    showing({ ...AVAILABLE, metas: [IS_WAITING] })
+    renderPage()
+
+    expect(await screen.findByText(/Celular está esperando/)).toBeInTheDocument()
+    expect(screen.getByText(/su mes ya pasó y no le has enlazado la compra/)).toBeInTheDocument()
+  })
+
+  it("A meta still running is not named", async () => {
+    showing({ ...AVAILABLE, metas: [{ ...IS_WAITING, waiting: false }] })
+    renderPage()
+
+    await screen.findByText("Sin fondo que lo cubra")
+    expect(screen.queryByText(/está esperando/)).not.toBeInTheDocument()
+  })
+
+  it("A month with no metas says nothing about waiting", async () => {
+    renderPage()
+
+    await screen.findByText("Sin fondo que lo cubra")
+    expect(screen.queryByText(/esperando/)).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-4 / AC-31 — the breakdown names every claim, closed metas included", () => {
+  it("A meta the owner closed is still named by the month that pays for it", async () => {
+    showing({
+      ...AVAILABLE,
+      metas: [
+        {
+          ...CELULAR,
+          closed: true,
+          cancelled: false,
+          released: 0,
+          asks: 160_000_000,
+          asks_cop: 160_000_000,
+        },
+      ],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
+  })
+
+  it("A meta held in dollars is named at what it costs the month in pesos", async () => {
+    showing({
+      ...AVAILABLE,
+      metas: [
+        {
+          ...CELULAR,
+          name: "Curso",
+          currency: "USD",
+          cancelled: false,
+          released: 0,
+          asks: 33_334,
+          asks_cop: 140_002_800,
+        },
+      ],
+    })
+    renderPage()
+
+    expect(await screen.findByText("Meta · Curso")).toBeInTheDocument()
+    expect(screen.getByText("$ 1.400.028")).toBeInTheDocument()
+    expect(screen.queryByText("$ 333")).not.toBeInTheDocument()
   })
 })

@@ -59,6 +59,8 @@ def test_monthly_report_markdown_is_mutable():
         net=0,
         funds_summary=FundsSummary(0, 0, 0),
         funds=[],
+        metas=[],
+        asked=0,
         by_category=[],
         by_group=[],
         balances=[],

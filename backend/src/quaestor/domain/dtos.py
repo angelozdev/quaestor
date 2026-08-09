@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -53,11 +53,95 @@ class FundStatus:
 
 
 @dataclass(frozen=True)
+class MetaStatus:
+    """What one meta asks and holds for one month (ADR-0046).
+
+    `holds` is what it opened the month with plus what it asks plus what the
+    owner contributed by hand in it — the contribution is inside `holds` and is
+    not reported apart, because the figure a screen shows is the month-level
+    one. `progress` is `holds` against the amount, capped at one hundred.
+
+    `waiting` says the target month has passed with no purchase linked: the
+    meta asks nothing and is holding still until the owner links, closes or
+    moves it (AC-19).
+
+    `cancelled` is true only in the month the owner cancelled it, which is the
+    last month that names it. A breakdown that listed it without saying which
+    one it was would leave the owner unable to tell a live meta from one they
+    had just called off.
+
+    `released` is what this meta handed back to the month — everything it held
+    if it was cancelled, the excess if the owner lowered its amount below what
+    it already had. Every meta carries its own, so a breakdown can name where
+    each give-back came from and still add up.
+
+    Two currencies live here, and which is which is the point. `amount`,
+    `asks`, `holds` are the meta's own, because every figure a meta reports is
+    worked out in the currency it is held in (AC-26). `asks_cop` and `released`
+    are the month's pesos, converted at read time from the one rate
+    (ADR-0031) — a breakdown of the money available is a peso column and has to
+    add up as one.
+    """
+
+    meta_id: int
+    name: str
+    year_month: str
+    amount: int
+    currency: str
+    target_month: str
+    asks: int
+    asks_cop: int
+    holds: int
+    progress: int
+    complete: bool
+    closed: bool
+    waiting: bool
+    cancelled: bool = False
+    released: int = 0
+
+
+@dataclass(frozen=True)
+class MonthSplit:
+    """What share of a month is spent, set aside, or left (AC-37).
+
+    `consumo + ahorro + libre == income` in every month, including the ones the
+    owner contributes, cancels or edits in — which is why `libre` is a
+    subtraction and never a second sum.
+
+    `ahorro` is net: a month a meta is cancelled is a month savings come back
+    out, so it can be negative. `set_aside` is the same month before the
+    give-back — what the owner actually put by — and `released` is what came
+    back: `set_aside - released == ahorro`. The second name says the ACT rather
+    than the noun, so it cannot be read as a synonym for the first. Both travel
+    because a month that had one of each would otherwise report a negative
+    ahorro and hide the money that was genuinely set aside beside it.
+
+    `gave_back` is every meta that returned money this month, cancelled or
+    lowered, each carrying its own share, so `Σ gave_back[].released` is
+    `released` and a screen can name where each one came from.
+    """
+
+    year_month: str
+    income: int
+    consumo: int
+    ahorro: int
+    libre: int
+    ahorro_share: int
+    set_aside: int
+    set_aside_share: int
+    released: int
+    gave_back: list[MetaStatus]
+
+
+@dataclass(frozen=True)
 class MonthAvailable:
     """The money available for one month, opened into the terms that make it.
 
-    `income − Σ funds asks − uncovered = free` holds exactly, which is why
-    `uncovered` is one term and not three (AC-10, ADR-0044).
+    `income − Σ funds asks − Σ metas asks − contributed + released − uncovered
+    = free` holds exactly. `uncovered` is one term and not three (AC-10,
+    ADR-0044); `contributed` and `released` are their own because a month the
+    owner acted in must say so rather than fold it into another term
+    (ADR-0046).
     """
 
     year_month: str
@@ -65,6 +149,9 @@ class MonthAvailable:
     funds: list[FundStatus]
     uncovered: int
     free: int
+    metas: list[MetaStatus] = field(default_factory=list)
+    contributed: int = 0
+    released: int = 0
 
 
 @dataclass(frozen=True)

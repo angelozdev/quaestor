@@ -28,6 +28,11 @@ export function hasEnded(endDate: string | null, now: Date = new Date()): boolea
   return endDate !== null && isOverdue(endDate, now)
 }
 
+/** The wire month a wire date falls in ("2026-12-24" → "2026-12"), or null when it is not a date yet. */
+export function yearMonthOf(date: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : null
+}
+
 /** The month after a wire month ("2026-12" → "2027-01"). */
 export function nextYearMonth(yearMonth: string): string {
   const [year, month] = yearMonth.split("-").map(Number)

@@ -135,6 +135,65 @@ def fund_ask_calc(missing: int, months_left: int) -> int:
     return _ceil_div(missing, max(months_left, 1))
 
 
+def months_to_meta(year_month: str, target_month: str) -> int:
+    """Months, counting this one and the target, left to fill a meta (ADR-0046).
+
+    Deliberately one more than `months_to_fund` gives a charge in the same
+    month, and the difference is the whole distinction between the two nouns: a
+    bill lands on the first of its month whether or not the owner is ready, so
+    the money is whole the month before; a purchase happens when he decides, so
+    the month he names is a month he saves in.
+
+    Never below one, so a target already behind still asks for what is missing
+    rather than dividing by zero.
+    """
+    return max(months_between(year_month, target_month) + 1, 1)
+
+
+def meta_ask_calc(amount: int, held: int, months_left: int) -> int:
+    """What a meta asks this month: what is missing over the months left.
+
+    Rounded up at the cent, so the last month never comes up short. Zero only
+    because nothing is missing — never because completing, cancelling or
+    contributing waived it (ADR-0046).
+    """
+    return fund_ask_calc(amount - held, months_left)
+
+
+def meta_uncovered_calc(spent: int, opening: int, ask: int) -> int:
+    """What a purchase cost past everything the meta had for the month.
+
+    The same shape as `uncovered_excess_calc`, and for the same reason: only
+    what goes past what was actually put by leaves the money available, never
+    the whole purchase (AC-12).
+    """
+    return uncovered_excess_calc(spent, opening, ask)
+
+
+def split_calc(consumo: int, ahorro: int, income: int) -> int:
+    """What the month leaves free once consumo and ahorro are named (AC-37).
+
+    One subtraction rather than a second sum, so `consumo + ahorro + libre`
+    equals the income by construction and cannot drift.
+
+    `ahorro` is net and may be negative: a month the owner cancels a meta is a
+    month he takes savings back out, and the release comes off what he set
+    aside rather than landing in another term. That is what keeps the identity
+    true — and it is also what the month actually did.
+    """
+    return income - consumo - ahorro
+
+
+def share_calc(part: int, whole: int) -> int:
+    """What share of the month a term took, as whole percent.
+
+    Zero income means no share to state rather than a division by zero.
+    """
+    if whole == 0:
+        return 0
+    return round(part * 100 / whole)
+
+
 def monthly_average_calc(spent: int, months_with_data: int) -> int:
     """A category's monthly average over the months the app holds data for.
 
@@ -204,13 +263,15 @@ def uncovered_excess_calc(spent: int, opening: int, asks: int) -> int:
     return max(spent - opening - asks, 0)
 
 
-def available_calc(income: int, asks_total: int, uncovered: int) -> int:
-    """The money available: income, less every fund's ask, less what no fund covers.
+def available_calc(income: int, claimed: int, uncovered: int) -> int:
+    """The money available: income, less everything already claimed, less what
+    no fund covers.
 
-    One uncovered term rather than three, so the breakdown adds up exactly
-    (AC-10).
+    `claimed` gathers every fund's and meta's ask, what the owner set aside by
+    hand and what a cancelled meta gave back (ADR-0046). One uncovered term
+    rather than three, so the breakdown adds up exactly (AC-10).
     """
-    return income - asks_total - uncovered
+    return income - claimed - uncovered
 
 
 def margin_calc(earning: int, cost: int) -> int:

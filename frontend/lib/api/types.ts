@@ -20,6 +20,7 @@ export interface Transaction {
   cop_equivalent: number | null
   account_id: number
   category_id: number | null
+  meta_id: number | null
   transfer_group_id: string | null
   transfer_direction: TransferDirection | null
   source: string
@@ -43,6 +44,7 @@ export interface Category {
   is_income: boolean
   exclude_from_budget: boolean
   exclude_from_totals: boolean
+  counts_as_saving: boolean
   archived: boolean
 }
 
@@ -104,7 +106,7 @@ export interface ToPay {
   total_base: number
 }
 
-export type FundRule = "fixed" | "average" | "from-recurring" | "target-by-date"
+export type FundRule = "fixed" | "average" | "from-recurring"
 
 /** A fund's stored rule. What it holds is never stored — it is derived. */
 export interface Fund {
@@ -115,8 +117,6 @@ export interface Fund {
   accumulates: boolean
   amount: number | null
   window_months: number | null
-  target_amount: number | null
-  target_month: string | null
 }
 
 export interface FundLine {
@@ -165,6 +165,9 @@ export interface MonthAvailable {
   year_month: string
   income: number
   funds: FundStatus[]
+  metas: MetaStatus[]
+  contributed: number
+  released: number
   uncovered: number
   free: number
 }
@@ -184,19 +187,7 @@ export interface FundCreate {
   accumulates?: boolean
   amount?: number | null
   window_months?: number | null
-  target_amount?: number | null
-  target_month?: string | null
   opening_balance?: number | null
-}
-
-export interface FundUpdate {
-  rule?: FundRule
-  accumulates?: boolean
-  amount?: number | null
-  window_months?: number | null
-  target_amount?: number | null
-  target_month?: string | null
-  balance?: number | null
 }
 
 export interface RecurringUpdate {
@@ -223,6 +214,13 @@ export interface FundReportLine {
   holds: number
   spent: number
   on_track: boolean
+}
+/** One meta inside the month's report — by meta, never folded into a category (AC-36). */
+export interface MetaReportLine {
+  meta_name: string
+  currency: string
+  asks: number
+  holds: number
 }
 export interface CategorySection {
   category: string
@@ -256,6 +254,8 @@ export interface MonthlyReport {
   net: number
   funds_summary: FundsSummary
   funds: FundReportLine[]
+  metas: MetaReportLine[]
+  asked: number
   by_category: CategorySection[]
   by_group: GroupSection[]
   balances: AccountBalance[]
@@ -287,6 +287,7 @@ export interface TransactionCreate {
   new_category?: string | null
   notes?: string | null
   tags?: string[]
+  meta_id?: number | null
 }
 export interface TransferCreate {
   from_account_id: number
@@ -303,6 +304,7 @@ export interface TransactionUpdate {
   category_id?: number | null
   date?: string
   tags?: string[]
+  meta_id?: number | null
 }
 export interface PlanPaymentCreate {
   payee: string
@@ -313,6 +315,7 @@ export interface PlanPaymentCreate {
   category_id?: number | null
   new_category?: string | null
   notes?: string | null
+  meta_id?: number | null
 }
 export interface ConfirmPaymentBody {
   amount?: number
@@ -349,6 +352,7 @@ export interface CategoryCreate {
   is_income?: boolean
   exclude_from_budget?: boolean
   exclude_from_totals?: boolean
+  counts_as_saving?: boolean
 }
 export interface CategoryUpdate {
   name?: string
@@ -356,6 +360,7 @@ export interface CategoryUpdate {
   is_income?: boolean
   exclude_from_budget?: boolean
   exclude_from_totals?: boolean
+  counts_as_saving?: boolean
 }
 export interface CategoryGroupCreate {
   name: string
@@ -424,4 +429,70 @@ export function applyApiErrorsToForm(form: any, err: unknown): void {
 export let onUnauthorized: (() => void) | null = null
 export function setUnauthorizedHandler(fn: (() => void) | null) {
   onUnauthorized = fn
+}
+
+export interface MetaStatus {
+  meta_id: number
+  name: string
+  year_month: string
+  amount: number
+  currency: string
+  target_month: string
+  /** In the meta's own currency (AC-26). */
+  asks: number
+  /** What it costs the month, in pesos, converted at the one rate (ADR-0031). */
+  asks_cop: number
+  holds: number
+  progress: number
+  complete: boolean
+  closed: boolean
+  waiting: boolean
+  cancelled: boolean
+  released: number
+}
+
+/** A meta as it is stored — no month's reading of it, so a cancelled one still reads. */
+export interface Meta {
+  id: number
+  name: string
+  amount: number
+  currency: string
+  start_month: string
+  target_month: string
+  closed: boolean
+  archived: boolean
+}
+
+export interface MetaCreate {
+  name: string
+  amount: number
+  target_month: string
+  currency?: string
+  stated_opening?: number | null
+}
+
+export interface MetaPreview {
+  asks: number
+  months_left: number
+  over_the_month: boolean
+}
+
+export interface MetaContribution {
+  id: number
+  meta_id: number
+  year_month: string
+  amount: number
+}
+
+export interface MonthSplit {
+  year_month: string
+  income: number
+  consumo: number
+  ahorro: number
+  libre: number
+  ahorro_share: number
+  set_aside: number
+  set_aside_share: number
+  released: number
+  gave_back: MetaStatus[]
 }

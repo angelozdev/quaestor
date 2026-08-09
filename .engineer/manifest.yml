@@ -30,6 +30,14 @@ mutation:
   scope: changed_files
   cadence: on_demand
 
+duplication:
+  tool: jscpd            # pinned in frontend/package.json; `just dup` runs the same binary
+  min_tokens: 50
+  min_lines: 5
+  # Formats and ignores live in .jscpd.json at the repo root, which jscpd reads
+  # on its own — so Refine's Reuse lens and `just dup` share one calibration
+  # instead of drifting apart (ADR-0047).
+
 agentic_summary:
   format: markdown
 

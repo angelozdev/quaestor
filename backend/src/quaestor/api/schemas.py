@@ -73,6 +73,7 @@ class CategoryCreate(BaseModel):
     is_income: bool = False
     exclude_from_budget: bool = False
     exclude_from_totals: bool = False
+    counts_as_saving: bool = False
 
 
 class CategoryUpdate(BaseModel):
@@ -81,6 +82,7 @@ class CategoryUpdate(BaseModel):
     is_income: bool | None = None
     exclude_from_budget: bool | None = None
     exclude_from_totals: bool | None = None
+    counts_as_saving: bool | None = None
 
 
 class CategoryOut(BaseModel):
@@ -92,6 +94,7 @@ class CategoryOut(BaseModel):
     is_income: bool
     exclude_from_budget: bool
     exclude_from_totals: bool
+    counts_as_saving: bool
     archived: bool
 
 
@@ -143,6 +146,7 @@ class TransactionCreate(BaseModel):
     notes: str | None = None
     source: str = "manual"
     tags: list[str] | None = None
+    meta_id: int | None = None
 
 
 class TransferIn(BaseModel):
@@ -171,6 +175,7 @@ class TransactionOut(BaseModel):
     cop_equivalent: int | None = None
     account_id: int
     category_id: int | None
+    meta_id: int | None
     transfer_group_id: str | None
     transfer_direction: TransferDirection | None = None
     source: Source
@@ -220,11 +225,15 @@ class TransferOut(BaseModel):
 
 
 class TransactionUpdate(BaseModel):
+    """Edit of a movement. Omitting `meta_id` leaves the link alone; sending
+    null removes it, and the category's fund takes the purchase back (AC-28)."""
+
     payee: str | None = None
     notes: str | None = None
     category_id: int | None = None
     date: Date | None = None
     tags: list[str] | None = None
+    meta_id: int | None = None
 
 
 class RecurringCreate(BaseModel):
@@ -304,6 +313,7 @@ class PlanPaymentIn(BaseModel):
     category_id: int | None = None
     new_category: str | None = None
     notes: str | None = None
+    meta_id: int | None = None
 
 
 class ConfirmPaymentIn(BaseModel):
@@ -328,8 +338,6 @@ class FundCreate(BaseModel):
     accumulates: bool | None = None
     amount: int | None = None
     window_months: int | None = None
-    target_amount: int | None = None
-    target_month: str | None = None
     opening_balance: int | None = None
 
 
@@ -338,8 +346,6 @@ class FundUpdate(BaseModel):
     accumulates: bool | None = None
     amount: int | None = None
     window_months: int | None = None
-    target_amount: int | None = None
-    target_month: str | None = None
     balance: int | None = None
 
 
@@ -353,8 +359,6 @@ class FundOut(BaseModel):
     accumulates: bool
     amount: int | None
     window_months: int | None
-    target_amount: int | None
-    target_month: str | None
 
 
 class FundLineOut(BaseModel):
@@ -403,6 +407,15 @@ class FundReportLineOut(BaseModel):
     on_track: bool
 
 
+class MetaReportLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_name: str
+    currency: str
+    asks: int
+    holds: int
+
+
 class CategorySectionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -441,12 +454,105 @@ class FundStatusOut(BaseModel):
     whole_by: str | None = None
 
 
+class MetaCreate(BaseModel):
+    name: str
+    amount: int
+    target_month: str
+    currency: str = "COP"
+    stated_opening: int | None = None
+
+
+class MetaUpdate(BaseModel):
+    name: str | None = None
+    amount: int | None = None
+    target_month: str | None = None
+
+
+class MetaContributionIn(BaseModel):
+    amount: int
+
+
+class MetaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    amount: int
+    currency: str
+    start_month: str
+    target_month: str
+    closed: bool
+    archived: bool
+
+
+class MetaStatusOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_id: int
+    name: str
+    year_month: str
+    amount: int
+    currency: str
+    target_month: str
+    asks: int
+    asks_cop: int
+    holds: int
+    progress: int
+    complete: bool
+    closed: bool
+    waiting: bool
+    cancelled: bool
+    released: int
+
+
+class MetaContributionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    meta_id: int
+    year_month: str
+    amount: int
+
+
+class MetaPreviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    asks: int
+    months_left: int
+    over_the_month: bool
+
+
+class MonthSplitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year_month: str
+    income: int
+    consumo: int
+    ahorro: int
+    libre: int
+    ahorro_share: int
+    set_aside: int
+    set_aside_share: int
+    released: int
+    gave_back: list[MetaStatusOut]
+
+
 class MonthAvailableOut(BaseModel):
+    """What the month has and what already has a claim on it.
+
+    `income` less every fund's and meta's ask, less what was put by hand, plus
+    what a cancelled meta released, less uncovered spending, is `free` — the
+    breakdown a screen shows has to add up, so every term travels (AC-4).
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     year_month: str
     income: int
     funds: list[FundStatusOut]
+    metas: list[MetaStatusOut]
+    contributed: int
+    released: int
     uncovered: int
     free: int
 
@@ -480,6 +586,8 @@ class MonthlyReportOut(BaseModel):
     net: int
     funds_summary: FundsSummaryOut
     funds: list[FundReportLineOut]
+    metas: list[MetaReportLineOut]
+    asked: int
     by_category: list[CategorySectionOut]
     by_group: list[GroupSectionOut]
     balances: list[AccountBalanceOut]

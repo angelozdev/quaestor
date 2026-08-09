@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
@@ -12,6 +13,8 @@ vi.mock("@/lib/api/planned", () => ({
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
+
+vi.mock("@/lib/api/metas", () => ({ listMetas: vi.fn().mockResolvedValue([]) }))
 
 import ToPayPage from "./page"
 
@@ -40,5 +43,15 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
         /Aquí aparecen los cobros que ya vencieron o vencen dentro del periodo y todavía no has pagado/,
       ),
     ).toBeInTheDocument()
+  })
+})
+
+describe("AC-43 — a debt can be pointed at a meta when it is written down", () => {
+  it("The plan form offers the metas of the month the payment is due", async () => {
+    const user = userEvent.setup()
+    render(<ToPayPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: /Planear/ }))
+
+    expect(await screen.findByLabelText("¿Es la compra de una meta?")).toBeInTheDocument()
   })
 })

@@ -25,8 +25,14 @@ def test_the_upgrade_creates_the_fund_table():
 
 
 def test_the_fund_table_carries_the_columns_the_model_declares():
+    """Every column the model declares exists at 0011.
+
+    Equality, not a subset, until feature 009 withdrew `target-by-date`: the
+    schema still carries `target_amount` and `target_month` at this revision
+    and loses them at 0015, so between the two the model is the smaller side.
+    """
     engine = engine_at_revision("0011")
-    assert _columns(engine, "fund") == set(Fund.model_fields)
+    assert set(Fund.model_fields) <= _columns(engine, "fund")
 
 
 def test_a_category_cannot_carry_two_funds():

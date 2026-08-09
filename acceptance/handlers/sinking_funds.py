@@ -5,7 +5,8 @@ recorded the intent and Checkpoint 4 owned the design. The feature has since
 shipped, so every binding now reaches real code; the helpers that name a
 missing capability survive as the message a future removal would produce.
 
-The API bound throughout is ``quaestor.services.funds``:
+The API bound throughout is ``quaestor.services.funds``, and — since feature
+009 lifted the month out of it — ``quaestor.services.month``:
 
 ``create_fund``      a fund on one expense category, one rule, one start month
 ``preview_fund``     what a fund would ask, before it exists (AC-24's warning)
@@ -13,8 +14,8 @@ The API bound throughout is ``quaestor.services.funds``:
 ``set_fund``         change a fund's rule or amount
 ``delete_fund``      remove a fund
 ``fund_status``      what a fund asks, holds and reports for one month
-``available``        the money available for a month, with its breakdown
-``rates``            the earning rate, the cost rate and the margin
+``available``        the money available for a month, with its breakdown (month)
+``rates``            the earning rate, the cost rate and the margin (month)
 
 Each helper below fails with a message naming the capability it wanted, so
 the red output reads as a to-do list rather than one repeated import error.
@@ -105,24 +106,30 @@ _SELECT_GOALS = "SELECT name FROM goal"
 # ------------------------------------------------------------------ helpers
 
 
-def _service():
-    """The funds service, or a red naming its absence."""
+def _services():
+    """What answers for a fund and for the month it lives in, or a red naming their absence.
+
+    One module until feature 009 split the month out of it, taking ``available``
+    and ``rates`` with it. A capability is therefore looked for in both rather
+    than in whichever module happened to hold it first — these scenarios pin
+    behaviour, and where the behaviour is implemented is not theirs to know.
+    """
     try:
-        from quaestor.services import funds
+        from quaestor.services import funds, month
     except ImportError as exc:
         raise AssertionError(
             "there is no funds service yet — a fund is the noun this whole feature adds (quaestor.services.funds)"
         ) from exc
-    return funds
+    return (funds, month)
 
 
 def _call(capability: str, *args, **kwargs):
-    """Invoke one capability of the funds service, or a red naming it."""
-    service = _service()
-    fn = getattr(service, capability, None)
-    if fn is None:
-        raise AssertionError(f"the funds service has no {capability!r} yet — Checkpoint 4 owns its shape")
-    return fn(*args, **kwargs)
+    """Invoke one capability of the fund or month service, or a red naming it."""
+    for service in _services():
+        fn = getattr(service, capability, None)
+        if fn is not None:
+            return fn(*args, **kwargs)
+    raise AssertionError(f"nothing answers {capability!r} yet — Checkpoint 4 owns its shape")
 
 
 def _attr(obj, name: str, what: str):
@@ -229,7 +236,11 @@ _FIXED = (
     r" starting (?P<start>" + _MONTH + r")(?P<roll>, accumulating|, resetting)?"
 )
 _AVERAGE = r" averaging the last (?P<window>\d+) months, starting (?P<start>" + _MONTH + r")"
-_OBLIGATIONS = r" funded from its obligations, starting (?P<start>" + _MONTH + r")"
+_OBLIGATIONS = (
+    r" funded from its obligations, starting (?P<start>" + _MONTH + r")"
+    r"(?:, opening with (?P<opening>" + _DEC + r") COP)?"
+    r"(?P<roll>, accumulating|, resetting)?"
+)
 _TARGET = (
     r" targeting (?P<target>" + _DEC + r") COP by (?P<by>" + _MONTH + r"),"
     r" starting (?P<start>" + _MONTH + r")"
@@ -306,9 +317,31 @@ def given_fund_average(world: World, name: str, window: str, start: str) -> None
     world.require_clean(f"creating the fund on {name!r}")
 
 
+def _obligations_spec(start: str, opening=None, roll=None) -> dict:
+    """The obligations rule, with the two options every dated rule takes.
+
+    `opening with` and the rollover suffix moved here when feature 009 withdrew
+    `target-by-date`: the seven scenarios that used the dated rule as a vehicle
+    for *what a fund does with an account, an opening balance and a rollover*
+    now ride this one, which is dated for the same reason — a charge has a
+    date — and asks the same figures.
+    """
+    spec = {"rule": "from-recurring", "start_month": start}
+    if opening is not None:
+        spec["opening_balance"] = _cents(opening)
+    if roll:
+        spec["accumulates"] = roll.strip(", ") == "accumulating"
+    return spec
+
+
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+def given_fund_from_obligations(world: World, name: str, start: str, opening, roll) -> None:
+    _make_fund(world, name, **_obligations_spec(start, opening, roll))
+    world.require_clean(f"creating the fund on {name!r}")
+
+
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS_IN_PLAIN_WORDS)
-def given_fund_from_obligations(world: World, name: str, start: str) -> None:
+def given_fund_from_obligations_plainly(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
     world.require_clean(f"creating the fund on {name!r}")
 
@@ -487,8 +520,17 @@ def when_create_fund_average(world: World, mode: str, name: str, window: str, st
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
-def when_create_fund_obligations(world: World, mode: str, name: str, start: str) -> None:
-    _make_fund(world, name, rule="from-recurring", start_month=start)
+def when_create_fund_obligations(world: World, mode: str, name: str, start: str, opening, roll) -> None:
+    _make_fund(world, name, **_obligations_spec(start, opening, roll))
+
+
+@step(r'the user starts creating a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS)
+def when_start_creating_fund_obligations(world: World, name: str, start: str, opening, roll) -> None:
+    spec = _obligations_spec(start, opening, roll)
+    world.fund_preview = world.attempt(
+        _call, "preview_fund", world.session, category_id=_category_id(world, name), **spec
+    )
+    world.pending_fund = (name, spec)
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _TARGET)
@@ -892,7 +934,11 @@ def then_breakdown_adds_up(world: World) -> None:
     lines = _attr(view, "funds", "the breakdown")
     uncovered = _attr(view, "uncovered", "the breakdown")
     free = _attr(view, "free", "the breakdown")
-    total = income - sum(getattr(line, "asks", 0) for line in lines) - uncovered
+    metas = getattr(view, "metas", [])
+    contributed = getattr(view, "contributed", 0)
+    released = getattr(view, "released", 0)
+    claimed = sum(getattr(line, "asks", 0) for line in lines) + sum(getattr(m, "asks", 0) for m in metas)
+    total = income - claimed - contributed + released - uncovered
     assert total == free, f"the breakdown adds to {total} but the money available is {free}"
 
 

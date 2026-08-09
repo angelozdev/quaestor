@@ -47,6 +47,22 @@ class FundReportLine:
 
 
 @dataclass(frozen=True)
+class MetaReportLine:
+    """One meta inside the month's report (AC-36).
+
+    Listed by meta and never folded into a category: a meta belongs to none
+    until its purchase names one. The figures are in the meta's own currency,
+    the way every other figure it reports is (AC-26); only the month's combined
+    total is in pesos.
+    """
+
+    meta_name: str
+    currency: str
+    asks: int  # cents, in the meta's own currency
+    holds: int  # cents, in the meta's own currency
+
+
+@dataclass(frozen=True)
 class CategorySection:
     category: str
     group: str | None
@@ -87,6 +103,8 @@ class MonthlyReport:  # not frozen: markdown is filled in after the data is buil
     net: int  # income - expense
     funds_summary: FundsSummary
     funds: list[FundReportLine]
+    metas: list[MetaReportLine]
+    asked: int  # Σ what the funds and the metas ask, COP cents (AC-36)
     by_category: list[CategorySection]
     by_group: list[GroupSection]
     balances: list[AccountBalance]

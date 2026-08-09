@@ -13,8 +13,6 @@ export const listTransactions = (filters: TransactionFilters = {}) =>
     `/transactions${qs(filters as Record<string, string | number | boolean | undefined>)}`,
   )
 
-export const getTransaction = (id: number) => get<Transaction>(`/transactions/${id}`)
-
 export const createTransaction = (body: TransactionCreate) =>
   post<Transaction>("/transactions", body)
 

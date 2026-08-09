@@ -4,8 +4,32 @@ The tools speak category names and answer in text; every rule they appear to
 enforce is `services.funds` speaking through `_as_text`.
 """
 
+from datetime import date
+
+from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
 from quaestor.mcp.tools import funds as fund_tools
-from quaestor.services import categories, fx
+from quaestor.services import accounts, categories, fx, recurring
+
+
+def _charge_due(session, category_name, amount, on):
+    """One yearly obligation, so a fund reading its category has a date."""
+    category = categories.list_categories(session)
+    cat = next(c for c in category if c.name == category_name)
+    account = accounts.create_account(session, name=f"Banco {on:%Y%m}", type="debit", currency="COP")
+    return recurring.create_recurring(
+        session,
+        name=f"{category_name} {on:%Y%m}",
+        payee=category_name,
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=amount,
+        currency="COP",
+        category_id=cat.id,
+        account_id=account.id,
+        interval_unit=IntervalUnit.year,
+        interval_count=1,
+        start_date=on,
+    )
 
 
 def _seeded(session, name="Restaurantes", is_income=False):
@@ -118,13 +142,12 @@ def test_deleting_a_fund_leaves_the_list_empty(session):
 
 def test_the_preview_warns_without_creating_anything(session):
     _seeded(session)
+    _charge_due(session, "Restaurantes", 300_000_000, date(2026, 11, 20))
     out = fund_tools.preview_fund(
         session,
         fund_tools.PreviewFundInput(
             category="Restaurantes",
-            rule="target-by-date",
-            target_amount=300_000_000,
-            target_month="2026-11",
+            rule="from-recurring",
             start_month="2026-11",
         ),
     )
