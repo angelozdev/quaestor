@@ -1,4 +1,4 @@
-> ▶ Code green, checkpoint 5 NOT closed | NEXT: owner runs `just backup && just migrate`, then /engineer.refine on a fresh agent | BLOCKED: CP5 exit criterion "verification independence" is unmet by construction — one agent wrote the plan, the code and its own handoff
+> ▶ CP5 Implement — 5/6 criteria met | NEXT: owner runs `just backup && just migrate`, then /engineer.refine on a fresh agent | BLOCKED: verification independence is unmet by construction — one agent wrote the plan, the code and its own handoff
 
 # Progress — 009 named-goals
 
