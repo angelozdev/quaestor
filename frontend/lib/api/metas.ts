@@ -23,6 +23,7 @@ export const listContributions = (id: number) =>
   get<MetaContribution[]>(`/metas/${id}/contributions`)
 export const removeContribution = (id: number) => del<void>(`/metas/contributions/${id}`)
 export const cancelMeta = (id: number, month: string) => del<void>(`/metas/${id}${qs({ month })}`)
-export const closeMeta = (id: number) => post<MetaStatus>(`/metas/${id}/close`, {})
+export const closeMeta = (id: number, month: string) =>
+  post<MetaStatus>(`/metas/${id}/close${qs({ month })}`, {})
 export const restoreMeta = (id: number, month: string) =>
   post<MetaStatus>(`/metas/${id}/restore${qs({ month })}`, {})

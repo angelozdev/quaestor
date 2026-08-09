@@ -83,8 +83,8 @@ def cancel_meta(meta_id: int, month: str, session: Session = Depends(get_session
 
 
 @router.post("/{meta_id}/close", response_model=MetaOut)
-def close_meta(meta_id: int, session: Session = Depends(get_session)):
-    return metas.close_meta(session, meta_id)
+def close_meta(meta_id: int, month: str, session: Session = Depends(get_session)):
+    return metas.close_meta(session, meta_id, year_month=month)
 
 
 @router.post("/{meta_id}/restore", response_model=MetaOut)

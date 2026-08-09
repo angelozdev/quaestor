@@ -221,7 +221,7 @@ describe("AC-8 — the three answers actually answer", () => {
     const user = userEvent.setup()
     renderPage()
     await user.click(await screen.findByRole("button", { name: /Cerrar Celular/ }))
-    await waitFor(() => expect(closeMeta).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(closeMeta).toHaveBeenCalledWith(1, THIS_MONTH))
   })
 
   it("carrying on with another amount asks for it and sends it", async () => {

@@ -92,7 +92,7 @@ export const INVALIDATION = {
     [ROOTS.transactions],
     [ROOTS.planned],
   ],
-  fundWrite: [[ROOTS.funds], [ROOTS.reports]],
+  fundWrite: [[ROOTS.funds], [ROOTS.reports], [ROOTS.metas]],
   metaWrite: [[ROOTS.metas], [ROOTS.funds], [ROOTS.reports]],
   // Scoped invalidation triggered by ChatSection's `useChat` onFinish. The
   // MCP tools can mutate any of these entity roots; settings/categories/tags

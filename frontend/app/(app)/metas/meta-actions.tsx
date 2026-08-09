@@ -44,7 +44,7 @@ export function MetaActions({ meta, month }: { meta: MetaStatus; month: string }
   })
 
   const close = useMutation({
-    mutationFn: () => closeMeta(meta.meta_id),
+    mutationFn: () => closeMeta(meta.meta_id, month),
     onSuccess: () => hooks.onSuccess(`${meta.name} quedó cerrada.`),
     onError: hooks.onError,
   })

@@ -104,6 +104,37 @@ def test_a_cancelled_meta_is_still_reachable_so_it_can_be_restored(client, auth)
     assert client.get("/api/metas/archived", headers=auth).json() == []
 
 
+def test_closing_a_meta_still_running_is_refused_so_its_money_cannot_evaporate(client, auth):
+    """Closing releases nothing, so closing a running meta loses what it held.
+
+    The meta is archived with no `cancelled_month`, which drops it from every
+    later month's aggregate: the month neither holds it nor hands it back, and
+    `consumo + ahorro + libre` silently stops equalling the income. Cancelling
+    is the act for a meta the owner no longer wants.
+    """
+    meta = _meta(client, auth)
+    running = client.get("/api/metas", headers=auth, params=MONTH).json()[0]
+    assert running["holds"] == 160_000_000
+
+    refused = client.post(f"/api/metas/{meta['id']}/close", headers=auth, params=MONTH)
+    assert refused.status_code == 422
+    assert "still running" in refused.text
+    assert client.get("/api/metas", headers=auth, params=MONTH).json()[0]["holds"] == 160_000_000
+
+
+def test_restoring_a_meta_that_was_never_cancelled_is_refused(client, auth):
+    """Restoring rewrites the start month and drops the stated opening.
+
+    On a running meta that would throw away the history every figure is
+    derived from, and the meta would silently restart from zero.
+    """
+    meta = _meta(client, auth)
+    refused = client.post(f"/api/metas/{meta['id']}/restore", headers=auth, params=MONTH)
+    assert refused.status_code == 422
+    assert "nothing to bring back" in refused.text
+    assert client.get("/api/metas", headers=auth, params=MONTH).json()[0]["holds"] == 160_000_000
+
+
 def test_a_contribution_is_listed_and_can_be_taken_back(client, auth):
     meta = _meta(client, auth)
     made = client.post(

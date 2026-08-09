@@ -384,13 +384,21 @@ def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
     return meta
 
 
-def close_meta(session: Session, meta_id: int) -> Meta:
+def close_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
     """Finish a meta whose purchase has been made. Releases nothing (AC-39).
+
+    A meta still running is refused, because closing releases nothing: it would
+    archive money the month had already set aside without handing it back to
+    anything, and the month's terms would stop adding up. Cancelling is the act
+    for a meta the owner no longer wants, and it says which month it freed.
 
     Raises:
         NotFound: no such meta.
+        ValidationError: the meta is still running.
     """
     meta = _require_meta(session, meta_id)
+    if not _status(_month_view(session, year_month), meta).complete:
+        raise ValidationError(f"the meta {meta.name!r} is still running, so it is cancelled rather than closed")
     meta.closed = True
     meta.archived = True
     session.add(meta)
@@ -407,11 +415,18 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     restored in and fills from zero. Resuming with the old holdings would give
     the owner the same money twice.
 
+    A meta that was never cancelled is refused: restoring rewrites its start
+    month and drops what the owner stated it already had, which on a running
+    meta would throw away the history every figure is derived from.
+
     Raises:
         NotFound: no such meta.
-        ValidationError: a live meta has taken its name since (AC-22).
+        ValidationError: the meta is not archived, or a live meta has taken its
+            name since (AC-22).
     """
     meta = _require_meta(session, meta_id)
+    if not meta.archived:
+        raise ValidationError(f"the meta {meta.name!r} is still running, so there is nothing to bring back")
     _refuse_name_already_held(session, meta.name, excluding=meta.id)
     meta.archived = False
     meta.closed = False

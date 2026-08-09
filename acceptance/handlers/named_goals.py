@@ -511,7 +511,7 @@ def then_told_closed_not_cancelled(world: World) -> None:
 
 @step(r'the user closes the meta "(?P<name>[^"]+)"')
 def when_close(world: World, name: str) -> None:
-    service.close_meta(world.session, _meta_id(world, name))
+    service.close_meta(world.session, _meta_id(world, name), year_month=_today(world))
 
 
 @step(r'the user restores the meta "(?P<name>[^"]+)"')
