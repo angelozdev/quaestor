@@ -35,6 +35,8 @@ function meta(over: Partial<MetaStatus> = {}): MetaStatus {
     complete: false,
     closed: false,
     waiting: false,
+    cancelled: false,
+    released: 0,
     ...over,
   }
 }

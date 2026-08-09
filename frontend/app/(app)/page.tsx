@@ -16,6 +16,7 @@ import { monthSplit } from "@/lib/api/metas"
 import { report as fetchReport } from "@/lib/api/reports"
 import type { MonthAvailable } from "@/lib/api/types"
 import { labelOf, shapeOf } from "@/lib/funds"
+import { gaveBackLabelOf, metaLabelOf } from "@/lib/metas"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -266,7 +267,7 @@ export default function DashboardPage() {
                     </Row>
                   ))}
                   {data.metas.map((meta) => (
-                    <Row key={meta.meta_id} label={`Meta · ${meta.name}`}>
+                    <Row key={meta.meta_id} label={metaLabelOf(meta)}>
                       <MoneyAmount
                         cents={meta.asks}
                         currency="COP"
@@ -285,15 +286,17 @@ export default function DashboardPage() {
                       />
                     </Row>
                   )}
-                  {data.released !== 0 && (
-                    <Row label="Devuelto por una meta cancelada">
-                      <MoneyAmount
-                        cents={-data.released}
-                        currency="COP"
-                        className="text-sm font-medium"
-                      />
-                    </Row>
-                  )}
+                  {data.metas
+                    .filter((meta) => meta.released > 0)
+                    .map((meta) => (
+                      <Row key={`back-${meta.meta_id}`} label={gaveBackLabelOf(meta)}>
+                        <MoneyAmount
+                          cents={-meta.released}
+                          currency="COP"
+                          className="text-sm font-medium"
+                        />
+                      </Row>
+                    ))}
                   <Row label="Sin fondo que lo cubra">
                     <MoneyAmount
                       cents={data.uncovered}
@@ -325,15 +328,24 @@ export default function DashboardPage() {
                 <div className="space-y-2.5">
                   <Row label="Ahorro · fondos y metas">
                     <span className="text-sm font-semibold tabular-nums">
-                      {formatCents(data.ahorro, "COP")}
+                      {formatCents(data.saved, "COP")}
                       <span
                         className="ml-2 font-normal"
                         style={{ color: "var(--muted-foreground)" }}
                       >
-                        {data.ahorro_share}%
+                        {data.saved_share}%
                       </span>
                     </span>
                   </Row>
+                  {data.gave_back.map((meta) => (
+                    <Row key={meta.meta_id} label={gaveBackLabelOf(meta)}>
+                      <MoneyAmount
+                        cents={-meta.released}
+                        currency="COP"
+                        className="text-sm font-medium"
+                      />
+                    </Row>
+                  ))}
                   <Row label="Consumo · lo que se gastó">
                     <MoneyAmount
                       cents={data.consumo}
@@ -354,12 +366,6 @@ export default function DashboardPage() {
                       {formatCents(data.income, "COP")}
                     </span>
                   </Row>
-                  {data.ahorro < 0 && (
-                    <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                      El ahorro es negativo porque este mes cancelaste una meta: lo que tenía
-                      guardado volvió a estar libre.
-                    </p>
-                  )}
                 </div>
               )}
             </QueryBoundary>

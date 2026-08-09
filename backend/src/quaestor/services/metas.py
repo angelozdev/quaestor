@@ -143,7 +143,7 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
         month = next_year_month(month)
 
 
-def _status(agg: MonthAggregate, meta: Meta) -> MetaStatus:
+def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaStatus:
     """What one meta reports for the month this aggregate holds.
 
     A meta is **complete** when the thing was bought, or when the owner lowered
@@ -171,6 +171,8 @@ def _status(agg: MonthAggregate, meta: Meta) -> MetaStatus:
         complete=complete,
         closed=meta.closed,
         waiting=target < agg.year_month and not bought and not meta.closed,
+        cancelled=cancelled,
+        released=_released_by(agg, meta) if cancelled else to_cop_cents(walked.released, meta.currency, agg.trm),
     )
 
 
@@ -186,7 +188,7 @@ def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
     charged their instalment and handed back what they held, and a breakdown
     that omitted them would not add up.
     """
-    return [_status(agg, meta) for meta in _cancelled_this_month(agg) if meta.archived]
+    return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
 
 
 def list_metas(session: Session, year_month: str) -> list[MetaStatus]:

@@ -116,8 +116,6 @@ export interface Fund {
   accumulates: boolean
   amount: number | null
   window_months: number | null
-  target_amount: number | null
-  target_month: string | null
 }
 
 export interface FundLine {
@@ -188,8 +186,6 @@ export interface FundCreate {
   accumulates?: boolean
   amount?: number | null
   window_months?: number | null
-  target_amount?: number | null
-  target_month?: string | null
   opening_balance?: number | null
 }
 
@@ -198,8 +194,6 @@ export interface FundUpdate {
   accumulates?: boolean
   amount?: number | null
   window_months?: number | null
-  target_amount?: number | null
-  target_month?: string | null
   balance?: number | null
 }
 
@@ -446,6 +440,8 @@ export interface MetaStatus {
   complete: boolean
   closed: boolean
   waiting: boolean
+  cancelled: boolean
+  released: number
 }
 
 export interface MetaCreate {
@@ -476,4 +472,8 @@ export interface MonthSplit {
   ahorro: number
   libre: number
   ahorro_share: number
+  saved: number
+  saved_share: number
+  released: number
+  gave_back: MetaStatus[]
 }

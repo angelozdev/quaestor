@@ -135,6 +135,8 @@ function livingMetas() {
     complete: false,
     closed: false,
     waiting: false,
+    cancelled: false,
+    released: 0,
   }))
 }
 

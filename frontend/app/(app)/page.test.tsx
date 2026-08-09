@@ -76,6 +76,10 @@ beforeEach(() => {
     ahorro: 0,
     libre: 0,
     ahorro_share: 0,
+    saved: 0,
+    saved_share: 0,
+    released: 0,
+    gave_back: [],
   })
 })
 
@@ -222,6 +226,8 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           complete: false,
           closed: false,
           waiting: false,
+          cancelled: true,
+          released: 30_000_000,
         },
       ],
       contributed: 50_000_000,
@@ -229,10 +235,10 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
     })
     renderPage()
 
-    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(await screen.findByText("Meta · Celular (la cancelaste)")).toBeInTheDocument()
     expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
     expect(screen.getByText("Puesto a mano en una meta")).toBeInTheDocument()
-    expect(screen.getByText("Devuelto por una meta cancelada")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
     expect(screen.getByText("$ -300.000")).toBeInTheDocument()
   })
 
@@ -241,9 +247,27 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
 
     expect(await screen.findByText("Sin fondo que lo cubra")).toBeInTheDocument()
     expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
-    expect(screen.queryByText("Devuelto por una meta cancelada")).not.toBeInTheDocument()
+    expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
   })
 })
+
+const CELULAR = {
+  meta_id: 1,
+  name: "Celular",
+  year_month: "2026-11",
+  amount: 800_000_000,
+  currency: "COP",
+  target_month: "2026-12",
+  asks: 0,
+  holds: 320_000_000,
+  contributed: 0,
+  progress: 40,
+  complete: false,
+  closed: false,
+  waiting: false,
+  cancelled: true,
+  released: 320_000_000,
+}
 
 describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
   const SPLIT = {
@@ -253,6 +277,10 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
     ahorro: 320_000_000,
     libre: 40_000_000,
     ahorro_share: 64,
+    saved: 320_000_000,
+    saved_share: 64,
+    released: 0,
+    gave_back: [],
   }
 
   it("says what share of the month was saved, and adds up to the income", async () => {
@@ -267,25 +295,46 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
     expect(SPLIT.consumo + SPLIT.ahorro + SPLIT.libre).toBe(SPLIT.income)
   })
 
-  it("says why the ahorro is negative in a month a meta was cancelled", async () => {
-    monthSplit.mockResolvedValue({
+  it("keeps what was set aside visible in a month a meta was also cancelled", async () => {
+    const MIXED = {
       ...SPLIT,
       consumo: 0,
-      ahorro: -320_000_000,
-      libre: 820_000_000,
-      ahorro_share: -64,
+      ahorro: -220_000_000,
+      libre: 720_000_000,
+      ahorro_share: -44,
+      saved: 100_000_000,
+      saved_share: 20,
+      released: 320_000_000,
+      gave_back: [CELULAR],
+    }
+    monthSplit.mockResolvedValue(MIXED)
+    renderPage()
+
+    expect(await screen.findByText("$ 1.000.000")).toBeInTheDocument()
+    expect(screen.getByText("20%")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
+    expect(screen.getByText("$ -3.200.000")).toBeInTheDocument()
+    expect(MIXED.saved - MIXED.released).toBe(MIXED.ahorro)
+    expect(MIXED.consumo + MIXED.ahorro + MIXED.libre).toBe(MIXED.income)
+  })
+
+  it("names a meta that gave money back because its amount was lowered", async () => {
+    monthSplit.mockResolvedValue({
+      ...SPLIT,
+      gave_back: [{ ...CELULAR, cancelled: false, released: 50_000_000 }],
     })
     renderPage()
 
-    expect(await screen.findByText("$ -3.200.000")).toBeInTheDocument()
-    expect(screen.getByText(/cancelaste una meta/)).toBeInTheDocument()
+    expect(
+      await screen.findByText("Devuelto por Celular (le bajaste el monto)"),
+    ).toBeInTheDocument()
   })
 
-  it("says nothing about cancelling in an ordinary month", async () => {
+  it("names no give-back in an ordinary month", async () => {
     monthSplit.mockResolvedValue(SPLIT)
     renderPage()
 
     expect(await screen.findByText("Ahorro · fondos y metas")).toBeInTheDocument()
-    expect(screen.queryByText(/cancelaste una meta/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
   })
 })

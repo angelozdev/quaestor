@@ -488,6 +488,8 @@ class MetaStatusOut(BaseModel):
     complete: bool
     closed: bool
     waiting: bool
+    cancelled: bool
+    released: int
 
 
 class MetaContributionOut(BaseModel):
@@ -516,6 +518,10 @@ class MonthSplitOut(BaseModel):
     ahorro: int
     libre: int
     ahorro_share: int
+    saved: int
+    saved_share: int
+    released: int
+    gave_back: list[MetaStatusOut]
 
 
 class MonthAvailableOut(BaseModel):

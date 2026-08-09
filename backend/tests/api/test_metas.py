@@ -116,6 +116,48 @@ def test_the_split_names_what_the_month_consumed_and_what_it_saved(client, auth)
     assert split["year_month"] == "2026-08"
 
 
+def test_a_month_that_saved_and_cancelled_says_both_and_names_the_meta(client, auth, account, income_category):
+    """The month the owner both set money aside and called a meta off.
+
+    `ahorro` nets the two and goes negative; `saved` is what was genuinely put
+    by. A screen showing only the net would report a month of saving as a month
+    of spending.
+    """
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "income",
+            "category_id": income_category,
+            "account_id": account["id"],
+            "amount": 500_000_000,
+            "currency": "COP",
+            "date": "2026-08-05",
+            "payee": "Empresa",
+        },
+    )
+    _meta(client, auth, name="Moto", amount=300_000_000, target="2026-10")
+    celular = _meta(client, auth)
+    client.post(f"/api/metas/{celular['id']}/contributions", headers=auth, params=MONTH, json={"amount": 320_000_000})
+    client.delete(f"/api/metas/{celular['id']}", headers=auth, params=MONTH)
+
+    split = client.get("/api/metas/split", headers=auth, params=MONTH).json()
+    assert split["saved"] > 0
+    assert split["ahorro"] == split["saved"] - split["released"]
+    assert split["consumo"] + split["ahorro"] + split["libre"] == split["income"]
+
+    assert [row["name"] for row in split["gave_back"]] == ["Celular"]
+    assert split["gave_back"][0]["cancelled"] is True
+    assert sum(row["released"] for row in split["gave_back"]) == split["released"]
+
+
+def test_a_live_meta_is_not_marked_cancelled(client, auth):
+    _meta(client, auth)
+    row = client.get("/api/metas", headers=auth, params=MONTH).json()[0]
+    assert row["cancelled"] is False
+    assert row["released"] == 0
+
+
 def test_the_available_breakdown_names_the_metas_and_adds_up(client, auth, account, income_category):
     client.post(
         "/api/transactions",

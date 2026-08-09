@@ -63,6 +63,16 @@ class MetaStatus:
     `waiting` says the target month has passed with no purchase linked: the
     meta asks nothing and is holding still until the owner links, closes or
     moves it (AC-19).
+
+    `cancelled` is true only in the month the owner cancelled it, which is the
+    last month that names it. A breakdown that listed it without saying which
+    one it was would leave the owner unable to tell a live meta from one they
+    had just called off.
+
+    `released` is what this meta handed back to the month — everything it held
+    if it was cancelled, the excess if the owner lowered its amount below what
+    it already had. Every meta carries its own, so a breakdown can name where
+    each give-back came from and still add up.
     """
 
     meta_id: int
@@ -78,6 +88,8 @@ class MetaStatus:
     complete: bool
     closed: bool
     waiting: bool
+    cancelled: bool = False
+    released: int = 0
 
 
 @dataclass(frozen=True)
@@ -87,6 +99,17 @@ class MonthSplit:
     `consumo + ahorro + libre == income` in every month, including the ones the
     owner contributes, cancels or edits in — which is why `libre` is a
     subtraction and never a second sum.
+
+    `ahorro` is net: a month a meta is cancelled is a month savings come back
+    out, so it can be negative. `saved` is the same month before the give-back,
+    which is what the owner actually put by, and `released` is what came back —
+    `saved - released == ahorro`. Both travel because a month that had one of
+    each would otherwise report a negative ahorro and hide the money that was
+    genuinely set aside beside it.
+
+    `gave_back` is every meta that returned money this month, cancelled or
+    lowered, each carrying its own share, so `Σ gave_back[].released` is
+    `released` and a screen can name where each one came from.
     """
 
     year_month: str
@@ -95,6 +118,10 @@ class MonthSplit:
     ahorro: int
     libre: int
     ahorro_share: int
+    saved: int
+    saved_share: int
+    released: int
+    gave_back: list[MetaStatus]
 
 
 @dataclass(frozen=True)

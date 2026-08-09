@@ -11,6 +11,7 @@ import { ScreenHelp } from "@/components/screen-help"
 import { SkeletonCard } from "@/components/skeleton"
 import { report } from "@/lib/api/reports"
 import { labelOf } from "@/lib/funds"
+import { gaveBackLabelOf, metaLabelOf } from "@/lib/metas"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 
@@ -292,7 +293,7 @@ export default function ReportsPage() {
                     </Row>
                   ))}
                   {data.available.metas.map((meta) => (
-                    <Row key={meta.meta_id} label={`Meta · ${meta.name}`} faint>
+                    <Row key={meta.meta_id} label={metaLabelOf(meta)} faint>
                       <span
                         className="text-sm tabular-nums"
                         style={{ color: "var(--muted-foreground)" }}
@@ -311,16 +312,18 @@ export default function ReportsPage() {
                       </span>
                     </Row>
                   )}
-                  {data.available.released !== 0 && (
-                    <Row label="Devuelto por una meta cancelada" faint>
-                      <span
-                        className="text-sm tabular-nums"
-                        style={{ color: "var(--muted-foreground)" }}
-                      >
-                        {formatCents(-data.available.released, "COP")}
-                      </span>
-                    </Row>
-                  )}
+                  {data.available.metas
+                    .filter((meta) => meta.released > 0)
+                    .map((meta) => (
+                      <Row key={`back-${meta.meta_id}`} label={gaveBackLabelOf(meta)} faint>
+                        <span
+                          className="text-sm tabular-nums"
+                          style={{ color: "var(--muted-foreground)" }}
+                        >
+                          {formatCents(-meta.released, "COP")}
+                        </span>
+                      </Row>
+                    ))}
                   <Row label="Sin fondo que lo cubra" faint>
                     <span
                       className="text-sm tabular-nums"

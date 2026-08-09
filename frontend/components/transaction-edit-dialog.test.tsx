@@ -38,6 +38,8 @@ vi.mock("@/lib/api/metas", () => ({
       complete: false,
       closed: false,
       waiting: false,
+      cancelled: false,
+      released: 0,
     },
   ]),
 }))

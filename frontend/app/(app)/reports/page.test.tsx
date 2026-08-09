@@ -120,6 +120,8 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
           complete: false,
           closed: false,
           waiting: false,
+          cancelled: true,
+          released: 30_000_000,
         },
       ],
       contributed: 50_000_000,
@@ -133,7 +135,7 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
     report.mockResolvedValue(withMetas)
     render(<ReportsPage />, { wrapper: queryWrapper })
 
-    expect(await screen.findByText("Meta · Celular")).toBeInTheDocument()
+    expect(await screen.findByText("Meta · Celular (la cancelaste)")).toBeInTheDocument()
     expect(screen.getByText("$ 1.600.000")).toBeInTheDocument()
   })
 
@@ -143,7 +145,7 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
 
     expect(await screen.findByText("Puesto a mano en una meta")).toBeInTheDocument()
     expect(screen.getByText("$ 500.000")).toBeInTheDocument()
-    expect(screen.getByText("Devuelto por una meta cancelada")).toBeInTheDocument()
+    expect(screen.getByText("Devuelto por Celular (la cancelaste)")).toBeInTheDocument()
     expect(screen.getByText("$ -300.000")).toBeInTheDocument()
   })
 
@@ -153,6 +155,6 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
 
     expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
     expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
-    expect(screen.queryByText("Devuelto por una meta cancelada")).not.toBeInTheDocument()
+    expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
   })
 })
