@@ -1,10 +1,12 @@
-> ▶ CP5 Implement — 5/6 criteria met | NEXT: owner runs `just backup && just migrate`, then /engineer.refine on a fresh agent | BLOCKED: verification independence is unmet by construction — one agent wrote the plan, the code and its own handoff
+> ▶ CP6 Refine — 5/6 criteria met | NEXT: the owner decides whether CP5 is verified by a fresh agent before CP7/CP8, then `just backup && just migrate` | BLOCKED: independence is partial — the three reviewers were fresh, the agent that applied their findings was the implementer
 
 # Progress — 009 named-goals
 
 Metas: named savings goals beside the fund, not inside it. 45 ACs, 125
 scenarios, all bound and green. Three migrations still outstanding and
-human-owned. CP6/7/8 open and blocked on a fresh agent, not on the code.
+human-owned. Refine has run — twelve findings, two real bugs, and one
+regression of its own that left the acceptance stream red for twelve hours
+while the other two streams reported green.
 
 ## Checkpoints
 
@@ -15,7 +17,7 @@ human-owned. CP6/7/8 open and blocked on a fresh agent, not on the code.
 | 3 | Spec | done | 2026-08-08T1610-atdd-redraft.md |
 | 4 | Plan | done | 2026-08-08T2000-plan.md |
 | 5 | Implement | **open** | 2026-08-08T2130-implement.md |
-| 6 | Refine | not started | — |
+| 6 | Refine | **open** | 2026-08-09T0758-refine.md |
 | 7 | Verify | not started | — |
 | 8 | Harden | not started | — |
 
@@ -63,13 +65,14 @@ report green over an app the owner cannot use.
 | 2026-08-08T1610 | atdd (redraft) | main | 110 → 125 scenarios derived from the one rule, not transcribed |
 | 2026-08-08T2000 | plan | main | ADR-0046 + product ADR-043 accepted; runbook created |
 | 2026-08-08T2130 | implement | main | all streams green; independence NOT met |
+| 2026-08-09T0758 | refine | main + 3 fresh reviewers | 12 findings applied, 2 bugs, 1 regression of its own; independence partial |
 
 ## Outstanding
 
 | What | Owner | How |
 |---|---|---|
 | Migrations 0014, 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
-| CP6 refine | fresh agent | Principle 7 — the implementer cannot refine its own code |
+| Decide how CP5/CP6 independence is closed | human | accept as documented, or send a fresh agent to verify CP5 against the 45 ACs |
 | CP7 crap-analyzer | fresh agent | |
 | CP8 mutation | fresh agent | `domain/rules.py` and `services/metas.py` only, per plan.md |
 
