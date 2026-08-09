@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner runs `just backup && just migrate` for 0015 and 0016, then the merge | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP5 Implement — 8/9 criteria met | NEXT: the owner merges to `main` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -114,7 +114,6 @@ Four screens, then three figures, then eight behaviours — one shape.
 | What | Owner | How |
 |---|---|---|
 | Whether a fourth verifier runs | human | 13, then 9, then 6 — decreasing, not yet zero |
-| Migrations 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Merge to `main` | human (CHARTER §7) | — |
 
 **The acceptance suite saw none of the twenty-eight, and the reason is
@@ -126,10 +125,17 @@ twelve go red against the code they were written to catch**; the twelfth is
 AC-8's control arm and must pass on both sides. 009 goes from 125 scenarios to
 137, the pipeline from 472 to 484.
 
-Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
-read-only on 2026-08-08, so nothing uses the dated rule it drops. The
-SQLite sandbox is not clear — it holds one dated fund and 0015 aborts
-that container's startup, which is the guard working.
+**The migrations are applied.** The owner ran `just backup && just migrate` on
+2026-08-09 behind a 53K dump written at 15:07; `alembic upgrade head` took the
+schema 0013 → 0016 in one go. Verified read-only afterwards: `alembic_version`
+= 0016, the `fundrule` enum is `fixed, average, from_recurring` with
+`target_by_date` gone, the three meta tables exist, and every count is what it
+was before — 635 movements, 7 accounts, 43 categories, 0 funds, 14 recurring
+items. The new tables are empty, which is the expected cold start.
+
+The SQLite sandbox is still not clear — it holds one dated fund and 0015 aborts
+that container's startup, which is the guard working. Resolving it is a
+destructive operation on `.dev-data/` and is the owner's.
 
 Closed since the last entry: `_Month.contributed` deleted (`2a3e2ee`); the
 contributions history reversed from **delete** to **build**, because the owner

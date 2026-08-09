@@ -2,7 +2,7 @@
 slug: 009-named-goals
 checkpoint: 4
 created: 2026-08-08
-status: partial
+status: done
 steps:
   - id: backup-before-0013
     description: "Fresh pg_dump of the local production Postgres to iCloud, dated today (ADR-0030)"
@@ -36,8 +36,8 @@ steps:
     description: "Fresh backup dated the day 0015 runs — 0015 is the destructive one"
     owner: human
     command: "just backup"
-    evidence: null
-    completed: false
+    evidence: "quaestor-local-2026-08-09.dump, 53K, in iCloud QuaestorBackups, written 15:07. `just migrate` refuses without a dump dated today, so the guard was in force as well as the habit."
+    completed: true
     blocking_acs:
       - migration-0015
 
@@ -54,10 +54,18 @@ steps:
     description: "Destructive migration — drop fund.target_amount, fund.target_month and the target_by_date enum value. The withdrawal code is merged; 0015 refuses on its own if any fund still uses the rule."
     owner: human
     command: "just migrate"
-    evidence: null
-    completed: false
+    evidence: "Applied 2026-08-09 by the owner. `alembic upgrade head` ran 0013 -> 0016 in one go, so 0014 (meta.cancelled_month) and 0016 (meta_amendment) landed with it. `SELECT version_num FROM alembic_version` = 0016."
+    completed: true
     blocking_acs:
       - AC-40
+
+  - id: verify-after-0016
+    description: "Confirm the schema landed and no row moved: the dated rule is gone from the enum, the three meta tables exist, and every count is what it was."
+    owner: agent
+    command: "QUAESTOR_ENV_FILE=backend/.env.local.postgres docker compose --env-file backend/.env.local.postgres --profile pg exec -T db sh -c 'psql -U \"${POSTGRES_USER:-quaestor}\" -d \"${POSTGRES_DB:-quaestor}\" -tAc \"...\"'"
+    evidence: "2026-08-09, read-only. `alembic_version` = 0016. Enum `fundrule` = fixed, average, from_recurring — `target_by_date` gone. Tables meta, meta_contribution, meta_amendment all present; `meta` carries stated_opening, closed, archived, cancelled_month. Counts UNCHANGED from the 0013 check: 635 movements, 7 accounts, 43 categories, 0 funds, 14 recurring items. New tables empty and 0 categories marked as saving, which is the expected cold start. `fund.anchor_month`/`anchor_amount` remain and should — they are product ADR-041's statement of what a fund already holds, not the dated rule's."
+    completed: true
+    blocking_acs: []
 ---
 
 # runbook — 009 named-goals
