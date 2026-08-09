@@ -73,6 +73,7 @@ class CategoryCreate(BaseModel):
     is_income: bool = False
     exclude_from_budget: bool = False
     exclude_from_totals: bool = False
+    counts_as_saving: bool = False
 
 
 class CategoryUpdate(BaseModel):
@@ -81,6 +82,7 @@ class CategoryUpdate(BaseModel):
     is_income: bool | None = None
     exclude_from_budget: bool | None = None
     exclude_from_totals: bool | None = None
+    counts_as_saving: bool | None = None
 
 
 class CategoryOut(BaseModel):
@@ -92,6 +94,7 @@ class CategoryOut(BaseModel):
     is_income: bool
     exclude_from_budget: bool
     exclude_from_totals: bool
+    counts_as_saving: bool
     archived: bool
 
 
@@ -403,6 +406,15 @@ class FundReportLineOut(BaseModel):
     on_track: bool
 
 
+class MetaReportLineOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    meta_name: str
+    currency: str
+    asks: int
+    holds: int
+
+
 class CategorySectionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -572,6 +584,8 @@ class MonthlyReportOut(BaseModel):
     net: int
     funds_summary: FundsSummaryOut
     funds: list[FundReportLineOut]
+    metas: list[MetaReportLineOut]
+    asked: int
     by_category: list[CategorySectionOut]
     by_group: list[GroupSectionOut]
     balances: list[AccountBalanceOut]

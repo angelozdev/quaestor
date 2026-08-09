@@ -47,6 +47,7 @@ export const qk = {
   metas: (month: string) => [ROOTS.metas, "list", month] as const,
   metaSplit: (month: string) => [ROOTS.metas, "split", month] as const,
   metasArchived: () => [ROOTS.metas, "archived"] as const,
+  metaContributions: (id: number) => [ROOTS.metas, "contributions", id] as const,
   metaPreview: (body: MetaCreate | null) =>
     [ROOTS.metas, "preview", whatThePreviewReads(body)] as const,
   fundPreview: (rule: string, body: FundCreate | null) =>

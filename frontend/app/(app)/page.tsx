@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
+import Link from "next/link"
 import { ChatSection } from "@/components/chat/chat-section"
 import { EmptyState } from "@/components/empty-state"
 import { MoneyAmount } from "@/components/money-amount"
@@ -14,7 +15,7 @@ import { listAccounts } from "@/lib/api/accounts"
 import { moneyRates } from "@/lib/api/funds"
 import { monthSplit } from "@/lib/api/metas"
 import { report as fetchReport } from "@/lib/api/reports"
-import type { MonthAvailable } from "@/lib/api/types"
+import type { MetaStatus, MonthAvailable } from "@/lib/api/types"
 import { availableRows } from "@/lib/available-breakdown"
 import { shapeOf } from "@/lib/funds"
 import { gaveBackLabelOf } from "@/lib/metas"
@@ -24,6 +25,28 @@ import { qk } from "@/lib/query"
 const MONTH = format(new Date(), "yyyy-MM")
 
 const ASKS_MORE_THAN_COMES_IN = "Pide más de lo que entra este mes"
+
+/**
+ * The metas whose month has passed with nothing bought (AC-19).
+ *
+ * They are full and asking for nothing, so no figure on this screen moves for
+ * them — which is exactly why the screen has to name them: the owner is the one
+ * being waited on, to link the purchase, close the meta or move its date.
+ */
+function WaitingMetas({ metas }: { metas: MetaStatus[] }) {
+  const waiting = metas.filter((meta) => meta.waiting)
+  if (waiting.length === 0) return null
+  return (
+    <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+      {waiting.map((meta) => meta.name).join(", ")}{" "}
+      {waiting.length === 1 ? "está esperando" : "están esperando"}: su mes ya pasó y no le
+      {waiting.length === 1 ? "" : "s"} has enlazado la compra.{" "}
+      <Link href="/metas" className="underline">
+        Ir a metas
+      </Link>
+    </p>
+  )
+}
 
 const NO_MOVEMENTS_YET = (
   <p>
@@ -149,6 +172,8 @@ export default function DashboardPage() {
           )}
         </QueryBoundary>
       </div>
+
+      {report.data && <WaitingMetas metas={report.data.available.metas} />}
 
       <hr style={{ borderColor: "var(--border)" }} />
 

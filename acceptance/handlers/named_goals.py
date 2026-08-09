@@ -714,9 +714,15 @@ def then_breakdown_funds(world: World, amount: str) -> None:
 # ------------------------------------------------------------- the report
 
 
-def _month_number(world: World):
-    """The month's number, loaded fresh — the report step opens its own view."""
-    return month_service.month_available(load_month(world.session, _today(world)))
+def _report(world: World):
+    """The report the viewing step built, and nothing rebuilt beside it.
+
+    These scenarios are about what the report says. Re-deriving the figures
+    from the month would assert that the arithmetic is right while the report
+    itself stayed empty — which is exactly what it did.
+    """
+    assert world.report is not None, "the report was never viewed"
+    return world.report
 
 
 @step(r'that expense is still linked to the meta "(?P<name>[^"]+)"')
@@ -727,33 +733,33 @@ def then_still_linked(world: World, name: str) -> None:
 
 @step(rf'the report lists the meta "(?P<name>[^"]+)" asking (?P<amount>{_DEC}) COP')
 def then_report_lists_meta(world: World, name: str, amount: str) -> None:
-    view = _month_number(world)
-    found = next((m for m in view.metas if m.name == name), None)
+    report = _report(world)
+    found = next((m for m in report.metas if m.meta_name == name), None)
     assert found is not None, f"the report lists no meta named {name!r}"
     assert found.asks == _cents(amount), f"the report lists {name!r} asking {found.asks}"
+    assert f"| {name} |" in report.markdown, f"the report's markdown never names {name!r}"
 
 
 @step(rf'the report lists "(?P<name>[^"]+)" asking (?P<amount>{_DEC}) COP')
 def then_report_lists_fund(world: World, name: str, amount: str) -> None:
-    view = _month_number(world)
-    found = next((f for f in view.funds if f.name == name), None)
+    report = _report(world)
+    found = next((f for f in report.funds if f.category_name == name), None)
     assert found is not None, f"the report lists no fund on {name!r}"
     assert found.asks == _cents(amount), f"the report lists {name!r} asking {found.asks}"
 
 
 @step(rf"the report states the month asks (?P<amount>{_DEC}) COP in all")
 def then_report_total(world: World, amount: str) -> None:
-    agg = load_month(world.session, _today(world))
-    view = month_service.month_available(agg)
-    total = sum(f.asks for f in view.funds) + service.asks_total(agg)
-    assert total == _cents(amount), f"the month asks {total} in all, expected {_cents(amount)}"
+    report = _report(world)
+    assert report.asked == _cents(amount), f"the month asks {report.asked} in all, expected {_cents(amount)}"
 
 
 @step(r'the report lists the meta "(?P<name>[^"]+)" under the metas, not under a category')
 def then_meta_not_under_category(world: World, name: str) -> None:
-    view = _month_number(world)
-    assert any(m.name == name for m in view.metas), f"the report lists no meta named {name!r}"
-    assert not any(f.name == name for f in view.funds), f"{name!r} is listed among the funds"
+    report = _report(world)
+    assert any(m.meta_name == name for m in report.metas), f"the report lists no meta named {name!r}"
+    assert not any(f.category_name == name for f in report.funds), f"{name!r} is listed among the funds"
+    assert not any(c.category == name for c in report.by_category), f"{name!r} is listed as a category"
 
 
 @step(r"the user is told to make a meta instead")

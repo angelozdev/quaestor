@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { MonthlyReport } from "@/lib/api/types"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
@@ -23,6 +23,8 @@ const RESTAURANTES_IS_A_CEILING: MonthlyReport = {
       on_track: true,
     },
   ],
+  metas: [{ meta_name: "Celular", currency: "COP", asks: 1_600_000, holds: 3_200_000 }],
+  asked: 11_600_000,
   by_category: [],
   by_group: [],
   balances: [],
@@ -155,5 +157,44 @@ describe("AC-4 — the breakdown states what the metas ask", () => {
     expect(await screen.findByText("Presupuesto · Restaurantes")).toBeInTheDocument()
     expect(screen.queryByText("Puesto a mano en una meta")).not.toBeInTheDocument()
     expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-36 — the report lists the metas beside the funds, and totals both", () => {
+  it("Every meta is named with what it asks and what it carries", async () => {
+    report.mockResolvedValue(RESTAURANTES_IS_A_CEILING)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    const metas = (await screen.findByRole("heading", { name: "Metas" })).closest("div")
+    expect(within(metas as HTMLElement).getByText("Celular")).toBeInTheDocument()
+    expect(within(metas as HTMLElement).getByText("$ 16.000")).toBeInTheDocument()
+    expect(within(metas as HTMLElement).getByText("$ 32.000")).toBeInTheDocument()
+  })
+
+  it("The month says what it asks between the two", async () => {
+    report.mockResolvedValue(RESTAURANTES_IS_A_CEILING)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    expect(
+      await screen.findByText(/Entre fondos y metas, el mes pide \$ 116\.000/),
+    ).toBeInTheDocument()
+  })
+
+  it("A meta is never listed as a category", async () => {
+    report.mockResolvedValue(RESTAURANTES_IS_A_CEILING)
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    const funds = (await screen.findByRole("heading", { name: "Fondos y presupuestos" })).closest(
+      "div",
+    )
+    expect(within(funds as HTMLElement).queryByText("Celular")).not.toBeInTheDocument()
+  })
+
+  it("A month with no metas says so and still totals the funds", async () => {
+    report.mockResolvedValue({ ...RESTAURANTES_IS_A_CEILING, metas: [], asked: 10_000_000 })
+    render(<ReportsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("Sin metas este mes")).toBeInTheDocument()
+    expect(screen.getByText(/Entre fondos y metas, el mes pide \$ 100\.000/)).toBeInTheDocument()
   })
 })

@@ -44,6 +44,7 @@ export interface Category {
   is_income: boolean
   exclude_from_budget: boolean
   exclude_from_totals: boolean
+  counts_as_saving: boolean
   archived: boolean
 }
 
@@ -189,14 +190,6 @@ export interface FundCreate {
   opening_balance?: number | null
 }
 
-export interface FundUpdate {
-  rule?: FundRule
-  accumulates?: boolean
-  amount?: number | null
-  window_months?: number | null
-  balance?: number | null
-}
-
 export interface RecurringUpdate {
   name?: string
   payee?: string
@@ -221,6 +214,13 @@ export interface FundReportLine {
   holds: number
   spent: number
   on_track: boolean
+}
+/** One meta inside the month's report — by meta, never folded into a category (AC-36). */
+export interface MetaReportLine {
+  meta_name: string
+  currency: string
+  asks: number
+  holds: number
 }
 export interface CategorySection {
   category: string
@@ -254,6 +254,8 @@ export interface MonthlyReport {
   net: number
   funds_summary: FundsSummary
   funds: FundReportLine[]
+  metas: MetaReportLine[]
+  asked: number
   by_category: CategorySection[]
   by_group: GroupSection[]
   balances: AccountBalance[]
@@ -349,6 +351,7 @@ export interface CategoryCreate {
   is_income?: boolean
   exclude_from_budget?: boolean
   exclude_from_totals?: boolean
+  counts_as_saving?: boolean
 }
 export interface CategoryUpdate {
   name?: string
@@ -356,6 +359,7 @@ export interface CategoryUpdate {
   is_income?: boolean
   exclude_from_budget?: boolean
   exclude_from_totals?: boolean
+  counts_as_saving?: boolean
 }
 export interface CategoryGroupCreate {
   name: string

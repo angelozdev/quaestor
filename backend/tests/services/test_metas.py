@@ -427,3 +427,18 @@ def test_a_closed_meta_cannot_be_brought_back(session):
 
     with pytest.raises(ValidationError):
         metas.restore_meta(session, moto.id, today="2026-09")
+
+
+def test_a_preview_counts_what_the_owner_says_he_already_put_by(session):
+    """AC-34's own figure, before the meta exists — the form shows this one."""
+    preview = metas.preview_meta(
+        amount=8_000_000, target_month="2026-12", today="2026-08", income=0, stated_opening=3_000_000
+    )
+
+    assert preview.asks == 1_000_000
+
+
+def test_a_preview_with_nothing_already_put_by_asks_for_the_whole_thing(session):
+    preview = metas.preview_meta(amount=8_000_000, target_month="2026-12", today="2026-08", income=0)
+
+    assert preview.asks == 1_600_000

@@ -341,3 +341,30 @@ describe("AC-37 — the month opens into consumo, ahorro and libre", () => {
     expect(screen.queryByText(/Devuelto por/)).not.toBeInTheDocument()
   })
 })
+
+describe("AC-19 — the month arrives with nothing bought, and the app says so", () => {
+  const IS_WAITING = { ...CELULAR, waiting: true, cancelled: false, released: 0, asks: 0 }
+
+  it("The meta whose month passed unbought is named on the dashboard", async () => {
+    showing({ ...AVAILABLE, metas: [IS_WAITING] })
+    renderPage()
+
+    expect(await screen.findByText(/Celular está esperando/)).toBeInTheDocument()
+    expect(screen.getByText(/su mes ya pasó y no le has enlazado la compra/)).toBeInTheDocument()
+  })
+
+  it("A meta still running is not named", async () => {
+    showing({ ...AVAILABLE, metas: [{ ...IS_WAITING, waiting: false }] })
+    renderPage()
+
+    await screen.findByText("Sin fondo que lo cubra")
+    expect(screen.queryByText(/está esperando/)).not.toBeInTheDocument()
+  })
+
+  it("A month with no metas says nothing about waiting", async () => {
+    renderPage()
+
+    await screen.findByText("Sin fondo que lo cubra")
+    expect(screen.queryByText(/esperando/)).not.toBeInTheDocument()
+  })
+})

@@ -16,6 +16,8 @@ const {
   setMeta,
   contribute,
   cancelMeta,
+  listContributions,
+  removeContribution,
   toast,
 } = vi.hoisted(() => ({
   listMetas: vi.fn(),
@@ -27,6 +29,8 @@ const {
   setMeta: vi.fn(),
   contribute: vi.fn(),
   cancelMeta: vi.fn(),
+  listContributions: vi.fn(),
+  removeContribution: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
 }))
 
@@ -40,6 +44,8 @@ vi.mock("@/lib/api/metas", () => ({
   setMeta,
   contribute,
   cancelMeta,
+  listContributions,
+  removeContribution,
 }))
 vi.mock("sonner", () => ({ toast }))
 
@@ -287,5 +293,145 @@ describe("AC-29 — a meta is archived and restored, never destroyed", () => {
     renderPage()
     await screen.findByText("Celular")
     expect(screen.queryByText("Canceladas")).toBeNull()
+  })
+})
+
+describe("AC-11 / AC-16 — a meta can be edited while it runs", () => {
+  it("A running meta can be renamed", async () => {
+    listMetas.mockResolvedValue([meta()])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Cambiarle el nombre" }))
+
+    const field = screen.getByLabelText("Nuevo nombre")
+    await user.clear(field)
+    await user.type(field, "Telefono")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(setMeta).toHaveBeenCalledTimes(1))
+    expect(setMeta.mock.calls[0][2]).toEqual({ name: "Telefono" })
+  })
+
+  it("A running meta can be raised without waiting for it to complete", async () => {
+    listMetas.mockResolvedValue([meta()])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Cambiarle el monto" }))
+
+    await user.type(screen.getByLabelText("Nuevo monto (COP)"), "9000000")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(setMeta).toHaveBeenCalledTimes(1))
+    expect(setMeta.mock.calls[0][2]).toEqual({ amount: 900_000_000 })
+  })
+
+  it("A running meta can be moved to another month", async () => {
+    listMetas.mockResolvedValue([meta()])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Cambiarle el mes" }))
+
+    await user.type(screen.getByLabelText("Nuevo mes"), "2027-03")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(setMeta).toHaveBeenCalledTimes(1))
+    expect(setMeta.mock.calls[0][2]).toEqual({ target_month: "2027-03" })
+  })
+})
+
+describe("AC-42 — a contribution is a listed record, and it can be removed", () => {
+  it("Every contribution is listed with its month and its amount", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    expect(await screen.findByText("$ 2.000.000")).toBeInTheDocument()
+    expect(screen.getByText(/agosto/i)).toBeInTheDocument()
+  })
+
+  it("Any of them can be removed", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    await user.click(await screen.findByRole("button", { name: "Quitar" }))
+
+    await waitFor(() => expect(removeContribution).toHaveBeenCalledWith(4))
+  })
+
+  it("A meta nobody put money into says so", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([])
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    expect(await screen.findByText("No le has puesto plata a mano.")).toBeInTheDocument()
+  })
+})
+
+describe("AC-26 / AC-34 — the currency and what was already put by", () => {
+  it("A meta can be created in dollars", async () => {
+    listMetas.mockResolvedValue([])
+    previewMeta.mockResolvedValue({ asks: 33_334, months_left: 6, over_the_month: false })
+    createMeta.mockResolvedValue(meta())
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Nueva meta" }))
+
+    await user.type(screen.getByLabelText("Nombre *"), "Curso")
+    await user.click(screen.getByLabelText("En qué moneda *"))
+    await user.click(await screen.findByRole("option", { name: "USD" }))
+    await user.type(screen.getByLabelText("Cuánto * (USD)"), "2000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2027-01")
+    await user.click(await screen.findByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createMeta).toHaveBeenCalledTimes(1))
+    expect(createMeta.mock.calls[0][1]).toMatchObject({ currency: "USD", amount: 200_000 })
+  })
+
+  it("A meta can be told what it already holds", async () => {
+    listMetas.mockResolvedValue([])
+    previewMeta.mockResolvedValue({ asks: 100_000_000, months_left: 5, over_the_month: false })
+    createMeta.mockResolvedValue(meta())
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Nueva meta" }))
+
+    await user.type(screen.getByLabelText("Nombre *"), "Celular")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "8000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-12")
+    await user.type(screen.getByLabelText("Ya tenía guardado"), "3000000")
+    await user.click(await screen.findByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createMeta).toHaveBeenCalledTimes(1))
+    expect(createMeta.mock.calls[0][1]).toMatchObject({ stated_opening: 300_000_000 })
+  })
+
+  it("A meta the owner says nothing about starts from nothing", async () => {
+    listMetas.mockResolvedValue([])
+    previewMeta.mockResolvedValue({ asks: 160_000_000, months_left: 5, over_the_month: false })
+    createMeta.mockResolvedValue(meta())
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Nueva meta" }))
+
+    await user.type(screen.getByLabelText("Nombre *"), "Celular")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "8000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-12")
+    await user.click(await screen.findByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createMeta).toHaveBeenCalledTimes(1))
+    expect(createMeta.mock.calls[0][1]).toMatchObject({ stated_opening: null, currency: "COP" })
   })
 })

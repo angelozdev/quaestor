@@ -211,6 +211,48 @@ export default function ReportsPage() {
               )}
             </Section>
 
+            <Section title="Metas">
+              {data.metas.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr style={{ color: "var(--muted-foreground)" }}>
+                      <th className="text-left pb-3 font-medium text-xs">Meta</th>
+                      <th className="text-right pb-3 font-medium text-xs">Pidió</th>
+                      <th className="text-right pb-3 font-medium text-xs">Lleva</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.metas.map((m) => (
+                      <tr
+                        key={m.meta_name}
+                        className="border-t"
+                        style={{ borderColor: "var(--border)" }}
+                      >
+                        <td className="py-2.5 text-sm">{m.meta_name}</td>
+                        <td
+                          className="py-2.5 text-right tabular-nums text-sm"
+                          style={{ color: "var(--muted-foreground)" }}
+                        >
+                          {formatCents(m.asks, m.currency)}
+                        </td>
+                        <td className="py-2.5 text-right tabular-nums text-sm font-medium">
+                          {formatCents(m.holds, m.currency)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <EmptyState
+                  message="Sin metas este mes"
+                  action={{ label: "Ir a metas", href: "/metas" }}
+                />
+              )}
+              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                Entre fondos y metas, el mes pide {formatCents(data.asked, "COP")}.
+              </p>
+            </Section>
+
             {/* Por categoría */}
             <Section title="Por categoría">
               {data.by_category.length > 0 ? (

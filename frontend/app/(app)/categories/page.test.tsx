@@ -3,9 +3,11 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { listCategories, listCategoryGroups } = vi.hoisted(() => ({
+const { listCategories, listCategoryGroups, createCategory, updateCategory } = vi.hoisted(() => ({
   listCategories: vi.fn(),
   listCategoryGroups: vi.fn(),
+  createCategory: vi.fn(),
+  updateCategory: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -15,8 +17,8 @@ vi.mock("next/navigation", () => ({
 }))
 vi.mock("@/lib/api/categories", () => ({
   listCategories,
-  createCategory: vi.fn(),
-  updateCategory: vi.fn(),
+  createCategory,
+  updateCategory,
   archiveCategory: vi.fn(),
   restoreCategory: vi.fn(),
 }))
@@ -31,6 +33,7 @@ const RESTAURANTES = {
   is_income: false,
   exclude_from_budget: true,
   exclude_from_totals: false,
+  counts_as_saving: false,
   archived: false,
 }
 
@@ -94,5 +97,51 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
     await user.click(screen.getByRole("button", { name: "Crear la primera" }))
 
     expect(screen.getByText("Nueva categoría")).toBeInTheDocument()
+  })
+})
+
+describe("AC-41 — a category can say that spending in it is saving", () => {
+  it("The mark can be put on a new category", async () => {
+    const user = userEvent.setup()
+    createCategory.mockResolvedValue({ ...RESTAURANTES, id: 9, name: "Inversión" })
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+
+    await user.type(await screen.findByLabelText(/^Nombre/), "Inversión")
+    await user.click(screen.getByRole("checkbox", { name: "Gastar aquí es ahorrar" }))
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    expect(createCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Inversión", counts_as_saving: true }),
+    )
+  })
+
+  it("The mark can be put on a category that already exists", async () => {
+    const user = userEvent.setup()
+    updateCategory.mockResolvedValue({ ...RESTAURANTES, counts_as_saving: true })
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Editar" }))
+
+    await user.click(await screen.findByRole("checkbox", { name: "Gastar aquí es ahorrar" }))
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    expect(updateCategory).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ counts_as_saving: true }),
+    )
+  })
+
+  it("A category that is saving says so in the list", async () => {
+    listCategories.mockResolvedValue([{ ...RESTAURANTES, counts_as_saving: true }])
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("ahorro")).toBeInTheDocument()
+  })
+
+  it("The mark is off unless the owner puts it on", async () => {
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+
+    await screen.findByText("Restaurantes")
+    expect(screen.queryByText("ahorro")).not.toBeInTheDocument()
   })
 })

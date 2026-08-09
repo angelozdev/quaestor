@@ -49,6 +49,7 @@ def preview_meta(body: MetaCreate, month: str, session: Session = Depends(get_se
         target_month=body.target_month,
         today=month,
         income=month_service.income_of(session, month),
+        stated_opening=body.stated_opening,
     )
 
 

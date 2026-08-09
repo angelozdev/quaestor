@@ -37,6 +37,7 @@ const FIELDS: Field[] = [
   },
   { kind: "checkbox", name: "is_income", label: "Es ingreso" },
   { kind: "checkbox", name: "exclude_from_totals", label: "Excluir de los totales" },
+  { kind: "checkbox", name: "counts_as_saving", label: "Gastar aquí es ahorrar" },
 ]
 
 const WHAT_A_CATEGORY_IS = (
@@ -85,6 +86,7 @@ export default function CategoriesPage() {
     group_id: (v.group_id as number | null) ?? null,
     is_income: Boolean(v.is_income),
     exclude_from_totals: Boolean(v.exclude_from_totals),
+    counts_as_saving: Boolean(v.counts_as_saving),
   })
 
   const create = useMutation({
@@ -187,7 +189,11 @@ export default function CategoriesPage() {
                     {groupName(c.group_id)}
                   </td>
                   <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    {[c.is_income && "ingreso", c.exclude_from_totals && "no-totales"]
+                    {[
+                      c.is_income && "ingreso",
+                      c.exclude_from_totals && "no-totales",
+                      c.counts_as_saving && "ahorro",
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "—"}
                   </td>
@@ -229,6 +235,7 @@ export default function CategoriesPage() {
           group_id: null,
           is_income: false,
           exclude_from_totals: false,
+          counts_as_saving: false,
         }}
         pending={create.isPending}
         onSubmit={(v) => create.mutate(v)}
@@ -243,6 +250,7 @@ export default function CategoriesPage() {
           group_id: editing?.group_id ?? null,
           is_income: editing?.is_income ?? false,
           exclude_from_totals: editing?.exclude_from_totals ?? false,
+          counts_as_saving: editing?.counts_as_saving ?? false,
         }}
         pending={update.isPending}
         onSubmit={(v) => update.mutate(v)}

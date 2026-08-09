@@ -536,8 +536,13 @@ def _amend(session: Session, meta: Meta, year_month: str, amount: int, target_mo
     session.add(MetaAmendment(meta_id=meta.id, year_month=year_month, amount=amount, target_month=target_month))
 
 
-def preview_meta(*, amount: int, target_month: str, today: str, income: int) -> MetaPreview:
+def preview_meta(
+    *, amount: int, target_month: str, today: str, income: int, stated_opening: int | None = None
+) -> MetaPreview:
     """What a meta would ask in its first month, before it exists (AC-45).
+
+    What the owner says he already put by is the month it would open with
+    (AC-34), so the figure the form shows is the one the meta will ask.
 
     Raises:
         ValidationError: every refusal `create_meta` raises about the amount
@@ -545,5 +550,5 @@ def preview_meta(*, amount: int, target_month: str, today: str, income: int) -> 
     """
     _validate_spec("preview", amount, target_month, today)
     months_left = months_to_meta(today, target_month)
-    asks = meta_ask_calc(amount, 0, months_left)
+    asks = meta_ask_calc(amount, stated_opening or 0, months_left)
     return MetaPreview(asks=asks, months_left=months_left, over_the_month=income > 0 and asks > income)

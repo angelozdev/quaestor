@@ -24,11 +24,13 @@ from ..domain.report_types import (
     FundReportLine,
     FundsSummary,
     GroupSection,
+    MetaReportLine,
     MonthAvailable,
     MonthlyReport,
 )
 from ..domain.rules import prev_year_month
 from . import accounts as _accounts
+from . import metas as metas_service
 from . import month as month_service
 from . import planned as _planned
 from .month_aggregate import MonthAggregate, load_month, require_year_month
@@ -130,6 +132,26 @@ def _fund_lines(agg: MonthAggregate, statuses: list) -> tuple[list[FundReportLin
     )
 
 
+def _meta_lines(statuses: list) -> list[MetaReportLine]:
+    """One MetaReportLine per meta the month reports, by name (AC-36).
+
+    The metas come from the same walk that produced the closing line, so a meta
+    is folded forward once per report and not twice.
+    """
+    return sorted(
+        (
+            MetaReportLine(
+                meta_name=status.name,
+                currency=status.currency,
+                asks=status.asks,
+                holds=status.holds,
+            )
+            for status in statuses
+        ),
+        key=lambda m: m.meta_name,
+    )
+
+
 def _balance_lines(session: Session) -> list[AccountBalance]:
     """Balance per non-archived account (account's own currency), sorted by name."""
     accs = _accounts.list_accounts(session, include_archived=False)
@@ -197,6 +219,8 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         net=net,
         funds_summary=funds_summary,
         funds=funds,
+        metas=_meta_lines(available.metas),
+        asked=sum(f.asks for f in funds) + metas_service.asks_total(agg),
         by_category=_category_sections(agg, expenses, expense),
         by_group=_group_sections(agg, expenses, expense),
         balances=_balance_lines(session),

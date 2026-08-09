@@ -47,6 +47,18 @@ def render_markdown(report: MonthlyReport) -> str:
         lines.append("_No funds this month._")
     lines.append("")
 
+    lines.append("## Metas")
+    if report.metas:
+        lines.append("| Meta | Asks | Holds |")
+        lines.append("|---|---|---|")
+        for m in report.metas:
+            lines.append(f"| {m.meta_name} | {money(m.asks, m.currency)} | {money(m.holds, m.currency)} |")
+    else:
+        lines.append("_No metas this month._")
+    lines.append("")
+    lines.append(f"**The month asks {money(report.asked)} in all**, funds and metas together.")
+    lines.append("")
+
     # 3. Expense by category
     lines.append("## Expense by category")
     if report.by_category:
