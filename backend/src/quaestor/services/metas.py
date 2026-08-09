@@ -88,7 +88,6 @@ def _bought(agg: MonthAggregate, meta: Meta) -> bool:
 class _Month:
     opening: int
     ask: int
-    contributed: int
     holds: int
     released: int = 0
 
@@ -117,10 +116,10 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
     """
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
-        return _Month(opening=opening, ask=0, contributed=0, holds=amount, released=opening - amount)
+        return _Month(opening=opening, ask=0, holds=amount, released=opening - amount)
     ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
     contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
-    return _Month(opening=opening, ask=ask, contributed=contributed, holds=opening + ask + contributed)
+    return _Month(opening=opening, ask=ask, holds=opening + ask + contributed)
 
 
 def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
@@ -130,7 +129,7 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Month:
     rather than one per branch of the month.
     """
     if agg.year_month < meta.start_month:
-        return _Month(opening=0, ask=0, contributed=0, holds=0)
+        return _Month(opening=0, ask=0, holds=0)
     month, opening = meta.start_month, meta.stated_opening or 0
     while month < agg.year_month:
         opening = _month_of(agg, meta, month, opening).holds
