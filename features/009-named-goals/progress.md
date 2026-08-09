@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner reviews the twelve scenarios drafted for `spec.md`, then runs `just backup && just migrate` | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
+> ▶ CP5 Implement — 7/9 criteria met | NEXT: the owner runs `just backup && just migrate` for 0015 and 0016, then the merge | BLOCKED: the CP5/CP6 shared agent_id keeps the Principle 7 gate red for every checkpoint after it
 
 # Progress — 009 named-goals
 
@@ -113,18 +113,18 @@ Four screens, then three figures, then eight behaviours — one shape.
 
 | What | Owner | How |
 |---|---|---|
-| Review the twelve scenarios drafted for `spec.md` | human | it is the owner's contract; no agent has modified it |
-| Whether a fourth verifier runs | human | 13, then 9, then 6 |
+| Whether a fourth verifier runs | human | 13, then 9, then 6 — decreasing, not yet zero |
 | Migrations 0015, 0016 | human (CHARTER §7) | `just backup && just migrate` |
 | Merge to `main` | human (CHARTER §7) | — |
 
 **The acceptance suite saw none of the twenty-eight, and the reason is
 structural.** No scenario closes a meta in a month where closing can move a
 figure; AC-39's only close is in January over a December purchase. No scenario
-cancels a meta that was contributed to. AC-43 asserts only *is running*. Twelve
-scenarios that would have caught them are drafted, with every figure run rather
-than reasoned, and await the owner's review — `spec.md` is his contract and no
-agent has modified it.
+cancels a meta that was contributed to. AC-43 asserts only *is running*. Twelve scenarios that catch them are in, approved by the owner, with
+every figure run against the service rather than reasoned out. **Eleven of the
+twelve go red against the code they were written to catch**; the twelfth is
+AC-8's control arm and must pass on both sides. 009 goes from 125 scenarios to
+137, the pipeline from 472 to 484.
 
 Production is clear for 0015: `SELECT count(*) FROM fund` returned 0
 read-only on 2026-08-08, so nothing uses the dated rule it drops. The
