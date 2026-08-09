@@ -30,3 +30,18 @@ def test_month_bounds_handles_february_and_year():
 def test_prev_year_month_wraps_january():
     assert rules.prev_year_month("2026-06") == "2026-05"
     assert rules.prev_year_month("2026-01") == "2025-12"
+
+
+def test_a_share_of_a_month_with_no_income_is_no_share():
+    """The guard is reached on every empty month; what it answers was never asked.
+
+    A month that earned nothing saved no share of it. Anything else puts a
+    percentage beside a figure there is no percentage of.
+    """
+    assert rules.share_calc(500_000, 0) == 0
+    assert rules.share_calc(0, 0) == 0
+
+
+def test_a_share_is_whole_percent_of_the_month():
+    assert rules.share_calc(300_000, 1_000_000) == 30
+    assert rules.share_calc(-200_000, 1_000_000) == -20
