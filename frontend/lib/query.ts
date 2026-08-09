@@ -57,7 +57,7 @@ export const qk = {
 // Each mutation declares the entity roots it must invalidate so derived numbers
 // (balances, dashboard, reports) refresh instantly. Roots reference ROOTS so a
 // rename forces tsc to flag every invalidation group that needs updating.
-export const INVALIDATION = {
+const INVALIDATION = {
   // `categories` is in all three because a movement can create the category it
   // is filed under, in the same request (ADR-0042) — a list that still holds
   // the old set renders the new one as a bare id.

@@ -1,6 +1,5 @@
 import type {
   DynamicToolUIPart,
-  TextUIPart,
   ToolUIPart,
   UIDataTypes,
   UIMessage,
@@ -15,7 +14,7 @@ import { isTextUIPart as aiIsTextUIPart, isToolUIPart as aiIsToolUIPart } from "
  * `UIMessage` is the canonical message type from `ai`; we narrow it locally
  * with type guards rather than redefining shapes.
  */
-export type { DynamicToolUIPart, TextUIPart, ToolUIPart, UIMessage, UIMessagePart }
+export type { UIMessage, UIMessagePart }
 
 /**
  * Any tool part the assistant can emit, whether typed (server declared the

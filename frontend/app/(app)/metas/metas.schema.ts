@@ -10,17 +10,8 @@ export const createMetaSchema = z.object({
 
 export type CreateMetaValues = z.infer<typeof createMetaSchema>
 
-/** A new amount for a meta already running (AC-11). */
+/** A new amount for a meta already running, and the money it is set aside with (AC-11, AC-34). */
 export const metaAmountSchema = z.object({ amount: positiveCents })
-
-export type MetaAmountValues = z.infer<typeof metaAmountSchema>
 
 /** A new month for a meta already running (AC-11). */
 export const metaMonthSchema = z.object({ targetMonth: yearMonth })
-
-export type MetaMonthValues = z.infer<typeof metaMonthSchema>
-
-/** Money the owner sets aside by hand, on top of the instalment (AC-34). */
-export const metaContributionSchema = z.object({ amount: positiveCents })
-
-export type MetaContributionValues = z.infer<typeof metaContributionSchema>

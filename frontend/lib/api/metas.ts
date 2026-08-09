@@ -19,9 +19,6 @@ export const setMeta = (id: number, month: string, body: Partial<MetaCreate>) =>
   patch<MetaStatus>(`/metas/${id}${qs({ month })}`, body)
 export const contribute = (id: number, month: string, amount: number) =>
   post<MetaContribution>(`/metas/${id}/contributions${qs({ month })}`, { amount })
-export const listContributions = (id: number) =>
-  get<MetaContribution[]>(`/metas/${id}/contributions`)
-export const removeContribution = (id: number) => del<void>(`/metas/contributions/${id}`)
 export const cancelMeta = (id: number, month: string) => del<void>(`/metas/${id}${qs({ month })}`)
 export const closeMeta = (id: number, month: string) =>
   post<MetaStatus>(`/metas/${id}/close${qs({ month })}`, {})

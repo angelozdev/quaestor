@@ -9,7 +9,7 @@ import { Input } from "@/ui"
  * COP: digits only, value is whole pesos -> ×100. USD: one decimal point allowed,
  * major units -> ×100 rounded. Returns null for empty/invalid input.
  */
-export function parseMoneyToCents(text: string, currency: string): number | null {
+function parseMoneyToCents(text: string, currency: string): number | null {
   const trimmed = text.trim()
   if (trimmed === "") return null
   if (currency === "USD") {
