@@ -5,7 +5,8 @@ recorded the intent and Checkpoint 4 owned the design. The feature has since
 shipped, so every binding now reaches real code; the helpers that name a
 missing capability survive as the message a future removal would produce.
 
-The API bound throughout is ``quaestor.services.funds``:
+The API bound throughout is ``quaestor.services.funds``, and — since feature
+009 lifted the month out of it — ``quaestor.services.month``:
 
 ``create_fund``      a fund on one expense category, one rule, one start month
 ``preview_fund``     what a fund would ask, before it exists (AC-24's warning)
@@ -13,8 +14,8 @@ The API bound throughout is ``quaestor.services.funds``:
 ``set_fund``         change a fund's rule or amount
 ``delete_fund``      remove a fund
 ``fund_status``      what a fund asks, holds and reports for one month
-``available``        the money available for a month, with its breakdown
-``rates``            the earning rate, the cost rate and the margin
+``available``        the money available for a month, with its breakdown (month)
+``rates``            the earning rate, the cost rate and the margin (month)
 
 Each helper below fails with a message naming the capability it wanted, so
 the red output reads as a to-do list rather than one repeated import error.
@@ -105,24 +106,30 @@ _SELECT_GOALS = "SELECT name FROM goal"
 # ------------------------------------------------------------------ helpers
 
 
-def _service():
-    """The funds service, or a red naming its absence."""
+def _services():
+    """What answers for a fund and for the month it lives in, or a red naming their absence.
+
+    One module until feature 009 split the month out of it, taking ``available``
+    and ``rates`` with it. A capability is therefore looked for in both rather
+    than in whichever module happened to hold it first — these scenarios pin
+    behaviour, and where the behaviour is implemented is not theirs to know.
+    """
     try:
-        from quaestor.services import funds
+        from quaestor.services import funds, month
     except ImportError as exc:
         raise AssertionError(
             "there is no funds service yet — a fund is the noun this whole feature adds (quaestor.services.funds)"
         ) from exc
-    return funds
+    return (funds, month)
 
 
 def _call(capability: str, *args, **kwargs):
-    """Invoke one capability of the funds service, or a red naming it."""
-    service = _service()
-    fn = getattr(service, capability, None)
-    if fn is None:
-        raise AssertionError(f"the funds service has no {capability!r} yet — Checkpoint 4 owns its shape")
-    return fn(*args, **kwargs)
+    """Invoke one capability of the fund or month service, or a red naming it."""
+    for service in _services():
+        fn = getattr(service, capability, None)
+        if fn is not None:
+            return fn(*args, **kwargs)
+    raise AssertionError(f"nothing answers {capability!r} yet — Checkpoint 4 owns its shape")
 
 
 def _attr(obj, name: str, what: str):

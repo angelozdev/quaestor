@@ -32,8 +32,9 @@ from quaestor.domain.models import Meta as _Meta
 from quaestor.domain.money import major_to_cents
 from quaestor.mcp import tools as _mcp_tools
 from quaestor.services import categories, planned, transactions
-from quaestor.services import funds as funds_service
 from quaestor.services import metas as service
+from quaestor.services import month as month_service
+from quaestor.services.month_aggregate import load_month
 from sqlmodel import select as _select
 
 from . import step
@@ -73,7 +74,7 @@ def _meta_id(world: World, name: str) -> int:
 
 def _status(world: World, name: str, year_month: str | None = None):
     month = year_month or _today(world)
-    agg = funds_service._month_view(world.session, month)
+    agg = load_month(world.session, month)
     for found in service.statuses(agg):
         if found.name == name:
             return found
@@ -176,14 +177,14 @@ def when_rename(world: World, name: str, to: str) -> None:
 
 @step(rf"the user views the metas for (?P<month>{_MONTH})")
 def when_view_metas(world: World, month: str) -> None:
-    agg = funds_service._month_view(world.session, month)
+    agg = load_month(world.session, month)
     world.metas_view = {found.name: found for found in service.statuses(agg)}
 
 
 @step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?:COP|USD) by (?P<target>{_MONTH}) would ask")
 def when_preview(world: World, amount: str, target: str) -> None:
     month = _today(world)
-    income = funds_service.available(world.session, month).income
+    income = month_service.available(world.session, month).income
     world.meta_preview = service.preview_meta(amount=_cents(amount), target_month=target, today=month, income=income)
     world.pending_meta = (_cents(amount), target)
 
@@ -289,7 +290,7 @@ def then_told_name_held(world: World) -> None:
 def then_breakdown_metas(world: World, amount: str) -> None:
     view = getattr(world, "available_view", None)
     assert view is not None, "nothing opened the money available into its breakdown"
-    agg = funds_service._month_view(world.session, _today(world))
+    agg = load_month(world.session, _today(world))
     asking = service.asks_total(agg) + service.cancelled_asks_total(agg)
     assert asking == _cents(amount), f"the metas ask {asking}, expected {_cents(amount)}"
 
@@ -400,7 +401,7 @@ def then_waiting(world: World, name: str) -> None:
 
 @step(r"no meta is waiting on its purchase")
 def then_none_waiting(world: World) -> None:
-    agg = funds_service._month_view(world.session, _today(world))
+    agg = load_month(world.session, _today(world))
     waiting = [found.name for found in service.statuses(agg) if found.waiting]
     assert not waiting, f"these metas are waiting: {waiting}"
 
@@ -545,14 +546,14 @@ def then_told_name_taken(world: World) -> None:
 
 @step(r'the meta "(?P<name>[^"]+)" is not listed')
 def then_not_listed(world: World, name: str) -> None:
-    agg = funds_service._month_view(world.session, _today(world))
+    agg = load_month(world.session, _today(world))
     assert name not in [f.name for f in service.statuses(agg)], f"the meta {name!r} is still listed"
 
 
 @step(r'the meta "(?P<name>[^"]+)" can be restored')
 def then_can_be_restored(world: World, name: str) -> None:
     service.restore_meta(world.session, _meta_id(world, name), today=_today(world))
-    agg = funds_service._month_view(world.session, _today(world))
+    agg = load_month(world.session, _today(world))
     assert name in [f.name for f in service.statuses(agg)], f"the meta {name!r} did not come back"
 
 
@@ -560,7 +561,7 @@ def then_can_be_restored(world: World, name: str) -> None:
 
 
 def _split(world: World):
-    return funds_service.split(world.session, _today(world))
+    return month_service.split(world.session, _today(world))
 
 
 @step(r'an expense category "(?P<name>[^"]+)" where spending is saving')
@@ -590,7 +591,7 @@ def then_split_adds_up(world: World) -> None:
 
 @step(rf"the user views the month's report for (?P<month>{_MONTH})")
 def when_view_split_for(world: World, month: str) -> None:
-    world.split_view = funds_service.split(world.session, month)
+    world.split_view = month_service.split(world.session, month)
 
 
 @step(rf"that month reports (?P<amount>{_DEC}) COP as (?P<term>consumo|ahorro|libre)")
@@ -715,7 +716,7 @@ def then_breakdown_funds(world: World, amount: str) -> None:
 
 def _month_number(world: World):
     """The month's number, loaded fresh — the report step opens its own view."""
-    return funds_service.month_available(funds_service._month_view(world.session, _today(world)))
+    return month_service.month_available(load_month(world.session, _today(world)))
 
 
 @step(r'that expense is still linked to the meta "(?P<name>[^"]+)"')
@@ -742,8 +743,8 @@ def then_report_lists_fund(world: World, name: str, amount: str) -> None:
 
 @step(rf"the report states the month asks (?P<amount>{_DEC}) COP in all")
 def then_report_total(world: World, amount: str) -> None:
-    agg = funds_service._month_view(world.session, _today(world))
-    view = funds_service.month_available(agg)
+    agg = load_month(world.session, _today(world))
+    view = month_service.month_available(agg)
     total = sum(f.asks for f in view.funds) + service.asks_total(agg)
     assert total == _cents(amount), f"the month asks {total} in all, expected {_cents(amount)}"
 
