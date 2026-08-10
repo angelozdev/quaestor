@@ -1,5 +1,7 @@
 "use client"
 
+import { Button } from "@/ui"
+
 type Props = {
   onPick: (text: string) => void
 }
@@ -13,10 +15,7 @@ const SUGGESTIONS = [
 export function ChatEmptyState({ onPick }: Props) {
   return (
     <div className="flex flex-col items-start gap-3 px-1 py-6">
-      <p
-        className="font-display text-lg font-semibold tracking-tight"
-        style={{ color: "var(--foreground)" }}
-      >
+      <p className="text-lg font-semibold tracking-tight" style={{ color: "var(--foreground)" }}>
         Pregúntale a tu asistente
       </p>
       <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
@@ -24,20 +23,17 @@ export function ChatEmptyState({ onPick }: Props) {
       </p>
       <div className="mt-1 flex flex-wrap gap-2">
         {SUGGESTIONS.map((text) => (
-          <button
+          <Button
             key={text}
             type="button"
+            size="sm"
+            variant="outline"
             aria-label={`Enviar sugerencia: ${text}`}
             onClick={() => onPick(text)}
-            className="rounded-full border px-3 py-1.5 text-xs transition-colors hover:bg-[color-mix(in_oklch,var(--primary)_8%,transparent)]"
-            style={{
-              borderColor: "var(--primary)",
-              color: "var(--foreground)",
-              background: "transparent",
-            }}
+            className="rounded-full border-primary bg-transparent"
           >
             {text}
-          </button>
+          </Button>
         ))}
       </div>
     </div>

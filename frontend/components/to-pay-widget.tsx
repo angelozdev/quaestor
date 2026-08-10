@@ -11,7 +11,7 @@ import type { Transaction } from "@/lib/api/types"
 import { formatDate } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
-import { Badge } from "@/ui"
+import { Badge, Button } from "@/ui"
 
 type Scope = "week" | "month"
 
@@ -48,22 +48,12 @@ export function ToPayWidget() {
   })
 
   return (
-    <div
-      className="p-5 space-y-4"
-      style={{
-        background: "var(--card)",
-        boxShadow: "var(--shadow-card)",
-        borderRadius: "var(--radius)",
-      }}
-    >
+    <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <p
-          className="text-xs font-medium uppercase tracking-wider"
-          style={{ color: "var(--muted-foreground)" }}
-        >
+        <h2 className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
           Por pagar
-        </p>
+        </h2>
         <div
           className="flex items-center gap-1 rounded-md p-0.5"
           style={{ background: "var(--muted)" }}
@@ -71,20 +61,16 @@ export function ToPayWidget() {
           {(["week", "month"] as Scope[]).map((s) => {
             const active = scope === s
             return (
-              <button
+              <Button
                 key={s}
                 type="button"
+                size="xs"
+                variant={active ? "outline" : "ghost"}
                 onClick={() => setScope(s)}
-                className="px-2.5 py-1 text-xs rounded transition-all"
-                style={{
-                  background: active ? "var(--card)" : "transparent",
-                  color: active ? "var(--foreground)" : "var(--muted-foreground)",
-                  fontWeight: active ? 500 : 400,
-                  border: active ? "1px solid var(--border)" : "1px solid transparent",
-                }}
+                className={active ? "rounded" : "rounded text-muted-foreground"}
               >
                 {s === "week" ? "Esta semana" : "Este mes"}
-              </button>
+              </Button>
             )
           })}
         </div>
@@ -108,7 +94,7 @@ export function ToPayWidget() {
 
       {query.data && (
         <>
-          <p className="font-display text-3xl font-bold tabular-nums tracking-tight">
+          <p className="text-xl font-semibold tabular-nums tracking-tight">
             {formatCents(query.data.total_base, "COP")}
           </p>
 
@@ -121,10 +107,7 @@ export function ToPayWidget() {
               {query.data.overdue.length > 0 && (
                 <section className="space-y-0">
                   <header className="flex items-center gap-2 pb-1">
-                    <p
-                      className="text-xs font-medium uppercase tracking-wider"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
+                    <p className="text-xs font-medium" style={{ color: "var(--expense)" }}>
                       Vencidos
                     </p>
                     <Badge variant="destructive">{query.data.overdue.length}</Badge>
@@ -146,7 +129,7 @@ export function ToPayWidget() {
                 <section className="space-y-0">
                   <header className="pb-1">
                     <h2
-                      className="text-xs font-medium uppercase tracking-wider"
+                      className="text-xs font-medium"
                       style={{ color: "var(--muted-foreground)" }}
                     >
                       {scope === "week" ? "Esta semana" : "Este mes"}
@@ -253,29 +236,9 @@ function ToPayRow({
       </div>
       <div className="flex items-center gap-4 shrink-0">
         <MoneyAmount cents={item.amount} currency={item.currency} className="text-sm font-medium" />
-        <button
-          type="button"
-          disabled={pending}
-          onClick={onMarkPaid}
-          className="text-xs px-3 py-1.5 rounded-md font-medium transition-colors disabled:opacity-50"
-          style={{
-            background: "var(--muted)",
-            color: "var(--foreground)",
-            border: "1px solid var(--border)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--foreground)"
-            e.currentTarget.style.color = "var(--background)"
-            e.currentTarget.style.borderColor = "var(--foreground)"
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--muted)"
-            e.currentTarget.style.color = "var(--foreground)"
-            e.currentTarget.style.borderColor = "var(--border)"
-          }}
-        >
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onMarkPaid}>
           Marcar pagado
-        </button>
+        </Button>
       </div>
     </li>
   )

@@ -11,6 +11,7 @@ import {
   useState,
 } from "react"
 import { createPortal } from "react-dom"
+import { Button } from "@/ui"
 
 const FOCUSABLE = [
   "a[href]",
@@ -121,16 +122,16 @@ export function ScreenHelp({ screen, children }: { screen: string; children: Rea
 
   return (
     <>
-      <button
+      <Button
         ref={trigger}
         type="button"
+        variant="outline"
         onClick={() => setOpen(true)}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors"
-        style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+        className="shrink-0 text-muted-foreground"
       >
         <CircleHelp aria-hidden className="size-3.5" />
         {HELP_LABEL}
-      </button>
+      </Button>
 
       {open &&
         host !== null &&
@@ -155,18 +156,19 @@ export function ScreenHelp({ screen, children }: { screen: string; children: Rea
                 className="flex items-start justify-between gap-3 border-b px-4 py-3"
                 style={{ borderColor: "var(--border)" }}
               >
-                <h2 id={titleId} className="font-display text-base font-semibold tracking-tight">
+                <h2 id={titleId} className="text-base font-semibold tracking-tight">
                   ¿Cómo funciona {screen}?
                 </h2>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={close}
                   aria-label="Cerrar"
-                  className="shrink-0 rounded-md p-1"
-                  style={{ color: "var(--muted-foreground)" }}
+                  className="shrink-0 text-muted-foreground"
                 >
                   <X aria-hidden className="size-4" />
-                </button>
+                </Button>
               </header>
 
               <div className="flex-1 space-y-3 break-words px-4 py-4 text-sm leading-relaxed">
@@ -174,14 +176,15 @@ export function ScreenHelp({ screen, children }: { screen: string; children: Rea
               </div>
 
               <footer className="border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
-                <button
+                <Button
                   type="button"
+                  size="sm"
+                  variant="outline"
                   onClick={close}
-                  className="w-full rounded-md border px-3 py-1.5 text-xs transition-colors"
-                  style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                  className="w-full"
                 >
                   Entendido
-                </button>
+                </Button>
               </footer>
             </section>
           </div>,

@@ -5,33 +5,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { EntitySelect } from "@/components/entity-select"
+import { Section, Term } from "@/components/ledger"
 import { PageHeader } from "@/components/page-header"
 import { ApiError, applyApiErrorsToForm } from "@/lib/api"
 import { listAccounts } from "@/lib/api/accounts"
 import { getFx, setFx } from "@/lib/api/fx"
 import { getSettings, updateSettings } from "@/lib/api/settings"
+import { formatRate } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input, Label } from "@/ui"
 import { type SetTrmValues, setTrmSchema } from "./settings.schema"
 
 const TRM_DEFAULTS: SetTrmValues = {
   usdCop: Number.NaN,
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
-        {title}
-      </h2>
-      <div
-        className="space-y-4 rounded-lg border p-5"
-        style={{ borderColor: "var(--border)", background: "var(--card)" }}
-      >
-        {children}
-      </div>
-    </div>
-  )
 }
 
 export default function SettingsPage() {
@@ -88,46 +74,54 @@ export default function SettingsPage() {
     <div className="space-y-6">
       <PageHeader title="Ajustes" />
 
-      <Section title="Cuenta origen por defecto">
+      <Section label="Cuenta origen por defecto">
         <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
           Cuenta usada como origen de las transferencias planeadas.
         </p>
-        <div className="space-y-1.5">
-          <Label>Cuenta origen</Label>
-          <EntitySelect
-            value={sourceId}
-            onChange={setSourceId}
-            queryKey={qk.accounts(false)}
-            queryFn={() => listAccounts(false)}
-            allowNullLabel="Ninguna"
-          />
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
-            {saveSettings.isPending ? "…" : "Guardar"}
-          </Button>
+        <div className="max-w-md space-y-3">
+          <div className="space-y-1.5">
+            <Label>Cuenta origen</Label>
+            <EntitySelect
+              value={sourceId}
+              onChange={setSourceId}
+              queryKey={qk.accounts(false)}
+              queryFn={() => listAccounts(false)}
+              allowNullLabel="Ninguna"
+            />
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
+              {saveSettings.isPending ? "…" : "Guardar"}
+            </Button>
+          </div>
         </div>
       </Section>
 
-      <Section title="TRM (USD→COP)">
-        <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-          Una sola tasa vigente para toda la app: el job diario la refresca y aquí puedes corregirla
-          manualmente. TRM actual:{" "}
-          {trm.isLoading
-            ? "…"
-            : trmMissing
-              ? "Sin TRM registrada"
-              : trm.data
-                ? trm.data.usd_cop
-                : "—"}
+      <Section label="TRM (USD→COP)">
+        <p className="max-w-prose text-sm" style={{ color: "var(--muted-foreground)" }}>
+          Una sola tasa vigente para toda la app, y la actualizas tú: por ahora no se refresca sola.
+          Sin una tasa puesta, las pantallas que muestran pesos no pueden leerse.
         </p>
+        <div className="max-w-md">
+          <Term label="TRM vigente">
+            <span className="text-sm font-medium tabular-nums">
+              {trm.isLoading
+                ? "…"
+                : trmMissing
+                  ? "Sin TRM registrada"
+                  : trm.data
+                    ? `$ ${formatRate(Number(trm.data.usd_cop))}`
+                    : "—"}
+            </span>
+          </Term>
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault()
             e.stopPropagation()
             void trmForm.handleSubmit()
           }}
-          className="space-y-3"
+          className="max-w-md space-y-3"
         >
           <trmForm.Field name="usdCop">
             {(field) => {
@@ -138,7 +132,7 @@ export default function SettingsPage() {
                   : ""
               return (
                 <div className="space-y-1.5">
-                  <Label htmlFor={field.name}>TRM actual *</Label>
+                  <Label htmlFor={field.name}>Nueva TRM</Label>
                   <Input
                     id={field.name}
                     inputMode="decimal"

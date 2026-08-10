@@ -139,8 +139,11 @@ function FundRow({
 }) {
   const shape = shapeOf(fund)
   return (
-    <tr className="border-t" style={{ borderColor: "var(--border)" }}>
-      <td className="px-3 py-2.5 align-top">
+    <tr
+      className="border-t transition-colors hover:bg-[var(--muted)]"
+      style={{ borderColor: "var(--border)" }}
+    >
+      <td className="px-3 py-2 align-top">
         <div className="space-y-1">
           <p className="font-medium">{fund.name}</p>
           <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
@@ -156,7 +159,7 @@ function FundRow({
           )}
         </div>
       </td>
-      <td className="px-3 py-2.5 align-top" style={{ color: "var(--muted-foreground)" }}>
+      <td className="px-3 py-2 align-top" style={{ color: "var(--muted-foreground)" }}>
         {ruleLabel(fund.rule, shape)}
       </td>
       <td className="px-3 py-2.5 text-right align-top tabular-nums">
@@ -165,7 +168,7 @@ function FundRow({
       <td className="px-3 py-2.5 text-right align-top tabular-nums">
         {formatCents(fund.holds, "COP")}
       </td>
-      <td className="px-3 py-2.5 align-top">
+      <td className="px-3 py-2 align-top">
         <StatusBadge kind="onTrack" value={fund.on_track} />
       </td>
       <td className="px-3 py-2.5 text-right align-top">
@@ -202,30 +205,40 @@ function FundSection({
   const headingId = `heading-${shape}`
   return (
     <section aria-labelledby={headingId} className="space-y-2">
-      <h2 id={headingId} className="text-xs font-semibold tracking-wider">
+      <h2 id={headingId} className="text-xs font-semibold">
         {heading}
       </h2>
       <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
         {says}
       </p>
       {funds.length === 0 ? (
-        <p
-          className="rounded-lg border border-dashed px-3 py-4 text-sm"
-          style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-        >
+        <p className="max-w-prose py-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
           {`Todavía no tienes ${shape}s. ${shapeSentence(shape)}.`}
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
+        <div className="overflow-x-auto">
           <table aria-labelledby={headingId} className="w-full text-sm">
             <thead>
-              <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Categoría</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Regla</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium">Pide</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium">Tiene</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Estado</th>
-                <th className="w-28 px-3 py-2.5" />
+              <tr
+                className="hairline-total"
+                style={{ color: "var(--muted-foreground)", borderTop: "none" }}
+              >
+                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
+                  Categoría
+                </th>
+                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
+                  Regla
+                </th>
+                <th className="px-3 pb-2 text-right text-xs font-medium uppercase tracking-wide">
+                  Pide
+                </th>
+                <th className="px-3 pb-2 text-right text-xs font-medium uppercase tracking-wide">
+                  Tiene
+                </th>
+                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
+                  Estado
+                </th>
+                <th className="w-28 px-3 pb-2" />
               </tr>
             </thead>
             <tbody>

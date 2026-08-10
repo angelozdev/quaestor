@@ -7,124 +7,121 @@
    Re-vendor if upgrading either package. */
 @import "../ui/styles/tw-animate.css";
 @import "../ui/styles/shadcn.css";
-/* Design system token contract + default theme. App overrides live below. */
 @import "../ui/styles/tokens.css";
 
-/* App-specific theme: brand fonts and domain (income/expense) color tokens. */
 @theme inline {
   --color-income: var(--income);
   --color-expense: var(--expense);
 }
 
 /*
-  Brand theme — "Fintech premium" (ADR 0004). Dark is the default look
-  (next-themes sets `defaultTheme="dark"`): `:root` holds the light palette,
-  `.dark` the dark one, matching the `ui/` `dark:` utilities and the design-system
-  token contract (ADR 0002 — we only PROVIDE values here, never edit `ui/`).
+  Brand theme — "The Instrument" (DESIGN.md; dark-first per ADR-0004).
+  next-themes sets `defaultTheme="dark"`, so `:root` holds the light palette and
+  `.dark` the dark one. Values are only PROVIDED here, never edited in `ui/`
+  (ADR-0002). Unlayered `:root`/`.dark` declarations beat `@layer theme`, so
+  these win over the neutral defaults from ui/styles/tokens.css.
 
-  Unlayered `:root`/`.dark` declarations beat `@layer theme`, so these win over the
-  neutral defaults imported from ui/styles/tokens.css, and the `--font-*` overrides
-  resolve the Next.js runtime font vars at build time.
+  Surfaces are flat: `--shadow-card` is a 1px hairline ring, not a shadow.
+  Depth exists only for elements that leave the page plane (`--shadow-pop`).
 */
 :root {
-  /* Brand fonts (provided by next/font in app/layout.tsx). */
-  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-heading: var(--font-bricolage), var(--font-sans);
+  color-scheme: light;
 
-  /* Light palette — refined, mint-accented. */
-  --background: oklch(0.99 0.004 250);
-  --foreground: oklch(0.22 0.02 264);
+  --font-sans-stack:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading-stack: var(--font-sans-stack);
+
+  --background: oklch(0.995 0.001 265);
+  --foreground: oklch(0.21 0.01 265);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.02 264);
+  --card-foreground: oklch(0.21 0.01 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.02 264);
-  --primary: oklch(0.7 0.15 165);
-  --primary-foreground: oklch(0.2 0.03 264);
-  --secondary: oklch(0.96 0.005 250);
-  --secondary-foreground: oklch(0.24 0.02 264);
-  --muted: oklch(0.965 0.004 250);
-  --muted-foreground: oklch(0.52 0.014 258);
-  --accent: oklch(0.96 0.005 250);
-  --accent-foreground: oklch(0.24 0.02 264);
-  --destructive: oklch(0.55 0.2 25);
-  --border: oklch(0.91 0.005 258);
-  --input: oklch(0.955 0.004 258);
-  --ring: oklch(0.7 0.15 165);
-  --radius: 0.625rem;
+  --popover-foreground: oklch(0.21 0.01 265);
+  --primary: oklch(0.62 0.13 165);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.97 0.002 265);
+  --secondary-foreground: oklch(0.21 0.01 265);
+  --muted: oklch(0.97 0.002 265);
+  --muted-foreground: oklch(0.47 0.012 265);
+  --accent: oklch(0.96 0.003 265);
+  --accent-foreground: oklch(0.21 0.01 265);
+  --destructive: oklch(0.53 0.19 25);
+  --border: oklch(0.9 0.004 265);
+  --input: oklch(0.93 0.004 265);
+  --ring: oklch(0.62 0.13 165);
+  --radius: 0.5rem;
 
-  --chart-1: oklch(0.7 0.15 165);
-  --chart-2: oklch(0.55 0.13 152);
-  --chart-3: oklch(0.55 0.18 25);
-  --chart-4: oklch(0.6 0.1 240);
-  --chart-5: oklch(0.7 0.12 60);
+  --chart-1: oklch(0.62 0.13 165);
+  --chart-2: oklch(0.5 0.13 158);
+  --chart-3: oklch(0.53 0.19 25);
+  --chart-4: oklch(0.55 0.09 245);
+  --chart-5: oklch(0.65 0.1 65);
 
-  --sidebar: oklch(0.975 0.004 250);
-  --sidebar-foreground: oklch(0.22 0.02 264);
-  --sidebar-primary: oklch(0.7 0.15 165);
-  --sidebar-primary-foreground: oklch(0.2 0.03 264);
-  --sidebar-accent: oklch(0.96 0.005 250);
-  --sidebar-accent-foreground: oklch(0.24 0.02 264);
-  --sidebar-border: oklch(0.91 0.005 258);
-  --sidebar-ring: oklch(0.7 0.15 165);
+  --sidebar: oklch(0.98 0.002 265);
+  --sidebar-foreground: oklch(0.21 0.01 265);
+  --sidebar-primary: oklch(0.62 0.13 165);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0.003 265);
+  --sidebar-accent-foreground: oklch(0.21 0.01 265);
+  --sidebar-border: oklch(0.9 0.004 265);
+  --sidebar-ring: oklch(0.62 0.13 165);
 
-  /* Domain tokens — tuned for light surfaces. */
-  --income: oklch(0.52 0.13 158);
-  --expense: oklch(0.53 0.2 27);
+  --income: oklch(0.5 0.13 158);
+  --expense: oklch(0.53 0.19 25);
 
-  /* Elevation (ADR 0004) — single source for card/popover shadows. */
-  --shadow-card: 0 1px 2px oklch(0.22 0.02 264 / 0.06), 0 0 0 1px oklch(0.22 0.02 264 / 0.05);
-  --shadow-pop: 0 8px 30px -8px oklch(0.22 0.02 264 / 0.18), 0 0 0 1px oklch(0.22 0.02 264 / 0.06);
+  --shadow-card: 0 0 0 1px oklch(0.21 0.01 265 / 0.09);
+  --shadow-pop:
+    0 16px 40px -12px oklch(0.21 0.01 265 / 0.16), 0 0 0 1px oklch(0.21 0.01 265 / 0.08);
 }
 
 .dark {
-  /* Dark palette — slate + mint, the default look. */
-  --background: oklch(0.18 0.014 258);
-  --foreground: oklch(0.93 0.008 250);
-  --card: oklch(0.215 0.016 258);
-  --card-foreground: oklch(0.93 0.008 250);
-  --popover: oklch(0.215 0.016 258);
-  --popover-foreground: oklch(0.93 0.008 250);
-  --primary: oklch(0.82 0.16 165);
-  --primary-foreground: oklch(0.19 0.02 258);
-  --secondary: oklch(0.25 0.016 258);
-  --secondary-foreground: oklch(0.93 0.008 250);
-  --muted: oklch(0.26 0.016 258);
-  --muted-foreground: oklch(0.7 0.013 250);
-  --accent: oklch(0.27 0.016 258);
-  --accent-foreground: oklch(0.93 0.008 250);
-  --destructive: oklch(0.62 0.2 25);
-  --border: oklch(1 0 0 / 0.09);
-  --input: oklch(1 0 0 / 0.07);
-  --ring: oklch(0.82 0.16 165);
+  color-scheme: dark;
 
-  --chart-1: oklch(0.82 0.16 165);
-  --chart-2: oklch(0.72 0.14 152);
-  --chart-3: oklch(0.66 0.19 25);
-  --chart-4: oklch(0.68 0.12 240);
-  --chart-5: oklch(0.78 0.13 70);
+  --background: oklch(0.17 0.005 265);
+  --foreground: oklch(0.96 0.003 265);
+  --card: oklch(0.205 0.005 265);
+  --card-foreground: oklch(0.96 0.003 265);
+  --popover: oklch(0.235 0.006 265);
+  --popover-foreground: oklch(0.96 0.003 265);
+  --primary: oklch(0.78 0.12 165);
+  --primary-foreground: oklch(0.17 0.005 265);
+  --secondary: oklch(0.235 0.006 265);
+  --secondary-foreground: oklch(0.96 0.003 265);
+  --muted: oklch(0.235 0.006 265);
+  --muted-foreground: oklch(0.68 0.008 265);
+  --accent: oklch(0.26 0.006 265);
+  --accent-foreground: oklch(0.96 0.003 265);
+  --destructive: oklch(0.7 0.17 22);
+  --border: oklch(1 0 0 / 0.08);
+  --input: oklch(1 0 0 / 0.1);
+  --ring: oklch(0.78 0.12 165);
 
-  --sidebar: oklch(0.155 0.013 258);
-  --sidebar-foreground: oklch(0.93 0.008 250);
-  --sidebar-primary: oklch(0.82 0.16 165);
-  --sidebar-primary-foreground: oklch(0.19 0.02 258);
-  --sidebar-accent: oklch(0.27 0.016 258);
-  --sidebar-accent-foreground: oklch(0.93 0.008 250);
+  --chart-1: oklch(0.78 0.12 165);
+  --chart-2: oklch(0.72 0.13 152);
+  --chart-3: oklch(0.7 0.17 22);
+  --chart-4: oklch(0.68 0.1 245);
+  --chart-5: oklch(0.76 0.11 70);
+
+  --sidebar: oklch(0.205 0.005 265);
+  --sidebar-foreground: oklch(0.96 0.003 265);
+  --sidebar-primary: oklch(0.78 0.12 165);
+  --sidebar-primary-foreground: oklch(0.17 0.005 265);
+  --sidebar-accent: oklch(0.26 0.006 265);
+  --sidebar-accent-foreground: oklch(0.96 0.003 265);
   --sidebar-border: oklch(1 0 0 / 0.08);
-  --sidebar-ring: oklch(0.82 0.16 165);
+  --sidebar-ring: oklch(0.78 0.12 165);
 
-  /* Domain tokens — brighter for contrast on slate. */
-  --income: oklch(0.8 0.16 158);
-  --expense: oklch(0.7 0.18 22);
+  --income: oklch(0.78 0.13 158);
+  --expense: oklch(0.7 0.17 22);
 
-  /* Elevation — depth + a faint light edge so cards read on dark. */
-  --shadow-card: 0 0 0 1px oklch(1 0 0 / 0.06), 0 12px 32px -16px oklch(0 0 0 / 0.7);
-  --shadow-pop: 0 0 0 1px oklch(1 0 0 / 0.08), 0 18px 48px -12px oklch(0 0 0 / 0.8);
+  --shadow-card: 0 0 0 1px oklch(1 0 0 / 0.08);
+  --shadow-pop: 0 16px 40px -12px oklch(0 0 0 / 0.55), 0 0 0 1px oklch(1 0 0 / 0.08);
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -132,54 +129,11 @@
   }
 }
 .animate-fade-up {
-  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-up 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Hero treatment — accent-tinted gradient number + soft radial glow behind it. */
-.text-gradient-hero {
-  background: linear-gradient(
-    160deg,
-    var(--foreground),
-    color-mix(in oklch, var(--hero-accent) 65%, var(--foreground))
-  );
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-.hero-glow {
-  --hero-accent: var(--primary);
-  position: relative;
-  isolation: isolate;
-}
-.hero-glow[data-tone="negative"] {
-  --hero-accent: var(--expense);
-}
-.hero-glow::before {
-  content: "";
-  position: absolute;
-  inset: -60% 0;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(
-    closest-side at 22% 50%,
-    color-mix(in oklch, var(--hero-accent) 18%, transparent),
-    transparent
-  );
-}
-
-/* Card hover-lift for app surfaces. */
-.card-lift {
-  transition:
-    box-shadow 0.22s ease,
-    transform 0.22s ease;
-}
-.card-lift:hover {
-  transform: translateY(-2px);
-}
-
-/* alias for components that still use font-display */
-.font-display {
-  font-family: var(--font-heading);
+.hairline-total {
+  border-top: 1px solid color-mix(in oklch, var(--foreground) 18%, transparent);
 }
 
 @layer base {
@@ -253,6 +207,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
   .chat-blinking-cursor,
   .chat-input-underline:focus-within,
   .chat-tool-pulse {

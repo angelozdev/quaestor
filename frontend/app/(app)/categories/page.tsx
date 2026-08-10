@@ -4,9 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { EmptyState } from "@/components/empty-state"
+import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
-import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
 import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
@@ -23,7 +22,7 @@ import { ApiError } from "@/lib/api/types"
 import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button } from "@/ui"
+import { Button, Checkbox } from "@/ui"
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
@@ -136,94 +135,67 @@ export default function CategoriesPage() {
         className="flex items-center gap-2 text-sm"
         style={{ color: "var(--muted-foreground)" }}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={values.archived}
-          onChange={(e) => patch({ archived: e.target.checked })}
+          onCheckedChange={(checked) => patch({ archived: checked })}
         />
         Mostrar archivadas
       </label>
 
-      {list.isLoading && (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, i) => `skel-${i}`).map((k) => (
-            <div
-              key={k}
-              className="h-10 animate-pulse rounded"
-              style={{ background: "var(--muted)" }}
-            />
-          ))}
-        </div>
-      )}
-      {list.isError && (
-        <ErrorState message="No se pudieron cargar las categorías" onRetry={() => list.refetch()} />
-      )}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          message="Todavía no tienes categorías."
-          description={WHAT_A_CATEGORY_IS}
-          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Nombre</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Grupo</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Flags</th>
-                <th className="w-40 px-3 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((c) => (
-                <tr key={c.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2">
-                      {c.name} <StatusBadge kind="archived" value={c.archived} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5" style={{ color: "var(--muted-foreground)" }}>
-                    {groupName(c.group_id)}
-                  </td>
-                  <td className="px-3 py-2.5 text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    {[
-                      c.is_income && "ingreso",
-                      c.exclude_from_totals && "no-totales",
-                      c.counts_as_saving && "ahorro",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {c.archived ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={restore.isPending}
-                        onClick={() => restore.mutate(c.id)}
-                      >
-                        Restaurar
-                      </Button>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(c)}>
-                          Editar
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setArchiving(c)}>
-                          Archivar
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={list.data}
+        rowKey={(c) => c.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        columns={[
+          {
+            key: "name",
+            header: "Nombre",
+            render: (c) => (
+              <span className="flex items-center gap-2">
+                {c.name} <StatusBadge kind="archived" value={c.archived} />
+              </span>
+            ),
+          },
+          {
+            key: "group",
+            header: "Grupo",
+            render: (c) => (
+              <span style={{ color: "var(--muted-foreground)" }}>{groupName(c.group_id)}</span>
+            ),
+          },
+          {
+            key: "marks",
+            header: "Marcas",
+            render: (c) => (
+              <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                {[
+                  c.is_income && "ingreso",
+                  c.exclude_from_totals && "no-totales",
+                  c.counts_as_saving && "ahorro",
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
+              </span>
+            ),
+          },
+        ]}
+        actionsAs="inline"
+        actions={[
+          {
+            label: "Restaurar",
+            show: (c) => c.archived,
+            disabled: restore.isPending,
+            onClick: (c) => restore.mutate(c.id),
+          },
+          { label: "Editar", show: (c) => !c.archived, onClick: (c) => setEditing(c) },
+          { label: "Archivar", show: (c) => !c.archived, onClick: (c) => setArchiving(c) },
+        ]}
+        emptyMessage="Todavía no tienes categorías."
+        emptyDescription={WHAT_A_CATEGORY_IS}
+        emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+      />
 
       <EntityFormDialog
         open={creating}

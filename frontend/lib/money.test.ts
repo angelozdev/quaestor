@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatCents, formatImpliedRate, impliedRate } from "./money"
+import { formatCents, formatRate, impliedRate } from "./money"
 
 describe("impliedRate", () => {
   it("is received over sent", () => {
@@ -23,9 +23,9 @@ describe("impliedRate", () => {
   })
 })
 
-describe("formatImpliedRate", () => {
+describe("formatRate", () => {
   it("formats with two decimals in es-CO", () => {
-    expect(formatImpliedRate(4000)).toBe("4.000,00")
+    expect(formatRate(4000)).toBe("4.000,00")
   })
 })
 

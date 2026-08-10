@@ -2,6 +2,7 @@
 
 import { getToolName } from "ai"
 import { useState } from "react"
+import { Button } from "@/ui"
 import type { AnyToolPart } from "./chat.types"
 
 type Props = {
@@ -60,19 +61,16 @@ export function ChatToolChip({ part }: Props) {
 
   return (
     <div className="my-1.5 inline-block max-w-full">
-      <button
+      <Button
         type="button"
+        size="xs"
+        variant="secondary"
         aria-expanded={open}
         aria-controls={regionId}
         onClick={() => expandable && setOpen((v) => !v)}
         disabled={!expandable}
-        className="inline-flex items-center gap-2 rounded-md border px-2.5 py-1 font-mono text-xs transition-opacity"
-        style={{
-          background: "var(--muted)",
-          borderColor: "var(--border)",
-          color: "var(--foreground)",
-          opacity: expandable ? 1 : 0.85,
-        }}
+        className="rounded-md border-border font-mono"
+        style={{ opacity: expandable ? 1 : 0.85 }}
       >
         <span
           data-testid="chat-tool-dot"
@@ -92,7 +90,7 @@ export function ChatToolChip({ part }: Props) {
             {displayOpen ? "▾" : "▸"}
           </span>
         )}
-      </button>
+      </Button>
 
       {expandable && displayOpen && (
         <section

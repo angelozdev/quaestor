@@ -29,10 +29,10 @@ function waitingOn(meta: MetaStatus): string | null {
   return null
 }
 
-function MetaCard({ meta, month }: { meta: MetaStatus; month: string }) {
+function MetaRow({ meta, month }: { meta: MetaStatus; month: string }) {
   const waiting = waitingOn(meta)
   return (
-    <li className="space-y-1 rounded-md border p-3" style={{ borderColor: "var(--border)" }}>
+    <li className="space-y-1 border-t py-3" style={{ borderColor: "var(--border)" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <span className="font-medium">{meta.name}</span>
         {waiting !== null && (
@@ -109,9 +109,9 @@ export default function MetasPage() {
         }}
       >
         {(rows) => (
-          <ul className="space-y-2">
+          <ul>
             {rows.map((meta) => (
-              <MetaCard key={meta.meta_id} meta={meta} month={month} />
+              <MetaRow key={meta.meta_id} meta={meta} month={month} />
             ))}
           </ul>
         )}

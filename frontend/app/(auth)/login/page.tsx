@@ -39,7 +39,7 @@ export default function LoginPage() {
           }}
         >
           <div className="space-y-1">
-            <h1 className="font-display text-xl font-semibold tracking-tight">Quaestor</h1>
+            <h1 className="text-xl font-semibold tracking-tight">Quaestor</h1>
             <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
               Ingresa tu contraseña para continuar
             </p>

@@ -3,6 +3,7 @@
 import { X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { translateChatError } from "@/lib/chat-errors"
+import { Button } from "@/ui"
 
 type Props = {
   error: Error
@@ -34,28 +35,26 @@ export function ChatErrorBanner({ error, onRetry }: Props) {
       <span>{message}</span>
       <div className="flex items-center gap-2">
         {onRetry && (
-          <button
+          <Button
             type="button"
+            size="xs"
+            variant="outline"
             onClick={onRetry}
-            className="rounded border px-2 py-1 transition-opacity hover:opacity-80"
-            style={{
-              borderColor: "var(--destructive)",
-              color: "var(--destructive)",
-              background: "transparent",
-            }}
+            className="border-destructive bg-transparent text-destructive"
           >
             Reintentar
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
+          size="icon-xs"
+          variant="ghost"
           onClick={() => setDismissed(true)}
           aria-label="Cerrar mensaje de error"
-          className="grid size-6 place-items-center rounded transition-opacity hover:opacity-80"
-          style={{ color: "var(--destructive)" }}
+          className="text-destructive"
         >
           <X className="size-3" />
-        </button>
+        </Button>
       </div>
     </div>
   )

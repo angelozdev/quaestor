@@ -10,7 +10,7 @@ export function impliedRate(sentCents: number | null, receivedCents: number | nu
   return receivedCents / sentCents
 }
 
-export function formatImpliedRate(rate: number): string {
+export function formatRate(rate: number): string {
   return new Intl.NumberFormat("es-CO", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

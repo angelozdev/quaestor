@@ -178,19 +178,16 @@ export default function ToPayPage() {
         style={{ background: "var(--muted)" }}
       >
         {(["week", "month"] as Scope[]).map((s) => (
-          <button
+          <Button
             key={s}
             type="button"
+            size="xs"
+            variant={scope === s ? "outline" : "ghost"}
             onClick={() => setScope(s)}
-            className="rounded px-2.5 py-1 text-xs transition-all"
-            style={{
-              background: scope === s ? "var(--card)" : "transparent",
-              color: scope === s ? "var(--foreground)" : "var(--muted-foreground)",
-              fontWeight: scope === s ? 500 : 400,
-            }}
+            className={scope === s ? "rounded" : "rounded text-muted-foreground"}
           >
             {s === "week" ? "Esta semana" : "Este mes"}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -200,7 +197,7 @@ export default function ToPayPage() {
 
       {list.data && (
         <>
-          <p className="text-3xl font-bold tabular-nums tracking-tight">
+          <p className="text-[2.5rem] font-semibold leading-[1.05] tabular-nums tracking-tight">
             {formatCents(list.data.total_base, "COP")}
           </p>
           {list.data.overdue.length === 0 && list.data.upcoming.length === 0 ? (
@@ -210,10 +207,7 @@ export default function ToPayPage() {
               {list.data.overdue.length > 0 && (
                 <section className="space-y-0">
                   <header className="flex items-center gap-2 pb-2">
-                    <p
-                      className="text-xs font-medium uppercase tracking-wider"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
+                    <p className="text-xs font-medium" style={{ color: "var(--expense)" }}>
                       Vencidos
                     </p>
                     <Badge variant="destructive">{list.data.overdue.length}</Badge>
@@ -237,7 +231,7 @@ export default function ToPayPage() {
                 <section className="space-y-0">
                   <header className="pb-2">
                     <h2
-                      className="text-xs font-medium uppercase tracking-wider"
+                      className="text-xs font-medium"
                       style={{ color: "var(--muted-foreground)" }}
                     >
                       {scope === "week" ? "Esta semana" : "Este mes"}
@@ -453,14 +447,7 @@ function ToPayRow({
   skipPending: boolean
 }) {
   return (
-    <li className="relative flex items-center justify-between gap-4 py-3 pl-3">
-      {isOverdueRow && (
-        <span
-          aria-hidden
-          className="absolute inset-y-0 left-0 w-[2px] rounded-full"
-          style={{ background: "var(--destructive)" }}
-        />
-      )}
+    <li className="flex items-center justify-between gap-4 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-medium">{item.payee || "—"}</p>
@@ -476,7 +463,7 @@ function ToPayRow({
       </div>
       <div className="flex shrink-0 items-center gap-3">
         <MoneyAmount cents={item.amount} currency={item.currency} className="text-sm font-medium" />
-        <Button size="sm" onClick={onConfirm}>
+        <Button size="sm" variant="outline" onClick={onConfirm}>
           Confirmar
         </Button>
         <Button size="sm" variant="ghost" disabled={skipPending} onClick={onSkip}>

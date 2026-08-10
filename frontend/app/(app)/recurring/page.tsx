@@ -6,9 +6,8 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { CategoryField } from "@/components/category-field"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { EmptyState } from "@/components/empty-state"
+import { DataTable } from "@/components/data-table"
 import { EntitySelect } from "@/components/entity-select"
-import { ErrorState } from "@/components/error-state"
 import { FormField } from "@/components/form-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
@@ -28,7 +27,17 @@ import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } fro
 import { hasEnded } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
-import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogPopup,
+  DialogTitle,
+  Input,
+  Label,
+  Select,
+} from "@/ui"
 import { PendingDatesDialog } from "./pending-dates-dialog"
 import { type RecurringCreateValues, recurringCreateSchema } from "./recurring.schema"
 
@@ -284,111 +293,92 @@ export default function RecurringPage() {
         className="flex items-center gap-2 text-sm"
         style={{ color: "var(--muted-foreground)" }}
       >
-        <input
-          type="checkbox"
-          checked={showInactive}
-          onChange={(e) => setShowInactive(e.target.checked)}
-        />
+        <Checkbox checked={showInactive} onCheckedChange={setShowInactive} />
         Mostrar inactivos
       </label>
 
-      {list.isError && (
-        <ErrorState
-          message="No se pudieron cargar los recurrentes"
-          onRetry={() => list.refetch()}
-        />
-      )}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          message="Todavía no tienes cobros recurrentes."
-          description={WHAT_A_RECURRING_CHARGE_IS}
-          action={{ label: "Crear el primero", onClick: () => setCreating(true) }}
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Nombre</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Frecuencia</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Modo</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium">Monto</th>
-                <th className="w-24 px-3 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((r) => (
-                <tr key={r.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-3 py-2.5 font-medium">
-                    {r.name}
-                    {!r.active && <StatusBadge kind="archived" value={true} />}
-                    {r.active && hasEnded(r.end_date) && <Badge variant="ghost">Terminada</Badge>}
-                  </td>
-                  <td className="px-3 py-2.5" style={{ color: "var(--muted-foreground)" }}>
-                    {intervalLabel(r.interval_unit, r.interval_count)}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <StatusBadge kind="mode" value={r.mode} />
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <MoneyAmount cents={r.amount} currency={r.currency} type={r.type} />
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {r.active ? (
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditing(r)
-                            editForm.reset({
-                              name: r.name,
-                              payee: r.payee ?? "",
-                              amount: r.amount,
-                              currency: r.currency as "COP" | "USD",
-                              categoryId: r.category_id,
-                              newCategory: "",
-                              accountId: r.account_id,
-                              type: r.type,
-                              mode: r.mode,
-                              intervalCount: r.interval_count,
-                              intervalUnit: r.interval_unit,
-                              startDate: r.start_date,
-                              endDate: r.end_date ?? "",
-                            })
-                          }}
-                        >
-                          Editar
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setSkipping(r)}>
-                          Omitir
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setAnswering(r)}>
-                          Fechas pendientes
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
-                          Eliminar
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => restore.mutate(r)}
-                        disabled={restore.isPending}
-                      >
-                        Restaurar
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={list.data}
+        rowKey={(r) => r.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        columns={[
+          {
+            key: "name",
+            header: "Nombre",
+            render: (r) => (
+              <span className="flex items-center gap-2 font-medium">
+                {r.name}
+                {!r.active && <StatusBadge kind="archived" value={true} />}
+                {r.active && hasEnded(r.end_date) && <Badge variant="ghost">Terminada</Badge>}
+              </span>
+            ),
+          },
+          {
+            key: "interval",
+            header: "Frecuencia",
+            render: (r) => (
+              <span style={{ color: "var(--muted-foreground)" }}>
+                {intervalLabel(r.interval_unit, r.interval_count)}
+              </span>
+            ),
+          },
+          {
+            key: "mode",
+            header: "Modo",
+            render: (r) => <StatusBadge kind="mode" value={r.mode} />,
+          },
+          {
+            key: "amount",
+            header: "Monto",
+            align: "right",
+            render: (r) => <MoneyAmount cents={r.amount} currency={r.currency} type={r.type} />,
+          },
+        ]}
+        actionsAs="inline"
+        actions={[
+          {
+            label: "Editar",
+            show: (r) => r.active,
+            onClick: (r) => {
+              setEditing(r)
+              editForm.reset({
+                name: r.name,
+                payee: r.payee ?? "",
+                amount: r.amount,
+                currency: r.currency as "COP" | "USD",
+                categoryId: r.category_id,
+                newCategory: "",
+                accountId: r.account_id,
+                type: r.type,
+                mode: r.mode,
+                intervalCount: r.interval_count,
+                intervalUnit: r.interval_unit,
+                startDate: r.start_date,
+                endDate: r.end_date ?? "",
+              })
+            },
+          },
+          { label: "Omitir", show: (r) => r.active, onClick: (r) => setSkipping(r) },
+          { label: "Fechas pendientes", show: (r) => r.active, onClick: (r) => setAnswering(r) },
+          {
+            label: "Eliminar",
+            show: (r) => r.active,
+            variant: "destructive",
+            onClick: (r) => setDeleting(r),
+          },
+          {
+            label: "Restaurar",
+            show: (r) => !r.active,
+            disabled: restore.isPending,
+            onClick: (r) => restore.mutate(r),
+          },
+        ]}
+        emptyMessage="Todavía no tienes cobros recurrentes."
+        emptyDescription={WHAT_A_RECURRING_CHARGE_IS}
+        emptyAction={{ label: "Crear el primero", onClick: () => setCreating(true) }}
+      />
 
       {/* Create dialog */}
       <Dialog open={creating} onOpenChange={setCreating}>

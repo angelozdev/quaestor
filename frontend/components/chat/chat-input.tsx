@@ -2,6 +2,7 @@
 
 import { Send, Square } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { Button } from "@/ui"
 
 type Props = {
   status: "submitted" | "streaming" | "ready" | "error"
@@ -117,19 +118,15 @@ export function ChatInput({
           minHeight: `${LINE_HEIGHT_PX + 16}px`,
         }}
       />
-      <button
+      <Button
         type="button"
+        size="icon-lg"
         onClick={handleClickAction}
         aria-label={busy ? "Detener respuesta" : "Enviar mensaje"}
-        className="grid size-9 place-items-center rounded-md transition-opacity disabled:opacity-40"
-        style={{
-          background: "var(--primary)",
-          color: "var(--primary-foreground)",
-        }}
         disabled={!busy && (cooldown || text.trim().length === 0)}
       >
         {busy ? <Square className="size-4" /> : <Send className="size-4" />}
-      </button>
+      </Button>
     </div>
   )
 }

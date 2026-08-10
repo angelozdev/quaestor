@@ -72,6 +72,27 @@ function deleteDescription(tx: Transaction | null): string {
   return "Esta transferencia todavía no tiene contraparte: se eliminará solo este movimiento y ningún saldo cambiará. Es permanente."
 }
 
+function Filter({
+  id,
+  label,
+  width,
+  children,
+}: {
+  id: string
+  label: string
+  width: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={`${width} space-y-1`}>
+      <label htmlFor={id} className="block text-xs" style={{ color: "var(--muted-foreground)" }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
 export default function TransactionsPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
@@ -151,7 +172,11 @@ export default function TransactionsPage() {
   }
 
   const columns: Column<Transaction>[] = [
-    { key: "date", header: "Fecha", render: (t) => formatDate(t.date) },
+    {
+      key: "date",
+      header: "Fecha",
+      render: (t) => <span className="whitespace-nowrap">{formatDate(t.date)}</span>,
+    },
     {
       key: "payee",
       header: "Beneficiario",
@@ -194,7 +219,14 @@ export default function TransactionsPage() {
       key: "amount",
       header: "Monto",
       align: "right",
-      render: (t) => <MoneyAmount cents={t.amount} currency={t.currency} type={t.type} />,
+      render: (t) => (
+        <MoneyAmount
+          cents={t.amount}
+          currency={t.currency}
+          type={t.type}
+          className="whitespace-nowrap"
+        />
+      ),
     },
     {
       key: "cop_equivalent",
@@ -223,47 +255,24 @@ export default function TransactionsPage() {
   ]
 
   const filterBar = (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="space-y-1">
-        <label
-          htmlFor="tx-from"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Desde
-        </label>
+    <div className="flex flex-wrap items-end gap-3">
+      <Filter id="tx-from" label="Desde" width="w-36">
         <Input
           id="tx-from"
           type="date"
           value={values.date_from ?? ""}
           onChange={(e) => patch({ date_from: e.target.value })}
-          className="w-36"
         />
-      </div>
-      <div className="space-y-1">
-        <label
-          htmlFor="tx-to"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Hasta
-        </label>
+      </Filter>
+      <Filter id="tx-to" label="Hasta" width="w-36">
         <Input
           id="tx-to"
           type="date"
           value={values.date_to ?? ""}
           onChange={(e) => patch({ date_to: e.target.value })}
-          className="w-36"
         />
-      </div>
-      <div className="w-40 space-y-1">
-        <label
-          htmlFor="tx-account"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Cuenta
-        </label>
+      </Filter>
+      <Filter id="tx-account" label="Cuenta" width="w-40">
         <EntitySelect
           id="tx-account"
           value={values.account_id}
@@ -272,15 +281,8 @@ export default function TransactionsPage() {
           queryFn={() => listAccounts(true)}
           allowNullLabel="Todas"
         />
-      </div>
-      <div className="w-40 space-y-1">
-        <label
-          htmlFor="tx-category"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Categoría
-        </label>
+      </Filter>
+      <Filter id="tx-category" label="Categoría" width="w-40">
         <EntitySelect
           id="tx-category"
           value={values.category_id}
@@ -289,15 +291,8 @@ export default function TransactionsPage() {
           queryFn={() => listCategories(true)}
           allowNullLabel="Todas"
         />
-      </div>
-      <div className="w-36 space-y-1">
-        <label
-          htmlFor="tx-tag"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Etiqueta
-        </label>
+      </Filter>
+      <Filter id="tx-tag" label="Etiqueta" width="w-36">
         <EntitySelect
           id="tx-tag"
           value={values.tag}
@@ -307,15 +302,8 @@ export default function TransactionsPage() {
           allowNullLabel="Todas"
           disabled={tags.isLoading}
         />
-      </div>
-      <div className="w-32 space-y-1">
-        <label
-          htmlFor="tx-type"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Tipo
-        </label>
+      </Filter>
+      <Filter id="tx-type" label="Tipo" width="w-32">
         <Select
           id="tx-type"
           value={values.type ?? ALL}
@@ -323,15 +311,8 @@ export default function TransactionsPage() {
           items={TYPE_ITEMS}
           placeholder="Todos"
         />
-      </div>
-      <div className="w-32 space-y-1">
-        <label
-          htmlFor="tx-status"
-          className="block text-xs"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          Estado
-        </label>
+      </Filter>
+      <Filter id="tx-status" label="Estado" width="w-32">
         <Select
           id="tx-status"
           value={values.status ?? ALL}
@@ -339,7 +320,7 @@ export default function TransactionsPage() {
           items={STATUS_ITEMS}
           placeholder="Todos"
         />
-      </div>
+      </Filter>
       <Button variant="ghost" size="sm" onClick={clear}>
         Limpiar
       </Button>

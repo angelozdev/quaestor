@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useState } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { logout as apiLogout } from "@/lib/api/auth"
+import { Button } from "@/ui"
 
 export const GROUPS: { title: string; items: { href: string; label: string }[] }[] = [
   {
@@ -48,10 +49,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
     <nav className="space-y-5">
       {GROUPS.map((g) => (
         <div key={g.title} className="space-y-1">
-          <p
-            className="px-2 text-[0.7rem] font-medium uppercase tracking-wider"
-            style={{ color: "var(--muted-foreground)" }}
-          >
+          <p className="px-2 text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
             {g.title}
           </p>
           {g.items.map((n) => {
@@ -65,9 +63,7 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                 style={{
                   color: active ? "var(--foreground)" : "var(--muted-foreground)",
                   fontWeight: active ? 500 : 400,
-                  background: active
-                    ? "color-mix(in oklch, var(--primary) 14%, transparent)"
-                    : "transparent",
+                  background: active ? "var(--sidebar-accent)" : "transparent",
                 }}
               >
                 {n.label}
@@ -104,20 +100,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         style={{ background: "var(--sidebar)", borderColor: "var(--sidebar-border)" }}
       >
         <div className="space-y-6">
-          <Link href="/" className="font-display block px-2 text-base font-semibold tracking-tight">
+          <Link href="/" className="block px-2 text-base font-semibold tracking-tight">
             Quaestor
           </Link>
           <NavLinks pathname={pathname} />
         </div>
-        <div className="flex items-center justify-between px-2">
-          <button
+        <div className="flex items-center justify-between px-1">
+          <Button
             type="button"
+            size="sm"
+            variant="ghost"
             onClick={logout}
-            className="text-left text-sm transition-colors hover:text-[var(--foreground)]"
-            style={{ color: "var(--muted-foreground)" }}
+            className="px-2 text-muted-foreground"
           >
             Salir
-          </button>
+          </Button>
           <ThemeToggle />
         </div>
       </aside>
@@ -128,10 +125,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b px-4 md:hidden"
           style={{ background: "var(--card)", borderColor: "var(--border)" }}
         >
-          <button type="button" onClick={() => setDrawer(true)} aria-label="Abrir menú">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setDrawer(true)}
+            aria-label="Abrir menú"
+          >
             <Menu className="size-5" />
-          </button>
-          <span className="font-display text-base font-semibold tracking-tight">Quaestor</span>
+          </Button>
+          <span className="text-base font-semibold tracking-tight">Quaestor</span>
           <ThemeToggle className="ml-auto" />
         </header>
 
@@ -156,28 +159,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <div className="space-y-6">
                 <div className="flex items-center justify-between px-2">
-                  <span className="font-display text-base font-semibold tracking-tight">
-                    Quaestor
-                  </span>
-                  <button type="button" onClick={() => setDrawer(false)} aria-label="Cerrar menú">
+                  <span className="text-base font-semibold tracking-tight">Quaestor</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => setDrawer(false)}
+                    aria-label="Cerrar menú"
+                  >
                     <X className="size-5" />
-                  </button>
+                  </Button>
                 </div>
                 <NavLinks pathname={pathname} onNavigate={() => setDrawer(false)} />
               </div>
-              <button
+              <Button
                 type="button"
+                size="sm"
+                variant="ghost"
                 onClick={logout}
-                className="px-2 text-left text-sm"
-                style={{ color: "var(--muted-foreground)" }}
+                className="self-start px-2 text-muted-foreground"
               >
                 Salir
-              </button>
+              </Button>
             </aside>
           </div>
         )}
 
-        <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">{children}</main>
       </div>
     </div>
   )

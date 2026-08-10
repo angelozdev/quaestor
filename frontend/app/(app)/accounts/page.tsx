@@ -4,9 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { EmptyState } from "@/components/empty-state"
+import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
-import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
 import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
@@ -23,7 +22,7 @@ import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button } from "@/ui"
+import { Button, Checkbox } from "@/ui"
 
 const TYPE_OPTIONS = [
   { value: "debit", label: "Débito" },
@@ -137,88 +136,60 @@ export default function AccountsPage() {
         className="flex items-center gap-2 text-sm"
         style={{ color: "var(--muted-foreground)" }}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={values.archived}
-          onChange={(e) => patch({ archived: e.target.checked })}
+          onCheckedChange={(checked) => patch({ archived: checked })}
         />
         Mostrar archivadas
       </label>
 
-      {list.isLoading && (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, i) => `skel-${i}`).map((k) => (
-            <div
-              key={k}
-              className="h-10 animate-pulse rounded"
-              style={{ background: "var(--muted)" }}
-            />
-          ))}
-        </div>
-      )}
-      {list.isError && (
-        <ErrorState message="No se pudieron cargar las cuentas" onRetry={() => list.refetch()} />
-      )}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          message="Todavía no tienes cuentas."
-          description={WHAT_AN_ACCOUNT_IS}
-          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Nombre</th>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Tipo</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium">Saldo</th>
-                <th className="w-40 px-3 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((a) => (
-                <tr key={a.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2">
-                      {a.name} <StatusBadge kind="archived" value={a.archived} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5" style={{ color: "var(--muted-foreground)" }}>
-                    {TYPE_LABEL[a.type] ?? a.type}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">
-                    {formatCents(a.balance, a.currency)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    {a.archived ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={restore.isPending}
-                        onClick={() => restore.mutate(a.id)}
-                      >
-                        Restaurar
-                      </Button>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(a)}>
-                          Editar
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setArchiving(a)}>
-                          Archivar
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={list.data}
+        rowKey={(a) => a.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        columns={[
+          {
+            key: "name",
+            header: "Nombre",
+            render: (a) => (
+              <span className="flex items-center gap-2">
+                {a.name} <StatusBadge kind="archived" value={a.archived} />
+              </span>
+            ),
+          },
+          {
+            key: "type",
+            header: "Tipo",
+            render: (a) => (
+              <span style={{ color: "var(--muted-foreground)" }}>
+                {TYPE_LABEL[a.type] ?? a.type}
+              </span>
+            ),
+          },
+          {
+            key: "balance",
+            header: "Saldo",
+            align: "right",
+            render: (a) => formatCents(a.balance, a.currency),
+          },
+        ]}
+        actionsAs="inline"
+        actions={[
+          {
+            label: "Restaurar",
+            show: (a) => a.archived,
+            disabled: restore.isPending,
+            onClick: (a) => restore.mutate(a.id),
+          },
+          { label: "Editar", show: (a) => !a.archived, onClick: (a) => setEditing(a) },
+          { label: "Archivar", show: (a) => !a.archived, onClick: (a) => setArchiving(a) },
+        ]}
+        emptyMessage="Todavía no tienes cuentas."
+        emptyDescription={WHAT_AN_ACCOUNT_IS}
+        emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+      />
 
       <EntityFormDialog
         open={creating}

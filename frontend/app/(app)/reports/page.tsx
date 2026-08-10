@@ -3,7 +3,9 @@
 import { useQuery } from "@tanstack/react-query"
 import { format } from "date-fns"
 import { useState } from "react"
+import { DataTable } from "@/components/data-table"
 import { EmptyState } from "@/components/empty-state"
+import { Minus, Section, Term, Total } from "@/components/ledger"
 import { MoneyAmount } from "@/components/money-amount"
 import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
@@ -13,12 +15,7 @@ import { report } from "@/lib/api/reports"
 import { availableRows } from "@/lib/available-breakdown"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
-
-const CARD_STYLE = {
-  background: "var(--card)",
-  boxShadow: "var(--shadow-card)",
-  borderRadius: "var(--radius)",
-} as const
+import { Input } from "@/ui"
 
 const WHERE_THE_MONTH_WENT = (
   <p>Este reporte muestra a dónde se fue el gasto del mes, repartido por categoría y por grupo.</p>
@@ -34,38 +31,17 @@ const REPORTS_HELP = (
   </>
 )
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Share({ cents, pct }: { cents: number; pct: number }) {
   return (
-    <div className="space-y-3">
-      <h2 className="text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
-        {title}
-      </h2>
-      <div className="p-5" style={CARD_STYLE}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Row({
-  label,
-  children,
-  faint = false,
-}: {
-  label: string
-  children: React.ReactNode
-  faint?: boolean
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-1.5">
+    <span className="flex shrink-0 items-baseline gap-3">
+      <span className="text-sm font-medium tabular-nums">{formatCents(cents, "COP")}</span>
       <span
-        className="text-sm"
-        style={{ color: faint ? "var(--muted-foreground)" : "var(--foreground)" }}
+        className="w-11 text-right text-xs tabular-nums"
+        style={{ color: "var(--muted-foreground)" }}
       >
-        {label}
+        {pct.toFixed(1)}%
       </span>
-      {children}
-    </div>
+    </span>
   )
 }
 
@@ -82,19 +58,12 @@ export default function ReportsPage() {
         title="Reportes"
         subtitle={month}
         action={
-          <input
+          <Input
             type="month"
+            aria-label="Mes del reporte"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="rounded-md px-3 py-1.5 text-sm outline-none transition-colors w-40"
-            style={{
-              background: "var(--input)",
-              border: "1px solid var(--border)",
-              color: "var(--foreground)",
-              colorScheme: "light",
-            }}
-            onFocus={(e) => (e.target.style.borderColor = "var(--foreground)")}
-            onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
+            className="w-40"
           />
         }
         help={<ScreenHelp screen="Reportes">{REPORTS_HELP}</ScreenHelp>}
@@ -112,220 +81,184 @@ export default function ReportsPage() {
         errorMessage="No se pudo cargar el reporte"
       >
         {(data) => (
-          <div className="space-y-6 animate-fade-up">
-            {/* Neto */}
-            <Section title="Resultado del mes">
-              <div className="space-y-4">
-                <div className="space-y-0.5">
-                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    Neto
-                  </p>
-                  <p
-                    className="text-4xl font-bold tabular-nums tracking-tight"
-                    style={{ color: data.net >= 0 ? "var(--income)" : "var(--expense)" }}
-                  >
-                    {formatCents(data.net, "COP")}
-                  </p>
-                </div>
-                <hr style={{ borderColor: "var(--border)" }} />
-                <div className="space-y-1">
-                  <Row label="Ingresos">
-                    <MoneyAmount
-                      cents={data.income}
-                      currency="COP"
-                      type="income"
-                      className="text-sm font-medium"
-                    />
-                  </Row>
-                  <Row label="Gastos" faint>
+          <div className="animate-fade-up space-y-8">
+            <section className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                  Neto del mes
+                </p>
+                <p
+                  className="text-[2.5rem] font-semibold leading-[1.05] tabular-nums tracking-tight"
+                  style={{ color: data.net >= 0 ? "var(--income)" : "var(--expense)" }}
+                >
+                  {formatCents(data.net, "COP")}
+                </p>
+              </div>
+              <div className="max-w-lg">
+                <Term label="Ingresos">
+                  <MoneyAmount
+                    cents={data.income}
+                    currency="COP"
+                    type="income"
+                    className="text-sm font-medium"
+                  />
+                </Term>
+                <Term label="Gastos">
+                  <span className="flex items-baseline gap-1.5">
+                    <Minus />
                     <MoneyAmount
                       cents={data.expense}
                       currency="COP"
-                      type="expense"
                       className="text-sm font-medium"
                     />
-                  </Row>
-                </div>
-                {data.drift_mom && (
-                  <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                    vs {data.drift_mom.prev_month} →{" "}
-                    <span
-                      style={{
-                        color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)",
-                      }}
-                    >
-                      {data.drift_mom.net_abs >= 0 ? "+" : ""}
-                      {formatCents(data.drift_mom.net_abs, "COP")}
-                    </span>
-                  </p>
-                )}
+                  </span>
+                </Term>
+                <Total label="Neto" cents={data.net} />
               </div>
+              {data.drift_mom && (
+                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                  vs {data.drift_mom.prev_month} →{" "}
+                  <span
+                    className="tabular-nums"
+                    style={{
+                      color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)",
+                    }}
+                  >
+                    {data.drift_mom.net_abs >= 0 ? "+" : ""}
+                    {formatCents(data.drift_mom.net_abs, "COP")}
+                  </span>
+                </p>
+              )}
+            </section>
+
+            <hr style={{ borderColor: "var(--border)" }} />
+
+            <Section label="Fondos y presupuestos">
+              <DataTable
+                rows={data.funds}
+                rowKey={(f) => f.category_name}
+                pageSize={100}
+                emptyMessage="Sin fondos este mes"
+                emptyAction={{ label: "Ir a fondos", href: "/funds" }}
+                columns={[
+                  {
+                    key: "category",
+                    header: "Categoría",
+                    render: (f) => f.category_name,
+                  },
+                  {
+                    key: "asks",
+                    header: "Pidió",
+                    align: "right",
+                    render: (f) => formatCents(f.asks, "COP"),
+                  },
+                  {
+                    key: "spent",
+                    header: "Gastado",
+                    align: "right",
+                    render: (f) => formatCents(f.spent, "COP"),
+                  },
+                  {
+                    key: "holds",
+                    header: "Tiene",
+                    align: "right",
+                    render: (f) => (
+                      <span
+                        className="font-medium"
+                        style={{ color: f.on_track ? undefined : "var(--expense)" }}
+                      >
+                        {formatCents(f.holds, "COP")}
+                      </span>
+                    ),
+                  },
+                ]}
+              />
             </Section>
 
-            <Section title="Fondos y presupuestos">
-              {data.funds.length > 0 ? (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ color: "var(--muted-foreground)" }}>
-                      <th className="text-left pb-3 font-medium text-xs">Categoría</th>
-                      <th className="text-right pb-3 font-medium text-xs">Pidió</th>
-                      <th className="text-right pb-3 font-medium text-xs">Gastado</th>
-                      <th className="text-right pb-3 font-medium text-xs">Tiene</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.funds.map((f) => (
-                      <tr
-                        key={f.category_name}
-                        className="border-t"
-                        style={{ borderColor: "var(--border)" }}
-                      >
-                        <td className="py-2.5 text-sm">{f.category_name}</td>
-                        <td
-                          className="py-2.5 text-right tabular-nums text-sm"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {formatCents(f.asks, "COP")}
-                        </td>
-                        <td
-                          className="py-2.5 text-right tabular-nums text-sm"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {formatCents(f.spent, "COP")}
-                        </td>
-                        <td
-                          className="py-2.5 text-right tabular-nums text-sm font-medium"
-                          style={{ color: f.on_track ? "var(--income)" : "var(--expense)" }}
-                        >
-                          {formatCents(f.holds, "COP")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <EmptyState
-                  message="Sin fondos este mes"
-                  action={{ label: "Ir a fondos", href: "/funds" }}
-                />
-              )}
-            </Section>
-
-            <Section title="Metas">
-              {data.metas.length > 0 ? (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ color: "var(--muted-foreground)" }}>
-                      <th className="text-left pb-3 font-medium text-xs">Meta</th>
-                      <th className="text-right pb-3 font-medium text-xs">Pidió</th>
-                      <th className="text-right pb-3 font-medium text-xs">Lleva</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.metas.map((m) => (
-                      <tr
-                        key={m.meta_name}
-                        className="border-t"
-                        style={{ borderColor: "var(--border)" }}
-                      >
-                        <td className="py-2.5 text-sm">{m.meta_name}</td>
-                        <td
-                          className="py-2.5 text-right tabular-nums text-sm"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {formatCents(m.asks, m.currency)}
-                        </td>
-                        <td className="py-2.5 text-right tabular-nums text-sm font-medium">
-                          {formatCents(m.holds, m.currency)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <EmptyState
-                  message="Sin metas este mes"
-                  action={{ label: "Ir a metas", href: "/metas" }}
-                />
-              )}
+            <Section label="Metas">
+              <DataTable
+                rows={data.metas}
+                rowKey={(m) => m.meta_name}
+                pageSize={100}
+                emptyMessage="Sin metas este mes"
+                emptyAction={{ label: "Ir a metas", href: "/metas" }}
+                columns={[
+                  { key: "meta", header: "Meta", render: (m) => m.meta_name },
+                  {
+                    key: "asks",
+                    header: "Pidió",
+                    align: "right",
+                    render: (m) => formatCents(m.asks, m.currency),
+                  },
+                  {
+                    key: "holds",
+                    header: "Lleva",
+                    align: "right",
+                    render: (m) => (
+                      <span className="font-medium">{formatCents(m.holds, m.currency)}</span>
+                    ),
+                  },
+                ]}
+              />
               <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
                 Entre fondos y metas, el mes pide {formatCents(data.asked, "COP")}.
               </p>
             </Section>
 
-            {/* Por categoría */}
-            <Section title="Por categoría">
-              {data.by_category.length > 0 ? (
-                <div className="space-y-1">
-                  {data.by_category.map((c) => (
-                    <Row key={c.category} label={c.category} faint>
-                      <div className="flex items-baseline gap-3 shrink-0">
-                        <span className="text-sm font-medium tabular-nums">
-                          {formatCents(c.total, "COP")}
-                        </span>
-                        <span
-                          className="text-xs w-9 text-right"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {c.pct.toFixed(1)}%
-                        </span>
-                      </div>
-                    </Row>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState
-                  message="Sin gastos este mes"
-                  description={WHERE_THE_MONTH_WENT}
-                  action={{ label: "Registrar un movimiento", href: "/transactions" }}
-                />
-              )}
-            </Section>
+            <hr style={{ borderColor: "var(--border)" }} />
 
-            {/* Por grupo */}
-            <Section title="Por grupo">
-              {data.by_group.length > 0 ? (
-                <div className="space-y-1">
-                  {data.by_group.map((g) => (
-                    <Row key={g.group} label={g.group} faint>
-                      <div className="flex items-baseline gap-3 shrink-0">
-                        <span className="text-sm font-medium tabular-nums">
-                          {formatCents(g.total, "COP")}
-                        </span>
-                        <span
-                          className="text-xs w-9 text-right"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {g.pct.toFixed(1)}%
-                        </span>
-                      </div>
-                    </Row>
-                  ))}
-                </div>
-              ) : (
-                <EmptyState message="Sin gastos agrupados este mes" />
-              )}
-            </Section>
+            <div className="grid gap-8 sm:grid-cols-2">
+              <Section label="Por categoría">
+                {data.by_category.length > 0 ? (
+                  <div>
+                    {data.by_category.map((c) => (
+                      <Term key={c.category} label={c.category}>
+                        <Share cents={c.total} pct={c.pct} />
+                      </Term>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    message="Sin gastos este mes"
+                    description={WHERE_THE_MONTH_WENT}
+                    action={{ label: "Registrar un movimiento", href: "/transactions" }}
+                  />
+                )}
+              </Section>
 
-            {/* Cierre */}
-            <Section title="Disponible · cierre">
-              <div className="space-y-4">
-                <p className="text-3xl font-bold tabular-nums tracking-tight">
-                  {formatCents(data.available.free, "COP")}
-                </p>
-                <hr style={{ borderColor: "var(--border)" }} />
-                <div className="space-y-1">
-                  {availableRows(data.available).map((row) => (
-                    <Row key={row.key} label={row.label} faint>
-                      <span
-                        className="text-sm tabular-nums"
-                        style={{ color: "var(--muted-foreground)" }}
-                      >
-                        {formatCents(row.cents, "COP")}
-                      </span>
-                    </Row>
-                  ))}
-                </div>
+              <Section label="Por grupo">
+                {data.by_group.length > 0 ? (
+                  <div>
+                    {data.by_group.map((g) => (
+                      <Term key={g.group} label={g.group}>
+                        <Share cents={g.total} pct={g.pct} />
+                      </Term>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState message="Sin gastos agrupados este mes" />
+                )}
+              </Section>
+            </div>
+
+            <hr style={{ borderColor: "var(--border)" }} />
+
+            <Section label="Disponible · cierre">
+              <div className="max-w-lg">
+                {availableRows(data.available).map((row) => (
+                  <Term key={row.key} label={row.label}>
+                    <span className="flex items-baseline gap-1.5">
+                      {row.kind === "claim" && row.cents > 0 && <Minus />}
+                      <MoneyAmount
+                        cents={row.cents}
+                        currency="COP"
+                        type={row.kind === "income" ? "income" : undefined}
+                        className="text-sm font-medium"
+                      />
+                    </span>
+                  </Term>
+                ))}
+                <Total label="Disponible" cents={data.available.free} />
               </div>
             </Section>
           </div>

@@ -166,7 +166,7 @@ describe("AC-36 — the report lists the metas beside the funds, and totals both
     report.mockResolvedValue(RESTAURANTES_IS_A_CEILING)
     render(<ReportsPage />, { wrapper: queryWrapper })
 
-    const metas = (await screen.findByRole("heading", { name: "Metas" })).closest("div")
+    const metas = (await screen.findByRole("heading", { name: "Metas" })).closest("section")
     expect(within(metas as HTMLElement).getByText("Celular")).toBeInTheDocument()
     expect(within(metas as HTMLElement).getByText("$ 16.000")).toBeInTheDocument()
     expect(within(metas as HTMLElement).getByText("$ 32.000")).toBeInTheDocument()
@@ -186,7 +186,7 @@ describe("AC-36 — the report lists the metas beside the funds, and totals both
     render(<ReportsPage />, { wrapper: queryWrapper })
 
     const funds = (await screen.findByRole("heading", { name: "Fondos y presupuestos" })).closest(
-      "div",
+      "section",
     )
     expect(within(funds as HTMLElement).queryByText("Celular")).not.toBeInTheDocument()
   })

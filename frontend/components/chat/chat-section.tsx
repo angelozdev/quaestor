@@ -30,10 +30,7 @@ export function ChatSection() {
   return (
     <section aria-label="Asistente financiero" className="space-y-4">
       <header className="space-y-0.5">
-        <p
-          className="font-display text-xl font-semibold tracking-tight"
-          style={{ color: "var(--foreground)" }}
-        >
+        <p className="text-xl font-semibold tracking-tight" style={{ color: "var(--foreground)" }}>
           Asistente
         </p>
         <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>

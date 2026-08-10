@@ -24,13 +24,69 @@ export interface RowAction<T> {
   onClick: (row: T) => void
   variant?: "default" | "destructive"
   show?: (row: T) => boolean
+  disabled?: boolean
 }
 
+function InlineActions<T>({ row, actions }: { row: T; actions: RowAction<T>[] }) {
+  return (
+    <div className="flex justify-end gap-1">
+      {actions
+        .filter((a) => a.show === undefined || a.show(row))
+        .map((a) => (
+          <Button
+            key={a.label}
+            variant="ghost"
+            size="sm"
+            disabled={a.disabled}
+            className={a.variant === "destructive" ? "text-destructive" : undefined}
+            onClick={() => a.onClick(row)}
+          >
+            {a.label}
+          </Button>
+        ))}
+    </div>
+  )
+}
+
+function MenuActions<T>({ row, actions }: { row: T; actions: RowAction<T>[] }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Acciones" />}>
+        <MoreHorizontal className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent>
+        {actions
+          .filter((a) => a.show === undefined || a.show(row))
+          .map((a) => (
+            <DropdownMenuItem
+              key={a.label}
+              variant={a.variant}
+              disabled={a.disabled}
+              onClick={() => a.onClick(row)}
+            >
+              {a.label}
+            </DropdownMenuItem>
+          ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/**
+ * The one table in the app.
+ *
+ * `actionsAs` chooses how a row's actions are presented, not what they are: a
+ * long list with many columns hides them behind one overflow control, and a
+ * short master list where acting is the point keeps them in the row. Two
+ * presentations, one implementation — the alternative was six hand-rolled
+ * tables, which is what this replaced.
+ */
 export function DataTable<T>({
   rows,
   columns,
   rowKey,
   actions,
+  actionsAs = "menu",
   pageSize = 25,
   filterBar,
   isLoading,
@@ -44,6 +100,7 @@ export function DataTable<T>({
   columns: Column<T>[]
   rowKey: (row: T) => string | number
   actions?: RowAction<T>[]
+  actionsAs?: "menu" | "inline"
   pageSize?: number
   filterBar?: React.ReactNode
   isLoading?: boolean
@@ -82,61 +139,48 @@ export function DataTable<T>({
         <EmptyState message={emptyMessage} description={emptyDescription} action={emptyAction} />
       ) : (
         <>
-          <div
-            className="overflow-x-auto rounded-lg border"
-            style={{ borderColor: "var(--border)" }}
-          >
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ color: "var(--muted-foreground)" }}>
+                <tr
+                  className="hairline-total"
+                  style={{ color: "var(--muted-foreground)", borderTop: "none" }}
+                >
                   {columns.map((c) => (
                     <th
                       key={c.key}
-                      className={`px-3 py-2.5 text-xs font-medium ${c.align === "right" ? "text-right" : "text-left"}`}
+                      className={`px-3 pb-2 text-xs font-medium uppercase tracking-wide ${c.align === "right" ? "text-right" : "text-left"}`}
                     >
                       {c.header}
                     </th>
                   ))}
-                  {actions && actions.length > 0 && <th className="w-10 px-3 py-2.5" />}
+                  {actions && actions.length > 0 && (
+                    <th className={actionsAs === "inline" ? "px-3 pb-2" : "w-10 px-3 pb-2"} />
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {slice.map((row) => (
                   <tr
                     key={rowKey(row)}
-                    className="border-t"
+                    className="border-t transition-colors hover:bg-[var(--muted)]"
                     style={{ borderColor: "var(--border)" }}
                   >
                     {columns.map((c) => (
                       <td
                         key={c.key}
-                        className={`px-3 py-2.5 ${c.align === "right" ? "text-right tabular-nums" : "text-left"}`}
+                        className={`px-3 py-2 ${c.align === "right" ? "text-right tabular-nums" : "text-left"}`}
                       >
                         {c.render(row)}
                       </td>
                     ))}
                     {actions && actions.length > 0 && (
-                      <td className="px-3 py-2.5 text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger
-                            render={<Button variant="ghost" size="icon-sm" aria-label="Acciones" />}
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            {actions
-                              .filter((a) => a.show === undefined || a.show(row))
-                              .map((a) => (
-                                <DropdownMenuItem
-                                  key={a.label}
-                                  variant={a.variant}
-                                  onClick={() => a.onClick(row)}
-                                >
-                                  {a.label}
-                                </DropdownMenuItem>
-                              ))}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      <td className="px-3 py-2 text-right">
+                        {actionsAs === "inline" ? (
+                          <InlineActions row={row} actions={actions} />
+                        ) : (
+                          <MenuActions row={row} actions={actions} />
+                        )}
                       </td>
                     )}
                   </tr>

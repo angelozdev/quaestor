@@ -4,9 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { EmptyState } from "@/components/empty-state"
+import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
-import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
 import { ScreenHelp } from "@/components/screen-help"
 import { createTag, deleteTag, listTags, updateTag } from "@/lib/api/tags"
@@ -83,55 +82,22 @@ export default function TagsPage() {
         help={<ScreenHelp screen="Etiquetas">{TAGS_HELP}</ScreenHelp>}
       />
 
-      {list.isLoading && (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, i) => `skel-${i}`).map((k) => (
-            <div
-              key={k}
-              className="h-10 animate-pulse rounded"
-              style={{ background: "var(--muted)" }}
-            />
-          ))}
-        </div>
-      )}
-      {list.isError && (
-        <ErrorState message="No se pudieron cargar las etiquetas" onRetry={() => list.refetch()} />
-      )}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          message="Todavía no tienes etiquetas."
-          description={WHAT_A_TAG_IS}
-          action={{ label: "Crear la primera", onClick: () => setCreating(true) }}
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
-            <tbody>
-              {list.data.map((t) => (
-                <tr
-                  key={t.id}
-                  className="border-t first:border-t-0"
-                  style={{ borderColor: "var(--border)" }}
-                >
-                  <td className="px-3 py-2.5">{t.name}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(t)}>
-                        Editar
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setDeleting(t)}>
-                        Eliminar
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={list.data}
+        rowKey={(t) => t.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        columns={[{ key: "name", header: "Nombre", render: (t) => t.name }]}
+        actionsAs="inline"
+        actions={[
+          { label: "Editar", onClick: (t) => setEditing(t) },
+          { label: "Eliminar", variant: "destructive", onClick: (t) => setDeleting(t) },
+        ]}
+        emptyMessage="Todavía no tienes etiquetas."
+        emptyDescription={WHAT_A_TAG_IS}
+        emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+      />
 
       <EntityFormDialog
         open={creating}

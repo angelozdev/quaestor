@@ -2,35 +2,32 @@ import type { StreamdownProps } from "streamdown"
 
 export const markdownComponents: NonNullable<StreamdownProps["components"]> = {
   h1: ({ children, ...rest }) => (
-    <h1
-      {...rest}
-      className="font-display text-xl font-semibold tracking-tight mt-3 mb-1.5 first:mt-0"
-    >
+    <h1 {...rest} className="text-xl font-semibold tracking-tight mt-3 mb-1.5 first:mt-0">
       {children}
     </h1>
   ),
   h2: ({ children, ...rest }) => (
-    <h2 {...rest} className="font-display text-lg font-semibold tracking-tight mt-3 mb-1">
+    <h2 {...rest} className="text-lg font-semibold tracking-tight mt-3 mb-1">
       {children}
     </h2>
   ),
   h3: ({ children, ...rest }) => (
-    <h3 {...rest} className="font-display text-base font-semibold mt-2.5 mb-1">
+    <h3 {...rest} className="text-base font-semibold mt-2.5 mb-1">
       {children}
     </h3>
   ),
   h4: ({ children, ...rest }) => (
-    <h4 {...rest} className="font-display text-sm font-semibold mt-2 mb-0.5">
+    <h4 {...rest} className="text-sm font-semibold mt-2 mb-0.5">
       {children}
     </h4>
   ),
   h5: ({ children, ...rest }) => (
-    <h5 {...rest} className="font-display text-sm font-semibold mt-2 mb-0.5">
+    <h5 {...rest} className="text-sm font-semibold mt-2 mb-0.5">
       {children}
     </h5>
   ),
   h6: ({ children, ...rest }) => (
-    <h6 {...rest} className="font-display text-sm font-semibold mt-2 mb-0.5">
+    <h6 {...rest} className="text-sm font-semibold mt-2 mb-0.5">
       {children}
     </h6>
   ),

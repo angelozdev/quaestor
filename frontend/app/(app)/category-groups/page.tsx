@@ -4,9 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { EmptyState } from "@/components/empty-state"
+import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
-import { ErrorState } from "@/components/error-state"
 import { PageHeader } from "@/components/page-header"
 import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
@@ -21,7 +20,7 @@ import { ApiError, type CategoryGroup } from "@/lib/api/types"
 import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button } from "@/ui"
+import { Button, Checkbox } from "@/ui"
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
@@ -113,82 +112,46 @@ export default function CategoryGroupsPage() {
         className="flex items-center gap-2 text-sm"
         style={{ color: "var(--muted-foreground)" }}
       >
-        <input
-          type="checkbox"
+        <Checkbox
           checked={values.archived}
-          onChange={(e) => patch({ archived: e.target.checked })}
+          onCheckedChange={(checked) => patch({ archived: checked })}
         />
         Mostrar archivados
       </label>
 
-      {list.isLoading && (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }, (_, i) => `skel-${i}`).map((k) => (
-            <div
-              key={k}
-              className="h-10 animate-pulse rounded"
-              style={{ background: "var(--muted)" }}
-            />
-          ))}
-        </div>
-      )}
-      {list.isError && (
-        <ErrorState message="No se pudieron cargar los grupos" onRetry={() => list.refetch()} />
-      )}
-      {list.data && list.data.length === 0 && (
-        <EmptyState
-          message="Todavía no tienes grupos."
-          description={WHAT_A_GROUP_IS}
-          action={{ label: "Crear el primero", onClick: () => setCreating(true) }}
-        />
-      )}
-
-      {list.data && list.data.length > 0 && (
-        <div className="overflow-hidden rounded-lg border" style={{ borderColor: "var(--border)" }}>
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 py-2.5 text-left text-xs font-medium">Nombre</th>
-                <th className="px-3 py-2.5 text-right text-xs font-medium">Orden</th>
-                <th className="w-40 px-3 py-2.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((g) => (
-                <tr key={g.id} className="border-t" style={{ borderColor: "var(--border)" }}>
-                  <td className="px-3 py-2.5">
-                    <span className="flex items-center gap-2">
-                      {g.name} <StatusBadge kind="archived" value={g.archived} />
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{g.sort_order}</td>
-                  <td className="px-3 py-2.5 text-right">
-                    {g.archived ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={restore.isPending}
-                        onClick={() => restore.mutate(g.id)}
-                      >
-                        Restaurar
-                      </Button>
-                    ) : (
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(g)}>
-                          Editar
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setArchiving(g)}>
-                          Archivar
-                        </Button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        rows={list.data}
+        rowKey={(g) => g.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        columns={[
+          {
+            key: "name",
+            header: "Nombre",
+            render: (g) => (
+              <span className="flex items-center gap-2">
+                {g.name} <StatusBadge kind="archived" value={g.archived} />
+              </span>
+            ),
+          },
+          { key: "order", header: "Orden", align: "right", render: (g) => g.sort_order },
+        ]}
+        actionsAs="inline"
+        actions={[
+          {
+            label: "Restaurar",
+            show: (g) => g.archived,
+            disabled: restore.isPending,
+            onClick: (g) => restore.mutate(g.id),
+          },
+          { label: "Editar", show: (g) => !g.archived, onClick: (g) => setEditing(g) },
+          { label: "Archivar", show: (g) => !g.archived, onClick: (g) => setArchiving(g) },
+        ]}
+        emptyMessage="Todavía no tienes grupos."
+        emptyDescription={WHAT_A_GROUP_IS}
+        emptyAction={{ label: "Crear el primero", onClick: () => setCreating(true) }}
+      />
 
       <EntityFormDialog
         open={creating}

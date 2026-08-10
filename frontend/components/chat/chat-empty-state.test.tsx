@@ -27,7 +27,6 @@ describe("ChatEmptyState", () => {
   it("uses the brand mint accent for the chip border", () => {
     const { container } = render(<ChatEmptyState onPick={vi.fn()} />)
     const firstChip = container.querySelector("button")
-    const style = (firstChip as HTMLElement).style.borderColor
-    expect(style).toContain("var(--primary)")
+    expect(firstChip).toHaveClass("border-primary")
   })
 })

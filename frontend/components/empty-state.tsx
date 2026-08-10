@@ -1,20 +1,18 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
+import { Button } from "@/ui"
 
 export type Action = { label: string; href?: string; onClick?: () => void }
 
-const WAY_IN_CLASS = "text-xs px-3 py-1.5 rounded-md border transition-colors"
-const WAY_IN_STYLE = { borderColor: "var(--border)", color: "var(--foreground)" } as const
-
 function WayIn({ label, href, onClick }: Action) {
   return href ? (
-    <Link href={href} className={WAY_IN_CLASS} style={WAY_IN_STYLE}>
+    <Button size="sm" variant="outline" render={<Link href={href} />}>
       {label}
-    </Link>
+    </Button>
   ) : (
-    <button type="button" onClick={onClick} className={WAY_IN_CLASS} style={WAY_IN_STYLE}>
+    <Button type="button" size="sm" variant="outline" onClick={onClick}>
       {label}
-    </button>
+    </Button>
   )
 }
 

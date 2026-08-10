@@ -1,7 +1,7 @@
 "use client"
 
 import { MoneyInput } from "@/components/money-input"
-import { formatImpliedRate, impliedRate } from "@/lib/money"
+import { formatRate, impliedRate } from "@/lib/money"
 import { Label } from "@/ui"
 
 export function TransferReceivedField({
@@ -29,7 +29,7 @@ export function TransferReceivedField({
       <MoneyInput currency={receivedCurrency} value={receivedCents} onChange={onChange} />
       {rate !== null && (
         <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-          Tasa implícita: {formatImpliedRate(rate)} (solo informativa)
+          Tasa implícita: {formatRate(rate)} (solo informativa)
         </p>
       )}
       {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
