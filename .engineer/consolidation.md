@@ -168,12 +168,33 @@ pipeline generation → tests green. Bounded, one feature per task.
    - Follow-up, likely an ADR at plan time: `Source` has `manual`, `agent` and
      `import` but no value for the engine, so engine-created movements record
      themselves as hand-entered — blocks AC-25.
-4. month-close-rollover ← **scope resolved 2026-08-02.** `goal-contribution-hooks`
-   is dropped from this task: the discuss that promoted 003 decided goals
-   collapse into funds, so the month-close hook that proposes one planned
-   transfer per active goal is deleted rather than covered. Do not write
-   acceptance tests for it. Rollover mechanics themselves survive the redesign,
-   so the remainder of this task is safe to work now — it no longer waits on 003.
+4. month-close-rollover ← **PARKED 2026-08-10. There is nothing left to cover.**
+   The 2026-08-02 note below said the rollover mechanics survive the redesign
+   and the remainder was safe to work. Measured before writing a scenario, that
+   turns out to be wrong: `close_month` opens a transaction, iterates
+   `ROLLOVER_HOOKS` and commits, and the list is **empty at runtime** — 0 hooks
+   after `register_recurring_hooks()`, and the only `register_rollover_hook`
+   calls in the repository are fakes inside `tests/services/test_rollover.py`.
+   The module says so itself: *"The seam is ready and currently empty."* Goals
+   took the only hook with them and nothing replaced it.
+
+   Meanwhile `POST /api/rollover` is mounted and answers `{"ok": true}`, and
+   `jobs/daily.py` reports `month_closed` every day, both for work that does not
+   happen. Covering that with acceptance scenarios would be a green suite over
+   code that does nothing — the exact failure 009 spent a week chasing.
+
+   Promoted to roadmap `id:month-close-does-nothing` as a product question with
+   the measurements: delete the machinery, give closing a real job (freezing a
+   month is the obvious candidate, and it contradicts 009's AC-16, so it needs
+   a decision first), or keep the seam and stop the endpoint claiming `ok`.
+   **This row unparks when that is answered**, and what it covers depends on the
+   answer.
+
+   The original note, kept because its scope call still holds:
+   *scope resolved 2026-08-02 — `goal-contribution-hooks` is dropped from this
+   task: the discuss that promoted 003 decided goals collapse into funds, so the
+   month-close hook that proposes one planned transfer per active goal is
+   deleted rather than covered. Do not write acceptance tests for it.*
 5. monthly-report (+ month-aggregate-read-path — shared read path)
 6. mcp-tool-surface (+ mcp-tool-tier-policy)
 7. chat-coach (+ chat-wire-adapter, chat-output-sanitization)
