@@ -2,7 +2,7 @@
 
 # Progress — 009 named-goals
 
-Metas: named savings goals beside the fund, not inside it. 45 ACs, 145
+Metas: named savings goals beside the fund, not inside it. 45 ACs, 146
 scenarios. Merged to `main` on 2026-08-09. An independent review of the merged
 code then found six more user-facing defects; those fixes, the scenarios that
 catch them and a behaviour-preserving refactor merged on 2026-08-10 as
@@ -65,9 +65,9 @@ written and shipped.
 ## Where the code stands
 
 ```
-009           145 escenarios · unbound 0
+009           146 escenarios · unbound 0
 backend      1126 passed        (era 1082 al mergear)
-aceptación    492 passed        (eran 472)
+aceptación    493 passed        (eran 472)
 vitest         56 archivos · 440 passed
 lint          exit 0 · Contracts 2 kept, 0 broken
 cobertura     backend unión 96,02% · frontend 84,1%
@@ -116,7 +116,6 @@ three not-found tests. The residue fell from eleven lines to none.
 
 | What | Owner | How |
 |---|---|---|
-| What should closing a meta *as of a month before it existed* do? | human | CP8's one real survivor, and the only thing this feature never decided. Refused today; no AC covers it. The screen never sends such a month, so it is an API-surface question |
 | The SQLite sandbox still crash-loops | human | destructive operation on `.dev-data/`, CHARTER §7 |
 
 ## Found here, not 009's, filed rather than fixed
@@ -160,6 +159,7 @@ three not-found tests. The residue fell from eleven lines to none.
 | 2026-08-10T1115 | crap-analyzer (round 2) | subagent-crap-cp7-round2 | 96,02% union; residue 11 → 3 lines, then 0 |
 | 2026-08-10T1145 | mutation (round 2) | subagent-mutation-cp8-round2 | 99,7% adjusted; 9 equivalent survivors, 1 real gap left open for an AC |
 | 2026-08-10T1230 | atdd (defect scenarios) | subagent-atdd-cp3-defects | 139 → 145 scenarios, additions only; 5 proven red at 46af2da, 1 control arm green on both sides |
+| 2026-08-10T1400 | atdd (AC-39 clause) | subagent-atdd-ac39-close-before-start | product ADR-045; CP8's last real survivor killed at stage 2 |
 
 ## Tracker sync
 
