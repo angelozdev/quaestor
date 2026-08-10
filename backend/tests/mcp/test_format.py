@@ -1,6 +1,8 @@
+import re
 from datetime import date
 from decimal import Decimal
 
+from quaestor.domain.dtos import MetaStatus, MonthAvailable
 from quaestor.domain.errors import (
     MissingRate,
     NotFound,
@@ -261,3 +263,117 @@ def test_recurring_restored():
     text = format.recurring_restored(item)
     assert "Rent" in text and "restored" in text
     assert "id=5" in text
+
+
+def _meta_status(name, **overrides):
+    spec = {
+        "meta_id": 1,
+        "name": name,
+        "year_month": "2026-11",
+        "amount": 1_000_000,
+        "currency": "COP",
+        "target_month": "2026-12",
+        "asks": 100_000,
+        "asks_cop": 100_000,
+        "holds": 400_000,
+        "progress": 40,
+        "complete": False,
+        "closed": False,
+        "waiting": False,
+    }
+    return MetaStatus(**{**spec, **overrides})
+
+
+def _available(metas, **overrides):
+    spec = {
+        "year_month": "2026-11",
+        "income": 5_000_000,
+        "funds": [],
+        "uncovered": 0,
+        "free": 4_900_000,
+        "metas": metas,
+        "contributed": 0,
+        "released": 0,
+    }
+    return MonthAvailable(**{**spec, **overrides})
+
+
+def test_the_money_card_leaves_out_a_meta_that_claims_nothing():
+    """A finished meta would otherwise sit at −0.00 in every month, forever.
+
+    `available_breakdown.ts` drops it for that reason and the card is the same
+    column (AC-32, ADR-0006/0009). The month goes on carrying a closed meta so
+    the month it was bought in still charges it, which means every month after
+    that one lists it asking nothing.
+    """
+    card = format.money_available_card(
+        _available([_meta_status("Celular", asks=0, asks_cop=0, closed=True, complete=True)])
+    )
+
+    assert "Celular" not in card
+
+
+def test_the_money_card_says_which_meta_was_cancelled():
+    """The screen renders "(la cancelaste)" so three metas can be told apart.
+
+    A cancelled meta is named by the month it was cancelled in — it charged its
+    instalment and handed back what it held — and a row indistinguishable from
+    a running meta's reads as one still saving.
+    """
+    card = format.money_available_card(
+        _available([_meta_status("Celular", cancelled=True), _meta_status("Televisor", meta_id=2)])
+    )
+
+    assert "- Meta Celular (you cancelled it): −1000.00 COP" in card
+    assert "- Meta Televisor: −1000.00 COP" in card
+
+
+def test_the_money_card_names_each_give_back_and_says_why():
+    """Two metas hand money back for different reasons and the card must say both.
+
+    One line reading "Given back by a cancelled meta" is wrong twice over: it
+    does not say which meta, and it calls a lowered amount a cancellation.
+    """
+    card = format.money_available_card(
+        _available(
+            [
+                _meta_status("Celular", cancelled=True, released=600_000),
+                _meta_status("Televisor", meta_id=2, released=260_000),
+            ],
+            released=860_000,
+        )
+    )
+
+    assert "- Given back by Celular (you cancelled it): +6000.00 COP" in card
+    assert "- Given back by Televisor (you lowered its amount): +2600.00 COP" in card
+
+
+_FIGURE = re.compile(r"(−|\+)?(\d+\.\d{2}) COP")
+
+
+def _signed_cents(line: str) -> int:
+    sign, figure = _FIGURE.search(line).groups()
+    return round(float(figure) * 100) * (-1 if sign == "−" else 1)
+
+
+def test_the_money_cards_terms_still_reach_the_total_it_prints():
+    """`income − Σ claims = free` (AC-10), read off the card the assistant sends.
+
+    A correct total whose terms do not reach it is what product decision 15
+    exists to prevent, and naming the give-backs one per meta is exactly the
+    kind of change that could drop one.
+    """
+    view = _available(
+        [
+            _meta_status("Celular", cancelled=True, released=600_000),
+            _meta_status("Televisor", meta_id=2, asks=0, asks_cop=0),
+        ],
+        contributed=200_000,
+        uncovered=300_000,
+        released=600_000,
+        free=5_000_000,
+    )
+
+    rows = format.money_available_card(view).splitlines()
+
+    assert _signed_cents(rows[1]) + sum(_signed_cents(row) for row in rows[2:-1]) == _signed_cents(rows[-1])

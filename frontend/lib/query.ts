@@ -21,9 +21,22 @@ const ROOTS = {
 const DETAIL = "detail" as const
 
 /** The fields the preview's answer actually depends on. The meta's name is not
- * one of them, so keying on it would refetch for a figure that cannot change. */
+ * one of them, so keying on it would refetch for a figure that cannot change.
+ *
+ * Every other field is one of them, and a field left out is worse than a
+ * refetch: the answer is served from the cache under a key that cannot tell
+ * the two questions apart. What the owner says he already put by divides the
+ * instalment (AC-34), and the currency decides whether it is weighed against
+ * the month in pesos (AC-45). */
 function whatThePreviewReads(body: MetaCreate | null) {
-  return body && { amount: body.amount, target_month: body.target_month }
+  return (
+    body && {
+      amount: body.amount,
+      target_month: body.target_month,
+      stated_opening: body.stated_opening,
+      currency: body.currency,
+    }
+  )
 }
 
 // Query-key factory. First element is the entity root used for broad invalidation.

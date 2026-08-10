@@ -58,8 +58,8 @@ class MetaReportLine:
 
     meta_name: str
     currency: str
-    asks: int  # cents, in the meta's own currency
-    holds: int  # cents, in the meta's own currency
+    asks: int
+    holds: int
 
 
 @dataclass(frozen=True)
@@ -97,6 +97,13 @@ class DriftMoM:
 
 @dataclass
 class MonthlyReport:  # not frozen: markdown is filled in after the data is built
+    """One month's report, as the endpoints, the assistant and the screens read it.
+
+    `asked` is what the funds and the metas claim of the month together, in COP
+    cents. A meta reports its own figures in the currency it is held in, so
+    that total is the one place the two are added, and it is pesos (AC-36).
+    """
+
     month: str
     income: int  # COP cents, posted only
     expense: int
@@ -104,7 +111,7 @@ class MonthlyReport:  # not frozen: markdown is filled in after the data is buil
     funds_summary: FundsSummary
     funds: list[FundReportLine]
     metas: list[MetaReportLine]
-    asked: int  # Σ what the funds and the metas ask, COP cents (AC-36)
+    asked: int
     by_category: list[CategorySection]
     by_group: list[GroupSection]
     balances: list[AccountBalance]

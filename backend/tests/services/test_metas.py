@@ -11,6 +11,7 @@ every other test still green.
 """
 
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from quaestor.domain.errors import ValidationError
@@ -61,6 +62,11 @@ def _reported(session, year_month, name):
     found = next((m for m in metas.list_metas(session, year_month) if m.name == name), None)
     assert found is not None, f"the month {year_month} reports no meta named {name!r}"
     return found
+
+
+def _preview(**spec):
+    """A preview always weighs its instalment at the app's one rate (ADR-0031)."""
+    return metas.preview_meta(trm=Decimal(SEEDED_TRM), **spec)
 
 
 def _amendments(session, meta):
@@ -269,7 +275,7 @@ def test_a_month_before_the_meta_existed_charges_nothing_for_it(session):
     agg = load_month(session, "2026-07")
     reported = next(m for m in metas.statuses(agg) if m.name == "Moto")
     assert (reported.asks, reported.holds, reported.progress) == (0, 0, 0)
-    assert metas.asks_total(agg) == 0
+    assert metas.fold(agg).asks == 0
 
 
 def test_a_purchase_dated_before_its_meta_existed_costs_the_month_all_of_itself(session):
@@ -281,7 +287,7 @@ def test_a_purchase_dated_before_its_meta_existed_costs_the_month_all_of_itself(
     meta = _meta(session, today="2026-08", target="2026-12")
     _buy(session, meta, 500_000, date(2026, 7, 15))
 
-    assert metas.uncovered_total(load_month(session, "2026-07")) == 500_000
+    assert metas.fold(load_month(session, "2026-07")).uncovered == 500_000
 
 
 def test_a_meta_never_ends_up_holding_more_than_the_thing_costs(session):
@@ -302,14 +308,14 @@ def test_a_meta_never_ends_up_holding_more_than_the_thing_costs(session):
 def test_a_contribution_of_one_centavo_is_taken(session):
     meta = _meta(session, amount=1_000_000)
 
-    assert metas.contribute(session, meta.id, year_month="2026-06", amount=1) == 1
+    assert metas.contribute(session, meta.id, year_month="2026-06", amount=1).amount == 1
 
 
 def test_a_contribution_is_trimmed_to_the_last_centavo_missing(session):
     meta = _meta(session, amount=1_000_000)
     metas.contribute(session, meta.id, year_month="2026-06", amount=857_141)
 
-    assert metas.contribute(session, meta.id, year_month="2026-06", amount=1_000) == 1
+    assert metas.contribute(session, meta.id, year_month="2026-06", amount=1_000).amount == 1
 
 
 def test_contributing_to_a_meta_that_needs_nothing_more_is_refused(session):
@@ -367,40 +373,78 @@ def test_a_purchase_reaches_a_foreign_meta_in_the_metas_own_currency(session):
     meta = _meta(session, amount=10_000, currency="USD")
     _buy(session, meta, 42_000_000, date(2026, 6, 10))
 
-    uncovered = metas.uncovered_total(load_month(session, "2026-06"))
+    uncovered = metas.fold(load_month(session, "2026-06")).uncovered
     assert uncovered == (10_000 - 1_429) * 4_200
 
 
 def test_what_a_meta_would_ask_assumes_it_starts_with_nothing(session):
     """An amount that does not divide evenly is understated by assuming otherwise."""
-    assert metas.preview_meta(amount=1_000_001, target_month="2026-07", today="2026-06", income=0).asks == 500_001
+    assert _preview(amount=1_000_001, target_month="2026-07", today="2026-06", income=0).asks == 500_001
 
 
 def test_a_meta_is_announced_as_bigger_than_the_month_only_when_it_is(session):
-    over = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=100_000)
-    under = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=900_000)
+    over = _preview(amount=1_000_000, target_month="2026-07", today="2026-06", income=100_000)
+    under = _preview(amount=1_000_000, target_month="2026-07", today="2026-06", income=900_000)
 
     assert over.over_the_month is True
     assert under.over_the_month is False
 
 
 def test_a_meta_that_asks_exactly_the_months_income_is_not_over_it(session):
-    preview = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=500_000)
+    preview = _preview(amount=1_000_000, target_month="2026-07", today="2026-06", income=500_000)
 
     assert preview.over_the_month is False
 
 
 def test_before_any_income_is_recorded_no_meta_is_announced_as_bigger_than_the_month(session):
     """The false alarm the income guard exists to prevent."""
-    preview = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=0)
+    preview = _preview(amount=1_000_000, target_month="2026-07", today="2026-06", income=0)
 
     assert preview.over_the_month is False
 
 
 def test_a_month_earning_one_centavo_still_announces_a_meta_bigger_than_it(session):
-    preview = metas.preview_meta(amount=1_000_000, target_month="2026-07", today="2026-06", income=1)
+    preview = _preview(amount=1_000_000, target_month="2026-07", today="2026-06", income=1)
 
     assert preview.over_the_month is True
+
+
+def test_a_dollar_meta_is_weighed_against_the_month_in_pesos(session):
+    """AC-45 compares two figures and only one of them was ever pesos.
+
+    A meta held in dollars asks in dollars, and what it costs the month is that
+    instalment at the rate (AC-26). The same cents in the two currencies are
+    two different claims on the month, and the warning has to tell them apart.
+    """
+    in_dollars = _preview(
+        amount=200_000,
+        target_month="2026-07",
+        today="2026-06",
+        income=100_000_000,
+        currency="USD",
+    )
+    in_pesos = _preview(
+        amount=200_000,
+        target_month="2026-07",
+        today="2026-06",
+        income=100_000_000,
+        currency="COP",
+    )
+
+    assert (in_dollars.over_the_month, in_pesos.over_the_month) == (True, False)
+
+
+def test_what_a_dollar_meta_would_ask_stays_in_its_own_currency(session):
+    """Converting the comparison must not convert the figure the form prints."""
+    preview = _preview(
+        amount=200_000,
+        target_month="2026-07",
+        today="2026-06",
+        income=100_000_000,
+        currency="USD",
+    )
+
+    assert preview.asks == 100_000
 
 
 def test_closing_a_bought_meta_leaves_the_purchase_costing_the_month_it_was_made_in(session):
@@ -413,12 +457,12 @@ def test_closing_a_bought_meta_leaves_the_purchase_costing_the_month_it_was_made
     """
     moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
     _buy(session, moto, 1_000_000, date(2026, 8, 10))
-    before = metas.uncovered_total(load_month(session, "2026-08"))
+    before = metas.fold(load_month(session, "2026-08")).uncovered
     assert before > 0
 
     metas.close_meta(session, moto.id, year_month="2026-08")
 
-    assert metas.uncovered_total(load_month(session, "2026-08")) == before
+    assert metas.fold(load_month(session, "2026-08")).uncovered == before
     assert [m.name for m in metas.list_metas(session, "2026-08")] == []
 
 
@@ -451,7 +495,7 @@ def test_a_contribution_is_trimmed_against_the_amount_the_meta_wants_now(session
 
     put_in = metas.contribute(session, moto.id, year_month="2026-06", amount=2_000_000 - walked.holds)
 
-    assert put_in == 2_000_000 - walked.holds
+    assert put_in.amount == 2_000_000 - walked.holds
     assert _reported(session, "2026-06", "Moto").holds == 2_000_000
 
 
@@ -476,15 +520,13 @@ def test_a_closed_meta_cannot_be_brought_back(session):
 
 def test_a_preview_counts_what_the_owner_says_he_already_put_by(session):
     """AC-34's own figure, before the meta exists — the form shows this one."""
-    preview = metas.preview_meta(
-        amount=8_000_000, target_month="2026-12", today="2026-08", income=0, stated_opening=3_000_000
-    )
+    preview = _preview(amount=8_000_000, target_month="2026-12", today="2026-08", income=0, stated_opening=3_000_000)
 
     assert preview.asks == 1_000_000
 
 
 def test_a_preview_with_nothing_already_put_by_asks_for_the_whole_thing(session):
-    preview = metas.preview_meta(amount=8_000_000, target_month="2026-12", today="2026-08", income=0)
+    preview = _preview(amount=8_000_000, target_month="2026-12", today="2026-08", income=0)
 
     assert preview.asks == 1_600_000
 
@@ -542,13 +584,13 @@ def test_a_closed_meta_is_still_named_by_the_month_that_pays_for_it(session):
     moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
     _buy(session, moto, 1_000_000, date(2026, 8, 10))
     agg = load_month(session, "2026-08")
-    charged = metas.asks_total(agg)
+    charged = metas.fold(agg).asks
     assert charged > 0
 
     metas.close_meta(session, moto.id, year_month="2026-08")
 
     after = load_month(session, "2026-08")
-    assert metas.asks_total(after) == charged
+    assert metas.fold(after).asks == charged
     assert [m.name for m in metas.statuses(after)] == ["Moto"]
     assert [m.name for m in metas.list_metas(session, "2026-08")] == []
 
@@ -564,6 +606,44 @@ def test_a_meta_kept_on_with_a_new_amount_asks_again(session):
     september = _reported(session, "2026-09", "Moto")
     assert september.asks > 0
     assert september.holds == held + september.asks
+
+
+def test_a_meta_kept_on_after_its_purchase_stops_reading_as_finished(session):
+    """A meta that asks again is running, and the screen has to be told so.
+
+    ADR-0049 decided an amendment resumes the meta and it stays resumed. But
+    `complete` was left meaning "a purchase has been linked, ever" — timeless —
+    so September reported a meta both finished and asking $200.000. The screen
+    reads that one flag for the "cumplida" badge and to swap *Ponerle plata*
+    for *Cerrar*, leaving the owner unable to feed a meta the service accepts
+    money for.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    assert _reported(session, "2026-08", "Moto").complete is True
+
+    metas.set_meta(session, moto.id, today="2026-09", amount=2_000_000)
+
+    september = _reported(session, "2026-09", "Moto")
+    assert september.asks > 0
+    assert september.complete is False
+
+
+def test_a_meta_kept_on_after_its_purchase_can_still_be_closed(session):
+    """Narrowing what "complete" means must not strand the meta it narrows.
+
+    Closing asks whether the meta ever finished, which a purchase settles for
+    good; only what it asks *now* was ever a month's question. Cancelling is
+    already refused to anything bought (AC-39), so a resumed meta answering no
+    to both would be un-endable through the app.
+    """
+    moto = _meta(session, amount=1_000_000, today="2026-06", target="2026-12")
+    _buy(session, moto, 1_000_000, date(2026, 8, 10))
+    metas.set_meta(session, moto.id, today="2026-09", amount=2_000_000)
+
+    closed = metas.close_meta(session, moto.id, year_month="2026-09")
+
+    assert closed.closed is True
 
 
 def test_a_meta_kept_on_with_a_new_month_asks_again(session):

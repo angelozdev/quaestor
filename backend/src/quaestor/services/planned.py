@@ -65,10 +65,15 @@ def plan_payment(
     from the moment the payment is planned, not from the moment it is confirmed
     (ADR-0042).
 
+    A debt pointed at a meta answers to the same question a posted purchase
+    does: planning a payment is the third way a link is made, and a meta the
+    owner cancelled or closed takes no new one (AC-25).
+
     Raises:
-        ValidationError: amount <= 0, unsupported currency, or any refusal from
+        ValidationError: amount <= 0, unsupported currency, a meta that was
+            cancelled or closed, or any refusal from
             `categories.resolve_for_movement`.
-        NotFound: account does not exist.
+        NotFound: account does not exist, or no such meta.
     """
     if amount <= 0:
         raise ValidationError("amount must be > 0")
@@ -77,6 +82,7 @@ def plan_payment(
     acc = _require_account(session, account_id)
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
+    _tx.refuse_bad_meta(session, TxType.expense, meta_id)
     category_id = _categories.resolve_for_movement(session, TxType.expense, category_id, new_category)
     tx = Transaction(
         date=due_date,

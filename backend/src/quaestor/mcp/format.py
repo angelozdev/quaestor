@@ -373,6 +373,23 @@ def fund_preview_card(preview, category_name: str) -> str:
     return "\n".join(lines)
 
 
+def _meta_label(meta) -> str:
+    """How the breakdown names a meta.
+
+    The month a meta is cancelled in is the last one that names it — it still
+    charged its instalment and handed back what it held — so the row says so.
+    Without that, a list of three metas gives no way to tell which one the
+    owner called off from the two still running.
+    """
+    return f"{meta.name} (you cancelled it)" if meta.cancelled else meta.name
+
+
+def _gave_back_label(meta) -> str:
+    """Why a meta handed money back: the owner called it off, or wanted less."""
+    reason = "you cancelled it" if meta.cancelled else "you lowered its amount"
+    return f"{meta.name} ({reason})"
+
+
 def money_available_card(view) -> str:
     """The month's number opened into the terms that make it (AC-10).
 
@@ -381,6 +398,13 @@ def money_available_card(view) -> str:
     this one answer is not a softening of that but what keeps it honest — once
     a meta is a term of this number, an answer that omits it shows terms that
     do not reach their own total.
+
+    The same column the screen renders, in the same order and to the same
+    rules, because ADR-0006/0009 make the two surfaces one answer: a meta
+    asking nothing claims nothing and gets no line, a cancelled one says so,
+    and a give-back is named per meta with the reason it happened. The figures
+    are pesos throughout — `asks_cop` and not `asks`, which a dollar meta
+    reports in dollars (AC-26).
     """
     lines = [
         f"# Money available — {view.year_month}",
@@ -389,11 +413,13 @@ def money_available_card(view) -> str:
     for fund in view.funds:
         lines.append(f"- Fund {fund.name}: −{money(fund.asks, 'COP')}")
     for meta in view.metas:
-        lines.append(f"- Meta {meta.name}: −{money(meta.asks_cop, 'COP')}")
+        if meta.asks_cop:
+            lines.append(f"- Meta {_meta_label(meta)}: −{money(meta.asks_cop, 'COP')}")
     if view.contributed:
         lines.append(f"- Set aside by hand: −{money(view.contributed, 'COP')}")
-    if view.released:
-        lines.append(f"- Given back by a cancelled meta: +{money(view.released, 'COP')}")
+    for meta in view.metas:
+        if meta.released > 0:
+            lines.append(f"- Given back by {_gave_back_label(meta)}: +{money(meta.released, 'COP')}")
     lines.append(f"- Uncovered: −{money(view.uncovered, 'COP')}")
     lines.append(f"- **Available: {money(view.free, 'COP')}**")
     return "\n".join(lines)

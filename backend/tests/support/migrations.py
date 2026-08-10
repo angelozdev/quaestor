@@ -36,6 +36,22 @@ def insert_category(conn, category_id, name="Seeded", is_income=False):
     )
 
 
+def insert_meta(conn, meta_id, name, archived=False):
+    """Seed one meta, naming only the columns revision 0013 created.
+
+    `cancelled_month` arrives at 0014 and is left out on purpose, so the same
+    helper seeds a database sitting at any revision from 0013 on.
+    """
+    conn.execute(
+        sa.text(
+            "INSERT INTO meta (id, name, amount, currency, start_month, target_month, "
+            "stated_opening, closed, archived) "
+            "VALUES (:id, :name, 500000000, 'COP', '2026-06', '2026-12', NULL, false, :archived)"
+        ),
+        {"id": meta_id, "name": name, "archived": archived},
+    )
+
+
 def insert_transaction(conn, tx_id, tx_type, account_id, group, created_at=DEFAULT_CREATED_AT, category_id=None):
     """Seed one movement.
 

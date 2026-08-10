@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
-import type { MetaStatus } from "@/lib/api/types"
+import type { MetaCreate, MetaStatus } from "@/lib/api/types"
 import { openHelpPanel } from "@/tests/factories"
 
 const {
@@ -88,7 +88,7 @@ function renderPage() {
 beforeEach(() => {
   vi.clearAllMocks()
   listMetas.mockResolvedValue([meta()])
-  previewMeta.mockResolvedValue({ asks: 160_000_000, months_left: 5, over_the_month: false })
+  previewMeta.mockResolvedValue({ asks: 160_000_000, over_the_month: false })
   createMeta.mockResolvedValue(meta())
   listArchived.mockResolvedValue([])
   restoreMeta.mockResolvedValue(undefined)
@@ -187,7 +187,7 @@ describe("AC-44 — the metas list puts what needs an answer first", () => {
 
 describe("AC-45 — the form says what the meta will ask before it is created", () => {
   it("The create button says what it is about to do", async () => {
-    previewMeta.mockResolvedValue({ asks: 4_000_000_000, months_left: 1, over_the_month: true })
+    previewMeta.mockResolvedValue({ asks: 4_000_000_000, over_the_month: true })
     const user = userEvent.setup()
     renderPage()
     await screen.findByText("Celular")
@@ -384,7 +384,7 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
 describe("AC-26 / AC-34 — the currency and what was already put by", () => {
   it("A meta can be created in dollars", async () => {
     listMetas.mockResolvedValue([])
-    previewMeta.mockResolvedValue({ asks: 33_334, months_left: 6, over_the_month: false })
+    previewMeta.mockResolvedValue({ asks: 33_334, over_the_month: false })
     createMeta.mockResolvedValue(meta())
     const user = userEvent.setup()
     renderPage()
@@ -403,7 +403,7 @@ describe("AC-26 / AC-34 — the currency and what was already put by", () => {
 
   it("A meta can be told what it already holds", async () => {
     listMetas.mockResolvedValue([])
-    previewMeta.mockResolvedValue({ asks: 100_000_000, months_left: 5, over_the_month: false })
+    previewMeta.mockResolvedValue({ asks: 100_000_000, over_the_month: false })
     createMeta.mockResolvedValue(meta())
     const user = userEvent.setup()
     renderPage()
@@ -421,7 +421,7 @@ describe("AC-26 / AC-34 — the currency and what was already put by", () => {
 
   it("A meta the owner says nothing about starts from nothing", async () => {
     listMetas.mockResolvedValue([])
-    previewMeta.mockResolvedValue({ asks: 160_000_000, months_left: 5, over_the_month: false })
+    previewMeta.mockResolvedValue({ asks: 160_000_000, over_the_month: false })
     createMeta.mockResolvedValue(meta())
     const user = userEvent.setup()
     renderPage()
@@ -434,6 +434,50 @@ describe("AC-26 / AC-34 — the currency and what was already put by", () => {
 
     await waitFor(() => expect(createMeta).toHaveBeenCalledTimes(1))
     expect(createMeta.mock.calls[0][1]).toMatchObject({ stated_opening: null, currency: "COP" })
+  })
+
+  it("Saying what was already put by lowers the figure the form shows", async () => {
+    listMetas.mockResolvedValue([])
+    previewMeta.mockImplementation((_month: string, body: MetaCreate) =>
+      Promise.resolve({
+        asks: body.stated_opening ? 100_000_000 : 160_000_000,
+        over_the_month: false,
+      }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Nueva meta" }))
+
+    await user.type(screen.getByLabelText("Nombre *"), "Celular")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "8000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-12")
+    await waitFor(() => expect(screen.getByText(/1\.600\.000 al mes/)).toBeInTheDocument())
+
+    await user.type(screen.getByLabelText("Ya tenía guardado"), "3000000")
+
+    await waitFor(() => expect(screen.getByText(/1\.000\.000 al mes/)).toBeInTheDocument())
+  })
+
+  it("Changing the currency asks again, because the month weighs the answer in pesos", async () => {
+    listMetas.mockResolvedValue([])
+    previewMeta.mockImplementation((_month: string, body: MetaCreate) =>
+      Promise.resolve({ asks: 200_000, over_the_month: body.currency === "USD" }),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Nueva meta" }))
+
+    await user.type(screen.getByLabelText("Nombre *"), "Curso")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "2000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-09")
+    await waitFor(() => expect(screen.getByRole("button", { name: "Crear" })).toBeInTheDocument())
+
+    await user.click(screen.getByLabelText("En qué moneda *"))
+    await user.click(await screen.findByRole("option", { name: "USD" }))
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/más de lo que tu mes tiene/),
+    )
   })
 })
 

@@ -518,7 +518,6 @@ class MetaPreviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     asks: int
-    months_left: int
     over_the_month: bool
 
 

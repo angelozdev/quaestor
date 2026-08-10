@@ -62,10 +62,10 @@ class MonthAggregate:
     month_planned_expense: list[Transaction]
     funds: list[Fund]
     metas: list[Meta]
-    cancelled: list[Meta]
+    cancelled_this_month: list[Meta]
     contributions: dict[int, dict[str, int]]
     amendments: dict[int, list[MetaAmendment]]
-    linked: list[Transaction]
+    linked_by_meta: dict[int, list[Transaction]]
     first_movement_month: str | None
     skipped_turns: frozenset[tuple[int, Date]]
     _window_expense: list[Transaction]
@@ -101,6 +101,14 @@ class MonthAggregate:
     def obligations_in(self, category_id: int) -> list[RecurringItem]:
         """The live expense obligations filed under one category (AC-4)."""
         return [i for i in self.active_recurring if i.type == TxType.expense and i.category_id == category_id]
+
+    def funded_categories(self) -> frozenset[int]:
+        """The categories a fund answers for, so the month need not ask twice.
+
+        What is left over is what nothing covers, and the month reads that set
+        three times per request (AC-13).
+        """
+        return frozenset(fund.category_id for fund in self.funds)
 
     def was_skipped(self, recurring_id: int, due_date: Date) -> bool:
         """Whether the owner said this turn will not happen (AC-17)."""
@@ -141,9 +149,13 @@ class MonthAggregate:
         arithmetic asks for the planned ones too, because a debt owed this
         month costs this month and must be netted against what the meta holds
         (AC-43).
+
+        Indexed by meta rather than filtered: the fold asks this once per month
+        walked, per meta, so scanning every linked row each time made the read
+        path quadratic in the number of metas.
         """
-        rows = [tx for tx in self.linked if tx.meta_id == meta_id]
-        return [tx for tx in rows if tx.status == TxStatus.posted] if posted_only else rows
+        rows = self.linked_by_meta.get(meta_id, ())
+        return [tx for tx in rows if tx.status == TxStatus.posted] if posted_only else list(rows)
 
     def month_expense(self) -> list[Transaction]:
         return self.posted_in_month(self.year_month, TxType.expense)
@@ -248,14 +260,10 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
 
     funds = list(session.exec(select(Fund)).all())
     every_meta = list(
-        session.exec(
-            select(Meta).where(
-                or_(Meta.archived.is_(False), Meta.cancelled_month.is_(None), Meta.cancelled_month >= year_month)
-            )
-        ).all()
+        session.exec(select(Meta).where(or_(Meta.cancelled_month.is_(None), Meta.cancelled_month >= year_month))).all()
     )
     metas = [m for m in every_meta if m.cancelled_month is None or m.cancelled_month > year_month]
-    cancelled = [m for m in every_meta if m.cancelled_month == year_month]
+    cancelled_this_month = [m for m in every_meta if m.cancelled_month == year_month]
     contributions: dict[int, dict[str, int]] = {}
     for meta_id, month, total in session.exec(
         select(
@@ -272,15 +280,15 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         select(MetaAmendment).where(MetaAmendment.year_month <= year_month).order_by(MetaAmendment.year_month)
     ).all():
         amendments.setdefault(row.meta_id, []).append(row)
-    linked = list(
-        session.exec(
-            select(Transaction).where(
-                Transaction.meta_id.is_not(None),
-                Transaction.status.in_([TxStatus.posted, TxStatus.planned]),
-                Transaction.date <= end,
-            )
-        ).all()
-    )
+    linked_by_meta: dict[int, list[Transaction]] = {}
+    for tx in session.exec(
+        select(Transaction).where(
+            Transaction.meta_id.is_not(None),
+            Transaction.status.in_([TxStatus.posted, TxStatus.planned]),
+            Transaction.date <= end,
+        )
+    ).all():
+        linked_by_meta.setdefault(tx.meta_id, []).append(tx)
     first_movement = session.exec(
         select(Transaction.date).where(Transaction.status == TxStatus.posted).order_by(Transaction.date).limit(1)
     ).first()
@@ -303,10 +311,10 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         month_planned_expense=month_planned_expense,
         funds=funds,
         metas=metas,
-        cancelled=cancelled,
+        cancelled_this_month=cancelled_this_month,
         contributions=contributions,
         amendments=amendments,
-        linked=linked,
+        linked_by_meta=linked_by_meta,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
         skipped_turns=skipped_turns,
         _window_expense=window_expense,

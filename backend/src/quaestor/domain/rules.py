@@ -154,20 +154,12 @@ def meta_ask_calc(amount: int, held: int, months_left: int) -> int:
     """What a meta asks this month: what is missing over the months left.
 
     Rounded up at the cent, so the last month never comes up short. Zero only
-    because nothing is missing — never because completing, cancelling or
-    contributing waived it (ADR-0046).
+    because nothing is missing — never because cancelling, editing or
+    contributing waived it. A meta the purchase has stopped is not asked at all
+    rather than asked for zero, so that case never reaches here (ADR-0048,
+    ADR-0049).
     """
     return fund_ask_calc(amount - held, months_left)
-
-
-def meta_uncovered_calc(spent: int, opening: int, ask: int) -> int:
-    """What a purchase cost past everything the meta had for the month.
-
-    The same shape as `uncovered_excess_calc`, and for the same reason: only
-    what goes past what was actually put by leaves the money available, never
-    the whole purchase (AC-12).
-    """
-    return uncovered_excess_calc(spent, opening, ask)
 
 
 def split_calc(consumo: int, ahorro: int, income: int) -> int:

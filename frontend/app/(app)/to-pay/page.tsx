@@ -18,7 +18,7 @@ import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
-import { formatDate } from "@/lib/date"
+import { formatDate, yearMonthOf } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
@@ -56,9 +56,13 @@ const TO_PAY_HELP = (
   </>
 )
 
-/** The month a debt belongs to is the month it is due, so that is the month whose metas it may point at. */
+/**
+ * The month a debt belongs to is the month it is due, so that is the month
+ * whose metas it may point at. A form with no date yet offers this month's,
+ * which is what the picker showed before the owner said anything.
+ */
 function monthOf(dueDate: string): string {
-  return /^\d{4}-\d{2}/.test(dueDate) ? dueDate.slice(0, 7) : format(new Date(), "yyyy-MM")
+  return yearMonthOf(dueDate) ?? format(new Date(), "yyyy-MM")
 }
 
 const PLAN_DEFAULTS: PlanPaymentValues = {
@@ -374,16 +378,21 @@ export default function ToPayPage() {
                 )
               }}
             </planForm.Field>
-            <planForm.Field name="metaId">
-              {(field) => (
+            <planForm.Subscribe
+              selector={(state) => ({
+                month: monthOf(state.values.dueDate),
+                metaId: state.values.metaId,
+              })}
+            >
+              {({ month, metaId }) => (
                 <MetaField
-                  id={field.name}
-                  month={monthOf(planForm.state.values.dueDate)}
-                  value={field.state.value as number | null}
-                  onChange={(metaId) => field.handleChange(metaId as never)}
+                  id="plan-meta"
+                  month={month}
+                  value={metaId}
+                  onChange={(chosen) => planForm.setFieldValue("metaId", chosen)}
                 />
               )}
-            </planForm.Field>
+            </planForm.Subscribe>
             <planForm.Field name="notes">
               {(field) => {
                 const error = field.state.meta.errors[0] as { message?: string } | undefined

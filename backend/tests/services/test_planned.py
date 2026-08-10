@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 from quaestor.domain.errors import IllegalTransition, NotFound, ValidationError
 from quaestor.domain.models import AccountType, IntervalUnit, OccurrenceStatus, RecurringMode, TxStatus, TxType
-from quaestor.services import accounts, occurrences, planned, recurring, transactions
+from quaestor.services import accounts, fx, metas, occurrences, planned, recurring, transactions
 
 from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
@@ -42,6 +42,32 @@ def test_plan_payment_rejects_bad_amount(session):
             due_date=date(2026, 6, 20),
             account_id=acc.id,
             category_id=a_category(session),
+        )
+
+
+def test_plan_payment_refuses_a_meta_the_owner_called_off(session):
+    """AC-25: a cancelled meta takes no new link, from every writer that can make one.
+
+    Recording and editing a movement both ask the same question before they
+    write `meta_id`. Planning one is the third way a link is made, and a debt
+    pointed at a meta that no longer exists on any screen is a link nothing can
+    ever unmake through the app.
+    """
+    fx.set_trm(session, "4000")
+    acc = _acc(session)
+    meta = metas.create_meta(session, name="Celular", amount=1_000_000, target_month="2026-12", today="2026-06")
+    metas.cancel_meta(session, meta.id, year_month="2026-06")
+
+    with pytest.raises(ValidationError, match="was cancelled and takes no new link"):
+        planned.plan_payment(
+            session,
+            payee="Store",
+            amount=1_000_000,
+            currency="COP",
+            due_date=date(2026, 6, 20),
+            account_id=acc.id,
+            category_id=a_category(session),
+            meta_id=meta.id,
         )
 
 

@@ -18,7 +18,7 @@ from collections import Counter
 from sqlmodel import Session
 
 from ..domain.dtos import MonthAvailable, MonthRates, MonthSplit
-from ..domain.models import RecurringItem, TxType
+from ..domain.models import RecurringItem, Transaction, TxType
 from ..domain.money import to_cop_cents
 from ..domain.rules import available_calc, margin_calc, monthly_rate_calc, share_calc, split_calc
 from . import funds, metas
@@ -59,7 +59,19 @@ def _unsettled_promise(agg: MonthAggregate, item: RecurringItem, posted_turns: i
     return remaining * to_cop_cents(item.amount, item.currency, agg.trm)
 
 
-def _uncovered(agg: MonthAggregate, overspill: int) -> int:
+def _uncovered_posted(agg: MonthAggregate) -> list[Transaction]:
+    """This month's posted spending that no fund covers and no meta counted.
+
+    One predicate, read by the uncovered term and by the share of it the owner
+    declared to be saving. A term added to one and not the other would leave
+    `consumo + ahorro + libre` short of the income (AC-37) in exactly the months
+    a saving category has anything in it, and silent in every other.
+    """
+    funded = agg.funded_categories()
+    return [tx for tx in agg.month_expense() if tx.category_id not in funded and tx.meta_id is None]
+
+
+def _uncovered(agg: MonthAggregate, overspill: int, over_the_metas: int) -> int:
     """Everything the month owes that no fund covers (ADR-0044).
 
     One term on purpose: spending in categories with no fund, obligations in
@@ -73,8 +85,8 @@ def _uncovered(agg: MonthAggregate, overspill: int) -> int:
     obligation is switched off after posting still costs what it really did.
     Every posted expense counts once, at what left the account.
     """
-    funded = {fund.category_id for fund in agg.funds}
-    posted = [tx for tx in agg.month_expense() if tx.category_id not in funded and tx.meta_id is None]
+    funded = agg.funded_categories()
+    posted = _uncovered_posted(agg)
     spent = sum(agg.to_cop_cents(tx) for tx in posted)
     posted_turns = Counter(tx.recurring_id for tx in posted if tx.recurring_id is not None)
     obligations = sum(
@@ -85,7 +97,7 @@ def _uncovered(agg: MonthAggregate, overspill: int) -> int:
     planned = sum(
         agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded and tx.meta_id is None
     )
-    return spent + obligations + planned + overspill + metas.uncovered_total(agg)
+    return spent + obligations + planned + overspill + over_the_metas
 
 
 def month_available(agg: MonthAggregate) -> MonthAvailable:
@@ -96,28 +108,20 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
     `available` is the same answer for a caller holding only a session.
     """
     year_month = agg.year_month
-    folded = funds.fold(agg)
-    lines = folded.lines
+    funded = funds.fold(agg)
+    saved = metas.fold(agg)
     income = _income(agg)
-    uncovered = _uncovered(agg, folded.overspill)
-    contributed = metas.contributed_total(agg)
-    released = metas.released_total(agg)
-    claimed = (
-        sum(line.asks for line in lines)
-        + metas.asks_total(agg)
-        + metas.cancelled_asks_total(agg)
-        + contributed
-        - released
-    )
+    uncovered = _uncovered(agg, funded.overspill, saved.uncovered)
+    claimed = sum(line.asks for line in funded.lines) + saved.asks + saved.contributed - saved.released
     return MonthAvailable(
         year_month=year_month,
         income=income,
-        funds=lines,
+        funds=funded.lines,
         uncovered=uncovered,
         free=available_calc(income, claimed, uncovered),
-        metas=metas.statuses(agg) + metas.cancelled_statuses(agg),
-        contributed=contributed,
-        released=released,
+        metas=saved.lines,
+        contributed=saved.contributed,
+        released=saved.released,
     )
 
 
@@ -164,13 +168,8 @@ def _spent_where_spending_is_saving(agg: MonthAggregate) -> int:
     Only the uncovered part: spending a fund already covers is the fund's
     business, and the mark moves what nothing else claims (AC-41).
     """
-    funded = {fund.category_id for fund in agg.funds}
     saving = {cid for cid, cat in agg.categories.items() if cat.counts_as_saving}
-    return sum(
-        agg.to_cop_cents(tx)
-        for tx in agg.month_expense()
-        if tx.category_id in saving and tx.category_id not in funded and tx.meta_id is None
-    )
+    return sum(agg.to_cop_cents(tx) for tx in _uncovered_posted(agg) if tx.category_id in saving)
 
 
 def split(session: Session, year_month: str) -> MonthSplit:
@@ -228,7 +227,7 @@ def rates(session: Session, year_month: str) -> MonthRates:
     """
     require_year_month(year_month)
     agg = load_month(session, year_month)
-    funded = {fund.category_id for fund in agg.funds}
+    funded = agg.funded_categories()
     earning = 0
     cost = sum(line.asks for line in funds.fold(agg).lines)
     for item in agg.active_recurring:

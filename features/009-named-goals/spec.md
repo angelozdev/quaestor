@@ -621,6 +621,25 @@ Scenario: A purchase linked to one meta leaves the others alone
   Then the meta "Celular" is complete
   And the meta "Televisor" is running
   And the meta "Televisor" holds 5000000.00 COP this month
+
+@backend
+Scenario: A meta the owner restarts after buying runs again
+  Given today is 2026-09-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 1000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 1000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-08-20
+  When the user sets the meta "Celular" to want 3000000.00 COP
+  Then the meta "Celular" is running
+  And the meta "Celular" asks 700000.00 COP this month
+  And the user contributes 100000.00 COP to "Celular"
+
+@backend
+Scenario: A meta nobody touched after buying stays finished
+  Given today is 2026-09-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 1000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 1000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-08-20
+  Then the meta "Celular" is complete
 ```
 
 ## AC-18 — A meta created for the month in course asks for the whole thing
@@ -827,6 +846,16 @@ Scenario: Movements already linked keep their link and stay out of the fund
   When the user closes the meta "Televisor"
   Then that expense is still linked to the meta "Televisor"
   And the fund on "Tecnologia" spent 0.00 COP this month
+
+@backend
+Scenario: A planned payment cannot be pointed at a cancelled meta
+  Given today is 2026-08-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And the user cancels the meta "Celular"
+  When the user plans an expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  Then the planned payment is rejected
+  And the user is told a cancelled meta takes no new link
 ```
 
 ## AC-26 — A meta may be held in dollars
@@ -1059,6 +1088,26 @@ Scenario: The assistant has no way to contribute to one
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the assistant is asked to contribute to a meta
   Then the assistant has no way to do it
+
+@backend
+Scenario: The assistant does not name a meta that asks nothing
+  Given today is 2026-09-10
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 1000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 1000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-08-20
+  And the user closes the meta "Celular"
+  When the assistant is asked how much is available this month
+  Then the assistant's answer does not name "Celular"
+
+@backend
+Scenario: The assistant says which meta gave money back, and why
+  Given today is 2026-09-10
+  And an expense category "Tecnologia"
+  And a meta "Moto" of 6000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 2000000.00 COP to "Moto" made 2026-08
+  And the user sets the meta "Moto" to want 1000000.00 COP
+  When the assistant is asked how much is available this month
+  Then the assistant's answer says "Moto" gave back 2200000.00 COP because its amount was lowered
 ```
 
 ## AC-33 — The link changes what the month plans, never what the reports say
@@ -1560,6 +1609,17 @@ Scenario: A meta bigger than the month is announced with its figure
   And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
   When the user asks what a meta of 80000000.00 COP by 2026-09 would ask
   Then the user is warned it would ask 40000000.00 COP a month
+  And the user is warned that is more than the month has
+
+@backend
+Scenario: A dollar meta bigger than the month is announced too
+  Given today is 2026-08-10
+  And the TRM is 4000.00
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  When the user asks what a meta of 20000.00 USD by 2026-09 would ask
+  Then the user is warned it would ask 10000.00 USD a month
   And the user is warned that is more than the month has
 
 @backend
