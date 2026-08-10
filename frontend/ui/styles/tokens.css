@@ -9,7 +9,15 @@
  *   1. Toggle a `.dark` class to switch themes (next-themes does this).
  *   2. Provide a `.dark { ... }` block overriding the `:root` values below for dark
  *      mode. Components ship `dark:` utilities but the palette is the app's call.
- *   3. Override any brand values (e.g. --primary, --radius, --font-sans) it wants.
+ *   3. Override any brand values it wants (e.g. --primary, --radius) and the font
+ *      stacks --font-sans-stack / --font-heading-stack.
+ *
+ * The font slots are the `-stack` ones, and only those. --font-sans and
+ * --font-heading are declared inside `@theme inline` below, which means Tailwind
+ * inlines their value into the utilities it generates and never emits them as CSS
+ * custom properties: setting them from the app has no effect at all. This bit an
+ * app for months — it set --font-sans, the utility kept reading
+ * --font-sans-stack, and no brand font ever loaded (ADR 0050).
  *
  * Portability: this file depends only on Tailwind v4 (`@theme inline`, `@custom-variant`).
  * Copy `ui/` to another Tailwind v4 app, `@import "../ui/styles/tokens.css"`, done.
