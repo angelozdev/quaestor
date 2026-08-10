@@ -25,12 +25,12 @@ import { ruleLabel } from "./rules"
 const SECTIONS: { shape: FundShape; heading: string; says: string }[] = [
   {
     shape: "presupuesto",
-    heading: "PRESUPUESTOS — topes del mes",
+    heading: "Presupuestos — topes del mes",
     says: "Lo que no gastes no se guarda.",
   },
   {
     shape: "fondo",
-    heading: "FONDOS — van juntando",
+    heading: "Fondos — van juntando",
     says: "Lo que sobre pasa al mes siguiente.",
   },
 ]
@@ -162,16 +162,16 @@ function FundRow({
       <td className="px-3 py-2 align-top" style={{ color: "var(--muted-foreground)" }}>
         {ruleLabel(fund.rule, shape)}
       </td>
-      <td className="px-3 py-2.5 text-right align-top tabular-nums">
+      <td className="px-3 py-2 text-right align-top tabular-nums">
         {formatCents(fund.asks, "COP")}
       </td>
-      <td className="px-3 py-2.5 text-right align-top tabular-nums">
+      <td className="px-3 py-2 text-right align-top tabular-nums">
         {formatCents(fund.holds, "COP")}
       </td>
       <td className="px-3 py-2 align-top">
         <StatusBadge kind="onTrack" value={fund.on_track} />
       </td>
-      <td className="px-3 py-2.5 text-right align-top">
+      <td className="px-3 py-2 text-right align-top">
         <Button
           variant="ghost"
           size="sm"

@@ -184,8 +184,8 @@ describe("AC-1 — the two shapes have two names", () => {
     showing([presupuesto(), tecnologia()])
     renderPage()
 
-    expect((await under(/PRESUPUESTOS/)).getByText("Restaurantes")).toBeInTheDocument()
-    expect((await under(/FONDOS/)).getByText("Tecnologia")).toBeInTheDocument()
+    expect((await under(/Presupuestos/)).getByText("Restaurantes")).toBeInTheDocument()
+    expect((await under(/Fondos/)).getByText("Tecnologia")).toBeInTheDocument()
   })
 })
 
@@ -208,16 +208,16 @@ describe("AC-2 — each list says what its shape does", () => {
     showing([presupuesto(), tecnologia()])
     renderPage()
 
-    expect(entriesUnder(await under(/PRESUPUESTOS/))).toBe(1)
-    expect(entriesUnder(await under(/FONDOS/))).toBe(1)
+    expect(entriesUnder(await under(/Presupuestos/))).toBe(1)
+    expect(entriesUnder(await under(/Fondos/))).toBe(1)
   })
 
   it("shows both headings even when one shape has nothing under it", async () => {
     showing([presupuesto()])
     renderPage()
 
-    expect(entriesUnder(await under(/PRESUPUESTOS/))).toBe(1)
-    expect(screen.getByRole("heading", { name: /FONDOS/ })).toBeInTheDocument()
+    expect(entriesUnder(await under(/Presupuestos/))).toBe(1)
+    expect(screen.getByRole("heading", { name: /Fondos —/ })).toBeInTheDocument()
     expect(
       screen.getByText(
         "Todavía no tienes fondos. Un fondo aparta plata cada mes y guarda lo que sobra.",
@@ -229,8 +229,8 @@ describe("AC-2 — each list says what its shape does", () => {
     showing([tecnologia()])
     renderPage()
 
-    expect(entriesUnder(await under(/FONDOS/))).toBe(1)
-    expect(screen.getByRole("heading", { name: /PRESUPUESTOS/ })).toBeInTheDocument()
+    expect(entriesUnder(await under(/Fondos/))).toBe(1)
+    expect(screen.getByRole("heading", { name: /Presupuestos —/ })).toBeInTheDocument()
     expect(
       screen.getByText(
         "Todavía no tienes presupuestos. Un presupuesto es un tope: lo que no gastes no se guarda.",
@@ -445,7 +445,7 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
         expect.objectContaining({ rule: "fixed", accumulates: false, amount: 10_000_000 }),
       ),
     )
-    expect((await under(/PRESUPUESTOS/)).getByText("Restaurantes")).toBeInTheDocument()
+    expect((await under(/Presupuestos/)).getByText("Restaurantes")).toBeInTheDocument()
   })
 
   it("A fondo with a fixed amount is filed as a fondo", async () => {
@@ -461,7 +461,7 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
         expect.objectContaining({ rule: "fixed", accumulates: true }),
       ),
     )
-    expect((await under(/FONDOS/)).getByText("Tecnologia")).toBeInTheDocument()
+    expect((await under(/Fondos/)).getByText("Tecnologia")).toBeInTheDocument()
   })
 
   it("A presupuesto from the category average is filed as a presupuesto", async () => {
@@ -479,7 +479,7 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
         expect.objectContaining({ rule: "average", window_months: 1, accumulates: false }),
       ),
     )
-    expect((await under(/PRESUPUESTOS/)).getByText("Restaurantes")).toBeInTheDocument()
+    expect((await under(/Presupuestos/)).getByText("Restaurantes")).toBeInTheDocument()
   })
 
   it("A fondo from the category average is filed as a fondo", async () => {
@@ -497,7 +497,7 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
         expect.objectContaining({ rule: "average", window_months: 1, accumulates: true }),
       ),
     )
-    expect((await under(/FONDOS/)).getByText("Mercado")).toBeInTheDocument()
+    expect((await under(/Fondos/)).getByText("Mercado")).toBeInTheDocument()
   })
 
   it("A fondo that reads recurring charges is filed as a fondo", async () => {
@@ -513,7 +513,7 @@ describe("AC-6 — the accumulate checkbox disappears", () => {
         expect.objectContaining({ rule: "from-recurring", accumulates: true }),
       ),
     )
-    expect((await under(/FONDOS/)).getByText("Servicios")).toBeInTheDocument()
+    expect((await under(/Fondos/)).getByText("Servicios")).toBeInTheDocument()
   })
 })
 
@@ -823,14 +823,14 @@ describe("AC-13 — everything created before the split keeps working", () => {
     showing([presupuesto()])
     renderPage()
 
-    expect((await under(/PRESUPUESTOS/)).getByText("Restaurantes")).toBeInTheDocument()
+    expect((await under(/Presupuestos/)).getByText("Restaurantes")).toBeInTheDocument()
   })
 
   it("A pre-split fund that carries money forward reads as a fondo", async () => {
     showing([tecnologia()])
     renderPage()
 
-    expect((await under(/FONDOS/)).getByText("Tecnologia")).toBeInTheDocument()
+    expect((await under(/Fondos/)).getByText("Tecnologia")).toBeInTheDocument()
   })
 
   it("Nothing created before the split is asked about, and it still shows", async () => {
@@ -867,7 +867,7 @@ describe("AC-15 — a category still holds exactly one of these", () => {
     await user.click(screen.getByRole("button", { name: "Crear" }))
 
     await waitFor(() => expect(createFund).toHaveBeenCalledTimes(1))
-    expect((await under(/PRESUPUESTOS/)).getByText("Restaurantes")).toBeInTheDocument()
+    expect((await under(/Presupuestos/)).getByText("Restaurantes")).toBeInTheDocument()
   })
 })
 

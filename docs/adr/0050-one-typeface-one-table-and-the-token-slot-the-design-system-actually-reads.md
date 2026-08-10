@@ -154,9 +154,14 @@ change what a figure means:
   acceptance:** the contract now names the `-stack` slots and states the
   indirection outright, so the trap is written down where the next reader meets
   it. Docstring only — no contract change, no component internals touched.
-- Bad / cost: `PRESUPUESTOS` and `FONDOS` remain shouting in all-caps. That copy
-  is asserted by eight vitest assertions pinning feature 010's vocabulary
-  (product ADR-042), so lowering it needs the owner's decision, not a designer's.
+- ~~Bad / cost: `PRESUPUESTOS` and `FONDOS` remain shouting in all-caps.~~ **Paid,
+  on the owner's decision:** both headings are sentence case, and the fourteen
+  vitest assertions that matched them were re-anchored. The words are untouched,
+  so feature 010's vocabulary (product ADR-042) still reads exactly as it did —
+  only the case changed. Two of those assertions needed qualifying with the em
+  dash: the screen's own `<h1>` is *Fondos y presupuestos*, so a bare `/Fondos/`
+  matched two headings and `getByRole` refuses an ambiguous match. No `spec.md` or
+  `acs.md` pinned the string, so no DAE artifact moved.
 - Bad / cost: two test locators in `reports/page.test.tsx` walked with
   `closest("div")` to a card wrapper that no longer exists and were re-anchored to
   `closest("section")`. AC-36's intent is unchanged; only the anchor moved. In the
