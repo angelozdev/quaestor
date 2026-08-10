@@ -1,16 +1,18 @@
-> ▶ CP2 ACs — 5/5 criteria met | NEXT: the owner approves `acs.md`, then /engineer.atdd | BLOCKED: none
+> ▶ CP3 Spec — 5/5 criteria met | NEXT: the owner approves `spec.md`, then /engineer.plan (the ADR is owed there) | BLOCKED: none
 
 # Progress — 012 movement-corrections
 
-A movement is corrected, not deleted. 30 acceptance criteria, no spec yet.
+A movement is corrected, not deleted. 30 acceptance criteria, 66 scenarios —
+53 against the logic, 13 against the screen. Red: 51 failed, 2 passed, the two
+being declared control arms.
 
 ## Checkpoints
 
 | CP | Stage | Status | Handoff |
 |---|---|---|---|
 | 1.5 | Ready | done | 2026-08-10T1730-feature-init.md |
-| 2 | ACs | **done, awaiting the owner** | 2026-08-10T1900-discover-acs.md |
-| 3 | Spec | — | |
+| 2 | ACs | done — approved by the owner 2026-08-10 | 2026-08-10T1900-discover-acs.md |
+| 3 | Spec | **done, awaiting the owner** | 2026-08-10T2015-atdd.md |
 | 4 | Plan | — | |
 | 5 | Implement | — | |
 | 6 | Refine | — | |
@@ -60,3 +62,4 @@ nothing to supersede and a new one to write (CLAUDE.md).
 | 2026-08-10T1730 | feature-init | main | 012 allocated, branch cut from main at 9229784 |
 | 2026-08-10T1815 | discuss (round 2) | main | five questions answered, then re-checked against sources; four held, one changed — the mispriced one was mine |
 | 2026-08-10T1900 | discover-acs | main | 30 ACs; the last two gaps closed with the owner |
+| 2026-08-10T2015 | atdd | main | 66 scenarios; red on 30 unbound step texts; 224 existing steps reused where they fit |
