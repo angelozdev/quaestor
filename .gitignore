@@ -58,3 +58,8 @@ lunchmoney-transactions.csv
 
 # The mutation sweep copies its target here so a kill signal cannot lose the source.
 *.py.orig
+
+# Design-tool state: a hook cache, the served decision pages and their answers, and
+# a four-line live-mode config any run regenerates. Machine-local, not source — and
+# a one-machine project (PRODUCT.md) has no second clone that would want it.
+.impeccable/
