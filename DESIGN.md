@@ -261,9 +261,17 @@ reads as engineering, and this surface is finance.
 **The Tabular Rule.** Any element that can contain a number carries `tnum`. A
 figure that shifts by a pixel between two rows is a defect, not a nuance.
 
-**The Quiet Label Rule.** Section labels are sentence-case 12px medium in
-muted ink. Tracked uppercase is not page grammar here; it survives in exactly
-one place — a table's column heads — and nowhere else.
+**The Quiet Label Rule.** The Label rung is sentence-case 12px medium in muted
+ink, and it is for what sits *inside* a section: its column heads, its control
+text, a sub-group's name. Tracked uppercase is not page grammar here; it
+survives in exactly one place — a table's column heads — and nowhere else.
+
+**The Rung Rule.** A section's own name is the Title rung — 15px semibold in
+full ink — never the Label rung. At 12px it measured the same as the column
+heads it contains and only one weight step apart, so a screen went 20px → 12px →
+12px and stopped having levels: the second thing the owner reported was that
+sections still did not separate. A name never shares a rung with the things it
+names.
 
 **The One Family Rule.** No second typeface is added for display, and no
 monospace is loaded as a font dependency. Where code or a tool name must read
@@ -277,6 +285,12 @@ its content.** That rule is what bounds a section without boxing it — remove t
 cards and put nothing in their place and the page reads as floating, which is the
 first thing the owner said when it did. Sections sit 40px apart and the page
 carries no separate `<hr>`: one device, not two.
+
+**40px is the only distance between sections, on every screen.** Separation is
+not a line, it is the ratio between the space around a group and the space
+inside it: at 24px — which nine screens used — the gap *between* sections barely
+beat the 16–20px gaps *within* one, and nothing grouped. A control that filters
+a table belongs to that table at 12px, not adrift at the section distance.
 
 Related rows sit 4–8px apart; a heading takes more space above it than below it.
 
@@ -404,8 +418,8 @@ other numbers. It is never collapsed, never behind a tab, and never a chart.
 
 - **Do** put `tnum` on every element that can hold a number, and right-align
   columns of amounts.
-- **Do** open every section with its label over a hairline, and space sections
-  40px apart, instead of wrapping each one in a card.
+- **Do** open every section with its Title-rung name over a hairline, and space
+  sections 40px apart, instead of wrapping each one in a card.
 - **Do** show a total's terms next to it, as the Liquidation, with nothing to
   click.
 - **Do** keep all three explanation lines on a fund row visible, ranked below
@@ -423,6 +437,9 @@ other numbers. It is never collapsed, never behind a tab, and never a chart.
   existed in the previous system and were removed on purpose.
 - **Don't** put a tracked uppercase eyebrow over every section. Column heads
   only.
+- **Don't** name a section on the same rung as its column heads, and don't let
+  one spacing value carry both "these belong together" and "these are different
+  subjects".
 - **Don't** hide a visible number behind a hover, a tooltip, a tab or an
   accordion.
 - **Don't** fill a row or a cell with red or green to say direction; colour the
