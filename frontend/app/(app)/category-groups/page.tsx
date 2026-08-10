@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CheckboxField } from "@/components/checkbox-field"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
@@ -20,7 +21,7 @@ import { ApiError, type CategoryGroup } from "@/lib/api/types"
 import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button, Checkbox } from "@/ui"
+import { Button } from "@/ui"
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
@@ -101,57 +102,55 @@ export default function CategoryGroupsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Grupos de categorías"
         action={<Button onClick={() => setCreating(true)}>Nuevo</Button>}
         help={<ScreenHelp screen="Grupos">{GROUPS_HELP}</ScreenHelp>}
       />
 
-      <label
-        className="flex items-center gap-2 text-sm"
-        style={{ color: "var(--muted-foreground)" }}
-      >
-        <Checkbox
+      <div className="space-y-3">
+        <CheckboxField
+          id="show-archived"
+          label="Mostrar archivados"
           checked={values.archived}
           onCheckedChange={(checked) => patch({ archived: checked })}
         />
-        Mostrar archivados
-      </label>
 
-      <DataTable
-        rows={list.data}
-        rowKey={(g) => g.id}
-        isLoading={list.isLoading}
-        isError={list.isError}
-        onRetry={() => list.refetch()}
-        columns={[
-          {
-            key: "name",
-            header: "Nombre",
-            render: (g) => (
-              <span className="flex items-center gap-2">
-                {g.name} <StatusBadge kind="archived" value={g.archived} />
-              </span>
-            ),
-          },
-          { key: "order", header: "Orden", align: "right", render: (g) => g.sort_order },
-        ]}
-        actionsAs="inline"
-        actions={[
-          {
-            label: "Restaurar",
-            show: (g) => g.archived,
-            disabled: restore.isPending,
-            onClick: (g) => restore.mutate(g.id),
-          },
-          { label: "Editar", show: (g) => !g.archived, onClick: (g) => setEditing(g) },
-          { label: "Archivar", show: (g) => !g.archived, onClick: (g) => setArchiving(g) },
-        ]}
-        emptyMessage="Todavía no tienes grupos."
-        emptyDescription={WHAT_A_GROUP_IS}
-        emptyAction={{ label: "Crear el primero", onClick: () => setCreating(true) }}
-      />
+        <DataTable
+          rows={list.data}
+          rowKey={(g) => g.id}
+          isLoading={list.isLoading}
+          isError={list.isError}
+          onRetry={() => list.refetch()}
+          columns={[
+            {
+              key: "name",
+              header: "Nombre",
+              render: (g) => (
+                <span className="flex items-center gap-2">
+                  {g.name} <StatusBadge kind="archived" value={g.archived} />
+                </span>
+              ),
+            },
+            { key: "order", header: "Orden", align: "right", render: (g) => g.sort_order },
+          ]}
+          actionsAs="inline"
+          actions={[
+            {
+              label: "Restaurar",
+              show: (g) => g.archived,
+              disabled: restore.isPending,
+              onClick: (g) => restore.mutate(g.id),
+            },
+            { label: "Editar", show: (g) => !g.archived, onClick: (g) => setEditing(g) },
+            { label: "Archivar", show: (g) => !g.archived, onClick: (g) => setArchiving(g) },
+          ]}
+          emptyMessage="Todavía no tienes grupos."
+          emptyDescription={WHAT_A_GROUP_IS}
+          emptyAction={{ label: "Crear el primero", onClick: () => setCreating(true) }}
+        />
+      </div>
 
       <EntityFormDialog
         open={creating}

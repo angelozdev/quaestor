@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CheckboxField } from "@/components/checkbox-field"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
@@ -22,7 +23,7 @@ import { ApiError } from "@/lib/api/types"
 import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button, Checkbox } from "@/ui"
+import { Button } from "@/ui"
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
@@ -124,78 +125,76 @@ export default function CategoriesPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Categorías"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
         help={<ScreenHelp screen="Categorías">{CATEGORIES_HELP}</ScreenHelp>}
       />
 
-      <label
-        className="flex items-center gap-2 text-sm"
-        style={{ color: "var(--muted-foreground)" }}
-      >
-        <Checkbox
+      <div className="space-y-3">
+        <CheckboxField
+          id="show-archived"
+          label="Mostrar archivadas"
           checked={values.archived}
           onCheckedChange={(checked) => patch({ archived: checked })}
         />
-        Mostrar archivadas
-      </label>
 
-      <DataTable
-        rows={list.data}
-        rowKey={(c) => c.id}
-        isLoading={list.isLoading}
-        isError={list.isError}
-        onRetry={() => list.refetch()}
-        columns={[
-          {
-            key: "name",
-            header: "Nombre",
-            render: (c) => (
-              <span className="flex items-center gap-2">
-                {c.name} <StatusBadge kind="archived" value={c.archived} />
-              </span>
-            ),
-          },
-          {
-            key: "group",
-            header: "Grupo",
-            render: (c) => (
-              <span style={{ color: "var(--muted-foreground)" }}>{groupName(c.group_id)}</span>
-            ),
-          },
-          {
-            key: "marks",
-            header: "Marcas",
-            render: (c) => (
-              <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                {[
-                  c.is_income && "ingreso",
-                  c.exclude_from_totals && "no-totales",
-                  c.counts_as_saving && "ahorro",
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || "—"}
-              </span>
-            ),
-          },
-        ]}
-        actionsAs="inline"
-        actions={[
-          {
-            label: "Restaurar",
-            show: (c) => c.archived,
-            disabled: restore.isPending,
-            onClick: (c) => restore.mutate(c.id),
-          },
-          { label: "Editar", show: (c) => !c.archived, onClick: (c) => setEditing(c) },
-          { label: "Archivar", show: (c) => !c.archived, onClick: (c) => setArchiving(c) },
-        ]}
-        emptyMessage="Todavía no tienes categorías."
-        emptyDescription={WHAT_A_CATEGORY_IS}
-        emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
-      />
+        <DataTable
+          rows={list.data}
+          rowKey={(c) => c.id}
+          isLoading={list.isLoading}
+          isError={list.isError}
+          onRetry={() => list.refetch()}
+          columns={[
+            {
+              key: "name",
+              header: "Nombre",
+              render: (c) => (
+                <span className="flex items-center gap-2">
+                  {c.name} <StatusBadge kind="archived" value={c.archived} />
+                </span>
+              ),
+            },
+            {
+              key: "group",
+              header: "Grupo",
+              render: (c) => (
+                <span style={{ color: "var(--muted-foreground)" }}>{groupName(c.group_id)}</span>
+              ),
+            },
+            {
+              key: "marks",
+              header: "Marcas",
+              render: (c) => (
+                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  {[
+                    c.is_income && "ingreso",
+                    c.exclude_from_totals && "no-totales",
+                    c.counts_as_saving && "ahorro",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "—"}
+                </span>
+              ),
+            },
+          ]}
+          actionsAs="inline"
+          actions={[
+            {
+              label: "Restaurar",
+              show: (c) => c.archived,
+              disabled: restore.isPending,
+              onClick: (c) => restore.mutate(c.id),
+            },
+            { label: "Editar", show: (c) => !c.archived, onClick: (c) => setEditing(c) },
+            { label: "Archivar", show: (c) => !c.archived, onClick: (c) => setArchiving(c) },
+          ]}
+          emptyMessage="Todavía no tienes categorías."
+          emptyDescription={WHAT_A_CATEGORY_IS}
+          emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+        />
+      </div>
 
       <EntityFormDialog
         open={creating}

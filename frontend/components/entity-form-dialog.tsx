@@ -3,13 +3,14 @@
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useState } from "react"
 import type { z } from "zod"
+import { CheckboxField } from "@/components/checkbox-field"
 import {
   buildEntityFormSchema,
   type EntityFormValues,
 } from "@/components/entity-form-dialog.schema"
 import { EntitySelect } from "@/components/entity-select"
 import { MoneyInput } from "@/components/money-input"
-import { Button, Checkbox, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
+import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 
 export type Field =
   | {
@@ -240,14 +241,12 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                       )}
 
                       {f.kind === "checkbox" && (
-                        <label htmlFor={f.name} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            id={f.name}
-                            checked={Boolean(field.state.value)}
-                            onCheckedChange={(c) => field.handleChange(c as never)}
-                          />
-                          {f.label}
-                        </label>
+                        <CheckboxField
+                          id={f.name}
+                          label={f.label}
+                          checked={Boolean(field.state.value)}
+                          onCheckedChange={(c) => field.handleChange(c as never)}
+                        />
                       )}
 
                       {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}

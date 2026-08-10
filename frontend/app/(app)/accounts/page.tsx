@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
+import { CheckboxField } from "@/components/checkbox-field"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { DataTable } from "@/components/data-table"
 import { EntityFormDialog, type Field, type FormValues } from "@/components/entity-form-dialog"
@@ -22,7 +23,7 @@ import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
-import { Button, Checkbox } from "@/ui"
+import { Button } from "@/ui"
 
 const TYPE_OPTIONS = [
   { value: "debit", label: "Débito" },
@@ -125,71 +126,69 @@ export default function AccountsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Cuentas"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
         help={<ScreenHelp screen="Cuentas">{ACCOUNTS_HELP}</ScreenHelp>}
       />
 
-      <label
-        className="flex items-center gap-2 text-sm"
-        style={{ color: "var(--muted-foreground)" }}
-      >
-        <Checkbox
+      <div className="space-y-3">
+        <CheckboxField
+          id="show-archived"
+          label="Mostrar archivadas"
           checked={values.archived}
           onCheckedChange={(checked) => patch({ archived: checked })}
         />
-        Mostrar archivadas
-      </label>
 
-      <DataTable
-        rows={list.data}
-        rowKey={(a) => a.id}
-        isLoading={list.isLoading}
-        isError={list.isError}
-        onRetry={() => list.refetch()}
-        columns={[
-          {
-            key: "name",
-            header: "Nombre",
-            render: (a) => (
-              <span className="flex items-center gap-2">
-                {a.name} <StatusBadge kind="archived" value={a.archived} />
-              </span>
-            ),
-          },
-          {
-            key: "type",
-            header: "Tipo",
-            render: (a) => (
-              <span style={{ color: "var(--muted-foreground)" }}>
-                {TYPE_LABEL[a.type] ?? a.type}
-              </span>
-            ),
-          },
-          {
-            key: "balance",
-            header: "Saldo",
-            align: "right",
-            render: (a) => formatCents(a.balance, a.currency),
-          },
-        ]}
-        actionsAs="inline"
-        actions={[
-          {
-            label: "Restaurar",
-            show: (a) => a.archived,
-            disabled: restore.isPending,
-            onClick: (a) => restore.mutate(a.id),
-          },
-          { label: "Editar", show: (a) => !a.archived, onClick: (a) => setEditing(a) },
-          { label: "Archivar", show: (a) => !a.archived, onClick: (a) => setArchiving(a) },
-        ]}
-        emptyMessage="Todavía no tienes cuentas."
-        emptyDescription={WHAT_AN_ACCOUNT_IS}
-        emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
-      />
+        <DataTable
+          rows={list.data}
+          rowKey={(a) => a.id}
+          isLoading={list.isLoading}
+          isError={list.isError}
+          onRetry={() => list.refetch()}
+          columns={[
+            {
+              key: "name",
+              header: "Nombre",
+              render: (a) => (
+                <span className="flex items-center gap-2">
+                  {a.name} <StatusBadge kind="archived" value={a.archived} />
+                </span>
+              ),
+            },
+            {
+              key: "type",
+              header: "Tipo",
+              render: (a) => (
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  {TYPE_LABEL[a.type] ?? a.type}
+                </span>
+              ),
+            },
+            {
+              key: "balance",
+              header: "Saldo",
+              align: "right",
+              render: (a) => formatCents(a.balance, a.currency),
+            },
+          ]}
+          actionsAs="inline"
+          actions={[
+            {
+              label: "Restaurar",
+              show: (a) => a.archived,
+              disabled: restore.isPending,
+              onClick: (a) => restore.mutate(a.id),
+            },
+            { label: "Editar", show: (a) => !a.archived, onClick: (a) => setEditing(a) },
+            { label: "Archivar", show: (a) => !a.archived, onClick: (a) => setArchiving(a) },
+          ]}
+          emptyMessage="Todavía no tienes cuentas."
+          emptyDescription={WHAT_AN_ACCOUNT_IS}
+          emptyAction={{ label: "Crear la primera", onClick: () => setCreating(true) }}
+        />
+      </div>
 
       <EntityFormDialog
         open={creating}
