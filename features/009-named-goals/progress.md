@@ -116,7 +116,7 @@ three not-found tests. The residue fell from eleven lines to none.
 
 | What | Owner | How |
 |---|---|---|
-| The SQLite sandbox still crash-loops | human | destructive operation on `.dev-data/`, CHARTER §7 |
+| ~~The SQLite sandbox crash-loops~~ | — | **Closed 2026-08-10.** The sandbox held one fund on the withdrawn dated rule, so 0015 refused and the container never finished booting — the guard working, not a bug. Its intent was preserved rather than deleted: the fund became a meta wanting the same $10.000.000 by 2026-09. Backup at `.dev-data/quaestor.pre-0016.db` |
 
 ## Found here, not 009's, filed rather than fixed
 
