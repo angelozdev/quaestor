@@ -204,13 +204,15 @@ function FundSection({
 }) {
   const headingId = `heading-${shape}`
   return (
-    <section aria-labelledby={headingId} className="space-y-2">
-      <h2 id={headingId} className="text-xs font-semibold">
-        {heading}
-      </h2>
-      <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-        {says}
-      </p>
+    <section aria-labelledby={headingId} className="space-y-3">
+      <div className="border-b pb-2" style={{ borderColor: "var(--border)" }}>
+        <h2 id={headingId} className="text-xs font-semibold">
+          {heading}
+        </h2>
+        <p className="mt-0.5 text-sm" style={{ color: "var(--muted-foreground)" }}>
+          {says}
+        </p>
+      </div>
       {funds.length === 0 ? (
         <p className="max-w-prose py-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
           {`Todavía no tienes ${shape}s. ${shapeSentence(shape)}.`}

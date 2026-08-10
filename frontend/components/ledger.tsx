@@ -22,7 +22,10 @@ export function Section({
 }) {
   return (
     <section className={`space-y-3 ${className}`}>
-      <h2 className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+      <h2
+        className="border-b pb-2 text-xs font-medium"
+        style={{ color: "var(--muted-foreground)", borderColor: "var(--border)" }}
+      >
         {label}
       </h2>
       {children}

@@ -142,10 +142,7 @@ export function DataTable<T>({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr
-                  className="hairline-total"
-                  style={{ color: "var(--muted-foreground)", borderTop: "none" }}
-                >
+                <tr style={{ color: "var(--muted-foreground)" }}>
                   {columns.map((c) => (
                     <th
                       key={c.key}

@@ -111,7 +111,7 @@ export default function DashboardPage() {
   const negative = (report.data?.available.free ?? 0) < 0
 
   return (
-    <div className="animate-fade-up space-y-8">
+    <div className="animate-fade-up space-y-10">
       <PageHeader
         title="Dashboard"
         titleHidden
@@ -172,13 +172,9 @@ export default function DashboardPage() {
         {report.data && <WaitingMetas metas={report.data.available.metas} />}
       </div>
 
-      <hr style={{ borderColor: "var(--border)" }} />
-
       <ToPayWidget />
 
-      <hr style={{ borderColor: "var(--border)" }} />
-
-      <div className="grid gap-8 sm:grid-cols-2">
+      <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
         <Section label="Saldos">
           <QueryBoundary
             query={accounts}

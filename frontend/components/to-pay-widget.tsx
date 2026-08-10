@@ -50,7 +50,10 @@ export function ToPayWidget() {
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div
+        className="flex items-center justify-between gap-4 border-b pb-2"
+        style={{ borderColor: "var(--border)" }}
+      >
         <h2 className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
           Por pagar
         </h2>

@@ -271,10 +271,14 @@ as machine text, the system `ui-monospace` stack is used.
 
 ## Layout
 
-A single reading column, not a grid of tiles. The page is a vertical sequence of
-sections separated by 32px and, where a subject genuinely changes, by a
-hairline. Related rows sit 4–8px apart; a heading takes more space above it than
-below it.
+A single reading column, not a grid of tiles. Every section is the same three
+things in the same order: **its label, a hairline the width of the section, then
+its content.** That rule is what bounds a section without boxing it — remove the
+cards and put nothing in their place and the page reads as floating, which is the
+first thing the owner said when it did. Sections sit 40px apart and the page
+carries no separate `<hr>`: one device, not two.
+
+Related rows sit 4–8px apart; a heading takes more space above it than below it.
 
 **One container, 1152px, for every screen.** Measure is then controlled by the
 content that needs it — a term list caps at 32rem, prose at 65–75ch — never by a
@@ -400,8 +404,8 @@ other numbers. It is never collapsed, never behind a tab, and never a chart.
 
 - **Do** put `tnum` on every element that can hold a number, and right-align
   columns of amounts.
-- **Do** separate subjects with a 1px hairline and 32px of space instead of
-  wrapping each one in a card.
+- **Do** open every section with its label over a hairline, and space sections
+  40px apart, instead of wrapping each one in a card.
 - **Do** show a total's terms next to it, as the Liquidation, with nothing to
   click.
 - **Do** keep all three explanation lines on a fund row visible, ranked below

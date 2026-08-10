@@ -81,7 +81,7 @@ export default function ReportsPage() {
         errorMessage="No se pudo cargar el reporte"
       >
         {(data) => (
-          <div className="animate-fade-up space-y-8">
+          <div className="animate-fade-up space-y-10">
             <section className="space-y-4">
               <div className="space-y-1">
                 <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
@@ -130,8 +130,6 @@ export default function ReportsPage() {
                 </p>
               )}
             </section>
-
-            <hr style={{ borderColor: "var(--border)" }} />
 
             <Section label="Fondos y presupuestos">
               <DataTable
@@ -205,9 +203,7 @@ export default function ReportsPage() {
               </p>
             </Section>
 
-            <hr style={{ borderColor: "var(--border)" }} />
-
-            <div className="grid gap-8 sm:grid-cols-2">
+            <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
               <Section label="Por categoría">
                 {data.by_category.length > 0 ? (
                   <div>
@@ -240,8 +236,6 @@ export default function ReportsPage() {
                 )}
               </Section>
             </div>
-
-            <hr style={{ borderColor: "var(--border)" }} />
 
             <Section label="Disponible · cierre">
               <div className="max-w-lg">
