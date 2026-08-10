@@ -190,7 +190,7 @@ def when_preview(world: World, amount: str, target: str, currency: str) -> None:
         trm=fx.get_trm(world.session),
         currency=currency,
     )
-    world.pending_meta = (_cents(amount), target)
+    world.pending_meta = (_cents(amount), currency, target)
 
 
 @step(
@@ -212,8 +212,10 @@ def when_create_anyway(world: World, name: str) -> None:
     warning is a different act on a different noun; sharing the words would
     make which one ran depend on registration order.
     """
-    amount, target = world.pending_meta
-    meta = service.create_meta(world.session, name=name, amount=amount, target_month=target, today=_today(world))
+    amount, currency, target = world.pending_meta
+    meta = service.create_meta(
+        world.session, name=name, amount=amount, currency=currency, target_month=target, today=_today(world)
+    )
     _ids(world)[name] = meta.id
 
 
@@ -317,8 +319,15 @@ def then_preview_asks(world: World, amount: str) -> None:
     assert preview.asks == _cents(amount), f"the preview asks {preview.asks}, expected {_cents(amount)}"
 
 
-@step(rf"the user is warned it would ask (?P<amount>{_DEC}) COP a month")
-def then_warned_amount(world: World, amount: str) -> None:
+@step(rf"the user is warned it would ask (?P<amount>{_DEC}) (?P<currency>COP|USD) a month")
+def then_warned_amount(world: World, amount: str, currency: str) -> None:
+    """The instalment in the meta's own currency, the way every meta figure reads (AC-26).
+
+    The unit is asserted and not skipped over: a warning that quotes dollars as
+    pesos is the shape this scenario exists to catch.
+    """
+    asked_in = world.pending_meta[1]
+    assert asked_in == currency, f"the warning is about a meta in {asked_in}, not {currency}"
     preview = world.meta_preview
     assert preview.asks == _cents(amount), f"the warning said {preview.asks}, expected {_cents(amount)}"
 
@@ -415,7 +424,8 @@ def then_none_waiting(world: World) -> None:
     rf' in category "(?P<category>[^"]+)" linked to the meta "(?P<name>[^"]+)"'
 )
 def when_plan_linked(world: World, amount: str, category: str, name: str) -> None:
-    given_planned_linked(world, amount, category, name)
+    """Planning is the third way a link is made, so a refusal is an answer here, not a crash."""
+    world.attempt(given_planned_linked, world, amount, category, name)
 
 
 @step(
@@ -433,6 +443,17 @@ def given_planned_linked(world: World, amount: str, category: str, name: str) ->
         category_id=_spending_category_id(world, category),
         meta_id=_meta_id(world, name),
     ).id
+
+
+@step(r"the planned payment is rejected")
+def then_planned_rejected(world: World) -> None:
+    world.consume_rejection((ValidationError, NotFound), "planning a payment against a meta")
+
+
+@step(r"the user is told a cancelled meta takes no new link")
+def then_told_planned_cancelled(world: World) -> None:
+    said = getattr(world, "last_rejection", "")
+    assert "was cancelled and takes no new link" in said, f"the refusal said {said!r}"
 
 
 @step(r"the user confirms that payment")
@@ -639,6 +660,26 @@ def when_assistant_create_meta(world: World) -> None:
 @step(r"the assistant is asked to contribute to a meta")
 def when_assistant_contribute(world: World) -> None:
     world.assistant_meta_tools = _assistant_meta_tools()
+
+
+@step(r'the assistant\'s answer does not name "(?P<name>[^"]+)"')
+def then_assistant_omits(world: World, name: str) -> None:
+    """A meta claiming nothing of the month claims no line, so no line names it (AC-32)."""
+    world.require_clean("asking the assistant how much is available")
+    answer = world.assistant_answer or ""
+    assert name not in answer, f"the assistant's answer names {name!r}: {answer!r}"
+
+
+@step(
+    rf'the assistant\'s answer says "(?P<name>[^"]+)" gave back (?P<amount>{_DEC}) COP'
+    r" because its amount was lowered"
+)
+def then_assistant_gave_back(world: World, name: str, amount: str) -> None:
+    """Which meta handed the money back and why, in the words the card prints."""
+    world.require_clean("asking the assistant how much is available")
+    answer = world.assistant_answer or ""
+    expected = f"Given back by {name} (you lowered its amount): +{amount} COP"
+    assert expected in answer, f"the assistant's answer never says {expected!r}: {answer!r}"
 
 
 # ------------------------------------------------- moving and undoing the link
