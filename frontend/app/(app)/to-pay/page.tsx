@@ -10,10 +10,12 @@ import { EmptyState } from "@/components/empty-state"
 import { EntitySelect } from "@/components/entity-select"
 import { ErrorState } from "@/components/error-state"
 import { FormField } from "@/components/form-field"
+import { Section } from "@/components/ledger"
 import { MetaField } from "@/components/meta-field"
 import { MoneyAmount } from "@/components/money-amount"
 import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
+import { type Scope, ScopePicker } from "@/components/scope-picker"
 import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
@@ -23,8 +25,6 @@ import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
-
-type Scope = "week" | "month"
 
 function currencyOf(accounts: Account[] | undefined, id: number | null): string {
   return accounts?.find((a) => a.id === id)?.currency ?? "COP"
@@ -157,7 +157,7 @@ export default function ToPayPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Por pagar"
         action={
@@ -173,88 +173,63 @@ export default function ToPayPage() {
         help={<ScreenHelp screen="Por pagar">{TO_PAY_HELP}</ScreenHelp>}
       />
 
-      <div
-        className="inline-flex items-center gap-1 rounded-md p-0.5"
-        style={{ background: "var(--muted)" }}
-      >
-        {(["week", "month"] as Scope[]).map((s) => (
-          <Button
-            key={s}
-            type="button"
-            size="xs"
-            variant={scope === s ? "outline" : "ghost"}
-            onClick={() => setScope(s)}
-            className={scope === s ? "rounded" : "rounded text-muted-foreground"}
-          >
-            {s === "week" ? "Esta semana" : "Este mes"}
-          </Button>
-        ))}
-      </div>
+      <div className="space-y-3">
+        <ScopePicker scope={scope} onPick={setScope} />
 
-      {list.isError && (
-        <ErrorState message="No se pudo cargar lo pendiente" onRetry={() => list.refetch()} />
-      )}
+        {list.isError && (
+          <ErrorState message="No se pudo cargar lo pendiente" onRetry={() => list.refetch()} />
+        )}
 
-      {list.data && (
-        <>
+        {list.data && (
           <p className="text-[2.5rem] font-semibold leading-[1.05] tabular-nums tracking-tight">
             {formatCents(list.data.total_base, "COP")}
           </p>
-          {list.data.overdue.length === 0 && list.data.upcoming.length === 0 ? (
-            <EmptyState message="Nada pendiente en este periodo." description={WHAT_IS_PENDING} />
-          ) : (
-            <div className="space-y-4">
-              {list.data.overdue.length > 0 && (
-                <section className="space-y-0">
-                  <header className="flex items-center gap-2 pb-2">
-                    <p className="text-xs font-medium" style={{ color: "var(--expense)" }}>
-                      Vencidos
-                    </p>
-                    <Badge variant="destructive">{list.data.overdue.length}</Badge>
-                  </header>
-                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-                    {list.data.overdue.map((item) => (
-                      <ToPayRow
-                        key={item.id}
-                        item={item}
-                        isOverdueRow
-                        onConfirm={() => openConfirm(item)}
-                        onSkip={() => skip.mutate(item.id)}
-                        skipPending={skip.isPending}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              )}
+        )}
+      </div>
 
-              {list.data.upcoming.length > 0 && (
-                <section className="space-y-0">
-                  <header className="pb-2">
-                    <h2
-                      className="text-xs font-medium"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      {scope === "week" ? "Esta semana" : "Este mes"}
-                    </h2>
-                  </header>
-                  <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
-                    {list.data.upcoming.map((item) => (
-                      <ToPayRow
-                        key={item.id}
-                        item={item}
-                        isOverdueRow={false}
-                        onConfirm={() => openConfirm(item)}
-                        onSkip={() => skip.mutate(item.id)}
-                        skipPending={skip.isPending}
-                      />
-                    ))}
-                  </ul>
-                </section>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      {list.data &&
+        (list.data.overdue.length === 0 && list.data.upcoming.length === 0 ? (
+          <EmptyState message="Nada pendiente en este periodo." description={WHAT_IS_PENDING} />
+        ) : (
+          <div className="space-y-10">
+            {list.data.overdue.length > 0 && (
+              <Section
+                label="Vencidos"
+                badge={<Badge variant="destructive">{list.data.overdue.length}</Badge>}
+              >
+                <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                  {list.data.overdue.map((item) => (
+                    <ToPayRow
+                      key={item.id}
+                      item={item}
+                      isOverdueRow
+                      onConfirm={() => openConfirm(item)}
+                      onSkip={() => skip.mutate(item.id)}
+                      skipPending={skip.isPending}
+                    />
+                  ))}
+                </ul>
+              </Section>
+            )}
+
+            {list.data.upcoming.length > 0 && (
+              <Section label={scope === "week" ? "Esta semana" : "Este mes"}>
+                <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
+                  {list.data.upcoming.map((item) => (
+                    <ToPayRow
+                      key={item.id}
+                      item={item}
+                      isOverdueRow={false}
+                      onConfirm={() => openConfirm(item)}
+                      onSkip={() => skip.mutate(item.id)}
+                      skipPending={skip.isPending}
+                    />
+                  ))}
+                </ul>
+              </Section>
+            )}
+          </div>
+        ))}
 
       {/* Confirm dialog */}
       <Dialog open={confirming !== null} onOpenChange={(o) => !o && setConfirming(null)}>

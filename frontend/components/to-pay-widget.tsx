@@ -5,15 +5,15 @@ import { endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-f
 import { useState } from "react"
 import { toast } from "sonner"
 import { ErrorState } from "@/components/error-state"
+import { Section } from "@/components/ledger"
 import { MoneyAmount } from "@/components/money-amount"
+import { type Scope, ScopePicker } from "@/components/scope-picker"
 import { confirmPayment, toPay } from "@/lib/api/planned"
 import type { Transaction } from "@/lib/api/types"
 import { formatDate } from "@/lib/date"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
 import { Badge, Button } from "@/ui"
-
-type Scope = "week" | "month"
 
 function windowFor(scope: Scope) {
   const now = new Date()
@@ -48,37 +48,7 @@ export function ToPayWidget() {
   })
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div
-        className="flex items-center justify-between gap-4 border-b pb-2"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <h2 className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
-          Por pagar
-        </h2>
-        <div
-          className="flex items-center gap-1 rounded-md p-0.5"
-          style={{ background: "var(--muted)" }}
-        >
-          {(["week", "month"] as Scope[]).map((s) => {
-            const active = scope === s
-            return (
-              <Button
-                key={s}
-                type="button"
-                size="xs"
-                variant={active ? "outline" : "ghost"}
-                onClick={() => setScope(s)}
-                className={active ? "rounded" : "rounded text-muted-foreground"}
-              >
-                {s === "week" ? "Esta semana" : "Este mes"}
-              </Button>
-            )
-          })}
-        </div>
-      </div>
-
+    <Section label="Por pagar" aside={<ScopePicker scope={scope} onPick={setScope} />}>
       {query.isLoading && (
         <div className="space-y-2">
           {[1, 2].map((i) => (
@@ -110,9 +80,12 @@ export function ToPayWidget() {
               {query.data.overdue.length > 0 && (
                 <section className="space-y-0">
                   <header className="flex items-center gap-2 pb-1">
-                    <p className="text-xs font-medium" style={{ color: "var(--expense)" }}>
+                    <h3
+                      className="text-xs font-medium"
+                      style={{ color: "var(--muted-foreground)" }}
+                    >
                       Vencidos
-                    </p>
+                    </h3>
                     <Badge variant="destructive">{query.data.overdue.length}</Badge>
                   </header>
                   <ul className="space-y-0">
@@ -131,12 +104,12 @@ export function ToPayWidget() {
               {query.data.upcoming.length > 0 && (
                 <section className="space-y-0">
                   <header className="pb-1">
-                    <h2
+                    <h3
                       className="text-xs font-medium"
                       style={{ color: "var(--muted-foreground)" }}
                     >
                       {scope === "week" ? "Esta semana" : "Este mes"}
-                    </h2>
+                    </h3>
                   </header>
                   <ul className="space-y-0">
                     {query.data.upcoming.map((item) => (
@@ -154,7 +127,7 @@ export function ToPayWidget() {
           )}
         </>
       )}
-    </div>
+    </Section>
   )
 }
 

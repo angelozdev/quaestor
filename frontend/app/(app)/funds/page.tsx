@@ -6,6 +6,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
+import { Section } from "@/components/ledger"
 import { PageHeader } from "@/components/page-header"
 import { QueryBoundary } from "@/components/query-boundary"
 import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
@@ -204,15 +205,7 @@ function FundSection({
 }) {
   const headingId = `heading-${shape}`
   return (
-    <section aria-labelledby={headingId} className="space-y-3">
-      <div className="border-b pb-2" style={{ borderColor: "var(--border)" }}>
-        <h2 id={headingId} className="text-xs font-semibold">
-          {heading}
-        </h2>
-        <p className="mt-0.5 text-sm" style={{ color: "var(--muted-foreground)" }}>
-          {says}
-        </p>
-      </div>
+    <Section label={heading} says={says} headingId={headingId}>
       {funds.length === 0 ? (
         <p className="max-w-prose py-2 text-sm" style={{ color: "var(--muted-foreground)" }}>
           {`Todavía no tienes ${shape}s. ${shapeSentence(shape)}.`}
@@ -221,10 +214,7 @@ function FundSection({
         <div className="overflow-x-auto">
           <table aria-labelledby={headingId} className="w-full text-sm">
             <thead>
-              <tr
-                className="hairline-total"
-                style={{ color: "var(--muted-foreground)", borderTop: "none" }}
-              >
+              <tr style={{ color: "var(--muted-foreground)" }}>
                 <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
                   Categoría
                 </th>
@@ -256,7 +246,7 @@ function FundSection({
           </table>
         </div>
       )}
-    </section>
+    </Section>
   )
 }
 
@@ -290,7 +280,7 @@ export default function FundsPage() {
   const deletingShape = deleting === null ? "fondo" : shapeOf(deleting)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Fondos y presupuestos"
         subtitle={month}
@@ -349,7 +339,7 @@ export default function FundsPage() {
         }}
       >
         {(data) => (
-          <div className="space-y-8">
+          <div className="space-y-10">
             {SECTIONS.map((section) => (
               <FundSection
                 key={section.shape}
