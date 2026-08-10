@@ -1,12 +1,12 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: the owner merges `cp6-independent-review` into `main` | BLOCKED: none
+> ▶ CP8 Harden — 5/6 criteria met | NEXT: done — merged to `main` 2026-08-10 as `ae5f0ae` | BLOCKED: none
 
 # Progress — 009 named-goals
 
 Metas: named savings goals beside the fund, not inside it. 45 ACs, 145
 scenarios. Merged to `main` on 2026-08-09. An independent review of the merged
 code then found six more user-facing defects; those fixes, the scenarios that
-catch them and a behaviour-preserving refactor sit on `cp6-independent-review`,
-unmerged.
+catch them and a behaviour-preserving refactor merged on 2026-08-10 as
+`ae5f0ae`. **Done.**
 
 The green suite has been wrong six times in this feature, always the same way:
 a behaviour reachable from Python and from no screen, or reachable from one
@@ -116,8 +116,7 @@ three not-found tests. The residue fell from eleven lines to none.
 
 | What | Owner | How |
 |---|---|---|
-| Merge `cp6-independent-review` into `main` | human (CHARTER §7) | four commits, `397c21f` … `5cef2b7` |
-| What should closing a meta *as of a month before it existed* do? | human | CP8's one real survivor. Refused today; no AC covers it. The screen never sends such a month, so it is an API-surface question |
+| What should closing a meta *as of a month before it existed* do? | human | CP8's one real survivor, and the only thing this feature never decided. Refused today; no AC covers it. The screen never sends such a month, so it is an API-surface question |
 | The SQLite sandbox still crash-loops | human | destructive operation on `.dev-data/`, CHARTER §7 |
 
 ## Found here, not 009's, filed rather than fixed
