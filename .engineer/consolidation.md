@@ -122,7 +122,13 @@ pipeline generation → tests green. Bounded, one feature per task.
      row with every action hidden would open an empty dropdown. Trigger to
      fix: the first `show` predicate on `Editar`/`Eliminar`, or a page whose
      whole action set is conditional.
-3. recurring-engine ← **in progress.** `features/007-recurring-engine`, branch
+3. ~~recurring-engine~~ ← **DONE 2026-08-02.** `features/007-recurring-engine`
+   merged to `main` as `91f31ae`; 28 ACs, 69 scenarios, feature `status: done`.
+   The record of how it was worked is kept below because its method — clean-room
+   ACs first, then diff against shipped behaviour and resolve every divergence
+   as fix-or-accept — is the one this backlog reuses for every row after it.
+
+   `features/007-recurring-engine`, branch
    `recurring-engine`, CP1.5 done 2026-08-02. Method fixed at intake by user
    decision: design the ACs clean-room (product-first, without reading
    `services/recurring.py`), then diff against shipped behaviour and resolve
@@ -177,20 +183,27 @@ pipeline generation → tests green. Bounded, one feature per task.
 11. bff-api-proxy
 12. markdown-rendering
 13. Tier 4 features (masters + UI infra), one folder per row, in table order
-14. goals ← **cancelled 2026-08-02.** The discuss that promoted 003 decided goals
-    are not a feature: a goal becomes a fund with a `target-by-date` funding
-    rule, and the `Goal` / `GoalContribution` tables plus the goals screen are
-    deleted. There is nothing left to cover — 003's own acceptance suite owns
-    the behaviour. Delete this row once 003 ships; keep it until then so the
-    cancellation is not mistaken for an oversight.
-15. budgets-envelopes + safe-to-spend ← **formalized at onboarding; paused pending
-    sinking-funds redesign (features/003-sinking-funds, now `ready`)**
+15. budgets-envelopes + safe-to-spend ← **UNPAUSED 2026-08-10.** It waited on the
+    sinking-funds redesign, and `features/003-sinking-funds` is `done`. Nothing
+    blocks it now.
     - Open followup from fix `2026-07-31-phantom-budget-assignment`
-      (gap: `missing_ac`): when this unpauses, land "archived and
-      budget-excluded categories cannot hold an envelope" as an AC in
-      `acs.md` and propagate it to `spec.md`. The rule is already enforced
-      in `services/budgets.set_budget` and pinned by service-layer
-      regression tests — only the AC/spec paper trail is missing.
+      (gap: `missing_ac`): land "archived and budget-excluded categories cannot
+      hold an envelope" as an AC in `acs.md` and propagate it to `spec.md`. The
+      rule is already enforced in `services/budgets.set_budget` and pinned by
+      service-layer regression tests — only the AC/spec paper trail is missing.
+    - Second followup, from 009's close: **a meta cannot be closed as of a month
+      before it existed** is the shape to look for here too. Product ADR-045
+      settled it for metas; whether an envelope or a budget answers a month
+      before it was set is unasked.
+
+*(Row 14, `goals`, was deleted on 2026-08-10 as its own note instructed —
+"delete this row once 003 ships". Goals are not a feature: a goal became a fund
+with a dated rule, and 009 then withdrew that rule in favour of the meta. The
+`Goal` / `GoalContribution` tables and the goals screen are gone, and 003's and
+009's acceptance suites own the behaviour between them. **The number is left
+vacant rather than closed up**, because `.engineer/fixes/2026-07-31-phantom-budget-assignment.md`
+and its handoff both cite "consolidation #15", and those are records of what was
+true when they were written.)*
 
 ## Cleanup tasks (doc/code drift — approved at triage)
 
