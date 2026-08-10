@@ -2,10 +2,11 @@
 
 # Progress — 009 named-goals
 
-Metas: named savings goals beside the fund, not inside it. 45 ACs, 139
+Metas: named savings goals beside the fund, not inside it. 45 ACs, 145
 scenarios. Merged to `main` on 2026-08-09. An independent review of the merged
-code then found six more user-facing defects; those fixes and a
-behaviour-preserving refactor sit on `cp6-independent-review`, unmerged.
+code then found six more user-facing defects; those fixes, the scenarios that
+catch them and a behaviour-preserving refactor sit on `cp6-independent-review`,
+unmerged.
 
 The green suite has been wrong six times in this feature, always the same way:
 a behaviour reachable from Python and from no screen, or reachable from one
@@ -64,9 +65,9 @@ written and shipped.
 ## Where the code stands
 
 ```
-009           139 escenarios · unbound 0
+009           145 escenarios · unbound 0
 backend      1126 passed        (era 1082 al mergear)
-aceptación    486 passed        (eran 472)
+aceptación    492 passed        (eran 472)
 vitest         56 archivos · 440 passed
 lint          exit 0 · Contracts 2 kept, 0 broken
 cobertura     backend unión 96,02% · frontend 84,1%
@@ -115,8 +116,7 @@ three not-found tests. The residue fell from eleven lines to none.
 
 | What | Owner | How |
 |---|---|---|
-| Merge `cp6-independent-review` into `main` | human (CHARTER §7) | two commits, `397c21f` and `cf81348` |
-| Permission to edit `spec.md` | human (CLAUDE.md) | six scenarios drafted, one per defect that is observable as behaviour; until then they are pinned by unit and API tests only |
+| Merge `cp6-independent-review` into `main` | human (CHARTER §7) | four commits, `397c21f` … `5cef2b7` |
 | What should closing a meta *as of a month before it existed* do? | human | CP8's one real survivor. Refused today; no AC covers it. The screen never sends such a month, so it is an API-surface question |
 | The SQLite sandbox still crash-loops | human | destructive operation on `.dev-data/`, CHARTER §7 |
 
@@ -160,6 +160,7 @@ three not-found tests. The residue fell from eleven lines to none.
 | 2026-08-10T1100 | refine (round 2) | 3 lenses + 4 appliers, all fresh | 39 findings; 6 user-facing defects; 7 refactor items byte-identical |
 | 2026-08-10T1115 | crap-analyzer (round 2) | subagent-crap-cp7-round2 | 96,02% union; residue 11 → 3 lines, then 0 |
 | 2026-08-10T1145 | mutation (round 2) | subagent-mutation-cp8-round2 | 99,7% adjusted; 9 equivalent survivors, 1 real gap left open for an AC |
+| 2026-08-10T1230 | atdd (defect scenarios) | subagent-atdd-cp3-defects | 139 → 145 scenarios, additions only; 5 proven red at 46af2da, 1 control arm green on both sides |
 
 ## Tracker sync
 
