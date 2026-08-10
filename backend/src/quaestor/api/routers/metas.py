@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from ...services import metas
+from ...services import fx, metas
 from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
@@ -49,6 +49,8 @@ def preview_meta(body: MetaCreate, month: str, session: Session = Depends(get_se
         target_month=body.target_month,
         today=month,
         income=month_service.income_of(session, month),
+        trm=fx.get_trm(session),
+        currency=body.currency,
         stated_opening=body.stated_opening,
     )
 
@@ -65,8 +67,7 @@ def set_meta(meta_id: int, body: MetaUpdate, month: str, session: Session = Depe
 
 @router.post("/{meta_id}/contributions", response_model=MetaContributionOut, status_code=201)
 def contribute(meta_id: int, body: MetaContributionIn, month: str, session: Session = Depends(get_session)):
-    metas.contribute(session, meta_id, year_month=month, amount=body.amount)
-    return metas.contributions_of(session, meta_id)[-1]
+    return metas.contribute(session, meta_id, year_month=month, amount=body.amount)
 
 
 @router.get("/{meta_id}/contributions", response_model=list[MetaContributionOut])

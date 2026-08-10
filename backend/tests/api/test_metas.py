@@ -361,6 +361,56 @@ def test_what_the_owner_says_he_already_has_lowers_the_preview_over_the_wire(cli
     assert (plain["asks"], stated["asks"]) == (160_000_000, 100_000_000)
 
 
+def test_contributing_answers_with_the_contribution_just_made(client, auth):
+    """AC-42 allows a contribution per month, so the newest row is not the new one.
+
+    The endpoint re-read the meta's whole history and took the last of it,
+    which is ordered by month. Putting money into August after September was
+    already on record answered with September's $300.000 while August's
+    $100.000 was what got written.
+    """
+    meta = _meta(client, auth, amount=800_000_000, target="2026-12")
+    client.post(
+        f"/api/metas/{meta['id']}/contributions",
+        headers=auth,
+        params={"month": "2026-09"},
+        json={"amount": 30_000_000},
+    )
+
+    made = client.post(
+        f"/api/metas/{meta['id']}/contributions", headers=auth, params=MONTH, json={"amount": 10_000_000}
+    ).json()
+
+    assert (made["year_month"], made["amount"]) == ("2026-08", 10_000_000)
+
+
+def test_the_preview_warns_about_a_dollar_meta_the_month_cannot_take(client, auth, account, income_category):
+    """AC-45 over the wire: the currency has to reach the rule that weighs the figure.
+
+    US$2.000 due this month costs $8.000.000 at the rate, against a month
+    earning $5.000.000. A warning that compared the cents as if both were pesos
+    would answer that 200.000 is comfortably under 500.000.000 and stay quiet.
+    """
+    client.post(
+        "/api/transactions",
+        headers=auth,
+        json={
+            "type": "income",
+            "category_id": income_category,
+            "account_id": account["id"],
+            "amount": 500_000_000,
+            "currency": "COP",
+            "date": "2026-08-05",
+            "payee": "Empresa",
+        },
+    )
+    body = {"name": "Curso", "amount": 200_000, "target_month": "2026-08", "currency": "USD"}
+
+    preview = client.post("/api/metas/preview", headers=auth, params=MONTH, json=body).json()
+
+    assert preview["over_the_month"] is True
+
+
 def test_a_dollar_metas_peso_cost_travels_beside_its_own_figure(client, auth):
     """AC-26 over the wire: the breakdown is a peso column and the meta reports dollars."""
     _meta(client, auth, name="Curso", amount=200_000, target="2027-01", currency="USD")

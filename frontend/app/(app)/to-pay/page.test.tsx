@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { toPay } = vi.hoisted(() => ({ toPay: vi.fn() }))
+const { toPay, listMetas } = vi.hoisted(() => ({ toPay: vi.fn(), listMetas: vi.fn() }))
 
 vi.mock("@/lib/api/planned", () => ({
   toPay,
@@ -14,13 +14,14 @@ vi.mock("@/lib/api/planned", () => ({
 vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
 
-vi.mock("@/lib/api/metas", () => ({ listMetas: vi.fn().mockResolvedValue([]) }))
+vi.mock("@/lib/api/metas", () => ({ listMetas }))
 
 import ToPayPage from "./page"
 
 beforeEach(() => {
   vi.clearAllMocks()
   toPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
+  listMetas.mockResolvedValue([])
 })
 
 describe("AC-7 — every screen carries the same control", () => {
@@ -53,5 +54,16 @@ describe("AC-43 — a debt can be pointed at a meta when it is written down", ()
     await user.click(await screen.findByRole("button", { name: /Planear/ }))
 
     expect(await screen.findByLabelText("¿Es la compra de una meta?")).toBeInTheDocument()
+  })
+
+  it("A due date in another month offers that month's metas", async () => {
+    const user = userEvent.setup()
+    render(<ToPayPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: /Planear/ }))
+    await screen.findByLabelText("¿Es la compra de una meta?")
+
+    await user.type(screen.getByLabelText(/Fecha de vencimiento/), "2027-03-15")
+
+    await waitFor(() => expect(listMetas).toHaveBeenCalledWith("2027-03"))
   })
 })

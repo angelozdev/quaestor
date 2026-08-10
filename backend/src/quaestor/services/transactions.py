@@ -54,7 +54,7 @@ def _require_account(session: Session, account_id: int) -> Account:
     return acc
 
 
-def _refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
+def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
     """A meta is pointed at by a purchase, and by nothing else (AC-23, AC-25).
 
     Money coming in is not a purchase, and money moving between the owner's own
@@ -97,7 +97,7 @@ def _record(
     if currency != acc.currency:
         raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
     category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
-    _refuse_bad_meta(session, tx_type, meta_id)
+    refuse_bad_meta(session, tx_type, meta_id)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -472,7 +472,7 @@ def update_transaction(
     if category_id is not _UNSET:
         tx.category_id = categories.resolve_for_movement(session, tx.type, category_id)
     if meta_id is not _UNSET:
-        _refuse_bad_meta(session, tx.type, meta_id)
+        refuse_bad_meta(session, tx.type, meta_id)
         tx.meta_id = meta_id
     session.add(tx)
     session.commit()

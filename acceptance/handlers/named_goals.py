@@ -6,7 +6,7 @@ The API bound here is ``quaestor.services.metas``:
 ``set_meta``       change its name, amount or target month while it runs
 ``preview_meta``   what it would ask before it exists (AC-45)
 ``statuses``       what every live meta asks and holds for one month
-``asks_total``     what they ask together, in COP, for the month's number
+``fold``           what they ask, hold and free together, for the month's number
 
 Dates are absolute, as in 003 and for the same reason: a meta is month
 arithmetic and "2 months ago" cannot pin $1.600.000 the way a calendar can.
@@ -30,8 +30,9 @@ from quaestor.domain.errors import NotFound, QuaestorError, ValidationError
 from quaestor.domain.models import Category as _Category
 from quaestor.domain.models import Meta as _Meta
 from quaestor.domain.money import major_to_cents
+from quaestor.domain.rules import year_month_of
 from quaestor.mcp import tools as _mcp_tools
-from quaestor.services import categories, planned, transactions
+from quaestor.services import categories, fx, planned, transactions
 from quaestor.services import metas as service
 from quaestor.services import month as month_service
 from quaestor.services.month_aggregate import load_month
@@ -52,12 +53,8 @@ def _cents(amount: str) -> int:
     return major_to_cents(amount)
 
 
-def _month_of(day: Date) -> str:
-    return f"{day.year:04d}-{day.month:02d}"
-
-
 def _today(world: World) -> str:
-    return _month_of(world.today)
+    return year_month_of(world.today)
 
 
 def _ids(world: World) -> dict[str, int]:
@@ -181,20 +178,27 @@ def when_view_metas(world: World, month: str) -> None:
     world.metas_view = {found.name: found for found in service.statuses(agg)}
 
 
-@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?:COP|USD) by (?P<target>{_MONTH}) would ask")
-def when_preview(world: World, amount: str, target: str) -> None:
+@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask")
+def when_preview(world: World, amount: str, target: str, currency: str) -> None:
     month = _today(world)
     income = month_service.available(world.session, month).income
-    world.meta_preview = service.preview_meta(amount=_cents(amount), target_month=target, today=month, income=income)
+    world.meta_preview = service.preview_meta(
+        amount=_cents(amount),
+        target_month=target,
+        today=month,
+        income=income,
+        trm=fx.get_trm(world.session),
+        currency=currency,
+    )
     world.pending_meta = (_cents(amount), target)
 
 
 @step(
-    rf"the user was warned a meta of (?P<amount>{_DEC}) (?:COP|USD) by (?P<target>{_MONTH}) "
+    rf"the user was warned a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) "
     rf"would ask (?P<asks>{_DEC}) (?:COP|USD) a month"
 )
-def given_warned(world: World, amount: str, target: str, asks: str) -> None:
-    when_preview(world, amount, target)
+def given_warned(world: World, amount: str, target: str, asks: str, currency: str) -> None:
+    when_preview(world, amount, target, currency)
     preview = world.meta_preview
     assert preview.asks == _cents(asks), f"the warning said {preview.asks}, expected {_cents(asks)}"
 
@@ -291,7 +295,7 @@ def then_breakdown_metas(world: World, amount: str) -> None:
     view = getattr(world, "available_view", None)
     assert view is not None, "nothing opened the money available into its breakdown"
     agg = load_month(world.session, _today(world))
-    asking = service.asks_total(agg) + service.cancelled_asks_total(agg)
+    asking = service.fold(agg).asks
     assert asking == _cents(amount), f"the metas ask {asking}, expected {_cents(amount)}"
 
 
@@ -450,7 +454,7 @@ def when_contribute(world: World, amount: str, name: str) -> None:
         world.last_contributed_to = _meta_id(world, name)
         world.last_put_in = service.contribute(
             world.session, world.last_contributed_to, year_month=_today(world), amount=_cents(amount)
-        )
+        ).amount
     except _REJECTED as exc:
         world.session.rollback()
         world.contribution_refusal = str(exc)

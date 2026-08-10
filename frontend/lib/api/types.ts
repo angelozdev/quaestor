@@ -473,7 +473,6 @@ export interface MetaCreate {
 
 export interface MetaPreview {
   asks: number
-  months_left: number
   over_the_month: boolean
 }
 

@@ -257,12 +257,6 @@ _AVERAGE_IN_PLAIN_WORDS = (
     r" starting (?P<start>" + _MONTH + r")"
 )
 _OBLIGATIONS_IN_PLAIN_WORDS = r" that asks what its recurring charges need, starting (?P<start>" + _MONTH + r")"
-_TARGET_IN_PLAIN_WORDS = (
-    r" that saves (?P<target>" + _DEC + r") COP by (?P<by>" + _MONTH + r"),"
-    r" starting (?P<start>" + _MONTH + r")"
-)
-
-
 # -------------------------------------------------------------------- Given
 
 
@@ -343,13 +337,6 @@ def given_fund_from_obligations(world: World, name: str, start: str, opening, ro
 @step(r'a fund on "(?P<name>[^"]+)"' + _OBLIGATIONS_IN_PLAIN_WORDS)
 def given_fund_from_obligations_plainly(world: World, name: str, start: str) -> None:
     _make_fund(world, name, rule="from-recurring", start_month=start)
-    world.require_clean(f"creating the fund on {name!r}")
-
-
-@step(r'a fund on "(?P<name>[^"]+)"' + _TARGET)
-@step(r'a fund on "(?P<name>[^"]+)"' + _TARGET_IN_PLAIN_WORDS)
-def given_fund_target(world: World, name: str, target: str, by: str, start: str, opening=None, roll=None) -> None:
-    _make_fund(world, name, **_target_spec(target, by, start, opening, roll))
     world.require_clean(f"creating the fund on {name!r}")
 
 
@@ -538,15 +525,6 @@ def when_create_fund_target(
     world: World, mode: str, name: str, target: str, by: str, start: str, opening, roll
 ) -> None:
     _make_fund(world, name, **_target_spec(target, by, start, opening, roll))
-
-
-@step(r'the user starts creating a fund on "(?P<name>[^"]+)"' + _TARGET)
-def when_start_creating_fund(world: World, name: str, target: str, by: str, start: str, opening, roll) -> None:
-    spec = _target_spec(target, by, start, opening, roll)
-    world.fund_preview = world.attempt(
-        _call, "preview_fund", world.session, category_id=_category_id(world, name), **spec
-    )
-    world.pending_fund = (name, spec)
 
 
 @step(r"the user goes ahead anyway")
@@ -937,7 +915,7 @@ def then_breakdown_adds_up(world: World) -> None:
     metas = getattr(view, "metas", [])
     contributed = getattr(view, "contributed", 0)
     released = getattr(view, "released", 0)
-    claimed = sum(getattr(line, "asks", 0) for line in lines) + sum(getattr(m, "asks", 0) for m in metas)
+    claimed = sum(getattr(line, "asks", 0) for line in lines) + sum(getattr(m, "asks_cop", 0) for m in metas)
     total = income - claimed - contributed + released - uncovered
     assert total == free, f"the breakdown adds to {total} but the money available is {free}"
 

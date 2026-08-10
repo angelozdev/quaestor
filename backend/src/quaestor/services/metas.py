@@ -5,10 +5,15 @@ meta's start month to the month being asked about, so a past month answers as
 that month stood and cancelling in December cannot rewrite what September
 reported.
 
-**The month always charges its instalment.** `meta_ask_calc` reads what the
-meta opened the month with and nothing else; contributing, completing,
-cancelling and editing are separate terms in the month, never adjustments to
-the instalment. An instalment of zero happens only because nothing is missing.
+**No act of the owner's waives the instalment.** `meta_ask_calc` reads what the
+meta opened the month with and nothing else; contributing, cancelling and
+editing are separate terms in the month, never adjustments to what it asks.
+
+The one thing that ends the series is the purchase, and only from the month
+after the one it was made in — the purchase month still charges, because what
+it asks is part of what covered the thing. Saying the meta wants a new amount
+or a new month from then on resumes it, and it stays resumed (ADR-0048,
+ADR-0049, narrowing ADR-0046 on this point).
 
 This module does not import `services.funds`, and `services.funds` does not
 import this. Both read the same `MonthAggregate` and hand their folds to
@@ -17,7 +22,9 @@ import this. Both read the same `MonthAggregate` and hand their folds to
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
+from decimal import Decimal
 
 from sqlmodel import Session, select
 
@@ -27,9 +34,9 @@ from ..domain.models import Meta, MetaAmendment, MetaContribution
 from ..domain.money import to_cop_cents
 from ..domain.rules import (
     meta_ask_calc,
-    meta_uncovered_calc,
     months_to_meta,
     next_year_month,
+    uncovered_excess_calc,
     year_month_of,
 )
 from .month_aggregate import MonthAggregate, load_month, require_year_month
@@ -43,7 +50,6 @@ class MetaPreview:
     """
 
     asks: int
-    months_left: int
     over_the_month: bool
 
 
@@ -127,18 +133,33 @@ class _Month:
     released: int = 0
 
 
-def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
+def _wanted_as_of(meta: Meta, amendments: Iterable[MetaAmendment], month: str) -> tuple[int, str]:
     """What the meta wanted, and by when, as of one month (AC-11).
 
     The meta's own amount and target are the first term of the series; each
-    amendment replaces them from its own month on. Nothing is rewritten, which
-    is why a past month still answers as that month stood (AC-27).
+    amendment replaces them from its own month on, so the answer is the last one
+    at or before the month. Nothing is rewritten, which is why a past month
+    still answers as that month stood (AC-27).
+
+    The rule lives here alone: the read path folds it over the rows the
+    aggregate carries and the write path over the rows it queries, and a second
+    copy is how an edit came to silently undo an earlier one.
+
+    Args:
+        meta: the meta, whose own columns are the series' first term.
+        amendments: this meta's amendments, in any order.
+        month: the month being asked about, YYYY-MM.
     """
-    amount, target = meta.amount, meta.target_month
-    for row in agg.amendments.get(meta.id, []):
-        if row.year_month <= month:
-            amount, target = row.amount, row.target_month
-    return amount, target
+    effective = [row for row in amendments if row.year_month <= month]
+    if not effective:
+        return meta.amount, meta.target_month
+    last = max(effective, key=lambda row: row.year_month)
+    return last.amount, last.target_month
+
+
+def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
+    """What the meta wanted as of one month, over the amendments in memory."""
+    return _wanted_as_of(meta, agg.amendments.get(meta.id, ()), month)
 
 
 def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Month:
@@ -197,20 +218,29 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Walked:
     return _Walked(last, finished or last.released > 0)
 
 
-def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaStatus:
+def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = False) -> MetaStatus:
     """What one meta reports for the month this aggregate holds.
 
-    A meta is **complete** when the thing was bought, or when the owner lowered
-    the amount below what it already held — strictly below, because a meta that
-    has exactly filled up has not finished: it is waiting for the purchase, and
+    The walk is handed in rather than taken, the way a fund's is: every figure
+    below comes out of it, and the month reads several of them per meta.
+
+    A meta is **complete** when it will ask nothing after this month: the thing
+    was bought and the owner has not restarted it, or he lowered the amount
+    below what it already held — strictly below, because a meta that has
+    exactly filled up has not finished: it is waiting for the purchase, and
     AC-17 keeps it running while its sibling completes. What a full meta stops
     doing is asking, and that falls out of the arithmetic rather than a flag.
+
+    Saying a bought meta wants more resumes it and it stays resumed
+    (ADR-0049), so it is running again — the screen names it neither cumplida
+    nor closable, and offers to put money in. A purchase is timeless and this
+    is not: the question is what the month after this one will ask.
     """
-    walked = _walk(agg, meta).month
+    month = walked.month
     amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
-    complete = bought or walked.released > 0
-    progress = min(round(walked.holds * 100 / amount), 100) if amount else 0
+    complete = _finished_before(agg, meta, next_year_month(agg.year_month)) or month.released > 0
+    progress = min(round(month.holds * 100 / amount), 100) if amount else 0
     return MetaStatus(
         meta_id=meta.id,
         name=meta.name,
@@ -218,15 +248,15 @@ def _status(agg: MonthAggregate, meta: Meta, cancelled: bool = False) -> MetaSta
         amount=amount,
         currency=meta.currency,
         target_month=target,
-        asks=walked.ask,
-        asks_cop=to_cop_cents(walked.ask, meta.currency, agg.trm),
-        holds=walked.holds,
+        asks=month.ask,
+        asks_cop=to_cop_cents(month.ask, meta.currency, agg.trm),
+        holds=month.holds,
         progress=progress,
         complete=complete,
         closed=meta.closed,
         waiting=target < agg.year_month and not bought and not meta.closed,
         cancelled=cancelled,
-        released=_released_by(agg, meta) if cancelled else to_cop_cents(walked.released, meta.currency, agg.trm),
+        released=_released_by(agg, meta, walked) if cancelled else to_cop_cents(month.released, meta.currency, agg.trm),
     )
 
 
@@ -238,20 +268,63 @@ def statuses(agg: MonthAggregate) -> list[MetaStatus]:
     that named every other claim but not that one would not add up. Leaving the
     metas screen is a different act, and `list_metas` is where it happens.
     """
-    return [_status(agg, meta) for meta in agg.metas]
+    return [_status(agg, meta, _walk(agg, meta)) for meta in agg.metas]
 
 
-def cancelled_statuses(agg: MonthAggregate) -> list[MetaStatus]:
-    """Metas cancelled in this month, as the month still reports them.
+@dataclass(frozen=True)
+class MetaFold:
+    """What every meta does to one month, folded once.
 
-    The month they were cancelled in is the last one that names them: it
-    charged their instalment and handed back what they held, and a breakdown
-    that omitted them would not add up.
+    `lines` is what each of them reports: the live ones, and the ones cancelled
+    in this month, which the month must still name because it charged their
+    instalment and handed back what they held.
+
+    `asks` is what they claim of the month in COP, the cancelled ones included
+    — cancelling part-way through does not hand the instalment back, and
+    releasing more than was ever taken would mint money (product ADR-014). The
+    two are one term and are never offered apart: a caller free to take the
+    first and forget the second is how a charge goes unnamed, which is what
+    ADR-0049's postmortem is about.
+
+    `contributed` is what the owner set aside by hand this month, cancelled
+    metas included for the same reason — charging one side and not the other
+    would hand him that money twice. `released` is what came back to the month,
+    from cancellations and from amounts lowered below what the meta already
+    held (AC-15, AC-16); it is read for that one month and never again, so
+    November cannot give back what October already gave. `uncovered` is what
+    each linked purchase cost past what its meta had (AC-12), the seam where
+    double counting would enter.
+
+    All of it comes out of one walk per meta, because walking the metas is the
+    dominant cost of the month's read path.
     """
-    return [_status(agg, meta, cancelled=True) for meta in _cancelled_this_month(agg) if meta.archived]
+
+    lines: list[MetaStatus]
+    asks: int
+    contributed: int
+    released: int
+    uncovered: int
 
 
-def _off_the_screen(agg: MonthAggregate, meta: Meta) -> bool:
+def fold(agg: MonthAggregate) -> MetaFold:
+    """Every meta's month, walked once. The seam `services.month` reads."""
+    cancelled = agg.cancelled_this_month
+    charged = list(agg.metas) + cancelled
+    walked = {meta.id: _walk(agg, meta) for meta in charged}
+    return MetaFold(
+        lines=[_status(agg, meta, walked[meta.id]) for meta in agg.metas]
+        + [_status(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled],
+        asks=sum(_ask_in_cop(agg, meta, walked[meta.id]) for meta in charged),
+        contributed=sum(
+            to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in charged
+        ),
+        released=sum(to_cop_cents(walked[meta.id].month.released, meta.currency, agg.trm) for meta in agg.metas)
+        + sum(_released_by(agg, meta, walked[meta.id]) for meta in cancelled),
+        uncovered=sum(_meta_uncovered(agg, meta, walked[meta.id]) for meta in agg.metas),
+    )
+
+
+def _off_the_screen(agg: MonthAggregate, meta: Meta, walked: _Walked) -> bool:
     """Whether the metas screen leaves this meta out of the month being read.
 
     A meta that had not been created yet is no part of that month, and listing
@@ -264,7 +337,7 @@ def _off_the_screen(agg: MonthAggregate, meta: Meta) -> bool:
     """
     if agg.year_month < meta.start_month:
         return True
-    return meta.closed and _walk(agg, meta).finished
+    return meta.closed and walked.finished
 
 
 def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
@@ -280,7 +353,10 @@ def list_metas(session: Session, year_month: str) -> list[MetaStatus]:
     """
     require_year_month(year_month)
     agg = load_month(session, year_month)
-    found = [_status(agg, meta) for meta in agg.metas if not _off_the_screen(agg, meta)]
+    walked = {meta.id: _walk(agg, meta) for meta in agg.metas}
+    found = [
+        _status(agg, meta, walked[meta.id]) for meta in agg.metas if not _off_the_screen(agg, meta, walked[meta.id])
+    ]
     return sorted(found, key=lambda m: (not (m.complete or m.waiting), m.target_month, m.name))
 
 
@@ -300,31 +376,23 @@ def list_archived(session: Session) -> list[Meta]:
     return sorted(found, key=lambda meta: (meta.cancelled_month or "", meta.name), reverse=True)
 
 
-def asks_total(agg: MonthAggregate) -> int:
-    """What every meta asks this month, in COP cents.
+def _ask_in_cop(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
+    """What one meta asks the month, in COP cents.
 
     A meta held in another currency converts at the app's single rate, the same
     way every other foreign figure does (ADR-0031).
     """
-    return sum(_ask_in_cop(agg, meta) for meta in agg.metas)
+    return to_cop_cents(walked.month.ask, meta.currency, agg.trm)
 
 
-def _ask_in_cop(agg: MonthAggregate, meta: Meta) -> int:
-    return to_cop_cents(_walk(agg, meta).month.ask, meta.currency, agg.trm)
+def _meta_uncovered(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
+    """What one linked purchase cost past what its meta had, in COP cents.
 
-
-def uncovered_total(agg: MonthAggregate) -> int:
-    """What every linked purchase cost past what its meta had, in COP cents.
-
-    The seam where double counting would enter. A linked movement is out of its
-    category's spending entirely (`spent_in` drops it), so the only thing it
-    can cost the month is its own excess — what it cost, less what the meta
-    opened the month with, less what the meta asks now (AC-12).
+    A linked movement is out of its category's spending entirely (`spent_in`
+    drops it), so the only thing it can cost the month is its own excess — what
+    it cost, less what the meta opened the month with, less what it asks now
+    (AC-12).
     """
-    return sum(_meta_uncovered(agg, meta) for meta in agg.metas)
-
-
-def _meta_uncovered(agg: MonthAggregate, meta: Meta) -> int:
     spent = sum(
         agg.to_cop_cents(tx)
         for tx in agg.linked_to(meta.id, posted_only=False)
@@ -332,9 +400,9 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta) -> int:
     )
     if not spent:
         return 0
-    walked = _walk(agg, meta).month
+    month = walked.month
     return to_cop_cents(
-        meta_uncovered_calc(_to_meta_currency(agg, meta, spent), walked.opening, walked.ask),
+        uncovered_excess_calc(_to_meta_currency(agg, meta, spent), month.opening, month.ask),
         meta.currency,
         agg.trm,
     )
@@ -347,53 +415,19 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
     return round(cop_cents / float(agg.trm))
 
 
-def contributed_total(agg: MonthAggregate) -> int:
-    """What the owner set aside by hand this month, in COP cents.
-
-    A meta cancelled this month counts here. The month it is cancelled in is the
-    last one that names it: it charged the contribution and it hands back what
-    the meta held, contribution included. Charging one side and not the other
-    would give the owner that money twice (ADR-014).
-    """
-    counted = list(agg.metas) + _cancelled_this_month(agg)
-    return sum(to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in counted)
+def _released_by(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
+    """What cancelling one meta hands back to the month: everything it held."""
+    return to_cop_cents(walked.month.holds, meta.currency, agg.trm)
 
 
-def released_total(agg: MonthAggregate) -> int:
-    """What came back to the month: cancellations, and amounts lowered (AC-15, AC-16).
-
-    Read for that one month and never again — November must not keep giving
-    back what October already gave. Lowering a meta below what it already held
-    releases the difference the same way, because the owner decided he needs
-    less than he has.
-    """
-    lowered = sum(to_cop_cents(_walk(agg, meta).month.released, meta.currency, agg.trm) for meta in agg.metas)
-    return lowered + sum(_released_by(agg, meta) for meta in _cancelled_this_month(agg))
-
-
-def _cancelled_this_month(agg: MonthAggregate) -> list[Meta]:
-    return [m for m in agg.cancelled if m.cancelled_month == agg.year_month]
-
-
-def _released_by(agg: MonthAggregate, meta: Meta) -> int:
-    return to_cop_cents(_walk(agg, meta).month.holds, meta.currency, agg.trm)
-
-
-def cancelled_asks_total(agg: MonthAggregate) -> int:
-    """What a meta cancelled this month still asked of it.
-
-    The month always charges its instalment, and cancelling part-way through
-    does not give it back — releasing more than was ever taken would mint
-    money (product ADR-014).
-    """
-    return sum(_ask_in_cop(agg, meta) for meta in _cancelled_this_month(agg))
-
-
-def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> int:
+def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> MetaContribution:
     """Set money aside by hand, on top of what the meta asks that month.
 
     Trimmed to what is missing: a meta never holds more than the thing costs
-    (AC-14). Returns what was actually put in.
+    (AC-14). Returns the contribution as it was written, whose `amount` is what
+    was actually put in — money may go into any month (AC-42), so the row just
+    made is not always the newest one on record and cannot be found again by
+    re-reading the history.
 
     Raises:
         NotFound: no such meta.
@@ -408,9 +442,11 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
     put_in = min(amount, room)
     if put_in <= 0:
         raise ValidationError(f"the meta {meta.name!r} needs nothing more")
-    session.add(MetaContribution(meta_id=meta.id, year_month=year_month, amount=put_in))
+    made = MetaContribution(meta_id=meta.id, year_month=year_month, amount=put_in)
+    session.add(made)
     session.commit()
-    return put_in
+    session.refresh(made)
+    return made
 
 
 def _room_left(session: Session, meta: Meta, year_month: str) -> int:
@@ -464,17 +500,22 @@ def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
 def close_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
     """Finish a meta whose purchase has been made. Releases nothing (AC-39).
 
-    A meta still running is refused, because closing releases nothing: it would
-    archive money the month had already set aside without handing it back to
-    anything, and the month's terms would stop adding up. Cancelling is the act
-    for a meta the owner no longer wants, and it says which month it freed.
+    A meta that never finished is refused, because closing releases nothing: it
+    would archive money the month had already set aside without handing it back
+    to anything, and the month's terms would stop adding up. Cancelling is the
+    act for a meta the owner no longer wants, and it says which month it freed.
+
+    What is asked is whether the meta ever finished, not whether it is finished
+    now. A meta the owner kept on after its purchase is asking again, and
+    cancelling it is already refused for having been bought (AC-39) — reading
+    the month's answer here would leave it with no way to end at all.
 
     Raises:
         NotFound: no such meta.
-        ValidationError: the meta is still running.
+        ValidationError: the meta never finished.
     """
     meta = _require_meta(session, meta_id)
-    if not _status(load_month(session, year_month), meta).complete:
+    if not _walk(load_month(session, year_month), meta).finished:
         raise ValidationError(f"the meta {meta.name!r} is still running, so it is cancelled rather than closed")
     meta.closed = True
     meta.archived = True
@@ -591,12 +632,9 @@ def set_meta(session: Session, meta_id: int, *, today: str, **changes) -> Meta:
 
 
 def _wanted_now(session: Session, meta: Meta, year_month: str) -> tuple[int, str]:
-    rows = session.exec(
-        select(MetaAmendment)
-        .where(MetaAmendment.meta_id == meta.id, MetaAmendment.year_month <= year_month)
-        .order_by(MetaAmendment.year_month)
-    ).all()
-    return (rows[-1].amount, rows[-1].target_month) if rows else (meta.amount, meta.target_month)
+    """What the meta wanted as of one month, over the amendments on record."""
+    rows = session.exec(select(MetaAmendment).where(MetaAmendment.meta_id == meta.id)).all()
+    return _wanted_as_of(meta, rows, year_month)
 
 
 def _amend(session: Session, meta: Meta, year_month: str, amount: int, target_month: str) -> None:
@@ -617,12 +655,24 @@ def _amend(session: Session, meta: Meta, year_month: str, amount: int, target_mo
 
 
 def preview_meta(
-    *, amount: int, target_month: str, today: str, income: int, stated_opening: int | None = None
+    *,
+    amount: int,
+    target_month: str,
+    today: str,
+    income: int,
+    trm: Decimal,
+    currency: str = "COP",
+    stated_opening: int | None = None,
 ) -> MetaPreview:
     """What a meta would ask in its first month, before it exists (AC-45).
 
     What the owner says he already put by is the month it would open with
     (AC-34), so the figure the form shows is the one the meta will ask.
+
+    `asks` is the meta's own currency, the way every figure a meta reports is
+    (AC-26). The warning is a peso comparison and converts before it makes it:
+    a dollar instalment and the month's income are not the same unit, and
+    weighing one against the other unconverted is what ADR-0049 names.
 
     Raises:
         ValidationError: every refusal `create_meta` raises about the amount
@@ -631,4 +681,5 @@ def preview_meta(
     _validate_spec("preview", amount, target_month, today)
     months_left = months_to_meta(today, target_month)
     asks = meta_ask_calc(amount, stated_opening or 0, months_left)
-    return MetaPreview(asks=asks, months_left=months_left, over_the_month=income > 0 and asks > income)
+    costs_the_month = to_cop_cents(asks, currency, trm)
+    return MetaPreview(asks=asks, over_the_month=income > 0 and costs_the_month > income)
