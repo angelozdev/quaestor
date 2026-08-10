@@ -63,4 +63,4 @@ New ADRs are created with the `adr` skill:
 | 0047 | The module boundaries are enforced, the dead code and the copies are reported | accepted | 2026-08-09 |
 | 0048 | A purchase stops the meta, and closing it moves no figure | accepted | 2026-08-09 |
 | 0049 | Closing leaves the screen, not the month, and a purchase stops only what the owner has not restarted | accepted | 2026-08-09 |
-| 0050 | One typeface, one table, and the token slot the design system actually reads | proposed | 2026-08-10 |
+| 0050 | One typeface, one table, and the token slot the design system actually reads | accepted | 2026-08-10 |

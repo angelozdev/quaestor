@@ -1,6 +1,6 @@
 # 0050. One typeface, one table, and the token slot the design system actually reads
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-10
 - **Deciders:** Angelo
 - **Supersedes:** —
@@ -149,10 +149,11 @@ change what a figure means:
   "job diario" refreshes the TRM; that job does not exist (roadmap
   `daily-trm-fetch`) and "job" is jargon on a human screen. It now tells the
   truth, and the rate reads `$ 3.142,00` instead of `3100.000000`.
-- Bad / cost: `ui/styles/tokens.css` still documents `--font-sans` as the value an
-  app overrides, which is the sentence that caused the bug. Correcting that
-  comment is a change inside `ui/` and is left as a follow-up rather than smuggled
-  into a re-skin.
+- ~~Bad / cost: `ui/styles/tokens.css` still documents `--font-sans` as the value
+  an app overrides, which is the sentence that caused the bug.~~ **Paid, on
+  acceptance:** the contract now names the `-stack` slots and states the
+  indirection outright, so the trap is written down where the next reader meets
+  it. Docstring only — no contract change, no component internals touched.
 - Bad / cost: `PRESUPUESTOS` and `FONDOS` remain shouting in all-caps. That copy
   is asserted by eight vitest assertions pinning feature 010's vocabulary
   (product ADR-042), so lowering it needs the owner's decision, not a designer's.
@@ -161,8 +162,16 @@ change what a figure means:
   `closest("section")`. AC-36's intent is unchanged; only the anchor moved. In the
   breakdown the subtraction operator is rendered as a separate muted glyph
   precisely so AC-4's asserted figures stay the strings they were.
-- Bad / cost: `lefthook` is not on PATH, so the pre-commit biome hook did not run
-  for this work. The checks were run by hand instead.
+- Bad / cost: the pre-commit biome hook did not run for the commits that carried
+  this decision; the checks were run by hand instead. **Fixed on acceptance:** the
+  installed hook held an absolute path into a deleted worktree, and the
+  `LEFTHOOK_CONFIG` indirection was never carried into the hook at run time, so
+  the config moved to the repo root with `root: frontend/`. Putting it back to
+  work exposed two errors that had been latent for as long as the hook had been
+  dead — `glob_strict` is not valid in lefthook 2.1.9, and `biome check --files`
+  is not a flag in biome 2.5.0. **A gate nobody watches fail is a gate that has
+  already rotted**, which is the same lesson ADR 0001's language rule warns about
+  and ADR 0040 answered by making lint a pipeline gate.
 
 ## Confirmation
 
