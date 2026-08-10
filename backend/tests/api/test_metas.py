@@ -509,3 +509,25 @@ def test_a_closed_meta_is_told_apart_from_a_cancelled_one_when_a_purchase_is_poi
 
     assert refused.status_code == 422
     assert "was closed" in refused.json()["detail"]
+
+
+def test_editing_a_meta_that_is_not_there_is_404(client, auth):
+    """A second tab cancelled it, and this one is still holding the button.
+
+    Nothing in the criteria describes it, but the browser can produce it any
+    day: the id in the URL stops naming anything between the screen loading
+    and the owner acting. It is the same 404 accounts, tags and transactions
+    already answer with, and the alternative is a 500.
+    """
+    resp = client.patch("/api/metas/9999", headers=auth, params=MONTH, json={"name": "Otra"})
+    assert resp.status_code == 404 and resp.json()["error"] == "NotFound"
+
+
+def test_taking_back_a_contribution_that_is_not_there_is_404(client, auth):
+    resp = client.delete("/api/metas/contributions/9999", headers=auth)
+    assert resp.status_code == 404 and resp.json()["error"] == "NotFound"
+
+
+def test_pointing_a_purchase_at_a_meta_that_is_not_there_is_404(client, auth, account, expense_category):
+    resp = _expense(client, auth, account, expense_category, meta_id=9999)
+    assert resp.status_code == 404 and resp.json()["error"] == "NotFound"
