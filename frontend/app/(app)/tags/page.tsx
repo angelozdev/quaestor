@@ -75,7 +75,7 @@ export default function TagsPage() {
   })
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Etiquetas"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}

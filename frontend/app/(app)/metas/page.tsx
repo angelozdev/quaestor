@@ -32,7 +32,7 @@ function waitingOn(meta: MetaStatus): string | null {
 function MetaRow({ meta, month }: { meta: MetaStatus; month: string }) {
   const waiting = waitingOn(meta)
   return (
-    <li className="space-y-1 border-t py-3" style={{ borderColor: "var(--border)" }}>
+    <li className="space-y-1 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <span className="font-medium">{meta.name}</span>
         {waiting !== null && (
@@ -63,7 +63,7 @@ export default function MetasPage() {
   const metas = useQuery({ queryKey: qk.metas(month), queryFn: () => listMetas(month) })
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-10">
       <PageHeader
         title="Metas"
         subtitle={month}
@@ -109,7 +109,7 @@ export default function MetasPage() {
         }}
       >
         {(rows) => (
-          <ul>
+          <ul className="divide-y" style={{ borderColor: "var(--border)" }}>
             {rows.map((meta) => (
               <MetaRow key={meta.meta_id} meta={meta} month={month} />
             ))}

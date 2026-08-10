@@ -71,7 +71,7 @@ export default function SettingsPage() {
     trm.isError && trm.error instanceof ApiError && trm.error.code === "MissingRate"
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader title="Ajustes" />
 
       <Section label="Cuenta origen por defecto">

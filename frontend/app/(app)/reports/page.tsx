@@ -53,7 +53,7 @@ export default function ReportsPage() {
   })
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <PageHeader
         title="Reportes"
         subtitle={month}

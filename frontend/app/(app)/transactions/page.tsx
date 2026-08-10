@@ -328,7 +328,7 @@ export default function TransactionsPage() {
   )
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <PageHeader
         title="Transacciones"
         action={<Button onClick={() => setCreating(true)}>Nueva</Button>}
