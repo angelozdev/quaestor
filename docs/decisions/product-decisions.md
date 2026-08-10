@@ -902,3 +902,27 @@ August read as though nothing had happened. That is the exact failure AC-39's ow
 - **No migration.** The behaviour falls out of the purchase the owner already recorded; nothing new is stored.
 - **The `Cerrar` button becomes honest.** It says the meta is finished, and finishing changes no number — which is the only reading of AC-39 that does not contradict AC-27.
 - **A meta bought before it filled stops asking anyway**, whether or not the owner closes it. The gap between what it held and what the thing cost is charged once, in the month of the purchase, and never again.
+
+---
+
+## ADR-045 — A meta cannot be closed as of a month before it existed
+
+**Status:** accepted (feature 009, 2026-08-10) · Extends ADR-044 and 009's AC-39
+
+**Context.** Feature 009's mutation sweep found one refusal the app makes that nothing had ever asked it to make. Closing a meta carries the month it is closed in; the metas screen always sends the current one, but the month is the caller's to choose, and no acceptance criterion said what a month **before the meta opened** should do.
+
+The owner's own `iPhone` meta is the case. It wants $7.000.000 by 2028-11, it was opened 2026-08, and it holds $250.000 today. Closing it as of 2026-07 — a month in which it did not exist — is refused today: *"the meta 'iPhone' is still running, so it is cancelled rather than closed"*. That refusal was the code's choice, not the product's.
+
+**Decision.** **Keep refusing it, and write it down as a rule with a scenario that proves it.**
+
+Closing means *"I already bought the thing"*, and closing gives nothing back because the money is in the thing. In a month before the meta existed there was nothing bought and nothing finished, so there is nothing to close. The owner is told what he is told about any meta still running: it is cancelled, not closed.
+
+**Alternatives rejected.**
+
+- **(A) Allow it.** The $250.000 the `iPhone` meta holds was set aside in 2026-08 and after — months later than the 2026-07 the close would be pointed at. Closing releases nothing, so that $250.000 is never handed back to any month; and a closed meta leaves the metas screen, so it is no longer visible anywhere either. The owner would be left with $250.000 that no month gives back and no screen names, while August still charged what it charged — **the month's terms would stop adding up**, which is the failure AC-39 exists to prevent. Rejected.
+- **(B) Silently close it as of the meta's own start month instead.** Answering a question the owner did not ask, and it archives a running meta on a slip of a month. Cancelling is the act for a meta the owner no longer wants, and it says which month it freed.
+
+**Consequences.**
+
+- **No production code changes and no migration.** The app already behaves this way; what was missing was the rule. AC-39 gains the clause, `spec.md` gains one scenario, and the surviving mutant on that branch dies with it.
+- **The `Cerrar` button keeps its one meaning.** It ends a meta whose thing was bought, and never in a month where no such thing could have been bought.

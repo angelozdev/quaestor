@@ -1384,6 +1384,14 @@ Scenario: A meta that was bought cannot be cancelled for its money back
   When the user cancels the meta "Celular"
   Then the cancellation is rejected
   And the user is told a meta that was bought is closed, not cancelled
+
+@backend
+Scenario: A meta cannot be closed as of a month before it existed
+  Given today is 2026-09-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user closes the meta "Celular" as of 2026-07
+  Then the close is rejected
+  And the user is told a meta that is still running is cancelled, not closed
 ```
 
 ## AC-40 — The fund no longer saves toward a date

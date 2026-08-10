@@ -950,6 +950,14 @@ $8.000.000 it held while the linked expense stayed excluded from both its
 category's fund and the uncovered term (AC-25) — a real purchase would vanish
 from the month and its money would reappear.
 
+Closing is the owner saying *the thing is bought*, so it is refused as of a
+month in which the meta did not yet exist. Nothing was bought in a month before
+the meta opened and nothing finished in it, so there is nothing to close.
+Allowing it would archive a meta that a later month had already set money aside
+for — money closing hands back to nothing, on a meta that has left the metas
+screen — and that month's terms would stop adding up. The owner is told what he
+is told about any meta still running: it is cancelled, not closed.
+
 ## AC-40: The fund no longer saves toward a date
 
 - **Priority:** high

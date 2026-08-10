@@ -540,6 +540,31 @@ def when_close(world: World, name: str) -> None:
     service.close_meta(world.session, _meta_id(world, name), year_month=_today(world))
 
 
+@step(rf'the user closes the meta "(?P<name>[^"]+)" as of (?P<month>{_MONTH})')
+def when_close_as_of(world: World, name: str, month: str) -> None:
+    """Closing names the month it is made in, and the month need not be this one.
+
+    The plain step above always closes in the scenario's own month, which is
+    what the screen does. This one says the month out loud, so a scenario can
+    aim it at one the screen would never send.
+    """
+    try:
+        service.close_meta(world.session, _meta_id(world, name), year_month=month)
+    except _REJECTED as exc:
+        world.session.rollback()
+        world.close_refusal = str(exc)
+
+
+@step(r"the close is rejected")
+def then_close_rejected(world: World) -> None:
+    assert getattr(world, "close_refusal", None), "the close was accepted, expected a refusal"
+
+
+@step(r"the user is told a meta that is still running is cancelled, not closed")
+def then_told_running_not_closed(world: World) -> None:
+    assert "cancelled rather than closed" in getattr(world, "close_refusal", "")
+
+
 @step(r'the user restores the meta "(?P<name>[^"]+)"')
 def when_restore(world: World, name: str) -> None:
     try:
