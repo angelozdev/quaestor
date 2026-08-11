@@ -24,6 +24,7 @@ import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/type
 import { formatDate, yearMonthOf } from "@/lib/date"
 import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useFormValues } from "@/lib/use-form-values"
 import { useStatedAmount } from "@/lib/use-stated-amount"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
@@ -100,8 +101,8 @@ export default function ToPayPage() {
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
   const confirmCurrency = currencyForAccount(confirming, accounts.data, cAccountId)
 
-  const planAccountId = planForm.state.values.accountId
-  const planCurrency = currencyOf(accounts.data, planAccountId)
+  const planValues = useFormValues(planForm)
+  const planCurrency = currencyOf(accounts.data, planValues.accountId)
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const done = (msg: string) => {
@@ -136,6 +137,7 @@ export default function ToPayPage() {
         amount: values.amount,
         due_date: values.dueDate,
         account_id: values.accountId as number,
+        currency: planCurrency,
         category_id: values.categoryId,
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         meta_id: values.metaId,
@@ -367,7 +369,7 @@ export default function ToPayPage() {
                     isIncome={false}
                     value={{
                       categoryId: field.state.value as number | null,
-                      newCategory: planForm.getFieldValue("newCategory"),
+                      newCategory: planValues.newCategory,
                     }}
                     onChange={(choice) => {
                       field.handleChange(choice.categoryId as never)

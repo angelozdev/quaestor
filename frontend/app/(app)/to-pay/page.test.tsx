@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { makeTransaction, openHelpPanel, queryWrapper } from "@/tests/factories"
+import { fieldUnder, makeTransaction, openHelpPanel, queryWrapper } from "@/tests/factories"
 
 const { toPay, listMetas, listAccounts, listCategories, planPayment, confirmPayment, getFx } =
   vi.hoisted(() => ({
@@ -98,19 +98,6 @@ beforeEach(() => {
   listCategories.mockResolvedValue([CATEGORY])
   planPayment.mockResolvedValue(makeTransaction({ status: "planned" }))
 })
-
-/**
- * The control under a label that names it in text only.
- *
- * The account and amount fields of this dialog carry a `Label` with no
- * `htmlFor`, so `getByLabelText` cannot reach them; the surrounding field is
- * the nearest thing the test can name without asserting on class names.
- */
-function fieldUnder(label: string) {
-  const field = screen.getByText(label).parentElement
-  if (!field) throw new Error(`the label "${label}" stands outside a field`)
-  return field
-}
 
 describe("AC-7 — every screen carries the same control", () => {
   it("Por pagar offers to explain itself", async () => {
@@ -432,6 +419,52 @@ async function emptyTheBoxOnPesosAndGoBackToDollars(user: ReturnType<typeof user
   await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
   await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
 }
+
+/**
+ * A payment planned against an account that holds dollars.
+ *
+ * The account is chosen before the figure is typed, as the owner does it: the
+ * amount box must already be asking for dollars by then, or a figure with cents
+ * loses its decimal point to peso parsing and the payment is planned in a
+ * currency the account does not hold.
+ */
+describe("a payment is planned in the currency the account holds", () => {
+  async function planADollarPayment(user: ReturnType<typeof userEvent.setup>) {
+    render(<ToPayPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: /Planear/ }))
+    await screen.findByLabelText("¿Es la compra de una meta?")
+
+    await user.type(screen.getByLabelText(/Beneficiario/), "Hogaru")
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+    await user.type(within(fieldUnder(/^Monto \*/)).getByRole("textbox"), "1556.04")
+    await user.type(screen.getByLabelText(/Fecha de vencimiento/), "2027-03-15")
+    await user.click(screen.getByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: CATEGORY.name }))
+  }
+
+  it("The amount box asks for dollars as soon as a dollar account is chosen", async () => {
+    const user = userEvent.setup()
+    await planADollarPayment(user)
+
+    expect(screen.getByText("Monto * (USD)")).toBeInTheDocument()
+  })
+
+  it("The payment is planned in dollars, cents and all", async () => {
+    const user = userEvent.setup()
+    await planADollarPayment(user)
+    await user.click(screen.getByRole("button", { name: "Planear" }))
+
+    await waitFor(() => expect(planPayment).toHaveBeenCalledTimes(1))
+    expect(planPayment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: "USD",
+        amount: 155_604,
+        account_id: DOLARAPP.id,
+      }),
+    )
+  })
+})
 
 describe("012 — an emptied box stays empty on the confirmation", () => {
   it("A box the owner emptied is still empty when he picks another account", async () => {

@@ -1,16 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { fieldUnder } from "@/tests/factories"
 import { TransactionCreateDialog } from "./transaction-create-dialog"
 
-const { createTransaction, listAccounts, listCategories, listMetas } = vi.hoisted(() => ({
-  createTransaction: vi.fn(),
-  listAccounts: vi.fn().mockResolvedValue([]),
-  listCategories: vi.fn().mockResolvedValue([]),
-  listMetas: vi.fn().mockResolvedValue([]),
-}))
-vi.mock("@/lib/api/transactions", () => ({ createTransaction, createTransfer: vi.fn() }))
+const { createTransaction, createTransfer, listAccounts, listCategories, listMetas } = vi.hoisted(
+  () => ({
+    createTransaction: vi.fn(),
+    createTransfer: vi.fn(),
+    listAccounts: vi.fn().mockResolvedValue([]),
+    listCategories: vi.fn().mockResolvedValue([]),
+    listMetas: vi.fn().mockResolvedValue([]),
+  }),
+)
+vi.mock("@/lib/api/transactions", () => ({ createTransaction, createTransfer }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/metas", () => ({ listMetas }))
@@ -20,6 +24,14 @@ const ACCOUNT = {
   name: "Bancolombia",
   type: "debit",
   currency: "COP",
+  balance: 0,
+  archived: false,
+}
+const DOLARAPP = {
+  id: 3,
+  name: "DolarApp",
+  type: "debit",
+  currency: "USD",
   balance: 0,
   archived: false,
 }
@@ -202,6 +214,82 @@ describe("TransactionCreateDialog meta link", () => {
     await user.click(screen.getByRole("option", { name: "Ingreso" }))
 
     expect(screen.queryByRole("combobox", { name: /Es la compra de una meta/ })).toBeNull()
+  })
+})
+
+/**
+ * A movement written down against an account that holds dollars.
+ *
+ * The account is chosen before the figure is typed, as the owner does it: the
+ * amount box must already be asking for dollars by then, or a figure with cents
+ * loses its decimal point to peso parsing and the request states the movement in
+ * a currency the account does not hold.
+ */
+describe("a movement is stated in the currency the chosen account holds", () => {
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME_CATEGORY] : [EXPENSE_CATEGORY]),
+      )
+    listAccounts.mockReset().mockResolvedValue([ACCOUNT, DOLARAPP])
+    listMetas.mockReset().mockResolvedValue([])
+    createTransaction.mockReset().mockResolvedValue(undefined)
+  })
+
+  async function writeADollarPurchase(user: ReturnType<typeof userEvent.setup>) {
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await waitFor(() => expect(listCategories).toHaveBeenCalled())
+
+    await user.click(screen.getByRole("combobox", { name: "Cuenta *" }))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+    await user.type(screen.getByLabelText(/^Monto \*/), "1556.04")
+    await user.click(screen.getByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: EXPENSE_CATEGORY.name }))
+  }
+
+  it("The amount box asks for dollars as soon as a dollar account is chosen", async () => {
+    const user = userEvent.setup()
+    await writeADollarPurchase(user)
+
+    expect(screen.getByLabelText("Monto * (USD)")).toBeInTheDocument()
+  })
+
+  it("The first press states the movement in dollars, cents and all", async () => {
+    const user = userEvent.setup()
+    await writeADollarPurchase(user)
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ currency: "USD", amount: 155_604, account_id: DOLARAPP.id }),
+    )
+  })
+
+  it("Dollars leaving for a peso account are asked for as two figures, and sent as dollars", async () => {
+    const user = userEvent.setup()
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await user.click(screen.getByRole("tab", { name: "Transferencia" }))
+
+    await user.click(within(fieldUnder("Desde *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+    await user.click(within(fieldUnder("Hacia *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: ACCOUNT.name }))
+
+    await user.type(within(fieldUnder("Monto enviado * (USD)")).getByRole("textbox"), "1556.04")
+    await user.type(within(fieldUnder("Monto recibido * (COP)")).getByRole("textbox"), "6200000")
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createTransfer).toHaveBeenCalledTimes(1))
+    expect(createTransfer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currency: "USD",
+        amount: 155_604,
+        amount_received: 620_000_000,
+        from_account_id: DOLARAPP.id,
+        to_account_id: ACCOUNT.id,
+      }),
+    )
   })
 })
 

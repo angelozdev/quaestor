@@ -15,6 +15,20 @@ export async function openHelpPanel(screenName: string, user = userEvent.setup()
   return screen.getByRole("dialog", { name: `¿Cómo funciona ${screenName}?` })
 }
 
+/**
+ * The control under a label that names it in text only.
+ *
+ * Several dialogs carry a `Label` with no `htmlFor` over a `MoneyInput` or an
+ * `EntitySelect` with no `id`, so `getByLabelText` cannot reach them; the
+ * surrounding field is the nearest thing a test can name without asserting on
+ * class names.
+ */
+export function fieldUnder(label: string | RegExp) {
+  const field = screen.getByText(label).parentElement
+  if (!field) throw new Error(`the label "${label}" stands outside a field`)
+  return field
+}
+
 const CATEGORY_ID = 3
 
 /** A movement as the API returns it. Expenses and incomes carry a category and
