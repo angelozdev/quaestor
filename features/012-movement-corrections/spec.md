@@ -745,6 +745,33 @@ Scenario: What it will ask for follows the correction
   When the user confirms the payment to "Hogaru"
   Then "RappiCard" has balance -400000.00 COP
   And "Nu Debito" has balance 1000000.00 COP
+
+@backend
+Scenario: Correcting a payment that was skipped moves no balance either
+  Given today is 2026-08-10
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an account "RappiCard" in COP with balance 0.00 COP
+  And an expense category "Hogar"
+  And a planned payment of 400000.00 COP to "Hogaru" from "Nu Debito" due in 2 days in category "Hogar"
+  And the user skips the payment to "Hogaru"
+  When the user moves the payment that was skipped to "RappiCard" for 420000.00 COP
+  Then "Nu Debito" has balance 1000000.00 COP
+  And "RappiCard" has balance 0.00 COP
+  And the payment that was skipped to "Hogaru" is against "RappiCard"
+
+@backend
+Scenario: What a skipped payment will ask for follows the correction too
+  Given today is 2026-08-10
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an account "RappiCard" in COP with balance 0.00 COP
+  And an expense category "Hogar"
+  And a planned payment of 400000.00 COP to "Hogaru" from "Nu Debito" due in 2 days in category "Hogar"
+  And the user skips the payment to "Hogaru"
+  And the user moves the payment that was skipped to "RappiCard" for 420000.00 COP
+  And the user restores the skipped payment to "Hogaru"
+  When the user confirms the payment to "Hogaru"
+  Then "RappiCard" has balance -420000.00 COP
+  And "Nu Debito" has balance 1000000.00 COP
 ```
 
 ## AC-21 — A correction that changes nothing changes nothing

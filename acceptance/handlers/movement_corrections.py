@@ -56,15 +56,24 @@ def _assistant_correction_surface() -> list[str]:
     return sorted(set(found))
 
 
-def _waiting_payment(world: World, payee: str | None = None) -> Transaction:
-    """The payment still waiting to be confirmed — by payee when one is named."""
-    stmt = select(Transaction).where(Transaction.status == TxStatus.planned)
+_UNCONFIRMED = {"still waiting": TxStatus.planned, "that was skipped": TxStatus.skipped}
+_UNCONFIRMED_STATE = "|".join(_UNCONFIRMED)
+
+
+def _unconfirmed_payment(world: World, state: str, payee: str | None = None) -> Transaction:
+    """A payment that has never moved a balance — by payee when one is named.
+
+    Resolved by the state the scenario names, so the same steps read a payment
+    still waiting to be confirmed and one the owner skipped, and neither can
+    answer for the other (AC-20).
+    """
+    stmt = select(Transaction).where(Transaction.status == _UNCONFIRMED[state])
     if payee is not None:
         stmt = stmt.where(Transaction.payee == payee)
     rows = world.session.exec(stmt.order_by(Transaction.id)).all()
     if not rows:
         named = f" to {payee!r}" if payee else ""
-        raise AssertionError(f"no payment{named} is waiting in this scenario")
+        raise AssertionError(f"no payment{named} {state} in this scenario")
     return rows[0]
 
 
@@ -212,7 +221,7 @@ def then_transfer_reads(
     r"(?: for (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}))?"
 )
 def when_confirm_from_account(world: World, payee: str, account: str, amount: str | None, currency: str | None) -> None:
-    tx = _waiting_payment(world, payee)
+    tx = _unconfirmed_payment(world, "still waiting", payee)
     world.attempt(
         planned.confirm_payment,
         world.session,
@@ -222,21 +231,27 @@ def when_confirm_from_account(world: World, payee: str, account: str, amount: st
     )
 
 
-@step(r'the user moves the payment still waiting to "(?P<account>[^"]+)"')
-def when_move_waiting_payment(world: World, account: str) -> None:
-    tx = _waiting_payment(world)
+@step(
+    r"the user moves the payment (?P<state>" + _UNCONFIRMED_STATE + r') to "(?P<account>[^"]+)"'
+    r"(?: for (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}))?"
+)
+def when_move_unconfirmed_payment(
+    world: World, state: str, account: str, amount: str | None, currency: str | None
+) -> None:
+    tx = _unconfirmed_payment(world, state)
     world.attempt(
         transactions.move_to_account,
         world.session,
         tx.id,
         account_id=world.account_id_or_missing(account),
+        amount=major_to_cents(amount) if amount else None,
     )
 
 
-@step(r'the payment still waiting to "(?P<payee>[^"]+)" is against "(?P<account>[^"]+)"')
-def then_waiting_payment_account(world: World, payee: str, account: str) -> None:
+@step(r"the payment (?P<state>" + _UNCONFIRMED_STATE + r') to "(?P<payee>[^"]+)" is against "(?P<account>[^"]+)"')
+def then_unconfirmed_payment_account(world: World, state: str, payee: str, account: str) -> None:
     world.require_clean(f"reading which account the payment to {payee!r} is against")
-    tx = _waiting_payment(world, payee)
+    tx = _unconfirmed_payment(world, state, payee)
     expected = world.accounts[account]
     assert tx.account_id == expected, f"expected account {expected}, got {tx.account_id}"
 

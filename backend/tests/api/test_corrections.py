@@ -428,3 +428,62 @@ def test_a_correction_cannot_be_made_without_the_csrf_token(client, auth, an_exp
     resp = fresh.post(f"/api/transactions/{an_expense['id']}/correction", headers=auth, json={"amount": 100})
 
     assert resp.status_code == 403
+
+
+@pytest.fixture
+def a_skipped_payment(client, auth, nu, expense_category):
+    """$400.000 owed to Hogaru out of Nu Debito, planned and then skipped.
+
+    Neither planning nor skipping moves a balance (ADR-007), so the correction
+    that follows has none to displace — AC-20's second clause, reachable from
+    the dialog by the same POST every other correction uses.
+    """
+    plan = client.post(
+        "/api/planned",
+        headers=auth,
+        json={
+            "payee": "Hogaru",
+            "category_id": expense_category,
+            "account_id": nu["id"],
+            "amount": 40_000_000,
+            "currency": "COP",
+            "due_date": "2026-08-12",
+        },
+    )
+    assert plan.status_code == 201, plan.text
+    skipped = client.post(f"/api/planned/{plan.json()['id']}/skip", headers=auth, json={})
+    assert skipped.status_code == 200, skipped.text
+    assert skipped.json()["status"] == "skipped"
+    return plan.json()
+
+
+def test_a_skipped_payment_corrects_without_moving_a_balance(client, auth, nu, rappi, a_skipped_payment):
+    resp = _correct(client, auth, a_skipped_payment["id"], {"account_id": rappi["id"], "amount": 42_000_000})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "skipped"
+    assert body["account_id"] == rappi["id"]
+    assert body["amount"] == 42_000_000
+    assert _balance(client, auth, nu) == 0
+    assert _balance(client, auth, rappi) == 0
+
+
+def test_a_skipped_payment_restored_asks_for_what_the_correction_left_it(client, auth, nu, rappi, a_skipped_payment):
+    """*Only what it will ask for when it is confirmed*, for a payment that was skipped.
+
+    Restoring is the one route from skipped back to confirmable (ADR-0034), so
+    it is the only place that half of AC-20 can be read at all.
+    """
+    corrected = _correct(client, auth, a_skipped_payment["id"], {"account_id": rappi["id"], "amount": 42_000_000})
+    assert corrected.status_code == 200, corrected.text
+    restored = client.post(f"/api/planned/{a_skipped_payment['id']}/restore", headers=auth, json={})
+    assert restored.status_code == 200, restored.text
+
+    resp = client.post(f"/api/planned/{a_skipped_payment['id']}/confirm", headers=auth, json={})
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "posted"
+    assert resp.json()["amount"] == 42_000_000
+    assert _balance(client, auth, rappi) == -42_000_000
+    assert _balance(client, auth, nu) == 0
