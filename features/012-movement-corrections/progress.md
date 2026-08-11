@@ -1,4 +1,4 @@
-> ▶ CP3 Spec — 5/5 criteria met | NEXT: the owner approves `spec.md`, then /engineer.plan (the ADR is owed there) | BLOCKED: none
+> ▶ CP4 Plan — 6/6 criteria met | NEXT: /atdd:atdd-team — slice 1, the core and the proof | BLOCKED: none
 
 # Progress — 012 movement-corrections
 
@@ -12,8 +12,8 @@ being declared control arms.
 |---|---|---|---|
 | 1.5 | Ready | done | 2026-08-10T1730-feature-init.md |
 | 2 | ACs | done — approved by the owner 2026-08-10 | 2026-08-10T1900-discover-acs.md |
-| 3 | Spec | **done, awaiting the owner** | 2026-08-10T2015-atdd.md |
-| 4 | Plan | — | |
+| 3 | Spec | done — approved by the owner 2026-08-10 | 2026-08-10T2015-atdd.md |
+| 4 | Plan | done — ADR-0051 accepted | 2026-08-10T2140-plan.md |
 | 5 | Implement | — | |
 | 6 | Refine | — | |
 | 7 | Verify | — | |
@@ -48,11 +48,15 @@ written straight to its balance and appears in no movement. Writing the sum in
 would destroy $2.101.837,94 on Nu Débito alone. Filed as
 `id:account-opening-balance-and-audit`.
 
-## Owed before code
+## Owed, and when
 
-An ADR. This changes the write model of a posted movement, and nothing pins the
-current rule today except an `update_transaction` docstring — so there is
-nothing to supersede and a new one to write (CLAUDE.md).
+**Paid:** the ADR. `docs/adr/0051` — accepted 2026-08-10. Nothing was superseded,
+because nothing recorded the old rule except an `update_transaction` docstring.
+
+**Still owed, at CP6:** verification independence. This session does not dispatch
+subagents unless asked, so CP6/CP7 need either the owner invoking fresh agents or
+his authorisation to dispatch. 009's CP6 ran on the implementing agent and an
+independent review afterwards found six user-facing defects in merged code.
 
 ## Handoff log
 
@@ -63,3 +67,4 @@ nothing to supersede and a new one to write (CLAUDE.md).
 | 2026-08-10T1815 | discuss (round 2) | main | five questions answered, then re-checked against sources; four held, one changed — the mispriced one was mine |
 | 2026-08-10T1900 | discover-acs | main | 30 ACs; the last two gaps closed with the owner |
 | 2026-08-10T2015 | atdd | main | 66 scenarios; red on 30 unbound step texts; 224 existing steps reused where they fit |
+| 2026-08-10T2140 | plan | main | ADR-0051 accepted; correcting = reverse + restate + apply + prove, reusing what delete already does |
