@@ -65,8 +65,11 @@ function useCounterpart(tx: Transaction): Transaction | undefined {
  * and a transfer's two figures together — the only route to what a transfer
  * moved, since a side is never restated on its own (AC-11, AC-12, ADR-0051).
  *
- * `refusal` is why a save would state nothing it could apply, so nothing is
- * written and nothing is reported as written.
+ * `missing` is what the correction has still not been told, so nothing at all is
+ * written. `refusal` is a fully stated correction that cannot be made in one
+ * save: the balance-safe edit beside it was never at risk and is still saved,
+ * and the owner is told the money stayed as it was rather than left to believe
+ * a figure he wrote was applied (AC-23).
  */
 function statedCorrection({
   tx,
@@ -86,36 +89,40 @@ function statedCorrection({
   const isTransfer = tx.type === "transfer"
   const moved = accountId !== tx.account_id
   const ridesWithTheMove = isTransfer && currency !== tx.currency
-  const pairIsKnown = tx.transfer_group_id !== null && counterpart !== undefined
-  const otherSide =
-    isTransfer && !moved && counterpart !== undefined && counterpart.currency !== tx.currency
-      ? counterpart
-      : null
-  const amountIsAsked = !isTransfer || ridesWithTheMove || pairIsKnown
+  const pair = tx.transfer_group_id !== null ? counterpart : undefined
+  const restatingThePair = isTransfer && !moved && pair !== undefined
+  const otherSide = restatingThePair && pair.currency !== tx.currency ? pair : null
+  const amountIsAsked = !isTransfer || ridesWithTheMove || pair !== undefined
   const amountRestated = amount !== tx.amount
-  const counterpartRestated = otherSide !== null && counterpartAmount !== otherSide.amount
-  const refuse = (refusal: string) => ({ otherSide, amountIsAsked, refusal, body: null })
+  const counterpartRestated =
+    pair !== undefined && pair.currency !== tx.currency && counterpartAmount !== pair.amount
+  const halvesWouldDiverge =
+    pair !== undefined && pair.currency === currency && amount !== pair.amount
+  const unstated = { otherSide, amountIsAsked, body: null }
+  const missing = (message: string) => ({ ...unstated, missing: message, refusal: null })
+  const refuse = (message: string) => ({ ...unstated, missing: null, refusal: message })
 
-  if (accountId === null) return refuse("Elige la cuenta del movimiento.")
-  if (amountIsAsked && amount === null) return refuse("Escribe el monto del movimiento.")
+  if (accountId === null) return missing("Elige la cuenta del movimiento.")
+  if (amountIsAsked && amount === null) return missing("Escribe el monto del movimiento.")
   if (otherSide !== null && counterpartAmount === null)
-    return refuse("Escribe los dos montos de la transferencia.")
-  if (isTransfer && moved && amountRestated && !ridesWithTheMove)
+    return missing("Escribe los dos montos de la transferencia.")
+  if (isTransfer && moved && (counterpartRestated || halvesWouldDiverge))
     return refuse("Mueve la transferencia de cuenta o corrige su monto, de a uno.")
 
   const other = otherSide === null ? amount : counterpartAmount
   const figuresRestated = amountRestated || counterpartRestated
   const body: CorrectionBody = {}
   if (moved) body.account_id = accountId
-  if (isTransfer && pairIsKnown && !moved && figuresRestated && amount !== null && other !== null) {
+  if (restatingThePair && figuresRestated && amount !== null && other !== null) {
     body.sent = tx.transfer_direction === "out" ? amount : other
     body.received = tx.transfer_direction === "out" ? other : amount
-  } else if (amountRestated && amount !== null && (!isTransfer || ridesWithTheMove)) {
+  } else if (amountIsAsked && amountRestated && amount !== null) {
     body.amount = amount
   }
   return {
     otherSide,
     amountIsAsked,
+    missing: null,
     refusal: null,
     body: Object.keys(body).length > 0 ? body : null,
   }
@@ -145,10 +152,13 @@ function amountForChosenAccount({
   return amountForAccount(stated, to, usdCop)
 }
 
-/** A correction the server refused after the balance-safe edit was already saved. */
+/** A correction that did not happen, after the balance-safe edit was saved. */
 class CorrectionRefused extends Error {
-  constructor(readonly cause: unknown) {
-    super(cause instanceof ApiError ? cause.message : "Error")
+  constructor(
+    message: string,
+    readonly cause?: unknown,
+  ) {
+    super(message)
   }
 }
 
@@ -196,7 +206,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const counterpart = useCounterpart(tx)
   const counterpartAmount = statedOther === undefined ? (counterpart?.amount ?? null) : statedOther
   const currency = currencyForAccount(tx, accountsQuery.data, accountId)
-  const { otherSide, amountIsAsked, refusal, body } = statedCorrection({
+  const { otherSide, amountIsAsked, missing, refusal, body } = statedCorrection({
     tx,
     counterpart,
     accountId,
@@ -210,8 +220,8 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
     defaultValues: valuesFromTx(tx),
     validators: { onChange: txEditSchema(isTransfer) },
     onSubmit: async ({ value }) => {
-      if (refusal !== null) {
-        toast.error(refusal)
+      if (missing !== null) {
+        toast.error(missing)
         return
       }
       update.mutate(value)
@@ -228,11 +238,12 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         tags: values.tags,
         meta_id: values.metaId,
       })
+      if (refusal !== null) throw new CorrectionRefused(refusal)
       if (body === null) return edited
       try {
         return await correctTransaction(tx.id, body)
       } catch (e: unknown) {
-        throw new CorrectionRefused(e)
+        throw new CorrectionRefused(e instanceof ApiError ? e.message : "Error", e)
       }
     },
     onSuccess: () => {

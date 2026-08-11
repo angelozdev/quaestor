@@ -31,6 +31,7 @@ const ACCOUNTS = [
   { id: 1, name: "Bancolombia", type: "debit", currency: "COP", balance: 0, archived: false },
   { id: 2, name: "Nequi", type: "debit", currency: "COP", balance: 0, archived: false },
   { id: 3, name: "DolarApp", type: "debit", currency: "USD", balance: 0, archived: false },
+  { id: 4, name: "Davivienda", type: "debit", currency: "COP", balance: 0, archived: false },
 ]
 const KOREA = { id: 9, name: "Korea", type: "debit", currency: "COP", balance: 0, archived: true }
 
@@ -537,5 +538,96 @@ describe("012 — the money moves after the edit is safe", () => {
       expect.stringContaining("Se guardaron los datos, pero el monto y la cuenta"),
     )
     expect(toast.success).not.toHaveBeenCalled()
+  })
+})
+
+describe("012 — moving a leg and restating what the transfer moved are two saves", () => {
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+    correctTransaction.mockReset().mockResolvedValue(makeTransaction())
+  })
+
+  const aTransferIntoDollars = () =>
+    aTransferPair({ received: { account_id: 3, amount: 5_000, currency: "USD" } })
+
+  async function writeWhatArrived(user: ReturnType<typeof userEvent.setup>) {
+    const arrived = await screen.findByLabelText("Monto recibido (USD)")
+    await user.clear(arrived)
+    await user.type(arrived, "52")
+  }
+
+  async function moveTo(user: ReturnType<typeof userEvent.setup>, name: string) {
+    await user.click(await screen.findByRole("combobox", { name: "Cuenta" }))
+    await user.click(screen.getByRole("option", { name }))
+  }
+
+  it("never drops the figure written for the other half when the leg moves", async () => {
+    const user = userEvent.setup()
+    const { sent } = aTransferIntoDollars()
+    renderDialog(sent)
+    await writeWhatArrived(user)
+    await moveTo(user, "Davivienda")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+  })
+
+  it("saves the balance-safe edit the refusal never put at risk", async () => {
+    const user = userEvent.setup()
+    const order: string[] = []
+    updateTransaction.mockReset().mockImplementation(async () => {
+      order.push("edit")
+      return makeTransaction()
+    })
+    const { sent } = aTransferPair()
+    renderDialog(sent)
+    await moveTo(user, "Davivienda")
+    const amount = await screen.findByLabelText("Monto (COP)")
+    await user.clear(amount)
+    await user.type(amount, "250000")
+    const payee = screen.getByLabelText(/Beneficiario/)
+    await user.clear(payee)
+    await user.type(payee, "Nu")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
+    expect(updateTransaction).toHaveBeenCalledWith(10, expect.objectContaining({ payee: "Nu" }))
+    expect(order).toEqual(["edit"])
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining("Se guardaron los datos, pero el monto y la cuenta"),
+      ),
+    )
+  })
+
+  it("moves a leg of a transfer across currencies and restates it in one save", async () => {
+    const user = userEvent.setup()
+    const { sent } = aTransferIntoDollars()
+    renderDialog(sent)
+    await moveTo(user, "Davivienda")
+    const amount = await screen.findByLabelText("Monto (COP)")
+    await user.clear(amount)
+    await user.type(amount, "210000")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(correctTransaction).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).toHaveBeenCalledWith(10, { account_id: 4, amount: 21_000_000 })
+  })
+
+  it("refuses to move a leg of a one-currency transfer while restating its figure", async () => {
+    const user = userEvent.setup()
+    const { sent } = aTransferPair()
+    renderDialog(sent)
+    await moveTo(user, "Davivienda")
+    const amount = await screen.findByLabelText("Monto (COP)")
+    await user.clear(amount)
+    await user.type(amount, "250000")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).not.toHaveBeenCalled()
   })
 })
