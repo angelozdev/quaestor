@@ -1,9 +1,9 @@
-> ▶ CP6 Refine — 5/5 criteria met | NEXT: /engineer.crap-analyzer for CP7, on a fresh agent | BLOCKED: none
+> ▶ CP8 Harden — 5/5 criteria met | NEXT: the owner — a lifecycle pass over a restored copy of production, then merge (CHARTER §7) | BLOCKED: none
 
 # Progress — 012 movement-corrections
 
-A movement is corrected, not deleted. 30 acceptance criteria, 66 scenarios —
-53 against the logic, 13 against the screen. **All green**, and the whole
+A movement is corrected, not deleted. 30 acceptance criteria, 80 scenarios —
+59 against the logic, 21 against the screen. **All green**, and the whole
 project's pipeline with them.
 
 ## Checkpoints
@@ -15,11 +15,9 @@ project's pipeline with them.
 | 3 | Spec | done — approved by the owner 2026-08-10 | 2026-08-10T2015-atdd.md |
 | 4 | Plan | done — ADR-0051 accepted | 2026-08-10T2140-plan.md |
 | 5 | Implement | done — all four slices, both streams green | 2026-08-10T2340-implement.md |
-| 6 | Refine | **done** — 25 fresh agents; four user-facing defects and a money hole | 2026-08-11T0400-refine.md |
-| 5 | Implement | — | |
-| 6 | Refine | — | |
-| 7 | Verify | — | |
-| 8 | Harden | — | |
+| 6 | Refine | done — 25 fresh agents; four user-facing defects and a money hole | 2026-08-11T0400-refine.md |
+| 7 | Verify | **done** — three AC-violating money defects, and a branch the metric could not see | 2026-08-11T0930-verify.md |
+| 8 | Harden | **done** — 157 mutants, 5 survivors, none of them work to do | 2026-08-11T1030-harden.md |
 
 ## The two rules everything derives from
 
