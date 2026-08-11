@@ -1,0 +1,98 @@
+---
+slug: "2026-08-11-a-foreign-currency-account-cannot-be-written-to"
+title: "Recording or planning money in a foreign-currency account fails with an English error"
+severity: high
+blocks_user: true
+workaround: "Creating a movement: press Crear a second time — the first attempt corrects the currency and the retry goes through. Planning a payment: no workaround; plan it against a peso account and move it afterwards with the correction dialog."
+status: investigating
+
+source:
+  kind: internal
+  ref: "features/012-movement-corrections/handoffs/2026-08-11T1200-browser-verification.md"
+
+repro: |
+  Planning (no workaround):
+  1. Por pagar → Planear pago.
+  2. Beneficiario, Cuenta = a USD account, Monto = 100, fecha, categoría.
+  3. Press Planear. Press it again. And again.
+
+  Creating (recoverable):
+  1. Transacciones → Nueva.
+  2. Cuenta = a USD account. Note the amount label still reads "Monto * (COP)".
+  3. Fill the rest and press Crear.
+
+expected: "A payment planned or a movement recorded against an account that holds dollars is stated in dollars, and is accepted. No screen in this app speaks English to the owner."
+actual: "Both refuse with the raw backend message `currency COP does not match account currency USD`, in English. Creating succeeds on the second press; planning never succeeds at all."
+
+feature_refs:
+  - "features/012-movement-corrections"
+
+investigation:
+  match_mode: manual
+  candidates_considered: 2
+  root_cause: |
+    Two distinct causes behind one symptom.
+
+    **Planning — the currency is never sent.** `frontend/app/(app)/to-pay/page.tsx`
+    `plan.mutationFn` builds the body with payee, amount, due_date, account_id,
+    category_id, new_category, meta_id and notes — and no `currency`. It is
+    optional in `PlanPaymentCreate` (`frontend/lib/api/types.ts:314`), so the
+    request omits it and the backend takes its default of COP. Against a USD
+    account `plan_payment` then raises. There is no sequence of clicks that fixes
+    this: the field is not merely stale, it is absent.
+
+    **Creating — the currency is one render stale.** `transaction-create-dialog.tsx`
+    reads `form.state.values.accountId` directly to derive the currency. A direct
+    read of TanStack Form's state is not reactive, so picking an account does not
+    re-render the label or the value that goes on the wire; the failed mutation is
+    what re-renders, which is why the second press works. The amount label is the
+    visible symptom — it still reads `(COP)` with a dollar account selected, and
+    `MoneyInput` is therefore in peso mode, so a typed `1556.04` is parsed as
+    155.604 pesos. `frontend/app/(app)/to-pay/page.tsx`'s plan dialog reads
+    `planAccountId` the same way and shows the same stale label.
+
+    **Neither is feature 012's.** `git diff --merge-base main` shows the branch
+    changed only the import in `transaction-create-dialog.tsx` — a local
+    `currencyOf` replaced by the identical shared one from `lib/money.ts` — and
+    `main`'s own `plan.mutationFn` omits `currency` exactly as this one does.
+
+  found_by: "Browser verification of feature 012 against the SQLite sandbox, 2026-08-11. Found while creating the fixture for AC-13's own example (US$1.556,04 moved to a peso account); it is not reachable from the correction dialogs, which resolve currency correctly through `currencyForAccount`."
+
+gap_analysis:
+  - category: missing_ac
+    phase: discover-acs
+    finding: "No acceptance criterion, in any feature, says that a payment can be planned against an account that holds another currency. AC-4 and AC-5 of feature 012 cover confirming and storing in that currency, and feature 005 covers reading in it, but planning was never stated — so nothing tested it and the omission survived every green suite."
+    followup_kind: amend_ac
+  - category: inadequate_verification
+    phase: verify
+    finding: "The frontend suite has no test that picks an account of a different currency in either the create dialog or the plan dialog and asserts what reaches the wire. Every existing test uses the default peso account, so a stale currency and an absent currency are both invisible to it."
+    followup_kind: add_verification
+
+followups:
+  - category: inadequate_verification
+    action: "Pin both before fixing: picking a USD account in the create dialog must put USD on the wire on the FIRST submit; planning against a USD account must send currency USD."
+    status: open
+  - category: missing_ac
+    action: "Decide whether planning a payment in a foreign currency is in scope at all, and if so state it as an AC before implementing."
+    status: open
+---
+
+# A foreign-currency account cannot be written to — notes
+
+Filed out of feature 012's browser verification, deliberately **not** fixed
+inside it: both causes predate the branch and live in the create and plan
+dialogs, neither of which is what 012 was about. 012's own dialogs — correcting
+a movement and confirming a payment — resolve the currency correctly and were
+verified end to end against the sandbox on 2026-08-11.
+
+The two causes deserve separate fixes even though the owner sees one symptom.
+The absent field is a real gap in what the screen sends; the stale read is a
+reactivity bug that likely has siblings anywhere `form.state.values` is read
+outside a subscription. Worth grepping for that pattern before closing.
+
+The English message is a third, smaller thing: raw backend text reaching the
+owner. Feature 012's CP6 fixed exactly this class in the edit dialog. The same
+treatment applies here.
+
+Resume at Step 3 (Pin): write the two red tests above, confirm they fail, then
+fix the absent field first — it is the one with no workaround.
