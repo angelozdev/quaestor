@@ -34,8 +34,8 @@ exit_criteria:
     evidence: "AC-8 keeps one figure where GnuCash, Firefly III, Lunch Money and IAS 21 keep two. The note beside AC-8 records the survey, names ADR-0031 as the reason, and points at AC-21 as the compensation."
   - criterion: "the owner has reviewed and approved the ACs"
     verified_by: human
-    met: false
-    evidence: "Pending on the amended file. The two changes were his calls; the whole set still needs his read before CP3 opens."
+    met: true
+    evidence: "Approved by the owner on 2026-08-11 after the industry review was presented: «apruebo, sigue con CP3». The two changes the review produced — AC-13 split by mode, AC-21 added — were his own calls, made before the approval."
 status: complete
 ---
 
