@@ -56,7 +56,7 @@ from .fx_read_time import _DEC, _default_account_id
 from .planned_payments import skip_the_obligations_turn
 from .world import World
 
-_REJECTED = (ValidationError, NotFound, QuaestorError, TypeError, ValueError, AttributeError)
+_REJECTED = (ValidationError, NotFound, QuaestorError, ValueError)
 
 _MONTH = r"\d{4}-\d{2}"
 

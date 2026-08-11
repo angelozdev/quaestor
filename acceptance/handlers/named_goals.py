@@ -43,7 +43,7 @@ from .fx_read_time import _default_account_id
 from .sinking_funds import _spending_category_id
 from .world import World
 
-_REJECTED = (ValidationError, NotFound, QuaestorError, TypeError, ValueError, AttributeError)
+_REJECTED = (ValidationError, NotFound, QuaestorError, ValueError)
 
 _DEC = r"-?\d+(?:\.\d+)?"
 _MONTH = r"\d{4}-\d{2}"
