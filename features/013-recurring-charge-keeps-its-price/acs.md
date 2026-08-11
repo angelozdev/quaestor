@@ -1,7 +1,8 @@
 ---
-ac_count: 20
+ac_count: 21
 high_priority_count: 14
 discovered: 2026-08-11
+reviewed: 2026-08-11
 ---
 
 # Acceptance criteria — 013 recurring-charge-keeps-its-price
@@ -103,6 +104,14 @@ El movimiento que queda dice **US$32,10** sobre DolarApp. No guarda los 99.900
 COP, no guarda la tasa que se usó, y no queda ninguna cifra en pesos pegada a
 él. El precio en pesos vive en la regla; el movimiento guarda lo que salió.
 
+*Medido contra otros sistemas el 2026-08-11: GnuCash guarda dos cifras por
+movimiento (amount en la moneda de la cuenta, value en la del cobro), Firefly III
+exige un «foreign amount» aparte, Lunch Money guarda la tasa histórica de cada
+movimiento, y la norma contable IAS 21 registra a la tasa del día. **Quaestor es
+el único que guarda una sola cifra**, y es a propósito: ADR-0031 quitó las tasas
+congeladas por movimiento. El costo se compensa con AC-21, que muestra el precio
+sin guardarlo.*
+
 ## AC-9: El saldo se mueve por la cifra en la moneda de la cuenta
 
 **Priority:** high · **Type:** functional
@@ -136,16 +145,23 @@ Opal cuesta 9,99 USD y se cobra a DolarApp. Nada de esta feature la toca: se
 crea igual, puede cobrarse sola, nace igual y se confirma igual. Ninguna
 conversión aparece en ninguna pantalla.
 
-## AC-13: Mover la cuenta propone la conversión, nunca la exige
+## AC-13: Mover la cuenta propone la conversión, y solo la exige si la regla se cobra sola
 
 **Priority:** high · **Type:** functional
 
 El dueño mueve Opal (9,99 USD) de DolarApp a Nu, que es en pesos. La app le
-**propone 31.388 COP** en la casilla del monto, editable. Si la acepta, Opal
-queda en pesos; si la borra y deja 9,99 USD, Opal queda en dólares sobre una
-cuenta en pesos, que es AC-1 en el otro sentido. Igual en la dirección
-contraria. La app sugiere porque cambiar de cuenta suele significar algo, pero
-el precio es del dueño.
+**propone 31.388 COP** en la casilla del monto, editable.
+
+**Si la regla se confirma a mano**, él manda: acepta la propuesta y Opal queda en
+pesos, o la borra y Opal queda en 9,99 USD sobre una cuenta en pesos, que es
+AC-1 en el otro sentido. Igual en la dirección contraria. La app sugiere porque
+cambiar de cuenta suele significar algo, pero el precio es del dueño.
+
+**Si la regla se cobra sola**, borrar la propuesta dejaría el estado que AC-2
+prohíbe, así que la app **rechaza el guardado** y nombra las dos salidas:
+aceptar la conversión, o pasar la regla a confirmarse a mano. Nunca cambia el
+modo por su cuenta — el dueño rechazó eso explícitamente para el caso de crear,
+y vale igual aquí.
 
 ## AC-14: Un cobro que ya espera conserva el precio con el que nació
 
@@ -217,3 +233,18 @@ que se escribieron (≈3.306) no existe en ninguna parte, y ADR-0031 quitó a
 propósito las tasas congeladas por movimiento. Una migración que convierta
 escribiría dos números nuevos, mal — el defecto que esta feature existe para
 eliminar.
+
+## AC-21: Un cobro muestra el precio de la regla que lo produjo
+
+**Priority:** medium · **Type:** functional
+
+En el detalle de un movimiento y en el informe del mes, el cobro de Hevy Pro
+dice **US$32,10 (regla: 99.900 COP)**. El movimiento no guarda ninguna cifra
+nueva ni ninguna tasa: el precio se lee de la regla que lo produjo, que ya está
+enlazada al cobro.
+
+Sin esto, en diciembre —con el dólar a 4.400— el informe de julio mostraría Hevy
+Pro en **141.240 COP**, un 41% por encima de lo que costó, y sería la primera
+vez que la app conoce la cifra verdadera en pesos y no la enseña. Solo aparece
+en cobros nacidos de una regla cuya moneda no es la de su cuenta; los demás no
+muestran nada extra.
