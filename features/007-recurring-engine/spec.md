@@ -459,20 +459,46 @@ Scenario: The same rules hold when editing
   And "Netflix" is described as 25900.00 COP every 1 week
 ```
 
-## AC-19 — What an obligation is cannot be changed
+## AC-19 — The kind of movement is fixed; the currency follows the account
 
 ```gherkin
-Scenario: The kind of movement cannot change
+Scenario: Asking to turn a payment into an income leaves it going out
   Given an account "Bancolombia" in COP with balance 500000.00 COP
   And a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
-  When the user tries to turn "Netflix" into an income
-  Then the change to "Netflix" is rejected
+  When the user asks the app to turn "Netflix" into an income
+  Then the app still describes "Netflix" as money going out
 
-Scenario: The currency cannot change
+Scenario: The obligation goes on taking money out on its due date
   Given an account "Bancolombia" in COP with balance 500000.00 COP
   And a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
-  When the user tries to change the currency of "Netflix" to USD
+  When the user asks the app to turn "Netflix" into an income
+  And the daily run happens
+  Then "Bancolombia" has balance 474100.00 COP
+
+Scenario: Moving the charge to an account in another currency needs the amount in it
+  Given an account "Bancolombia" in COP with balance 500000.00 COP
+  And an account "DolarApp" in USD with balance 100.00 USD
+  And a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
+  When the user tries to move "Netflix" to the account "DolarApp"
   Then the change to "Netflix" is rejected
+  And "Netflix" is described as 25900.00 COP every 1 month
+
+Scenario: Restating the amount moves the charge and its currency together
+  Given an account "Bancolombia" in COP with balance 500000.00 COP
+  And an account "DolarApp" in USD with balance 100.00 USD
+  And a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
+  When the user moves "Netflix" to the account "DolarApp" restating it at 6.17 USD
+  Then "Netflix" is described as 6.17 USD every 1 month
+
+Scenario: The next charge is made in the new account's currency
+  Given an account "Bancolombia" in COP with balance 500000.00 COP
+  And an account "DolarApp" in USD with balance 100.00 USD
+  And a repeating payment of 25900.00 COP to "Netflix" from "Bancolombia" every 1 month starting today, paying itself
+  When the user moves "Netflix" to the account "DolarApp" restating it at 6.17 USD
+  And the daily run happens
+  Then "Netflix" was charged 6.17 USD today
+  And "DolarApp" has balance 93.83 USD
+  And "Bancolombia" has balance 500000.00 COP
 ```
 
 ## AC-20 — A date already charged cannot be skipped

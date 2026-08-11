@@ -13,13 +13,16 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+const SESSION_EXPIRED_MESSAGE = "Tu sesión expiró. Vuelve a iniciar sesión e inténtalo de nuevo."
+
 http.interceptors.response.use(
   (res) => (res.status === 204 ? undefined : res.data),
   (err: AxiosError) => {
+    const status = err.response?.status ?? 0
     const url = err.config?.url ?? ""
-    if (err.response?.status === 401 && !url.startsWith("/auth")) {
+    if (status === 401 && !url.startsWith("/auth")) {
       onUnauthorized?.()
-      return undefined as unknown
+      throw new ApiError(status, "Unauthorized", SESSION_EXPIRED_MESSAGE)
     }
     const data = err.response?.data as {
       error?: string
@@ -27,9 +30,9 @@ http.interceptors.response.use(
       fields?: Record<string, string>
     } | null
     throw new ApiError(
-      err.response?.status ?? 0,
+      status,
       data?.error ?? "Error",
-      data?.detail ?? `Request failed (${err.response?.status})`,
+      data?.detail ?? `Request failed (${status})`,
       data?.fields,
     )
   },

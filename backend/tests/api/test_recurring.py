@@ -105,6 +105,28 @@ def test_delete_recurring_is_soft(client, engine, auth, expense_category):
     assert [i["id"] for i in inactive] == [rid]
 
 
+def test_patch_recurring_across_currencies_needs_the_amount_restated(client, engine, auth, expense_category):
+    rid = _seed_recurring(client, engine, auth, expense_category)
+    with Session(engine) as s:
+        usd = accounts.create_account(s, "DolarApp", "debit", "USD", balance=0).id
+
+    r = client.patch(f"/api/recurring/{rid}", json={"account_id": usd}, headers=auth)
+
+    assert r.status_code == 422, r.text
+    assert "needs the amount in USD" in r.json()["detail"]
+
+
+def test_patch_recurring_across_currencies_restates_the_charge(client, engine, auth, expense_category):
+    rid = _seed_recurring(client, engine, auth, expense_category)
+    with Session(engine) as s:
+        usd = accounts.create_account(s, "DolarApp", "debit", "USD", balance=0).id
+
+    r = client.patch(f"/api/recurring/{rid}", json={"account_id": usd, "amount": 2935}, headers=auth)
+
+    assert r.status_code == 200, r.text
+    assert (r.json()["currency"], r.json()["amount"], r.json()["account_id"]) == ("USD", 2935, usd)
+
+
 def test_restore_recurring(client, engine, auth, expense_category):
     rid = _seed_recurring(client, engine, auth, expense_category)
     client.delete(f"/api/recurring/{rid}", headers=auth)

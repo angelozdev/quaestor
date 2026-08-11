@@ -18,10 +18,11 @@ import {
 import { TransferReceivedField } from "@/components/transfer-received-field"
 import { listAccounts } from "@/lib/api/accounts"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
-import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { finiteOrNull } from "@/lib/money"
+import { currencyOf, finiteOrNull } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useFormValues } from "@/lib/use-form-values"
 import { useTagNames } from "@/lib/use-tag-names"
 import {
   Button,
@@ -61,11 +62,6 @@ const TRANSFER_DEFAULTS: TxTransferValues = {
   amountReceived: Number.NaN,
   date: new Date().toISOString().slice(0, 10),
   notes: "",
-}
-
-function currencyOf(accounts: Account[] | undefined, id: number | null): string {
-  if (id === null) return "COP"
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
 }
 
 type FieldWithErrors = { state: { meta: { errors: unknown[] } } }
@@ -111,13 +107,13 @@ export function TransactionCreateDialog({
     },
   })
 
-  const normalCurrency = currencyOf(accounts.data, normalForm.getFieldValue("accountId"))
-  const sentCurrency = currencyOf(accounts.data, transferForm.getFieldValue("fromId"))
-  const receivedCurrency = currencyOf(accounts.data, transferForm.getFieldValue("toId"))
+  const normal = useFormValues(normalForm)
+  const transfer = useFormValues(transferForm)
+  const normalCurrency = currencyOf(accounts.data, normal.accountId)
+  const sentCurrency = currencyOf(accounts.data, transfer.fromId)
+  const receivedCurrency = currencyOf(accounts.data, transfer.toId)
   const isCrossCurrency =
-    transferForm.getFieldValue("fromId") !== null &&
-    transferForm.getFieldValue("toId") !== null &&
-    sentCurrency !== receivedCurrency
+    transfer.fromId !== null && transfer.toId !== null && sentCurrency !== receivedCurrency
 
   function resetForms() {
     normalForm.reset(NORMAL_DEFAULTS)
@@ -260,10 +256,10 @@ export function TransactionCreateDialog({
                 {(field) => (
                   <CategoryField
                     id="tx-create-category"
-                    isIncome={normalForm.getFieldValue("type") === "income"}
+                    isIncome={normal.type === "income"}
                     value={{
                       categoryId: field.state.value as number | null,
-                      newCategory: normalForm.getFieldValue("newCategory"),
+                      newCategory: normal.newCategory,
                     }}
                     onChange={(choice) => {
                       field.handleChange(choice.categoryId as never)
@@ -375,7 +371,7 @@ export function TransactionCreateDialog({
                     active={isCrossCurrency}
                     sentCurrency={sentCurrency}
                     receivedCurrency={receivedCurrency}
-                    sentCents={finiteOrNull(transferForm.getFieldValue("amount"))}
+                    sentCents={finiteOrNull(transfer.amount)}
                     receivedCents={finiteOrNull(field.state.value)}
                     onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
                     errorMessage={fieldError(field)}

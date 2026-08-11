@@ -100,6 +100,7 @@ class World:
         self.assistant_answer: str | None = None
 
         self.recurring_view: list | None = None
+        self.recurring_answer: dict | None = None
         self.run_failures: list[str] = []
 
         # Undo hooks for global registrations a scenario installs.

@@ -18,17 +18,16 @@ import { PageHeader } from "@/components/page-header"
 import { type Scope, ScopePicker } from "@/components/scope-picker"
 import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
+import { getFx } from "@/lib/api/fx"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
-import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate, yearMonthOf } from "@/lib/date"
-import { formatCents } from "@/lib/money"
+import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useFormValues } from "@/lib/use-form-values"
+import { useStatedAmount } from "@/lib/use-stated-amount"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
-
-function currencyOf(accounts: Account[] | undefined, id: number | null): string {
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
-}
 
 function windowFor(scope: Scope) {
   const now = new Date()
@@ -82,8 +81,9 @@ export default function ToPayPage() {
   const { since, until } = windowFor(scope)
 
   const [confirming, setConfirming] = useState<Transaction | null>(null)
-  const [cAmount, setCAmount] = useState<number | null>(null)
+  const confirmMoney = useStatedAmount({ cents: null, currency: "COP" })
   const [cDate, setCDate] = useState("")
+  const [cAccountId, setCAccountId] = useState<number | null>(null)
 
   const [planning, setPlanning] = useState(false)
 
@@ -97,9 +97,12 @@ export default function ToPayPage() {
 
   const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => toPay(since, until) })
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
+  const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
+  const usdCop = fx.data ? Number(fx.data.usd_cop) : null
+  const confirmCurrency = currencyForAccount(confirming, accounts.data, cAccountId)
 
-  const planAccountId = planForm.state.values.accountId
-  const planCurrency = currencyOf(accounts.data, planAccountId)
+  const planValues = useFormValues(planForm)
+  const planCurrency = currencyOf(accounts.data, planValues.accountId)
 
   const onErr = (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error")
   const done = (msg: string) => {
@@ -111,8 +114,9 @@ export default function ToPayPage() {
     mutationFn: () => {
       if (!confirming) throw new Error("confirming transaction is required")
       return confirmPayment(confirming.id, {
-        amount: cAmount ?? undefined,
+        amount: confirmMoney.amount ?? undefined,
         date: cDate || undefined,
+        account_id: cAccountId ?? undefined,
       })
     },
     onSuccess: () => {
@@ -133,6 +137,7 @@ export default function ToPayPage() {
         amount: values.amount,
         due_date: values.dueDate,
         account_id: values.accountId as number,
+        currency: planCurrency,
         category_id: values.categoryId,
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         meta_id: values.metaId,
@@ -152,8 +157,9 @@ export default function ToPayPage() {
 
   function openConfirm(item: Transaction) {
     setConfirming(item)
-    setCAmount(item.amount)
+    confirmMoney.write(item.amount, item.currency)
     setCDate(item.date)
+    setCAccountId(item.account_id)
   }
 
   return (
@@ -244,12 +250,39 @@ export default function ToPayPage() {
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label>Monto real ({confirming.currency})</Label>
-                <MoneyInput currency={confirming.currency} value={cAmount} onChange={setCAmount} />
+                <Label htmlFor="confirm-account">Cuenta</Label>
+                <EntitySelect
+                  id="confirm-account"
+                  value={cAccountId}
+                  onChange={(chosen) => {
+                    const next = chosen as number | null
+                    const to = currencyOf(accounts.data, next)
+                    setCAccountId(next)
+                    if (to !== confirmCurrency) {
+                      confirmMoney.offer(amountForAccount(confirmMoney.stated, to, usdCop))
+                    }
+                  }}
+                  queryKey={qk.accounts(false)}
+                  queryFn={() => listAccounts(false)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Fecha</Label>
-                <Input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} />
+                <Label htmlFor="confirm-amount">Monto real ({confirmCurrency})</Label>
+                <MoneyInput
+                  id="confirm-amount"
+                  currency={confirmCurrency}
+                  value={confirmMoney.amount}
+                  onChange={(cents) => confirmMoney.write(cents, confirmCurrency)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-date">Fecha</Label>
+                <Input
+                  id="confirm-date"
+                  type="date"
+                  value={cDate}
+                  onChange={(e) => setCDate(e.target.value)}
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
@@ -336,7 +369,7 @@ export default function ToPayPage() {
                     isIncome={false}
                     value={{
                       categoryId: field.state.value as number | null,
-                      newCategory: planForm.getFieldValue("newCategory"),
+                      newCategory: planValues.newCategory,
                     }}
                     onChange={(choice) => {
                       field.handleChange(choice.categoryId as never)

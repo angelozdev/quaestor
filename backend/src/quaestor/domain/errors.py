@@ -23,3 +23,11 @@ class NotFound(QuaestorError):
 
 class IllegalTransition(QuaestorError):
     """A status transition that is not allowed (e.g. confirm/skip a non-planned tx)."""
+
+
+class CorrectionNotApplied(QuaestorError):
+    """A correction's arithmetic did not prove out, so none of it was kept.
+
+    Raised when a balance did not move by exactly the delta the correction
+    declared — including not moving at all. Distinct from ValidationError: the
+    input was fine and the write is what failed (ADR-0051)."""

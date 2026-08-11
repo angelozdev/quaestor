@@ -64,3 +64,5 @@ New ADRs are created with the `adr` skill:
 | 0048 | A purchase stops the meta, and closing it moves no figure | accepted | 2026-08-09 |
 | 0049 | Closing leaves the screen, not the month, and a purchase stops only what the owner has not restarted | accepted | 2026-08-09 |
 | 0050 | One typeface, one table, and the token slot the design system actually reads | accepted | 2026-08-10 |
+| 0051 | A posted movement is restated, not destroyed, and every correction proves its own arithmetic | accepted | 2026-08-10 |
+| 0052 | A recurring charge can move to an account in another currency, restated in it | accepted | 2026-08-11 |

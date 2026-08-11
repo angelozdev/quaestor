@@ -19,6 +19,7 @@ from ...services import fx, transactions
 from ...services import tags as tags_service
 from ..deps import get_session
 from ..schemas import (
+    CorrectionIn,
     TransactionCreate,
     TransactionOut,
     TransactionUpdate,
@@ -118,6 +119,28 @@ def update_transaction(tx_id: int, body: TransactionUpdate, session: Session = D
     if tag_names is not None:
         names = tags_service.set_transaction_tags(session, tx_id, tag_names)
         return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
+    return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
+
+
+@router.post("/{tx_id}/correction", response_model=TransactionOut)
+def correct_transaction(tx_id: int, body: CorrectionIn, session: Session = Depends(get_session)):
+    """Restate what a movement really was, moving the balances it displaces.
+
+    Its own path rather than a field on the balance-safe editor, so the only
+    write in the app that moves two stored balances is named as one (ADR-0051).
+    """
+    if body.sent is not None or body.received is not None:
+        if body.sent is None or body.received is None:
+            raise ValidationError("correcting a transfer states what it sent and what it received")
+        if body.account_id is not None or body.amount is not None:
+            raise ValidationError("a transfer's two figures are corrected on their own, not beside a leg's account")
+        tx = transactions.correct_transfer(session, tx_id, sent=body.sent, received=body.received)
+    elif body.account_id is not None:
+        tx = transactions.move_to_account(session, tx_id, account_id=body.account_id, amount=body.amount)
+    elif body.amount is not None:
+        tx = transactions.correct_amount(session, tx_id, amount=body.amount)
+    else:
+        raise ValidationError("a correction states an account, an amount, or both")
     return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 

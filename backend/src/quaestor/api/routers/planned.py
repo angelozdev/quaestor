@@ -44,7 +44,7 @@ def plan_payment(body: PlanPaymentIn, session: Session = Depends(get_session)):
 
 @router.post("/{tx_id}/confirm", response_model=TransactionOut)
 def confirm_payment(tx_id: int, body: ConfirmPaymentIn, session: Session = Depends(get_session)):
-    tx = planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date)
+    tx = planned.confirm_payment(session, tx_id, amount=body.amount, date=body.date, account_id=body.account_id)
     return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 

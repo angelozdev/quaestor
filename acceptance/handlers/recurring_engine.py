@@ -46,10 +46,16 @@ from quaestor.services import accounts, occurrences, recurring, transactions
 from sqlmodel import select
 
 from . import step
-from .fx_read_time import _DEC
+from .fx_read_time import _DEC, _rest_client
 from .world import World
 
-_REJECTED = (ValidationError, NotFound, QuaestorError, TypeError, ValueError)
+_REJECTED = (ValidationError, NotFound, QuaestorError, ValueError)
+"""What counts as the app refusing something.
+
+`TypeError` is deliberately absent: a keyword the service does not take is a
+step calling the app wrongly, not the app turning the user down, and letting it
+count is what made AC-19's two scenarios pass against nothing at all.
+"""
 
 _WHEN = r"today|in \d+ days|\d+ days ago|on \d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}"
 
@@ -181,6 +187,27 @@ def _run(world: World, until: Date) -> None:
         world.reopen_session()
         return
     world.run_failures = [str(f) for f in getattr(result, "failures", [])]
+
+
+def _patch_recurring(world: World, item_id: int, edit: dict) -> dict:
+    """Send `edit` through the app's own edit door and return what it answers.
+
+    `quaestor.api` builds its app at import time, so the CSRF names are imported
+    only after `_rest_client` has put the app's environment in place.
+
+    Raises:
+        AssertionError: the app answered anything other than the edited
+            obligation, which would mean AC-19 no longer describes it.
+    """
+    client, auth = _rest_client(world)
+    from quaestor.api.csrf import CSRF_COOKIE, CSRF_HEADER
+
+    client.get("/api/auth/me", headers=auth)
+    headers = {**auth, CSRF_HEADER: client.cookies.get(CSRF_COOKIE, "")}
+    resp = client.patch(f"/api/recurring/{item_id}", json=edit, headers=headers)
+    if resp.status_code != 200:
+        raise AssertionError(f"the app refused the edit {edit} with {resp.status_code}: {resp.text}")
+    return resp.json()
 
 
 def _linked_tx(world: World, name: str, due: Date) -> Transaction:
@@ -338,27 +365,16 @@ def when_change_amount(world: World, name: str, amount: str, currency: str) -> N
     )
 
 
-@step(
-    r'the user tries to change the currency of "(?P<name>[^"]+)"'
-    r" to (?P<currency>[A-Z]{3})"
-)
-def when_change_currency(world: World, name: str, currency: str) -> None:
-    world.attempt(
-        recurring.update_recurring,
-        world.session,
-        _item(world, name).id,
-        currency=currency,
-    )
+@step(r'the user asks the app to turn "(?P<name>[^"]+)" into an income')
+def when_ask_to_turn_into_income(world: World, name: str) -> None:
+    """Ask the app's own edit door for the one change it does not carry (AC-19).
 
-
-@step(r'the user tries to turn "(?P<name>[^"]+)" into an income')
-def when_change_type(world: World, name: str) -> None:
-    world.attempt(
-        recurring.update_recurring,
-        world.session,
-        _item(world, name).id,
-        type=TxType.income,
-    )
+    The kind of movement is not part of an edit at all, so the ask reaches the
+    app, is answered, and the answer describes the obligation unchanged. Going
+    through the service instead would only prove that a keyword nobody sends
+    does not exist.
+    """
+    world.recurring_answer = _patch_recurring(world, _item(world, name).id, {"type": "income"})
 
 
 @step(
@@ -384,13 +400,28 @@ def when_extend_end(world: World, name: str, when: str) -> None:
     )
 
 
-@step(r'the user moves "(?P<name>[^"]+)" to the account "(?P<account>[^"]+)"')
+@step(r'the user (?:moves|tries to move) "(?P<name>[^"]+)" to the account "(?P<account>[^"]+)"')
 def when_move_account(world: World, name: str, account: str) -> None:
     world.attempt(
         recurring.update_recurring,
         world.session,
         _item(world, name).id,
         account_id=world.account_id_or_missing(account),
+    )
+
+
+@step(
+    r'the user moves "(?P<name>[^"]+)" to the account "(?P<account>[^"]+)"'
+    r" restating it at (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
+)
+def when_move_account_restated(world: World, name: str, account: str, amount: str, currency: str) -> None:
+    """Move the obligation and say what it is worth where it is going (ADR-0052)."""
+    world.attempt(
+        recurring.update_recurring,
+        world.session,
+        _item(world, name).id,
+        account_id=world.account_id_or_missing(account),
+        amount=major_to_cents(amount),
     )
 
 
@@ -540,6 +571,17 @@ def then_offered_passed_dates(world: World, count: str, name: str) -> None:
     assert len(dates) == int(count), (
         f"{name!r} offers {len(dates)} passed date(s), expected {count}: {[str(d) for d in dates]}"
     )
+
+
+@step(r'the app still describes "(?P<name>[^"]+)" as money going out')
+def then_still_money_going_out(world: World, name: str) -> None:
+    answer = world.recurring_answer
+    assert answer is not None, f"nothing was asked of the app about {name!r} in this scenario"
+    assert answer["type"] == TxType.expense.value, (
+        f"the app came back describing {name!r} as {answer['type']}, not money going out"
+    )
+    item = _item(world, name)
+    assert item.type == TxType.expense, f"{name!r} is recorded as {item.type.value}, not money going out"
 
 
 @step(r'"(?P<name>[^"]+)" is switched off')

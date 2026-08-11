@@ -1,5 +1,6 @@
 import { del, get, patch, post, qs } from "./client"
 import type {
+  CorrectionBody,
   Transaction,
   TransactionCreate,
   TransactionFilters,
@@ -18,6 +19,9 @@ export const createTransaction = (body: TransactionCreate) =>
 
 export const createTransfer = (body: TransferCreate) =>
   post<TransferOut>("/transactions/transfer", body)
+
+export const correctTransaction = (id: number, body: CorrectionBody) =>
+  post<Transaction>(`/transactions/${id}/correction`, body)
 
 export const updateTransaction = (id: number, body: TransactionUpdate) =>
   patch<Transaction>(`/transactions/${id}`, body)

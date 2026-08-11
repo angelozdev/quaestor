@@ -16,6 +16,7 @@ import { PageHeader } from "@/components/page-header"
 import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import { listAccounts } from "@/lib/api/accounts"
+import { getFx } from "@/lib/api/fx"
 import {
   createRecurring,
   deleteRecurring,
@@ -26,8 +27,10 @@ import {
 } from "@/lib/api/recurring"
 import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { hasEnded } from "@/lib/date"
-import { formatCents } from "@/lib/money"
+import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useFormValues } from "@/lib/use-form-values"
+import { useAmountBox } from "@/lib/use-stated-amount"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 import { PendingDatesDialog } from "./pending-dates-dialog"
 import { type RecurringCreateValues, recurringCreateSchema } from "./recurring.schema"
@@ -65,6 +68,51 @@ function intervalLabel(unit: IntervalUnit, count: number): string {
   return `Cada ${count} ${UNIT_PLURAL[unit]}`
 }
 
+const BLANK_CHARGE: RecurringCreateValues = {
+  name: "",
+  payee: "",
+  amount: Number.NaN,
+  categoryId: null,
+  newCategory: "",
+  accountId: null,
+  type: "expense",
+  mode: "manual",
+  intervalCount: 1,
+  intervalUnit: "month",
+  startDate: "",
+  endDate: "",
+}
+
+/**
+ * A blank charge that starts today.
+ *
+ * Held in state rather than rebuilt each render: a form compares the defaults it
+ * is handed against the ones it holds, and a fresh object that no longer matches
+ * what `reset` put there is taken as a new default and overwrites it — which is
+ * how the edit dialog opened blank over the charge it was asked about.
+ */
+function chargeStartingToday(): RecurringCreateValues {
+  return { ...BLANK_CHARGE, startDate: new Date().toISOString().slice(0, 10) }
+}
+
+/** A charge already registered, as the boxes that edit it. */
+function boxesFor(charge: Recurring): RecurringCreateValues {
+  return {
+    name: charge.name,
+    payee: charge.payee ?? "",
+    amount: charge.amount,
+    categoryId: charge.category_id,
+    newCategory: "",
+    accountId: charge.account_id,
+    type: charge.type,
+    mode: charge.mode,
+    intervalCount: charge.interval_count,
+    intervalUnit: charge.interval_unit,
+    startDate: charge.start_date,
+    endDate: charge.end_date ?? "",
+  }
+}
+
 const WHAT_A_RECURRING_CHARGE_IS = (
   <p>
     Un cobro recurrente es uno que vuelve solo — cada mes, cada año o cada cuantos días le digas. Lo
@@ -97,6 +145,206 @@ function RecurringHelp({ items }: { items: Recurring[] | undefined }) {
   )
 }
 
+/**
+ * The dialog that edits one charge, mounted on the charge itself.
+ *
+ * Keyed by the row so every opening starts a form whose defaults are that
+ * charge: a form seeded after the fact is overwritten by the defaults it was
+ * declared with on the very next render.
+ */
+function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => void }) {
+  const qc = useQueryClient()
+  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
+  const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
+  const usdCop = fx.data ? Number(fx.data.usd_cop) : null
+
+  const editForm = useTanStackForm({
+    defaultValues: boxesFor(charge),
+    validators: { onChange: recurringCreateSchema },
+    onSubmit: async ({ value }) => {
+      update.mutate(value)
+    },
+  })
+
+  const editValues = useFormValues(editForm)
+  const editCurrency = currencyForAccount(charge, accounts.data, editValues.accountId)
+  const money = useAmountBox({ cents: charge.amount, currency: charge.currency }, (cents) =>
+    editForm.setFieldValue("amount", cents ?? Number.NaN),
+  )
+
+  const update = useMutation({
+    mutationFn: (values: RecurringCreateValues) =>
+      updateRecurring(charge.id, {
+        name: values.name,
+        amount: values.amount,
+        payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
+        category_id: values.categoryId,
+        account_id: values.accountId ?? undefined,
+        mode: values.mode,
+        interval_unit: values.intervalUnit,
+        interval_count: values.intervalCount,
+        start_date: values.startDate,
+        end_date: values.endDate ? values.endDate : null,
+      }),
+    onSuccess: () => {
+      toast.success("Recurrente actualizado")
+      invalidate(qc, "recurringWrite")
+      onDone()
+    },
+    onError: (e: unknown) => {
+      applyApiErrorsToForm(editForm, e)
+      toast.error(e instanceof ApiError ? e.message : "Error")
+    },
+  })
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        void editForm.handleSubmit()
+      }}
+      className="space-y-4"
+    >
+      <editForm.Field name="name">
+        {(field) => <FormField field={field} label="Nombre" />}
+      </editForm.Field>
+      <div className="grid grid-cols-2 gap-3">
+        <editForm.Field name="type">
+          {() => (
+            <div className="space-y-1.5">
+              <Label>Tipo (no editable)</Label>
+              <Select
+                value={editValues.type}
+                onValueChange={() => {}}
+                items={TYPE_ITEMS}
+                disabled
+              />
+            </div>
+          )}
+        </editForm.Field>
+        <editForm.Field name="mode">
+          {(field) => (
+            <div className="space-y-1.5">
+              <Label>Modo *</Label>
+              <Select
+                value={field.state.value as string}
+                onValueChange={(v) => v && field.handleChange(v as never)}
+                items={MODE_ITEMS}
+              />
+            </div>
+          )}
+        </editForm.Field>
+      </div>
+      <editForm.Field name="accountId">
+        {(field) => (
+          <div className="space-y-1.5">
+            <Label>Cuenta *</Label>
+            <EntitySelect
+              value={field.state.value as number | null}
+              onChange={(v) => {
+                const chosen = v as number | null
+                const to = currencyOf(accounts.data, chosen)
+                field.handleChange(chosen as never)
+                if (to !== editCurrency) money.offer(amountForAccount(money.stated, to, usdCop))
+              }}
+              queryKey={qk.accounts(false)}
+              queryFn={() => listAccounts(false)}
+            />
+            {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+              <p className="text-xs text-destructive">
+                {String((field.state.meta.errors[0] as { message?: string })?.message)}
+              </p>
+            )}
+          </div>
+        )}
+      </editForm.Field>
+      <editForm.Field name="amount">
+        {(field) => (
+          <div className="space-y-1.5">
+            <Label>Monto * ({editCurrency})</Label>
+            <MoneyInput
+              currency={editCurrency}
+              value={
+                typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                  ? (field.state.value as number)
+                  : null
+              }
+              onChange={(cents) => money.write(cents, editCurrency)}
+            />
+            {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+              <p className="text-xs text-destructive">
+                {String((field.state.meta.errors[0] as { message?: string })?.message)}
+              </p>
+            )}
+          </div>
+        )}
+      </editForm.Field>
+      <div className="grid grid-cols-2 gap-3">
+        <editForm.Field name="intervalCount">
+          {(field) => (
+            <FormField field={field} label="Cada (cantidad)" type="number" min={1} valueAsNumber />
+          )}
+        </editForm.Field>
+        <editForm.Field name="intervalUnit">
+          {(field) => (
+            <div className="space-y-1.5">
+              <Label>Unidad *</Label>
+              <Select
+                value={field.state.value as string}
+                onValueChange={(v) => v && field.handleChange(v as never)}
+                items={UNIT_ITEMS}
+              />
+              {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                <p className="text-xs text-destructive">
+                  {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                </p>
+              )}
+            </div>
+          )}
+        </editForm.Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <editForm.Field name="startDate">
+          {(field) => <FormField field={field} label="Inicio" type="date" />}
+        </editForm.Field>
+        <editForm.Field name="endDate">
+          {(field) => <FormField field={field} label="Fin (opcional)" type="date" />}
+        </editForm.Field>
+      </div>
+      <editForm.Field name="categoryId">
+        {(field) => (
+          <CategoryField
+            id="recurring-edit-category"
+            allowCreate={false}
+            isIncome={editValues.type === "income"}
+            value={{
+              categoryId: field.state.value as number | null,
+              newCategory: editValues.newCategory,
+            }}
+            onChange={(choice) => {
+              field.handleChange(choice.categoryId as never)
+              editForm.setFieldValue("newCategory", choice.newCategory)
+            }}
+            error={(field.state.meta.errors[0] as { message?: string } | undefined)?.message}
+          />
+        )}
+      </editForm.Field>
+      <editForm.Field name="payee">
+        {(field) => <FormField field={field} label="Beneficiario" />}
+      </editForm.Field>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={() => onDone()}>
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={update.isPending || editForm.state.isSubmitting}>
+          {update.isPending || editForm.state.isSubmitting ? "…" : "Guardar"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
 export default function RecurringPage() {
   const qc = useQueryClient()
 
@@ -111,53 +359,19 @@ export default function RecurringPage() {
   const [deleting, setDeleting] = useState<Recurring | null>(null)
   const [answering, setAnswering] = useState<Recurring | null>(null)
 
+  const [createDefaults] = useState(chargeStartingToday)
+
   const createForm = useTanStackForm({
-    defaultValues: {
-      name: "",
-      payee: "",
-      amount: Number.NaN,
-      currency: "COP",
-      categoryId: null,
-      newCategory: "",
-      accountId: null,
-      type: "expense",
-      mode: "manual",
-      intervalCount: 1,
-      intervalUnit: "month",
-      startDate: new Date().toISOString().slice(0, 10),
-      endDate: "",
-    } as RecurringCreateValues,
+    defaultValues: createDefaults,
     validators: { onChange: recurringCreateSchema },
     onSubmit: async ({ value }) => {
-      create.mutate(value as RecurringCreateValues)
+      create.mutate(value)
     },
   })
 
-  const resetCreate = (values?: RecurringCreateValues) => {
-    createForm.reset(values)
-  }
-
-  const editForm = useTanStackForm({
-    defaultValues: {
-      name: "",
-      payee: "",
-      amount: Number.NaN,
-      currency: "COP",
-      categoryId: null,
-      newCategory: "",
-      accountId: null,
-      type: "expense",
-      mode: "manual",
-      intervalCount: 1,
-      intervalUnit: "month",
-      startDate: "",
-      endDate: "",
-    } as RecurringCreateValues,
-    validators: { onChange: recurringCreateSchema },
-    onSubmit: async ({ value }) => {
-      update.mutate(value as RecurringCreateValues)
-    },
-  })
+  const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
+  const createValues = useFormValues(createForm)
+  const createCurrency = currencyOf(accounts.data, createValues.accountId)
 
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
@@ -180,7 +394,7 @@ export default function RecurringPage() {
         interval_count: values.intervalCount,
         start_date: values.startDate,
         end_date: values.endDate ? values.endDate : null,
-        currency: values.currency,
+        currency: createCurrency,
         category_id: values.categoryId,
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
@@ -189,50 +403,10 @@ export default function RecurringPage() {
     onSuccess: () => {
       done("Recurrente creado")
       setCreating(false)
-      resetCreate({
-        name: "",
-        payee: "",
-        amount: Number.NaN,
-        currency: "COP",
-        categoryId: null,
-        newCategory: "",
-        accountId: null,
-        type: "expense",
-        mode: "manual",
-        intervalCount: 1,
-        intervalUnit: "month",
-        startDate: new Date().toISOString().slice(0, 10),
-        endDate: "",
-      })
+      createForm.reset(createDefaults)
     },
     onError: (e: unknown) => {
       applyApiErrorsToForm(createForm, e)
-      onErr(e)
-    },
-  })
-
-  const update = useMutation({
-    mutationFn: (values: RecurringCreateValues) => {
-      if (!editing) throw new Error("editing recurring is required")
-      return updateRecurring(editing.id, {
-        name: values.name,
-        amount: values.amount,
-        payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
-        category_id: values.categoryId,
-        account_id: values.accountId ?? undefined,
-        mode: values.mode,
-        interval_unit: values.intervalUnit,
-        interval_count: values.intervalCount,
-        start_date: values.startDate,
-        end_date: values.endDate ? values.endDate : null,
-      })
-    },
-    onSuccess: () => {
-      done("Recurrente actualizado")
-      setEditing(null)
-    },
-    onError: (e: unknown) => {
-      applyApiErrorsToForm(editForm, e)
       onErr(e)
     },
   })
@@ -332,24 +506,7 @@ export default function RecurringPage() {
             {
               label: "Editar",
               show: (r) => r.active,
-              onClick: (r) => {
-                setEditing(r)
-                editForm.reset({
-                  name: r.name,
-                  payee: r.payee ?? "",
-                  amount: r.amount,
-                  currency: r.currency as "COP" | "USD",
-                  categoryId: r.category_id,
-                  newCategory: "",
-                  accountId: r.account_id,
-                  type: r.type,
-                  mode: r.mode,
-                  intervalCount: r.interval_count,
-                  intervalUnit: r.interval_unit,
-                  startDate: r.start_date,
-                  endDate: r.end_date ?? "",
-                })
-              },
+              onClick: (r) => setEditing(r),
             },
             { label: "Omitir", show: (r) => r.active, onClick: (r) => setSkipping(r) },
             { label: "Fechas pendientes", show: (r) => r.active, onClick: (r) => setAnswering(r) },
@@ -438,28 +595,25 @@ export default function RecurringPage() {
               )}
             </createForm.Field>
             <createForm.Field name="amount">
-              {(field) => {
-                const currency = createForm.getFieldValue("currency") as string
-                return (
-                  <div className="space-y-1.5">
-                    <Label>Monto * ({currency})</Label>
-                    <MoneyInput
-                      currency={currency}
-                      value={
-                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                          ? (field.state.value as number)
-                          : null
-                      }
-                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
-                    />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
-                  </div>
-                )
-              }}
+              {(field) => (
+                <div className="space-y-1.5">
+                  <Label>Monto * ({createCurrency})</Label>
+                  <MoneyInput
+                    currency={createCurrency}
+                    value={
+                      typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                        ? (field.state.value as number)
+                        : null
+                    }
+                    onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
+                  />
+                  {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                    <p className="text-xs text-destructive">
+                      {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                    </p>
+                  )}
+                </div>
+              )}
             </createForm.Field>
             <div className="grid grid-cols-2 gap-3">
               <createForm.Field name="intervalCount">
@@ -503,10 +657,10 @@ export default function RecurringPage() {
               {(field) => (
                 <CategoryField
                   id="recurring-create-category"
-                  isIncome={createForm.getFieldValue("type") === "income"}
+                  isIncome={createValues.type === "income"}
                   value={{
                     categoryId: field.state.value as number | null,
-                    newCategory: createForm.getFieldValue("newCategory"),
+                    newCategory: createValues.newCategory,
                   }}
                   onChange={(choice) => {
                     field.handleChange(choice.categoryId as never)
@@ -535,154 +689,9 @@ export default function RecurringPage() {
       <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogPopup className="max-w-lg">
           <DialogTitle>Editar recurrente</DialogTitle>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              void editForm.handleSubmit()
-            }}
-            className="space-y-4"
-          >
-            <editForm.Field name="name">
-              {(field) => <FormField field={field} label="Nombre" />}
-            </editForm.Field>
-            <div className="grid grid-cols-2 gap-3">
-              <editForm.Field name="type">
-                {() => (
-                  <div className="space-y-1.5">
-                    <Label>Tipo (no editable)</Label>
-                    <Select
-                      value={editForm.getFieldValue("type") as string}
-                      onValueChange={() => {}}
-                      items={TYPE_ITEMS}
-                      disabled
-                    />
-                  </div>
-                )}
-              </editForm.Field>
-              <editForm.Field name="mode">
-                {(field) => (
-                  <div className="space-y-1.5">
-                    <Label>Modo *</Label>
-                    <Select
-                      value={field.state.value as string}
-                      onValueChange={(v) => v && field.handleChange(v as never)}
-                      items={MODE_ITEMS}
-                    />
-                  </div>
-                )}
-              </editForm.Field>
-            </div>
-            <editForm.Field name="accountId">
-              {(field) => (
-                <div className="space-y-1.5">
-                  <Label>Cuenta *</Label>
-                  <EntitySelect
-                    value={field.state.value as number | null}
-                    onChange={(v) => field.handleChange(v as never)}
-                    queryKey={qk.accounts(false)}
-                    queryFn={() => listAccounts(false)}
-                  />
-                  {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                    <p className="text-xs text-destructive">
-                      {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                    </p>
-                  )}
-                </div>
-              )}
-            </editForm.Field>
-            <editForm.Field name="amount">
-              {(field) => {
-                const currency = editForm.getFieldValue("currency") as string
-                return (
-                  <div className="space-y-1.5">
-                    <Label>Monto * ({currency})</Label>
-                    <MoneyInput
-                      currency={currency}
-                      value={
-                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                          ? (field.state.value as number)
-                          : null
-                      }
-                      onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
-                    />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
-                  </div>
-                )
-              }}
-            </editForm.Field>
-            <div className="grid grid-cols-2 gap-3">
-              <editForm.Field name="intervalCount">
-                {(field) => (
-                  <FormField
-                    field={field}
-                    label="Cada (cantidad)"
-                    type="number"
-                    min={1}
-                    valueAsNumber
-                  />
-                )}
-              </editForm.Field>
-              <editForm.Field name="intervalUnit">
-                {(field) => (
-                  <div className="space-y-1.5">
-                    <Label>Unidad *</Label>
-                    <Select
-                      value={field.state.value as string}
-                      onValueChange={(v) => v && field.handleChange(v as never)}
-                      items={UNIT_ITEMS}
-                    />
-                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                      <p className="text-xs text-destructive">
-                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </editForm.Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <editForm.Field name="startDate">
-                {(field) => <FormField field={field} label="Inicio" type="date" />}
-              </editForm.Field>
-              <editForm.Field name="endDate">
-                {(field) => <FormField field={field} label="Fin (opcional)" type="date" />}
-              </editForm.Field>
-            </div>
-            <editForm.Field name="categoryId">
-              {(field) => (
-                <CategoryField
-                  id="recurring-edit-category"
-                  allowCreate={false}
-                  isIncome={editForm.getFieldValue("type") === "income"}
-                  value={{
-                    categoryId: field.state.value as number | null,
-                    newCategory: editForm.getFieldValue("newCategory"),
-                  }}
-                  onChange={(choice) => {
-                    field.handleChange(choice.categoryId as never)
-                    editForm.setFieldValue("newCategory", choice.newCategory)
-                  }}
-                  error={(field.state.meta.errors[0] as { message?: string } | undefined)?.message}
-                />
-              )}
-            </editForm.Field>
-            <editForm.Field name="payee">
-              {(field) => <FormField field={field} label="Beneficiario" />}
-            </editForm.Field>
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setEditing(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={update.isPending || editForm.state.isSubmitting}>
-                {update.isPending || editForm.state.isSubmitting ? "…" : "Guardar"}
-              </Button>
-            </div>
-          </form>
+          {editing && (
+            <EditChargeForm key={editing.id} charge={editing} onDone={() => setEditing(null)} />
+          )}
         </DialogPopup>
       </Dialog>
 

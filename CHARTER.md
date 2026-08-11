@@ -81,6 +81,18 @@ Default roles for the DAE pipeline:
   feature via the consolidation backlog.
 - Existing-feature ATDD coverage is tracked in `.engineer/consolidation.md`
   and paid down feature by feature.
+- **A screen that writes money is tested against an account in another
+  currency.** Every screen that records, plans or corrects an amount needs at
+  least one case that picks a foreign-currency account and asserts what reaches
+  the wire. Decided 2026-08-11 after three defects hid behind 2.224 green tests:
+  no test anywhere had ever chosen one, so a stale currency, an absent currency
+  and a hard-coded one were all invisible.
+- **Green is not verified. A feature is driven in a browser before it is
+  called done**, against the sandbox, checking balances in cents rather than
+  reading the screen, which rounds. Feature 009 shipped a defect past a fully
+  green pipeline; feature 012's browser pass found three more that no suite
+  could see. The pipeline proves the code does what the tests say — only the
+  browser proves the owner can reach it.
 
 ## 7. Autonomy stance
 

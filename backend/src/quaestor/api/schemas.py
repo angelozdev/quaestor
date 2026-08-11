@@ -236,6 +236,21 @@ class TransactionUpdate(BaseModel):
     meta_id: int | None = None
 
 
+class CorrectionIn(BaseModel):
+    """What a movement really was: the account it came out of, the figure it
+    carried, or both. Its own request rather than a field on `TransactionUpdate`,
+    because this is the only path that moves two stored balances (ADR-0051).
+
+    `account_id` moves the movement; an account in another currency needs
+    `amount` restated in it. `sent`/`received` correct a transfer's two sides.
+    """
+
+    account_id: int | None = None
+    amount: int | None = None
+    sent: int | None = None
+    received: int | None = None
+
+
 class RecurringCreate(BaseModel):
     name: str
     payee: str = ""
@@ -317,8 +332,12 @@ class PlanPaymentIn(BaseModel):
 
 
 class ConfirmPaymentIn(BaseModel):
+    """`account_id` is the account the payment actually came out of, which the
+    plan chose weeks earlier and reality may have moved (ADR-0051)."""
+
     amount: int | None = None
     date: Date | None = None
+    account_id: int | None = None
 
 
 class ToPayOut(BaseModel):

@@ -291,15 +291,27 @@ the cadence is less than one period, the end date falls before the start date,
 or the account or category does not exist or has been archived. The same rules
 hold when editing.
 
-## AC-19: What an obligation is cannot be changed
+## AC-19: The kind of movement is fixed; the currency follows the account
 
 - **Priority:** medium
 - **Type:** error
 
-Whether an obligation is money going out or coming in, and the currency it is
-in, are fixed when it is declared. Changing either means switching that
-obligation off and declaring a new one — otherwise charges already made would
-stop meaning what they said.
+Whether an obligation is money going out or coming in is fixed when it is
+declared. Changing it means switching that obligation off and declaring a new
+one — otherwise charges already made would stop meaning what they said. Asking
+for it anyway is not refused, it simply does not take: the obligation comes back
+still money going out, and its next turn still takes money out.
+
+The currency is not fixed the same way. It is the currency of the account the
+obligation is charged to, so moving the obligation to an account that holds
+another currency changes it. That move is refused unless the amount is restated
+in the new currency, because the old figure cannot mean the same thing there.
+Charges already made keep the amount and the currency they were written with;
+one of those is restated on its own, as a correction to that movement.
+
+Amended 2026-08-11 by ADR-0052, which decided the currency follows the account.
+The original criterion fixed the currency alongside the kind of movement; its
+reason is unchanged and is what the second half still protects.
 
 ## AC-20: A date already charged cannot be skipped
 

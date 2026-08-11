@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from ..domain.errors import (
+    CorrectionNotApplied,
     IllegalTransition,
     MissingRate,
     NotFound,
@@ -26,6 +27,7 @@ class Unauthorized(Exception):
 
 _STATUS: dict[type[QuaestorError], int] = {
     ValidationError: 422,
+    CorrectionNotApplied: 409,
     MissingRate: 409,
     TransferImbalance: 409,
     IllegalTransition: 409,

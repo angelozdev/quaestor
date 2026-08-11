@@ -10,11 +10,12 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import date as Date
+from typing import Protocol
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
-from ..domain.errors import NotFound, TransferImbalance, ValidationError
+from ..domain.errors import CorrectionNotApplied, NotFound, TransferImbalance, ValidationError
 from ..domain.models import (
     Account,
     Meta,
@@ -54,6 +55,12 @@ def _require_account(session: Session, account_id: int) -> Account:
     return acc
 
 
+def require_positive(amount: int) -> None:
+    """A movement is worth something or it is not a movement (AC-24)."""
+    if amount <= 0:
+        raise ValidationError("amount must be > 0")
+
+
 def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
     """A meta is pointed at by a purchase, and by nothing else (AC-23, AC-25).
 
@@ -89,8 +96,7 @@ def _record(
     meta_id: int | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    require_positive(amount)
     if not is_supported(currency):
         raise ValidationError(f"unsupported currency: {currency}")
     acc = _require_account(session, account_id)
@@ -301,8 +307,7 @@ def transfer(
         NotFound: Either account does not exist.
     """
     categories.resolve_for_movement(session, TxType.transfer, category_id)
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    require_positive(amount)
     if amount_received is not None and amount_received <= 0:
         raise ValidationError("amount_received must be > 0")
     if from_account_id == to_account_id:
@@ -478,6 +483,260 @@ def update_transaction(
     session.commit()
     session.refresh(tx)
     return tx
+
+
+def _posted_effect(tx: Transaction) -> int:
+    """What this row currently does to its account — zero until it is posted."""
+    return _delta_balance_of(tx) if tx.status == TxStatus.posted else 0
+
+
+def _effects(rows: list[Transaction]) -> dict[int, int]:
+    """Account id -> what these rows together do to it right now."""
+    effects: dict[int, int] = {}
+    for tx in rows:
+        effects[tx.account_id] = effects.get(tx.account_id, 0) + _posted_effect(tx)
+    return effects
+
+
+def _stored_balances(session: Session, account_ids: set[int]) -> dict[int, int]:
+    """Balances read from the database, never from the session's own copies.
+
+    Selecting the column rather than the entity is what makes the proof in
+    `_restate` real: an entity query answers from the identity map, so it would
+    return the value the code just assigned and confirm nothing (ADR-0051)."""
+    session.flush()
+    return dict(session.exec(select(Account.id, Account.balance).where(Account.id.in_(account_ids))).all())
+
+
+def _restate(session: Session, rows: list[Transaction], mutate: Callable[[], None]) -> None:
+    """Apply `mutate` to `rows` and move every balance it displaces, or nothing.
+
+    The net movement of an account is what the rows do to it after the mutation
+    minus what they did before, which is a reversal and a re-application in one
+    subtraction. Both balances are then re-read from the database and each must
+    have moved by exactly that figure; anything else — including a write that
+    never persisted — rolls the whole correction back (ADR-0051).
+
+    The starting balances are never questioned, only their movement, so an
+    account that already disagrees with the sum of its movements disagrees by
+    exactly as much afterwards.
+
+    Raises:
+        CorrectionNotApplied: a balance did not move as the correction declared.
+    """
+    was = _effects(rows)
+    try:
+        mutate()
+        now = _effects(rows)
+        expected = {
+            account_id: now.get(account_id, 0) - was.get(account_id, 0) for account_id in was.keys() | now.keys()
+        }
+        before = _stored_balances(session, set(expected))
+        for account_id, delta in expected.items():
+            account = session.get(Account, account_id)
+            if account is None:
+                raise NotFound(f"account {account_id} not found")
+            account.balance += delta
+            session.add(account)
+        for tx in rows:
+            session.add(tx)
+        after = _stored_balances(session, set(expected))
+        for account_id, delta in expected.items():
+            moved = after[account_id] - before[account_id]
+            if moved != delta:
+                raise CorrectionNotApplied(f"account {account_id} moved {moved} where the correction declared {delta}")
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
+class Retargetable(Protocol):
+    """A row that names an account and carries a figure stated in one currency.
+
+    A posted movement, a planned one and a recurring rule all answer the same
+    question when they are pointed at an account in another currency, so one
+    function answers it for the three of them rather than three that agree by
+    accident (ADR-0051, ADR-0052).
+    """
+
+    account_id: int
+    amount: int
+    currency: str
+
+
+def retarget(session: Session, row: Retargetable, account_id: int, amount: int | None) -> bool:
+    """Point `row` at another account and say whether `amount` was consumed doing it.
+
+    A destination in another currency cannot hold the old figure, so the amount
+    must be restated in it: the app offers the conversion where the owner can see
+    it and never applies one of its own here (ADR-0051). That case consumes
+    `amount` and returns True.
+
+    A destination in the same currency can hold the old figure, so it is left
+    alone and False is returned: an amount the caller carries is still its to
+    apply, and both correcting and confirming take it as the real amount.
+
+    Raises:
+        NotFound: the account does not exist.
+        ValidationError: the account is archived, or the amount is missing or
+            not positive when the currency changes.
+    """
+    account = _require_account(session, account_id)
+    crosses = account.currency != row.currency
+    if crosses:
+        if amount is None:
+            raise ValidationError(f"moving to {account.currency} needs the amount in {account.currency}")
+        require_positive(amount)
+        row.amount = amount
+        row.currency = account.currency
+    row.account_id = account_id
+    return crosses
+
+
+def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: int | None = None) -> Transaction:
+    """Move a movement to the account it really came out of, or went into.
+
+    The account it left gets back exactly what it gave up, and the destination
+    gives up what the movement is worth there. Nothing else about the movement
+    changes: it keeps its date, payee, category, tags, meta and the recurring
+    due date it hangs from — which is what deleting and recreating cannot do
+    (ADR-0038, ADR-0051). A leg of a transfer moves on its own; its counterpart
+    is left alone.
+
+    `amount` is the real figure and is stated in the destination's currency. It
+    is required when that currency differs, since the old figure cannot survive
+    the change, and optional when it does not — the account and the real amount
+    are corrected in one act, exactly as confirming a payment does (AC-2, AC-7).
+
+    Raises:
+        NotFound: no such transaction, or no such account.
+        ValidationError: the destination is archived, or the amount is missing
+            when the currency changes, or not positive.
+        TransferImbalance: the destination is where this transfer's other leg
+            already sits, or the move would leave the pair's two halves
+            carrying different figures inside one currency.
+        CorrectionNotApplied: a balance did not move as declared.
+    """
+    tx = get_transaction(session, tx_id)
+    _refuse_transfer_collision(session, tx, account_id)
+    if amount is not None:
+        require_positive(amount)
+
+    def restate() -> None:
+        if not retarget(session, tx, account_id, amount) and amount is not None:
+            tx.amount = amount
+        _refuse_unequal_halves(session, tx)
+
+    _restate(session, [tx], restate)
+    session.refresh(tx)
+    return tx
+
+
+def _refuse_transfer_collision(session: Session, tx: Transaction, account_id: int) -> None:
+    """A transfer's two sides cannot sit on one account: that is not a transfer.
+
+    `TransferImbalance` is the class `transfer` already raises for the same
+    refusal at creation time, so a pair that cannot exist is named the same way
+    whether it is being made or being corrected (AC-22).
+    """
+    if tx.type != TxType.transfer or tx.transfer_group_id is None:
+        return
+    if any(member.account_id == account_id for member in _group_members(session, tx)):
+        raise TransferImbalance("source and destination cannot be the same account")
+
+
+def _refuse_unequal_halves(session: Session, leg: Transaction) -> None:
+    """In one currency a transfer's two halves are one number (AC-11).
+
+    Read from the pair as it stands rather than from what a caller asked for,
+    so the one rule covers both ways the halves can come to disagree: both
+    figures restated at once, and a single leg retargeted into the currency the
+    other half already holds. Money never appears or disappears between them.
+
+    A movement that is not a leg of a pair has no halves and is left alone.
+
+    Raises:
+        TransferImbalance: two different figures inside one currency.
+    """
+    if leg.type != TxType.transfer or leg.transfer_group_id is None:
+        return
+    out_side, in_side = _transfer_sides(session, leg)
+    if out_side.currency == in_side.currency and out_side.amount != in_side.amount:
+        raise TransferImbalance("the two sides of a transfer in one currency carry the same amount")
+
+
+def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
+    """Restate what a movement is worth. Its account keeps its own currency.
+
+    The balance moves by the difference alone, and the movement stays the same
+    movement — the correction that today costs it its identity, its category,
+    its tags and its meta, because deleting and recreating is the only way to
+    make it (ADR-0051).
+
+    A transfer is refused here: its two sides answer to each other, so what it
+    moved is restated through `correct_transfer` and never one side at a time
+    (AC-11).
+
+    Raises:
+        NotFound: no such transaction.
+        ValidationError: the amount is not positive, or the movement is a
+            transfer.
+        CorrectionNotApplied: the balance did not move as declared.
+    """
+    tx = get_transaction(session, tx_id)
+    if tx.type == TxType.transfer:
+        raise ValidationError("a transfer is restated on both of its sides at once")
+    require_positive(amount)
+
+    def restate() -> None:
+        tx.amount = amount
+
+    _restate(session, [tx], restate)
+    session.refresh(tx)
+    return tx
+
+
+def _transfer_sides(session: Session, leg: Transaction) -> tuple[Transaction, Transaction]:
+    """The (sent, received) sides of the pair this leg belongs to."""
+    if leg.type != TxType.transfer or leg.transfer_group_id is None:
+        raise ValidationError(f"transaction {leg.id} is not part of a transfer")
+    sides = {member.transfer_direction: member for member in (leg, *_group_members(session, leg))}
+    out_side, in_side = sides.get(TransferDirection.out), sides.get(TransferDirection.in_)
+    if out_side is None or in_side is None:
+        raise ValidationError(f"transfer {leg.transfer_group_id} does not have both of its sides")
+    return out_side, in_side
+
+
+def correct_transfer(session: Session, tx_id: int, *, sent: int, received: int) -> Transaction:
+    """Restate what a transfer moved, on both of its sides at once.
+
+    In one currency the two sides are one number, so they are stated as one and
+    disagreeing is refused — money never appears or disappears between the halves
+    of a transfer that never left its currency. Across currencies they are
+    genuinely two numbers, since the rate the bank used is not the app's, and
+    each side takes its own (AC-11, AC-12).
+
+    Raises:
+        NotFound: no such transaction.
+        ValidationError: not a transfer, a side missing, or a figure that is not
+            positive.
+        TransferImbalance: two different figures inside one currency.
+        CorrectionNotApplied: a balance did not move as declared.
+    """
+    leg = get_transaction(session, tx_id)
+    out_side, in_side = _transfer_sides(session, leg)
+    require_positive(sent)
+    require_positive(received)
+
+    def restate() -> None:
+        out_side.amount = sent
+        in_side.amount = received
+        _refuse_unequal_halves(session, leg)
+
+    _restate(session, [out_side, in_side], restate)
+    session.refresh(leg)
+    return leg
 
 
 def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:

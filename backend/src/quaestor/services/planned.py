@@ -75,8 +75,7 @@ def plan_payment(
             `categories.resolve_for_movement`.
         NotFound: account does not exist, or no such meta.
     """
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    _tx.require_positive(amount)
     if not is_supported(currency):
         raise ValidationError(f"unsupported currency: {currency}")
     acc = _require_account(session, account_id)
@@ -198,6 +197,7 @@ def confirm_payment(
     tx_id: int,
     amount: int | None = None,
     date: Date | None = None,
+    account_id: int | None = None,
 ) -> Transaction:
     """planned -> posted; the only such transition. Fires post-confirm hooks.
 
@@ -206,24 +206,36 @@ def confirm_payment(
     real posted pair (Task 9). Everything (post + hooks) runs in one
     transaction; any failure rolls back.
 
+    `account_id` names the account the payment actually came out of, which the
+    plan chose weeks earlier and reality may have moved (ADR-0051). The account
+    charged is the one named here; the obligation behind the payment keeps
+    declaring its own, so this is an exception for one month and never a move.
+    An account holding another currency takes `amount` restated in it. A planned
+    transfer is the exception: it materializes into a pair built from the
+    accounts it already names, so naming another one here is refused.
+
     Raises:
-        NotFound: the tx does not exist.
+        NotFound: the tx does not exist, or no such account.
         IllegalTransition: the tx is not `planned`.
-        ValidationError: a non-positive adjusted amount.
+        ValidationError: a non-positive adjusted amount, an archived account, a
+            missing amount when the account holds another currency, or another
+            account named while confirming a planned transfer.
     """
     tx = _tx.get_transaction(session, tx_id)
     if tx.status != TxStatus.planned:
         raise IllegalTransition(f"transaction {tx_id} is {tx.status.value}, not planned")
     try:
         if tx.type == TxType.transfer:
+            _refuse_transfer_retarget(tx, account_id)
             result = _materialize_planned_transfer(session, tx, amount, date)
         else:
+            if account_id is not None and _tx.retarget(session, tx, account_id, amount):
+                amount = None
             if amount is not None:
                 tx.amount = amount
             if date is not None:
                 tx.date = date
-            if tx.amount <= 0:
-                raise ValidationError("amount must be > 0")
+            _tx.require_positive(tx.amount)
             acc = _require_account(session, tx.account_id)
             acc.balance += delta_balance(tx.type, tx.amount)
             tx.status = TxStatus.posted
@@ -241,6 +253,18 @@ def confirm_payment(
     return result
 
 
+def _refuse_transfer_retarget(tx: Transaction, account_id: int | None) -> None:
+    """A planned transfer is confirmed against the accounts it already names.
+
+    Materializing one builds both legs from the row's own destination and the
+    default source account, so an account named here would be reported as
+    charged and never be. Refusing says so instead of answering wrongly; the leg
+    is moved with `move_to_account` once the pair is real (ADR-0051).
+    """
+    if account_id is not None and account_id != tx.account_id:
+        raise ValidationError("a planned transfer is confirmed against the accounts it already names")
+
+
 def _materialize_planned_transfer(
     session: Session, tx: Transaction, amount: int | None, date: Date | None
 ) -> Transaction:
@@ -255,8 +279,7 @@ def _materialize_planned_transfer(
         tx.amount = amount
     if date is not None:
         tx.date = date
-    if tx.amount <= 0:
-        raise ValidationError("amount must be > 0")
+    _tx.require_positive(tx.amount)
     settings = session.get(Settings, 1)
     src_id = settings.default_source_account_id if settings else None
     if src_id is None:
