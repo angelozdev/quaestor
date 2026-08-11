@@ -3,13 +3,15 @@ from datetime import date
 import pytest
 from quaestor.domain.errors import NotFound, ValidationError
 from quaestor.domain.models import (
+    Account,
     AccountType,
     IntervalUnit,
     RecurringItem,
     RecurringMode,
+    Transaction,
     TxType,
 )
-from quaestor.services import accounts, recurring
+from quaestor.services import accounts, occurrences, recurring, transactions
 
 from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
@@ -232,25 +234,99 @@ def test_update_recurring_rejects_bad_interval(session):
         recurring.update_recurring(session, item.id, interval_count=0)
 
 
-def test_update_recurring_account_must_match_currency(session):
-    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
-    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
-    item = declare_existing(
+def _netflix_on(session, account_id, amount=2_590_000, start=date(2026, 1, 1), mode=RecurringMode.auto):
+    return declare_existing(
         session,
-        name="X",
-        payee="",
+        name="Netflix",
+        payee="Netflix",
         type=TxType.expense,
-        mode=RecurringMode.auto,
-        amount=1000,
+        mode=mode,
+        amount=amount,
         currency="COP",
         category_id=a_category(session),
-        account_id=cop.id,
+        account_id=account_id,
         interval_unit=IntervalUnit.month,
         interval_count=1,
-        start_date=date(2026, 1, 1),
+        start_date=start,
     )
-    with pytest.raises(ValidationError):
+
+
+def test_a_turn_already_on_the_board_is_restated_one_at_a_time(session):
+    """The route out of a turn left in the old currency (ADR-0052, feature 012).
+
+    A manual charge puts its turn on the to-pay board before the money moves.
+    Moving the obligation leaves that turn alone — it is a movement of its own by
+    then — so `move_to_account` is what restates it, and nothing else does.
+    """
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id, mode=RecurringMode.manual)
+    january = occurrences.materialize_due(session, date(2026, 1, 1)).created[0]
+
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    waiting = session.get(Transaction, january.transaction_id)
+    assert (waiting.currency, waiting.amount, waiting.account_id) == ("COP", 2_590_000, cop.id)
+
+    corrected = transactions.move_to_account(session, waiting.id, account_id=usd.id, amount=2935)
+
+    assert (corrected.currency, corrected.amount, corrected.account_id) == ("USD", 2935, usd.id)
+    assert (session.get(Account, cop.id).balance, session.get(Account, usd.id).balance) == (0, 0)
+
+
+def test_moving_a_charge_to_another_currency_needs_the_amount_restated_in_it(session):
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id)
+
+    with pytest.raises(ValidationError, match="moving to USD needs the amount in USD"):
         recurring.update_recurring(session, item.id, account_id=usd.id)
+
+
+def test_a_charge_moved_to_another_currency_is_stated_in_that_currency(session):
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id)
+
+    moved = recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+
+    assert (moved.account_id, moved.currency, moved.amount) == (usd.id, "USD", 2935)
+
+
+def test_a_charge_that_stays_in_its_currency_still_moves_without_an_amount(session):
+    first = accounts.create_account(session, "Nu", AccountType.debit, "COP", balance=0)
+    second = accounts.create_account(session, "Bancolombia", AccountType.debit, "COP", balance=0)
+    item = _netflix_on(session, first.id)
+
+    moved = recurring.update_recurring(session, item.id, account_id=second.id)
+
+    assert (moved.account_id, moved.currency, moved.amount) == (second.id, "COP", 2_590_000)
+
+
+def test_future_turns_of_a_moved_charge_are_charged_in_the_new_currency(session):
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id)
+
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    created = occurrences.materialize_due(session, date(2026, 1, 1)).created
+
+    charged = [session.get(Transaction, occ.transaction_id) for occ in created]
+    assert [(tx.currency, tx.amount, tx.account_id) for tx in charged] == [("USD", 2935, usd.id)]
+
+
+def test_a_turn_already_charged_keeps_the_currency_it_was_written_with(session):
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id)
+    january = occurrences.materialize_due(session, date(2026, 1, 1)).created[0]
+
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    february = occurrences.materialize_due(session, date(2026, 2, 1)).created[0]
+
+    already = session.get(Transaction, january.transaction_id)
+    later = session.get(Transaction, february.transaction_id)
+    assert (already.currency, already.amount, already.account_id) == ("COP", 2_590_000, cop.id)
+    assert (later.currency, later.amount, later.account_id) == ("USD", 2935, usd.id)
 
 
 def test_update_recurring_not_found(session):

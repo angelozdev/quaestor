@@ -22,6 +22,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.recurrence import due_dates, has_ended
 from . import categories, occurrences
+from . import transactions as _tx
 
 _UNSET = object()
 
@@ -193,8 +194,18 @@ def update_recurring(
     end_date=_UNSET,
     today: Date | None = None,
 ) -> RecurringItem:
-    """Edit a recurring item. type and currency are immutable. Changes affect only
-    future un-materialized occurrences (materialize_due reads current fields).
+    """Edit a recurring item. `type` is immutable; the currency follows the account.
+
+    Changes affect only future un-materialized occurrences (materialize_due reads
+    current fields), so a turn already charged keeps the currency and the figure it
+    was written with; that one is restated on its own through a correction
+    (ADR-0052).
+
+    Moving the obligation to an account holding another currency takes `amount`
+    restated in that currency — the contract a posted movement already answers
+    (`transactions.retarget`, ADR-0051). The currency is never stated on its own:
+    the account determines it, so a second field could only agree redundantly or
+    disagree wrongly.
 
     `category_id=_UNSET`/`end_date=_UNSET` leave unchanged; `end_date=None`
     clears it. `category_id=None` does not clear the category — an obligation
@@ -203,7 +214,8 @@ def update_recurring(
     Raises:
         NotFound: the item or a new account does not exist.
         ValidationError: amount <= 0, interval_count < 1, end_date < start_date,
-            account currency mismatch, or any refusal from
+            an archived account, a move to an account in another currency with no
+            amount restated in it, or any refusal from
             `categories.resolve_for_movement`.
     """
     item = session.get(RecurringItem, recurring_id)
@@ -252,10 +264,7 @@ def update_recurring(
             ],
         )
     if account_id is not None:
-        acc = _require_account(session, account_id)
-        if item.currency != acc.currency:
-            raise ValidationError(f"currency {item.currency} does not match account currency {acc.currency}")
-        item.account_id = account_id
+        _tx.retarget(session, item, account_id, amount)
     if category_id is not _UNSET:
         item.category_id = categories.resolve_for_movement(session, item.type, category_id)
     session.add(item)

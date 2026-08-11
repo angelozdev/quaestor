@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Callable
 from datetime import date as Date
+from typing import Protocol
 
 from sqlalchemy import delete
 from sqlmodel import Session, select
@@ -550,8 +551,22 @@ def _restate(session: Session, rows: list[Transaction], mutate: Callable[[], Non
         raise
 
 
-def retarget(session: Session, tx: Transaction, account_id: int, amount: int | None) -> bool:
-    """Point `tx` at another account and say whether `amount` was consumed doing it.
+class Retargetable(Protocol):
+    """A row that names an account and carries a figure stated in one currency.
+
+    A posted movement, a planned one and a recurring rule all answer the same
+    question when they are pointed at an account in another currency, so one
+    function answers it for the three of them rather than three that agree by
+    accident (ADR-0051, ADR-0052).
+    """
+
+    account_id: int
+    amount: int
+    currency: str
+
+
+def retarget(session: Session, row: Retargetable, account_id: int, amount: int | None) -> bool:
+    """Point `row` at another account and say whether `amount` was consumed doing it.
 
     A destination in another currency cannot hold the old figure, so the amount
     must be restated in it: the app offers the conversion where the owner can see
@@ -568,14 +583,14 @@ def retarget(session: Session, tx: Transaction, account_id: int, amount: int | N
             not positive when the currency changes.
     """
     account = _require_account(session, account_id)
-    crosses = account.currency != tx.currency
+    crosses = account.currency != row.currency
     if crosses:
         if amount is None:
             raise ValidationError(f"moving to {account.currency} needs the amount in {account.currency}")
         require_positive(amount)
-        tx.amount = amount
-        tx.currency = account.currency
-    tx.account_id = account_id
+        row.amount = amount
+        row.currency = account.currency
+    row.account_id = account_id
     return crosses
 
 
