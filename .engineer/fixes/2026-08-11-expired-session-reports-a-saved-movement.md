@@ -59,7 +59,7 @@ gap_analysis:
 
 pin_confirmation:
   feature_refs:
-    - feature: "frontend/lib/api/client.ts"
+    - feature: "features/012-movement-corrections"
       spec_path: "frontend/lib/api/client.test.ts + frontend/components/transaction-edit-dialog.unauthorized.test.tsx"
       red_run:
         result: red

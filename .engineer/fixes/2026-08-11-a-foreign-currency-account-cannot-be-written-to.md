@@ -70,7 +70,7 @@ gap_analysis:
 
 pin_confirmation:
   feature_refs:
-    - feature: "frontend/app/(app)/to-pay/page.tsx + frontend/components/transaction-create-dialog.tsx"
+    - feature: "features/012-movement-corrections"
       spec_path: "frontend/app/(app)/to-pay/page.test.tsx + frontend/components/transaction-create-dialog.test.tsx"
       red_run:
         result: red
