@@ -2,7 +2,7 @@
 title: "A movement is corrected, not deleted: which account it came out of, and the number on it"
 slug: movement-corrections
 number: 012
-status: ready
+status: done
 autonomy_level: medium
 branch: movement-corrections
 area: core
