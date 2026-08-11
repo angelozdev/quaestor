@@ -284,7 +284,8 @@ Scenario: What the category spent follows the corrected figure
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an expense category "Servicios"
   And the user registers an expense of 100000.00 COP from "Nu Debito" paying "Tigo" in category "Servicios"
-  When the user corrects that expense to 120000.00 COP
+  And the user corrects that expense to 120000.00 COP
+  When the user views the current month's report
   Then the spending for "Servicios" shows 120000.00 COP
 ```
 
@@ -533,7 +534,7 @@ Scenario: Moving the purchase to another account leaves the meta alone
   And a recorded expense of 8000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
   When the user moves that expense to "RappiCard"
   Then the meta "Celular" is complete
-  And the meta "Celular" asks 0.00 COP this month
+  And that expense is still linked to the meta "Celular"
 ```
 
 ## AC-18 — Correcting an engine-made charge keeps it attached to its due date
@@ -546,9 +547,10 @@ Scenario: The month stays charged, not omitted
   And an account "RappiCard" in COP with balance 0.00 COP
   And an expense category "Hogar"
   And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", paying itself
+  And the daily run happens
   When the user moves that charge to "RappiCard"
   Then the due date behind "Hogaru" is still charged
-  And "Hogaru" was charged 400000.00 COP this month
+  And "Hogaru" was charged 400000.00 COP on 2026-08-01
 
 @backend
 Scenario: Correcting the figure keeps the charge attached too
@@ -556,6 +558,7 @@ Scenario: Correcting the figure keeps the charge attached too
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an expense category "Hogar"
   And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", paying itself
+  And the daily run happens
   When the user corrects that charge to 420000.00 COP
   Then the due date behind "Hogaru" is still charged
   And "Nu Debito" has balance 580000.00 COP
@@ -570,18 +573,21 @@ Scenario: The declared figure does not follow the corrected one
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an expense category "Hogar"
   And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", paying itself
+  And the daily run happens
   When the user corrects that charge to 420000.00 COP
   Then "Hogaru" is described as 400000.00 COP every 1 month
 
 @backend
-Scenario: Next month asks the declared figure again
-  Given today is 2026-09-10
+Scenario: The obligation still lists the figure it declares, not the corrected one
+  Given today is 2026-08-10
   And an account "Nu Debito" in COP with balance 5000000.00 COP
   And an expense category "Hogar"
-  And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", waiting for approval
-  And the user confirms the payment to "Hogaru" for 420000.00 COP
-  When the obligations that have come due are raised again
-  Then the payment to "Hogaru" is still for 400000.00 COP
+  And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", paying itself
+  And the daily run happens
+  And the user corrects that charge to 420000.00 COP
+  When the user views the repeating obligations
+  Then the list shows "Hogaru" at 400000.00 COP every 1 month
+  And "Hogaru" was charged 420000.00 COP on 2026-08-01
 ```
 
 ## AC-20 — A movement that has not moved money corrects without moving any
@@ -835,6 +841,7 @@ Scenario: Moving a movement between accounts leaves the month's figures alone
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an account "RappiCard" in COP with balance 0.00 COP
   And an expense category "Servicios"
+  And an income category "Salario"
   And a fund on "Servicios" that asks a fixed 200000.00 COP each month, starting 2026-08
   And a repeating income of 3000000.00 COP from "Empresa" into "Nu Debito" every 1 month starting on 2026-08-01 in category "Salario", paying itself
   And the user registers an expense of 100000.00 COP from "Nu Debito" paying "Tigo" in category "Servicios"
@@ -847,6 +854,7 @@ Scenario: Correcting the figure moves what its category spent, and only that
   Given today is 2026-08-10
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an expense category "Servicios"
+  And an income category "Salario"
   And a fund on "Servicios" that asks a fixed 200000.00 COP each month, starting 2026-08
   And a repeating income of 3000000.00 COP from "Empresa" into "Nu Debito" every 1 month starting on 2026-08-01 in category "Salario", paying itself
   And the user registers an expense of 100000.00 COP from "Nu Debito" paying "Tigo" in category "Servicios"

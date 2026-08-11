@@ -14,7 +14,7 @@ from datetime import date as Date
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
-from ..domain.errors import NotFound, TransferImbalance, ValidationError
+from ..domain.errors import CorrectionNotApplied, NotFound, TransferImbalance, ValidationError
 from ..domain.models import (
     Account,
     Meta,
@@ -476,6 +476,161 @@ def update_transaction(
         tx.meta_id = meta_id
     session.add(tx)
     session.commit()
+    session.refresh(tx)
+    return tx
+
+
+def _posted_effect(tx: Transaction) -> int:
+    """What this row currently does to its account — zero until it is posted."""
+    return _delta_balance_of(tx) if tx.status == TxStatus.posted else 0
+
+
+def _effects(rows: list[Transaction]) -> dict[int, int]:
+    """Account id -> what these rows together do to it right now."""
+    effects: dict[int, int] = {}
+    for tx in rows:
+        effects[tx.account_id] = effects.get(tx.account_id, 0) + _posted_effect(tx)
+    return effects
+
+
+def _stored_balances(session: Session, account_ids: set[int]) -> dict[int, int]:
+    """Balances read from the database, never from the session's own copies.
+
+    Selecting the column rather than the entity is what makes the proof in
+    `_restate` real: an entity query answers from the identity map, so it would
+    return the value the code just assigned and confirm nothing (ADR-0051)."""
+    session.flush()
+    return dict(session.exec(select(Account.id, Account.balance).where(Account.id.in_(account_ids))).all())
+
+
+def _restate(session: Session, rows: list[Transaction], mutate: Callable[[], None]) -> None:
+    """Apply `mutate` to `rows` and move every balance it displaces, or nothing.
+
+    The net movement of an account is what the rows do to it after the mutation
+    minus what they did before, which is a reversal and a re-application in one
+    subtraction. Both balances are then re-read from the database and each must
+    have moved by exactly that figure; anything else — including a write that
+    never persisted — rolls the whole correction back (ADR-0051).
+
+    The starting balances are never questioned, only their movement, so an
+    account that already disagrees with the sum of its movements disagrees by
+    exactly as much afterwards.
+
+    Raises:
+        CorrectionNotApplied: a balance did not move as the correction declared.
+    """
+    was = _effects(rows)
+    try:
+        mutate()
+        now = _effects(rows)
+        expected = {
+            account_id: now.get(account_id, 0) - was.get(account_id, 0) for account_id in was.keys() | now.keys()
+        }
+        before = _stored_balances(session, set(expected))
+        for account_id, delta in expected.items():
+            account = session.get(Account, account_id)
+            if account is None:
+                raise NotFound(f"account {account_id} not found")
+            account.balance += delta
+            session.add(account)
+        for tx in rows:
+            session.add(tx)
+        after = _stored_balances(session, set(expected))
+        for account_id, delta in expected.items():
+            moved = after[account_id] - before[account_id]
+            if moved != delta:
+                raise CorrectionNotApplied(f"account {account_id} moved {moved} where the correction declared {delta}")
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+
+def _retarget(session: Session, tx: Transaction, account_id: int, amount: int | None) -> None:
+    """Point `tx` at another account, carrying its amount across a currency change.
+
+    A destination in another currency needs the amount restated in it: the app
+    offers the conversion on screen and never applies one of its own here. A
+    destination in the same currency takes no amount, so a figure passed by
+    mistake cannot slip through as a silent correction.
+
+    Raises:
+        NotFound: the account does not exist.
+        ValidationError: the account is archived, the amount is missing when the
+            currency changes, or given when it does not.
+    """
+    account = _require_account(session, account_id)
+    if account.currency == tx.currency:
+        if amount is not None:
+            raise ValidationError("an amount is only stated when the account holds another currency")
+    elif amount is None:
+        raise ValidationError(f"moving to {account.currency} needs the amount in {account.currency}")
+    else:
+        _require_positive(amount)
+        tx.amount = amount
+        tx.currency = account.currency
+    tx.account_id = account_id
+
+
+def _require_positive(amount: int) -> None:
+    if amount <= 0:
+        raise ValidationError("amount must be > 0")
+
+
+def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: int | None = None) -> Transaction:
+    """Move a movement to the account it really came out of, or went into.
+
+    Both balances move by the same figure. Nothing else about the movement
+    changes: it keeps its date, payee, category, tags, meta and the recurring
+    due date it hangs from — which is what deleting and recreating cannot do
+    (ADR-0038, ADR-0051). A leg of a transfer moves on its own; its counterpart
+    is left alone.
+
+    `amount` restates the figure in the destination's currency and is required
+    exactly when that currency differs.
+
+    Raises:
+        NotFound: no such transaction, or no such account.
+        ValidationError: the destination is archived, or the amount is missing
+            when the currency changes, given when it does not, or not positive.
+        TransferImbalance: the destination is where this transfer's other leg
+            already sits.
+        CorrectionNotApplied: a balance did not move as declared.
+    """
+    tx = get_transaction(session, tx_id)
+    _refuse_transfer_collision(session, tx, account_id)
+    _restate(session, [tx], lambda: _retarget(session, tx, account_id, amount))
+    session.refresh(tx)
+    return tx
+
+
+def _refuse_transfer_collision(session: Session, tx: Transaction, account_id: int) -> None:
+    if tx.type != TxType.transfer or tx.transfer_group_id is None:
+        return
+    if any(member.account_id == account_id for member in _group_members(session, tx)):
+        raise TransferImbalance("source and destination cannot be the same account")
+
+
+def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
+    """Restate what a movement is worth. Its account keeps its own currency.
+
+    The balance moves by the difference alone, and the movement stays the same
+    movement — the correction that today costs it its identity, its category,
+    its tags and its meta, because deleting and recreating is the only way to
+    make it (ADR-0051).
+
+    Raises:
+        NotFound: no such transaction.
+        ValidationError: the amount is not positive.
+        CorrectionNotApplied: the balance did not move as declared.
+    """
+    tx = get_transaction(session, tx_id)
+    _require_positive(amount)
+
+    def restate() -> None:
+        tx.amount = amount
+
+    _restate(session, [tx], restate)
     session.refresh(tx)
     return tx
 

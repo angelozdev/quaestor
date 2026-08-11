@@ -85,6 +85,7 @@ def run_scenario(
 _FEATURE_MODULES = (
     "fx_read_time",
     "mandatory_categories",
+    "movement_corrections",
     "named_goals",
     "planned_payments",
     "recurring_engine",
