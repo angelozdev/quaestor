@@ -40,3 +40,34 @@ export function formatCents(cents: number, currency: string): string {
   const formatted = new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(pesos)
   return `$ ${formatted}`
 }
+
+/**
+ * The same amount of money, restated in another currency at the app's single
+ * rate (ADR-0031). Returns null when the rate is unknown or unusable, so a
+ * caller shows nothing rather than a figure it invented.
+ *
+ * What a correction offers when the owner picks an account in another currency
+ * — always as a suggestion he can replace, never applied on his behalf
+ * (ADR-0051). One helper for both screens: confirming a payment and moving a
+ * transfer's side behave identically on purpose.
+ */
+export function convertCents(
+  cents: number,
+  from: string,
+  to: string,
+  usdCop: number | null,
+): number | null {
+  if (from === to) return cents
+  if (usdCop === null || !Number.isFinite(usdCop) || usdCop <= 0) return null
+  if (from === "USD" && to === "COP") return Math.round(cents * usdCop)
+  if (from === "COP" && to === "USD") return Math.round(cents / usdCop)
+  return null
+}
+
+/** The currency an account holds, or pesos when the account is not known yet. */
+export function currencyOf(
+  accounts: { id: number; currency: string }[] | undefined,
+  id: number | null,
+): string {
+  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
+}

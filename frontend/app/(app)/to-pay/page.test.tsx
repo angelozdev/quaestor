@@ -3,22 +3,26 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { makeTransaction, openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { toPay, listMetas, listAccounts, listCategories, planPayment } = vi.hoisted(() => ({
-  toPay: vi.fn(),
-  listMetas: vi.fn(),
-  listAccounts: vi.fn(),
-  listCategories: vi.fn(),
-  planPayment: vi.fn(),
-}))
+const { toPay, listMetas, listAccounts, listCategories, planPayment, confirmPayment, getFx } =
+  vi.hoisted(() => ({
+    toPay: vi.fn(),
+    listMetas: vi.fn(),
+    listAccounts: vi.fn(),
+    listCategories: vi.fn(),
+    planPayment: vi.fn(),
+    confirmPayment: vi.fn(),
+    getFx: vi.fn(),
+  }))
 
 vi.mock("@/lib/api/planned", () => ({
   toPay,
-  confirmPayment: vi.fn(),
+  confirmPayment,
   skipPlanned: vi.fn(),
   planPayment,
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
+vi.mock("@/lib/api/fx", () => ({ getFx }))
 
 vi.mock("@/lib/api/metas", () => ({ listMetas }))
 
@@ -33,6 +37,23 @@ const ACCOUNT = {
   archived: false,
 }
 const CATEGORY = { id: 3, name: "Tecnología", is_income: false }
+const RAPPICARD = {
+  id: 2,
+  name: "RappiCard",
+  type: "credit",
+  currency: "COP",
+  balance: 0,
+  archived: false,
+}
+const DOLARAPP = {
+  id: 3,
+  name: "DolarApp",
+  type: "debit",
+  currency: "USD",
+  balance: 0,
+  archived: false,
+}
+const KOREA = { id: 9, name: "Korea", type: "debit", currency: "COP", balance: 0, archived: true }
 const TELEVISOR = 4
 
 /**
@@ -67,7 +88,13 @@ beforeEach(() => {
   vi.clearAllMocks()
   toPay.mockResolvedValue({ overdue: [], upcoming: [], total_base: 0 })
   listMetas.mockResolvedValue([])
-  listAccounts.mockResolvedValue([ACCOUNT])
+  listAccounts.mockImplementation((includeArchived = false) =>
+    Promise.resolve(
+      includeArchived ? [ACCOUNT, RAPPICARD, DOLARAPP, KOREA] : [ACCOUNT, RAPPICARD, DOLARAPP],
+    ),
+  )
+  getFx.mockResolvedValue({ usd_cop: "4000" })
+  confirmPayment.mockResolvedValue(makeTransaction({ status: "posted" }))
   listCategories.mockResolvedValue([CATEGORY])
   planPayment.mockResolvedValue(makeTransaction({ status: "planned" }))
 })
@@ -180,5 +207,90 @@ describe("AC-43 — a debt can be pointed at a meta when it is written down", ()
 
     await waitFor(() => expect(planPayment).toHaveBeenCalledTimes(1))
     expect(planPayment.mock.calls[0][0]).toHaveProperty("meta_id", null)
+  })
+})
+
+/**
+ * A payment already waiting, so the confirmation has something to open onto.
+ * The default `toPay` is empty on purpose — AC-10 above turns on that.
+ */
+function aWaitingPayment() {
+  const tx = makeTransaction({
+    id: 7,
+    payee: "Hogaru",
+    status: "planned",
+    amount: 40_000_000,
+    account_id: ACCOUNT.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+  toPay.mockResolvedValue({ overdue: [tx], upcoming: [], total_base: tx.amount })
+  return tx
+}
+
+async function openConfirmation() {
+  const user = userEvent.setup()
+  aWaitingPayment()
+  render(<ToPayPage />, { wrapper: queryWrapper })
+  await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Cuenta" })).toHaveTextContent(ACCOUNT.name),
+  )
+  return user
+}
+
+describe("012 — confirming a payment says which account it came out of", () => {
+  it("The confirmation offers the account it was planned against", async () => {
+    await openConfirmation()
+    expect(screen.getByRole("combobox", { name: "Cuenta" })).toHaveTextContent(ACCOUNT.name)
+  })
+
+  it("The account is named, never numbered", async () => {
+    await openConfirmation()
+    expect(screen.getByRole("combobox", { name: "Cuenta" })).toHaveTextContent(ACCOUNT.name)
+    expect(screen.queryByText(/cuenta #/)).not.toBeInTheDocument()
+  })
+
+  it("An account in another currency is on the list", async () => {
+    const user = await openConfirmation()
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    expect(await screen.findByRole("option", { name: DOLARAPP.name })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: ACCOUNT.name })).toBeInTheDocument()
+  })
+
+  it("The converted figure arrives already filled in", async () => {
+    const user = await openConfirmation()
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("100")
+  })
+
+  it("The offered figure is a suggestion, not a decision", async () => {
+    const user = await openConfirmation()
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+    const amount = await screen.findByLabelText("Monto real (USD)")
+    await user.clear(amount)
+    await user.type(amount, "105")
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ amount: 10_500, account_id: DOLARAPP.id }),
+    )
+  })
+
+  it("A retired account is not on the list when confirming", async () => {
+    const user = await openConfirmation()
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    await screen.findByRole("option", { name: DOLARAPP.name })
+    expect(screen.queryByRole("option", { name: KOREA.name })).not.toBeInTheDocument()
+  })
+
+  it("The account offered when confirming is reachable by its label", async () => {
+    await openConfirmation()
+    expect(screen.getByLabelText("Cuenta")).toBeInTheDocument()
+    expect(screen.getByLabelText("Monto real (COP)")).toBeInTheDocument()
+    expect(screen.getByLabelText("Fecha")).toBeInTheDocument()
   })
 })

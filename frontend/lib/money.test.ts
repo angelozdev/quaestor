@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { formatCents, formatRate, impliedRate } from "./money"
+import { convertCents, currencyOf, formatCents, formatRate, impliedRate } from "./money"
 
 describe("impliedRate", () => {
   it("is received over sent", () => {
@@ -36,5 +36,45 @@ describe("formatCents", () => {
 
   it("formats USD with two decimals", () => {
     expect(formatCents(1234, "USD")).toBe("US$ 12.34")
+  })
+})
+
+describe("convertCents", () => {
+  it("leaves a figure alone when the currency does not change", () => {
+    expect(convertCents(40_000_000, "COP", "COP", null)).toBe(40_000_000)
+  })
+
+  it("restates pesos as dollars at the app's rate", () => {
+    expect(convertCents(40_000_000, "COP", "USD", 4000)).toBe(10_000)
+  })
+
+  it("restates dollars as pesos at the app's rate", () => {
+    expect(convertCents(10_000, "USD", "COP", 4000)).toBe(40_000_000)
+  })
+
+  it("offers nothing rather than a figure it invented when no rate is known", () => {
+    expect(convertCents(40_000_000, "COP", "USD", null)).toBeNull()
+    expect(convertCents(40_000_000, "COP", "USD", 0)).toBeNull()
+    expect(convertCents(40_000_000, "COP", "USD", Number.NaN)).toBeNull()
+  })
+
+  it("offers nothing for a pair of currencies the single rate does not span", () => {
+    expect(convertCents(100, "EUR", "COP", 4000)).toBeNull()
+  })
+})
+
+describe("currencyOf", () => {
+  const accounts = [
+    { id: 1, currency: "COP" },
+    { id: 3, currency: "USD" },
+  ]
+
+  it("names the currency an account holds", () => {
+    expect(currencyOf(accounts, 3)).toBe("USD")
+  })
+
+  it("falls back to pesos while the account is not known yet", () => {
+    expect(currencyOf(undefined, 3)).toBe("COP")
+    expect(currencyOf(accounts, null)).toBe("COP")
   })
 })

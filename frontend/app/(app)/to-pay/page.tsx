@@ -18,17 +18,14 @@ import { PageHeader } from "@/components/page-header"
 import { type Scope, ScopePicker } from "@/components/scope-picker"
 import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
+import { getFx } from "@/lib/api/fx"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
-import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate, yearMonthOf } from "@/lib/date"
-import { formatCents } from "@/lib/money"
+import { convertCents, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
-
-function currencyOf(accounts: Account[] | undefined, id: number | null): string {
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
-}
 
 function windowFor(scope: Scope) {
   const now = new Date()
@@ -84,6 +81,7 @@ export default function ToPayPage() {
   const [confirming, setConfirming] = useState<Transaction | null>(null)
   const [cAmount, setCAmount] = useState<number | null>(null)
   const [cDate, setCDate] = useState("")
+  const [cAccountId, setCAccountId] = useState<number | null>(null)
 
   const [planning, setPlanning] = useState(false)
 
@@ -97,6 +95,9 @@ export default function ToPayPage() {
 
   const list = useQuery({ queryKey: qk.toPay(since, until), queryFn: () => toPay(since, until) })
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
+  const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
+  const usdCop = fx.data ? Number(fx.data.usd_cop) : null
+  const confirmCurrency = currencyOf(accounts.data, cAccountId)
 
   const planAccountId = planForm.state.values.accountId
   const planCurrency = currencyOf(accounts.data, planAccountId)
@@ -113,6 +114,7 @@ export default function ToPayPage() {
       return confirmPayment(confirming.id, {
         amount: cAmount ?? undefined,
         date: cDate || undefined,
+        account_id: cAccountId ?? undefined,
       })
     },
     onSuccess: () => {
@@ -154,6 +156,7 @@ export default function ToPayPage() {
     setConfirming(item)
     setCAmount(item.amount)
     setCDate(item.date)
+    setCAccountId(item.account_id)
   }
 
   return (
@@ -244,12 +247,41 @@ export default function ToPayPage() {
               className="space-y-4"
             >
               <div className="space-y-1.5">
-                <Label>Monto real ({confirming.currency})</Label>
-                <MoneyInput currency={confirming.currency} value={cAmount} onChange={setCAmount} />
+                <Label htmlFor="confirm-account">Cuenta</Label>
+                <EntitySelect
+                  id="confirm-account"
+                  value={cAccountId}
+                  onChange={(chosen) => {
+                    const next = chosen as number | null
+                    setCAccountId(next)
+                    const to = currencyOf(accounts.data, next)
+                    if (to !== confirmCurrency) {
+                      setCAmount(
+                        convertCents(cAmount ?? confirming.amount, confirmCurrency, to, usdCop),
+                      )
+                    }
+                  }}
+                  queryKey={qk.accounts(false)}
+                  queryFn={() => listAccounts(false)}
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Fecha</Label>
-                <Input type="date" value={cDate} onChange={(e) => setCDate(e.target.value)} />
+                <Label htmlFor="confirm-amount">Monto real ({confirmCurrency})</Label>
+                <MoneyInput
+                  id="confirm-amount"
+                  currency={confirmCurrency}
+                  value={cAmount}
+                  onChange={setCAmount}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-date">Fecha</Label>
+                <Input
+                  id="confirm-date"
+                  type="date"
+                  value={cDate}
+                  onChange={(e) => setCDate(e.target.value)}
+                />
               </div>
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setConfirming(null)}>

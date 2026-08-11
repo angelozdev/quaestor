@@ -627,12 +627,19 @@ def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
     its tags and its meta, because deleting and recreating is the only way to
     make it (ADR-0051).
 
+    A transfer is refused here: its two sides answer to each other, so what it
+    moved is restated through `correct_transfer` and never one side at a time
+    (AC-11).
+
     Raises:
         NotFound: no such transaction.
-        ValidationError: the amount is not positive.
+        ValidationError: the amount is not positive, or the movement is a
+            transfer.
         CorrectionNotApplied: the balance did not move as declared.
     """
     tx = get_transaction(session, tx_id)
+    if tx.type == TxType.transfer:
+        raise ValidationError("a transfer is restated on both of its sides at once")
     require_positive(amount)
 
     def restate() -> None:

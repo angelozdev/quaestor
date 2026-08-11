@@ -1,10 +1,10 @@
-> ▶ CP4 Plan — 6/6 criteria met | NEXT: /atdd:atdd-team — slice 1, the core and the proof | BLOCKED: none
+> ▶ CP5 Implement — 4/4 criteria met | NEXT: CP6 refine — the independence decision is owed first | BLOCKED: none
 
 # Progress — 012 movement-corrections
 
 A movement is corrected, not deleted. 30 acceptance criteria, 66 scenarios —
-53 against the logic, 13 against the screen. Red: 51 failed, 2 passed, the two
-being declared control arms.
+53 against the logic, 13 against the screen. **All green**, and the whole
+project's pipeline with them.
 
 ## Checkpoints
 
@@ -14,6 +14,7 @@ being declared control arms.
 | 2 | ACs | done — approved by the owner 2026-08-10 | 2026-08-10T1900-discover-acs.md |
 | 3 | Spec | done — approved by the owner 2026-08-10 | 2026-08-10T2015-atdd.md |
 | 4 | Plan | done — ADR-0051 accepted | 2026-08-10T2140-plan.md |
+| 5 | Implement | **done** — all four slices, both streams green | 2026-08-10T2340-implement.md |
 | 5 | Implement | — | |
 | 6 | Refine | — | |
 | 7 | Verify | — | |
@@ -68,3 +69,4 @@ independent review afterwards found six user-facing defects in merged code.
 | 2026-08-10T1900 | discover-acs | main | 30 ACs; the last two gaps closed with the owner |
 | 2026-08-10T2015 | atdd | main | 66 scenarios; red on 30 unbound step texts; 224 existing steps reused where they fit |
 | 2026-08-10T2140 | plan | main | ADR-0051 accepted; correcting = reverse + restate + apply + prove, reusing what delete already does |
+| 2026-08-10T2340 | implement | main | four slices; 66/66 scenarios; ten spec defects of my own, all measured before fixing; one 184-line test file clobbered and restored |

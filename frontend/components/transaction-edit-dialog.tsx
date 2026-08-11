@@ -2,10 +2,12 @@
 
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useState } from "react"
 import { toast } from "sonner"
 import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
 import { MetaField } from "@/components/meta-field"
+import { MoneyInput } from "@/components/money-input"
 import { TagChipsInput } from "@/components/tag-chips-input"
 import {
   type TransactionEditValues,
@@ -13,10 +15,11 @@ import {
 } from "@/components/transaction-edit-dialog.schema"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
-import { listTransactions, updateTransaction } from "@/lib/api/transactions"
+import { getFx } from "@/lib/api/fx"
+import { correctTransaction, listTransactions, updateTransaction } from "@/lib/api/transactions"
 import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { formatCents } from "@/lib/money"
+import { convertCents, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { findCounterpart } from "@/lib/transfers"
 import { useTagNames } from "@/lib/use-tag-names"
@@ -71,6 +74,18 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const isTransfer = tx.type === "transfer"
   const isIncome = tx.type === "income"
   const monthOfPurchase = tx.type === "expense" ? yearMonthOf(tx.date) : null
+  const [accountId, setAccountId] = useState<number | null>(tx.account_id)
+  const [amount, setAmount] = useState<number | null>(tx.amount)
+  const accountsQuery = useQuery({
+    queryKey: qk.accounts(false),
+    queryFn: () => listAccounts(false),
+  })
+  const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
+  const usdCop = fx.data ? Number(fx.data.usd_cop) : null
+  const currency = currencyOf(accountsQuery.data, accountId)
+  const restated = accountId !== tx.account_id || amount !== tx.amount
+  const amountRidesWithTheMove = isTransfer && currency !== tx.currency
+  const amountIsStatedHere = !isTransfer || amountRidesWithTheMove
 
   const form = useTanStackForm({
     defaultValues: valuesFromTx(tx),
@@ -81,15 +96,22 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   })
 
   const update = useMutation({
-    mutationFn: (values: TransactionEditValues) =>
-      updateTransaction(tx.id, {
+    mutationFn: async (values: TransactionEditValues) => {
+      if (restated) {
+        await correctTransaction(tx.id, {
+          account_id: accountId ?? undefined,
+          amount: amount ?? undefined,
+        })
+      }
+      return updateTransaction(tx.id, {
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         date: values.date,
         category_id: values.categoryId,
         notes: values.notes && values.notes.length > 0 ? values.notes : null,
         tags: values.tags,
         meta_id: values.metaId,
-      }),
+      })
+    },
     onSuccess: () => {
       toast.success("Transacción actualizada")
       invalidate(qc, "transactionWrite")
@@ -115,11 +137,30 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
       >
         {tx.transfer_group_id && <TransferPairInfo tx={tx} />}
-        <p>
-          {tx.type} · {formatCents(tx.amount, tx.currency)} · cuenta #{tx.account_id}
-        </p>
-        <p className="mt-1 text-xs">Para cambiar monto/cuenta, elimina y vuelve a crear.</p>
+        <p>{tx.type}</p>
       </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="tx-edit-account">Cuenta</Label>
+        <EntitySelect
+          id="tx-edit-account"
+          value={accountId}
+          onChange={(chosen) => {
+            const next = chosen as number | null
+            setAccountId(next)
+            const to = currencyOf(accountsQuery.data, next)
+            if (to !== currency && amount !== null)
+              setAmount(convertCents(amount, currency, to, usdCop))
+          }}
+          queryKey={qk.accounts(false)}
+          queryFn={() => listAccounts(false)}
+        />
+      </div>
+      {amountIsStatedHere && (
+        <div className="space-y-1.5">
+          <Label htmlFor="tx-edit-amount">Monto ({currency})</Label>
+          <MoneyInput id="tx-edit-amount" currency={currency} value={amount} onChange={setAmount} />
+        </div>
+      )}
       <form.Field name="payee">
         {(field) => <FormField field={field} label="Beneficiario" />}
       </form.Field>

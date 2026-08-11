@@ -320,6 +320,13 @@ export interface PlanPaymentCreate {
 export interface ConfirmPaymentBody {
   amount?: number
   date?: string
+  account_id?: number
+}
+export interface CorrectionBody {
+  account_id?: number
+  amount?: number
+  sent?: number
+  received?: number
 }
 export interface RecurringCreate {
   name: string
