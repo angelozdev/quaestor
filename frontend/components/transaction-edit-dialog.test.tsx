@@ -393,6 +393,90 @@ describe("012 — a transfer is restated on both of its sides", () => {
   })
 })
 
+describe("012 — the half being corrected is the half that changes", () => {
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+    correctTransaction.mockReset().mockResolvedValue(makeTransaction())
+  })
+
+  const aDollarTransferIntoPesos = () =>
+    aTransferPair({
+      sent: { account_id: 3, amount: 10_000, currency: "USD" },
+      received: { account_id: 1, amount: 40_000_000, currency: "COP" },
+    })
+
+  it("The half that received asks what arrived and names what left", async () => {
+    const { received } = aDollarTransferIntoPesos()
+    renderDialog(received)
+    expect(await screen.findByLabelText("Monto recibido (COP)")).toHaveValue("400000")
+    expect(screen.getByLabelText("Monto enviado (USD)")).toHaveValue("100")
+  })
+
+  it("Restating what arrived leaves what left exactly as it was", async () => {
+    const user = userEvent.setup()
+    const { received } = aDollarTransferIntoPesos()
+    renderDialog(received)
+    const arrived = await screen.findByLabelText("Monto recibido (COP)")
+    await user.clear(arrived)
+    await user.type(arrived, "398000")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(correctTransaction).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).toHaveBeenCalledWith(11, { sent: 10_000, received: 39_800_000 })
+  })
+
+  it("Restating what left from the half that received states it as what left", async () => {
+    const user = userEvent.setup()
+    const { received } = aDollarTransferIntoPesos()
+    renderDialog(received)
+    const left = await screen.findByLabelText("Monto enviado (USD)")
+    await user.clear(left)
+    await user.type(left, "98")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(correctTransaction).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).toHaveBeenCalledWith(11, { sent: 9_800, received: 40_000_000 })
+  })
+})
+
+describe("012 — a currency passed through corrects nothing", () => {
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+    correctTransaction.mockReset().mockResolvedValue(makeTransaction())
+  })
+
+  const tigo = () => makeTransaction({ payee: "Tigo", amount: 9_355_800 })
+
+  async function goToDollarsAndBack(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("combobox", { name: "Cuenta" }))
+    await user.click(screen.getByRole("option", { name: "DolarApp" }))
+    expect(await screen.findByLabelText("Monto (USD)")).toHaveValue("23.39")
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    await user.click(screen.getByRole("option", { name: "Bancolombia" }))
+  }
+
+  it("The figure comes back as the movement holds it after a trip through dollars", async () => {
+    const user = userEvent.setup()
+    renderDialog(tigo())
+    await goToDollarsAndBack(user)
+
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("93558")
+  })
+
+  it("Saving after that trip corrects nothing", async () => {
+    const user = userEvent.setup()
+    renderDialog(tigo())
+    await goToDollarsAndBack(user)
+    await screen.findByLabelText("Monto (COP)")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).not.toHaveBeenCalled()
+  })
+})
+
 describe("012 — a correction that states nothing writes nothing", () => {
   beforeEach(() => {
     updateTransaction.mockReset().mockResolvedValue(makeTransaction())

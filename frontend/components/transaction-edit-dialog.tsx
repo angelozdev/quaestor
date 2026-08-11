@@ -18,16 +18,22 @@ import { listCategories } from "@/lib/api/categories"
 import { getFx } from "@/lib/api/fx"
 import { correctTransaction, listTransactions, updateTransaction } from "@/lib/api/transactions"
 import {
-  type Account,
   ApiError,
   applyApiErrorsToForm,
   type CorrectionBody,
   type Transaction,
 } from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
+import {
+  amountForAccount,
+  currencyForAccount,
+  currencyOf,
+  formatCents,
+  type StatedAmount,
+} from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { findCounterpart } from "@/lib/transfers"
+import { useStatedAmount } from "@/lib/use-stated-amount"
 import { useTagNames } from "@/lib/use-tag-names"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Label } from "@/ui"
 
@@ -64,22 +70,21 @@ function useCounterpart(tx: Transaction): Transaction | undefined {
  */
 function statedCorrection({
   tx,
-  accounts,
   counterpart,
   accountId,
+  currency,
   amount,
   counterpartAmount,
 }: {
   tx: Transaction
-  accounts: Account[] | undefined
   counterpart: Transaction | undefined
   accountId: number | null
+  currency: string
   amount: number | null
   counterpartAmount: number | null
 }) {
   const isTransfer = tx.type === "transfer"
   const moved = accountId !== tx.account_id
-  const currency = currencyForAccount(tx, accounts, accountId)
   const ridesWithTheMove = isTransfer && currency !== tx.currency
   const pairIsKnown = tx.transfer_group_id !== null && counterpart !== undefined
   const otherSide =
@@ -89,7 +94,7 @@ function statedCorrection({
   const amountIsAsked = !isTransfer || ridesWithTheMove || pairIsKnown
   const amountRestated = amount !== tx.amount
   const counterpartRestated = otherSide !== null && counterpartAmount !== otherSide.amount
-  const refuse = (refusal: string) => ({ currency, otherSide, amountIsAsked, refusal, body: null })
+  const refuse = (refusal: string) => ({ otherSide, amountIsAsked, refusal, body: null })
 
   if (accountId === null) return refuse("Elige la cuenta del movimiento.")
   if (amountIsAsked && amount === null) return refuse("Escribe el monto del movimiento.")
@@ -109,7 +114,6 @@ function statedCorrection({
     body.amount = amount
   }
   return {
-    currency,
     otherSide,
     amountIsAsked,
     refusal: null,
@@ -118,27 +122,27 @@ function statedCorrection({
 }
 
 /**
- * The figure to offer once another account is chosen. A transfer's leg landing
- * in the currency its other half already holds is offered that half's own
- * figure, because two halves in one currency carry the same amount (AC-11);
+ * The figure to offer once another account is chosen. The figure the owner
+ * stated comes back untouched in the currency he stated it in. A transfer's leg
+ * landing in the currency its other half already holds is offered that half's
+ * own figure, because two halves in one currency carry the same amount (AC-11);
  * every other move is offered the same money restated at the app's rate
  * (AC-13).
  */
 function amountForChosenAccount({
-  amount,
-  from,
+  stated,
   to,
   usdCop,
   counterpart,
 }: {
-  amount: number | null
-  from: string
+  stated: StatedAmount
   to: string
   usdCop: number | null
   counterpart: Transaction | undefined
 }): number | null {
+  if (stated.currency === to) return stated.cents
   if (counterpart !== undefined && counterpart.currency === to) return counterpart.amount
-  return amountForAccount(amount, from, to, usdCop)
+  return amountForAccount(stated, to, usdCop)
 }
 
 /** A correction the server refused after the balance-safe edit was already saved. */
@@ -181,7 +185,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const isIncome = tx.type === "income"
   const monthOfPurchase = tx.type === "expense" ? yearMonthOf(tx.date) : null
   const [accountId, setAccountId] = useState<number | null>(tx.account_id)
-  const [amount, setAmount] = useState<number | null>(tx.amount)
+  const money = useStatedAmount({ cents: tx.amount, currency: tx.currency })
   const [statedOther, setStatedOther] = useState<number | null | undefined>(undefined)
   const accountsQuery = useQuery({
     queryKey: qk.accounts(false),
@@ -191,12 +195,13 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
   const counterpart = useCounterpart(tx)
   const counterpartAmount = statedOther === undefined ? (counterpart?.amount ?? null) : statedOther
-  const { currency, otherSide, amountIsAsked, refusal, body } = statedCorrection({
+  const currency = currencyForAccount(tx, accountsQuery.data, accountId)
+  const { otherSide, amountIsAsked, refusal, body } = statedCorrection({
     tx,
-    accounts: accountsQuery.data,
     counterpart,
     accountId,
-    amount,
+    currency,
+    amount: money.amount,
     counterpartAmount,
   })
   const sending = tx.transfer_direction === "out"
@@ -277,7 +282,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
             const to = currencyOf(accountsQuery.data, next)
             setAccountId(next)
             if (to !== currency) {
-              setAmount(amountForChosenAccount({ amount, from: currency, to, usdCop, counterpart }))
+              money.offer(amountForChosenAccount({ stated: money.stated, to, usdCop, counterpart }))
             }
           }}
           queryKey={qk.accounts(false)}
@@ -293,7 +298,12 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
                 ? `Monto enviado (${currency})`
                 : `Monto recibido (${currency})`}
           </Label>
-          <MoneyInput id="tx-edit-amount" currency={currency} value={amount} onChange={setAmount} />
+          <MoneyInput
+            id="tx-edit-amount"
+            currency={currency}
+            value={money.amount}
+            onChange={(cents) => money.write(cents, currency)}
+          />
         </div>
       )}
       {otherSide !== null && (

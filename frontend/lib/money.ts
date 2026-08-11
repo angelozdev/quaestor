@@ -41,10 +41,19 @@ export function formatCents(cents: number, currency: string): string {
   return `$ ${formatted}`
 }
 
+function wholePesos(cents: number): number {
+  return Math.round(cents / 100) * 100
+}
+
 /**
  * The same amount of money, restated in another currency at the app's single
  * rate (ADR-0031). Returns null when the rate is unknown or unusable, so a
  * caller shows nothing rather than a figure it invented.
+ *
+ * A peso result is whole pesos, the only peso figure the app can hold: it reads
+ * one back as whole pesos and shows it as whole pesos, so the figure the owner
+ * is offered is the figure that reaches his balance (AC-13). A dollar result
+ * keeps its cents, which the app holds exactly (AC-4).
  *
  * What a correction offers when the owner picks an account in another currency
  * — always as a suggestion he can replace, never applied on his behalf
@@ -59,27 +68,34 @@ export function convertCents(
 ): number | null {
   if (from === to) return cents
   if (usdCop === null || !Number.isFinite(usdCop) || usdCop <= 0) return null
-  if (from === "USD" && to === "COP") return Math.round(cents * usdCop)
+  if (from === "USD" && to === "COP") return wholePesos(cents * usdCop)
   if (from === "COP" && to === "USD") return Math.round(cents / usdCop)
   return null
 }
 
+/** A figure stated for a movement, and the currency it was stated in. */
+export type StatedAmount = { cents: number | null; currency: string }
+
 /**
- * The figure to offer after the owner picks another account: the same money
- * restated in that account's currency, unchanged when the currency is the same,
- * and null when there is nothing to restate or no usable rate.
+ * The figure to offer after the owner picks another account: the money he stated
+ * restated in that account's currency, handed back untouched when he stated it
+ * in that very currency, and null when there is nothing to restate or no usable
+ * rate.
+ *
+ * A figure is always restated from the currency it was stated in, never from the
+ * one on screen, so a trip out to another currency and back offers the figure
+ * the movement already held rather than one the owner never wrote (AC-21).
  *
  * One helper for both screens that offer an account: correcting a movement and
  * confirming a payment behave identically on purpose (ADR-0051).
  */
 export function amountForAccount(
-  cents: number | null,
-  from: string,
+  stated: StatedAmount,
   to: string,
   usdCop: number | null,
 ): number | null {
-  if (cents === null) return null
-  return convertCents(cents, from, to, usdCop)
+  if (stated.cents === null) return null
+  return convertCents(stated.cents, stated.currency, to, usdCop)
 }
 
 /** The currency an account holds, or pesos when the account is not known yet. */

@@ -24,6 +24,7 @@ import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/type
 import { formatDate, yearMonthOf } from "@/lib/date"
 import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
+import { useStatedAmount } from "@/lib/use-stated-amount"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
 
@@ -79,7 +80,7 @@ export default function ToPayPage() {
   const { since, until } = windowFor(scope)
 
   const [confirming, setConfirming] = useState<Transaction | null>(null)
-  const [cAmount, setCAmount] = useState<number | null>(null)
+  const confirmMoney = useStatedAmount({ cents: null, currency: "COP" })
   const [cDate, setCDate] = useState("")
   const [cAccountId, setCAccountId] = useState<number | null>(null)
 
@@ -112,7 +113,7 @@ export default function ToPayPage() {
     mutationFn: () => {
       if (!confirming) throw new Error("confirming transaction is required")
       return confirmPayment(confirming.id, {
-        amount: cAmount ?? undefined,
+        amount: confirmMoney.amount ?? undefined,
         date: cDate || undefined,
         account_id: cAccountId ?? undefined,
       })
@@ -154,7 +155,7 @@ export default function ToPayPage() {
 
   function openConfirm(item: Transaction) {
     setConfirming(item)
-    setCAmount(item.amount)
+    confirmMoney.write(item.amount, item.currency)
     setCDate(item.date)
     setCAccountId(item.account_id)
   }
@@ -256,9 +257,7 @@ export default function ToPayPage() {
                     const to = currencyOf(accounts.data, next)
                     setCAccountId(next)
                     if (to !== confirmCurrency) {
-                      setCAmount(
-                        amountForAccount(cAmount ?? confirming.amount, confirmCurrency, to, usdCop),
-                      )
+                      confirmMoney.offer(amountForAccount(confirmMoney.stated, to, usdCop))
                     }
                   }}
                   queryKey={qk.accounts(false)}
@@ -270,8 +269,8 @@ export default function ToPayPage() {
                 <MoneyInput
                   id="confirm-amount"
                   currency={confirmCurrency}
-                  value={cAmount}
-                  onChange={setCAmount}
+                  value={confirmMoney.amount}
+                  onChange={(cents) => confirmMoney.write(cents, confirmCurrency)}
                 />
               </div>
               <div className="space-y-1.5">

@@ -352,3 +352,102 @@ describe("012 — the confirmation reads the payment, not the list of accounts",
     expect(confirmPayment).toHaveBeenCalledWith(7, expect.objectContaining({ amount: 8_752 }))
   })
 })
+
+/** A payment of $93.558 waiting on a peso account, as Tigo's is in production. */
+async function openConfirmationOfATigoBill() {
+  const user = userEvent.setup()
+  const tx = makeTransaction({
+    id: 7,
+    payee: "Tigo",
+    status: "planned",
+    amount: 9_355_800,
+    account_id: ACCOUNT.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+  toPay.mockResolvedValue({ overdue: [tx], upcoming: [], total_base: tx.amount })
+  render(<ToPayPage />, { wrapper: queryWrapper })
+  await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Cuenta" })).toHaveTextContent(ACCOUNT.name),
+  )
+  return user
+}
+
+async function goToDollarsAndBack(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+  await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+  expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("23.39")
+  await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+  await user.click(await screen.findByRole("option", { name: ACCOUNT.name }))
+}
+
+describe("012 — a currency passed through charges nothing", () => {
+  it("The figure comes back as the payment holds it after a trip through dollars", async () => {
+    const user = await openConfirmationOfATigoBill()
+    await goToDollarsAndBack(user)
+
+    expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("93558")
+  })
+
+  it("Confirming after that trip charges the figure the payment already held", async () => {
+    const user = await openConfirmationOfATigoBill()
+    await goToDollarsAndBack(user)
+    await screen.findByLabelText("Monto real (COP)")
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ amount: 9_355_800, account_id: ACCOUNT.id }),
+    )
+  })
+})
+
+/** A dollar payment waiting on DolarApp, with every account already on the list. */
+async function openConfirmationOfAHogaruBillInDollars() {
+  const user = userEvent.setup()
+  const tx = makeTransaction({
+    id: 7,
+    payee: "Hogaru",
+    status: "planned",
+    amount: 10_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+  toPay.mockResolvedValue({ overdue: [tx], upcoming: [], total_base: tx.amount })
+  render(<ToPayPage />, { wrapper: queryWrapper })
+  await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: "Cuenta" })).toHaveTextContent(DOLARAPP.name),
+  )
+  return user
+}
+
+async function emptyTheBoxOnPesosAndGoBackToDollars(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+  await user.click(await screen.findByRole("option", { name: ACCOUNT.name }))
+  expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("400000")
+  await user.clear(screen.getByLabelText("Monto real (COP)"))
+  await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+  await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+}
+
+describe("012 — an emptied box stays empty on the confirmation", () => {
+  it("A box the owner emptied is still empty when he picks another account", async () => {
+    const user = await openConfirmationOfAHogaruBillInDollars()
+    await emptyTheBoxOnPesosAndGoBackToDollars(user)
+
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("")
+  })
+
+  it("Confirming an empty box charges no figure the owner never wrote", async () => {
+    const user = await openConfirmationOfAHogaruBillInDollars()
+    await emptyTheBoxOnPesosAndGoBackToDollars(user)
+    await screen.findByLabelText("Monto real (USD)")
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment.mock.calls[0][1].amount).toBeUndefined()
+  })
+})

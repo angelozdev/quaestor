@@ -69,19 +69,33 @@ describe("convertCents", () => {
   it("offers nothing for a pair of currencies the single rate does not span", () => {
     expect(convertCents(100, "EUR", "COP", 4000)).toBeNull()
   })
+
+  it("offers whole pesos, the only peso figure the app can hold", () => {
+    expect(convertCents(155_604, "USD", "COP", 3142)).toBe(488_907_800)
+  })
+
+  it("keeps the cents of a dollar figure, which the app can hold", () => {
+    expect(convertCents(27_500_000, "COP", "USD", 3142)).toBe(8_752)
+  })
 })
 
 describe("amountForAccount", () => {
   it("keeps the figure when the account picked holds the same currency", () => {
-    expect(amountForAccount(42_000_000, "COP", "COP", 4000)).toBe(42_000_000)
+    expect(amountForAccount({ cents: 42_000_000, currency: "COP" }, "COP", 4000)).toBe(42_000_000)
   })
 
   it("restates the figure in the currency the account picked holds", () => {
-    expect(amountForAccount(40_000_000, "COP", "USD", 4000)).toBe(10_000)
+    expect(amountForAccount({ cents: 40_000_000, currency: "COP" }, "USD", 4000)).toBe(10_000)
   })
 
   it("has nothing to restate when no figure was written", () => {
-    expect(amountForAccount(null, "COP", "USD", 4000)).toBeNull()
+    expect(amountForAccount({ cents: null, currency: "COP" }, "USD", 4000)).toBeNull()
+  })
+
+  it("hands back what was stated, however many currencies were passed through", () => {
+    const tigo = { cents: 9_355_800, currency: "COP" }
+    expect(amountForAccount(tigo, "USD", 4000)).toBe(2_339)
+    expect(amountForAccount(tigo, "COP", 4000)).toBe(9_355_800)
   })
 })
 
