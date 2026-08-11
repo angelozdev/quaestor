@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   amountForAccount,
   convertCents,
+  currencyForAccount,
   currencyOf,
   formatCents,
   formatRate,
@@ -97,5 +98,25 @@ describe("currencyOf", () => {
   it("falls back to pesos while the account is not known yet", () => {
     expect(currencyOf(undefined, 3)).toBe("COP")
     expect(currencyOf(accounts, null)).toBe("COP")
+  })
+})
+
+describe("currencyForAccount", () => {
+  const accounts = [
+    { id: 1, currency: "COP" },
+    { id: 3, currency: "USD" },
+  ]
+  const inDollars = { account_id: 3, currency: "USD" }
+
+  it("reads the movement's own currency while it stays on its account", () => {
+    expect(currencyForAccount(inDollars, undefined, 3)).toBe("USD")
+  })
+
+  it("reads the chosen account's currency once the movement moves", () => {
+    expect(currencyForAccount(inDollars, accounts, 1)).toBe("COP")
+  })
+
+  it("has only the list to read when there is no movement yet", () => {
+    expect(currencyForAccount(null, accounts, 3)).toBe("USD")
   })
 })

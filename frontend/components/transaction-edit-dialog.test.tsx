@@ -294,7 +294,9 @@ describe("012 — a movement is read in the currency it was recorded in", () => 
 })
 
 /** Both halves of a transfer, as the group query hands them over. */
-function aTransferPair(overrides: { received?: Partial<Transaction> } = {}) {
+function aTransferPair(
+  overrides: { sent?: Partial<Transaction>; received?: Partial<Transaction> } = {},
+) {
   const sent = makeTransaction({
     id: 10,
     type: "transfer",
@@ -303,6 +305,7 @@ function aTransferPair(overrides: { received?: Partial<Transaction> } = {}) {
     account_id: 2,
     amount: 20_000_000,
     currency: "COP",
+    ...overrides.sent,
   })
   const received = makeTransaction({
     id: 11,
@@ -341,6 +344,35 @@ describe("012 — a transfer is restated on both of its sides", () => {
     await user.click(screen.getByRole("button", { name: "Guardar" }))
     await waitFor(() => expect(correctTransaction).toHaveBeenCalledTimes(1))
     expect(correctTransaction).toHaveBeenCalledWith(10, { sent: 25_000_000, received: 25_000_000 })
+  })
+
+  it("A leg landing in the currency the other half already holds is offered the other half's figure", async () => {
+    const user = userEvent.setup()
+    const { sent } = aTransferPair({
+      sent: { account_id: 3, amount: 10_000, currency: "USD" },
+      received: { account_id: 1, amount: 41_000_000, currency: "COP" },
+    })
+    renderDialog(sent)
+    await user.click(await screen.findByRole("combobox", { name: "Cuenta" }))
+    await user.click(screen.getByRole("option", { name: "Nequi" }))
+
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("410000")
+  })
+
+  it("A leg landing in the other half's currency states the figure that keeps the transfer whole", async () => {
+    const user = userEvent.setup()
+    const { sent } = aTransferPair({
+      sent: { account_id: 3, amount: 10_000, currency: "USD" },
+      received: { account_id: 1, amount: 41_000_000, currency: "COP" },
+    })
+    renderDialog(sent)
+    await user.click(await screen.findByRole("combobox", { name: "Cuenta" }))
+    await user.click(screen.getByRole("option", { name: "Nequi" }))
+    await screen.findByLabelText("Monto (COP)")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(correctTransaction).toHaveBeenCalledTimes(1))
+    expect(correctTransaction).toHaveBeenCalledWith(10, { account_id: 2, amount: 41_000_000 })
   })
 
   it("asks what left and what arrived when the two halves are in different currencies", async () => {

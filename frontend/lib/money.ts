@@ -89,3 +89,21 @@ export function currencyOf(
 ): string {
   return accounts?.find((a) => a.id === id)?.currency ?? "COP"
 }
+
+/**
+ * The currency a movement is stated in while its account is being chosen: its
+ * own until it moves, and the chosen account's from then on.
+ *
+ * A movement carries its currency the moment it is read, so a list of accounts
+ * that has not arrived yet never restates a dollar figure as pesos. One helper
+ * for both screens that offer an account: correcting a movement and confirming
+ * a payment behave identically on purpose (ADR-0051).
+ */
+export function currencyForAccount(
+  movement: { account_id: number; currency: string } | null,
+  accounts: { id: number; currency: string }[] | undefined,
+  chosen: number | null,
+): string {
+  if (movement !== null && chosen === movement.account_id) return movement.currency
+  return currencyOf(accounts, chosen)
+}

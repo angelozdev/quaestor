@@ -22,7 +22,7 @@ import { getFx } from "@/lib/api/fx"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate, yearMonthOf } from "@/lib/date"
-import { amountForAccount, currencyOf, formatCents } from "@/lib/money"
+import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
@@ -97,7 +97,7 @@ export default function ToPayPage() {
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
   const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
-  const confirmCurrency = currencyOf(accounts.data, cAccountId)
+  const confirmCurrency = currencyForAccount(confirming, accounts.data, cAccountId)
 
   const planAccountId = planForm.state.values.accountId
   const planCurrency = currencyOf(accounts.data, planAccountId)
@@ -253,15 +253,13 @@ export default function ToPayPage() {
                   value={cAccountId}
                   onChange={(chosen) => {
                     const next = chosen as number | null
+                    const to = currencyOf(accounts.data, next)
                     setCAccountId(next)
-                    setCAmount(
-                      amountForAccount(
-                        cAmount ?? confirming.amount,
-                        confirmCurrency,
-                        currencyOf(accounts.data, next),
-                        usdCop,
-                      ),
-                    )
+                    if (to !== confirmCurrency) {
+                      setCAmount(
+                        amountForAccount(cAmount ?? confirming.amount, confirmCurrency, to, usdCop),
+                      )
+                    }
                   }}
                   queryKey={qk.accounts(false)}
                   queryFn={() => listAccounts(false)}

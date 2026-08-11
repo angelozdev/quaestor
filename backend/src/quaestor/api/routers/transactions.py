@@ -132,6 +132,8 @@ def correct_transaction(tx_id: int, body: CorrectionIn, session: Session = Depen
     if body.sent is not None or body.received is not None:
         if body.sent is None or body.received is None:
             raise ValidationError("correcting a transfer states what it sent and what it received")
+        if body.account_id is not None or body.amount is not None:
+            raise ValidationError("a transfer's two figures are corrected on their own, not beside a leg's account")
         tx = transactions.correct_transfer(session, tx_id, sent=body.sent, received=body.received)
     elif body.account_id is not None:
         tx = transactions.move_to_account(session, tx_id, account_id=body.account_id, amount=body.amount)

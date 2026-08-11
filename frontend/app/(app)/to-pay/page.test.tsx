@@ -293,4 +293,62 @@ describe("012 — confirming a payment says which account it came out of", () =>
     expect(screen.getByLabelText("Monto real (COP)")).toBeInTheDocument()
     expect(screen.getByLabelText("Fecha")).toBeInTheDocument()
   })
+
+  it("An account in the same currency leaves the amount box exactly as the owner left it", async () => {
+    const user = await openConfirmation()
+    await user.clear(screen.getByLabelText("Monto real (COP)"))
+    await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
+    await user.click(await screen.findByRole("option", { name: RAPPICARD.name }))
+
+    expect(screen.getByLabelText("Monto real (COP)")).toHaveValue("")
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ account_id: RAPPICARD.id }),
+    )
+    expect(confirmPayment.mock.calls[0][1].amount).toBeUndefined()
+  })
+})
+
+/**
+ * The confirmation of a dollar payment opened while the list of accounts is
+ * still in flight. The query never settles, so the only currency on screen is
+ * the one the payment itself carries.
+ */
+async function openConfirmationOfADollarPayment() {
+  const user = userEvent.setup()
+  const tx = makeTransaction({
+    id: 7,
+    payee: "Hogaru",
+    status: "planned",
+    amount: 10_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+  toPay.mockResolvedValue({ overdue: [tx], upcoming: [], total_base: tx.amount })
+  listAccounts.mockReturnValue(new Promise(() => undefined))
+  render(<ToPayPage />, { wrapper: queryWrapper })
+  await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+  return user
+}
+
+describe("012 — the confirmation reads the payment, not the list of accounts", () => {
+  it("The confirmation reads the payment's own currency before the list of accounts arrives", async () => {
+    await openConfirmationOfADollarPayment()
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("100")
+  })
+
+  it("A figure written into the confirmation before the list arrives keeps its cents", async () => {
+    const user = await openConfirmationOfADollarPayment()
+    const amount = await screen.findByLabelText("Monto real (USD)")
+    await user.clear(amount)
+    await user.type(amount, "87.52")
+    expect(amount).toHaveValue("87.52")
+
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment).toHaveBeenCalledWith(7, expect.objectContaining({ amount: 8_752 }))
+  })
 })

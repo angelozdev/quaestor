@@ -157,6 +157,23 @@ Scenario: A figure the app derived is never applied on its own
   When the user confirms the payment to "Hogaru" from "DolarApp" for 105.00 USD
   Then "DolarApp" has balance 895.00 USD
   And "Nu Debito" has balance 1000000.00 COP
+
+Scenario: The confirmation reads the payment's own currency before the list of accounts arrives
+  Given the app is open
+  And an account "DolarApp" in USD
+  And a payment waiting to "Hogaru" of 100.00 USD from "DolarApp"
+  And the list of accounts has not arrived yet
+  When the owner opens the confirmation
+  Then the amount offered is 100.00 USD
+
+Scenario: A figure written into the confirmation before the list arrives keeps its cents
+  Given the app is open
+  And an account "DolarApp" in USD
+  And a payment waiting to "Hogaru" of 100.00 USD from "DolarApp"
+  And the list of accounts has not arrived yet
+  When the owner opens the confirmation
+  And the owner writes the amount 87.52
+  Then the amount offered is 87.52 USD
 ```
 
 ## AC-5 — A payment confirmed against a foreign-currency account is stored in that currency
@@ -425,6 +442,36 @@ Scenario: Money never appears between the two halves
   And the user is told the two sides of a transfer in one currency carry the same amount
   And "Prestamos" has balance 300000.00 COP
   And "Nu Debito" has balance 1200000.00 COP
+
+@backend
+Scenario: A leg moved into the other half's currency cannot leave the two halves disagreeing
+  Given today is 2026-08-10
+  And the TRM is 4000
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an account "Prestamos" in COP with balance 500000.00 COP
+  And an account "DolarApp" in USD with balance 1000.00 USD
+  And the user transfers sending 100.00 USD from "DolarApp" and receiving 410000.00 COP into "Nu Debito"
+  When the user tries to move the sending side of the transfer to "Prestamos" for 400000.00 COP
+  Then the correction is rejected
+  And the user is told the two sides of a transfer in one currency carry the same amount
+  And the transfer sends 100.00 USD from "DolarApp" and receives 410000.00 COP into "Nu Debito"
+  And "DolarApp" has balance 900.00 USD
+  And "Prestamos" has balance 500000.00 COP
+  And "Nu Debito" has balance 1410000.00 COP
+
+@backend
+Scenario: A leg moved into the other half's currency is taken when the two figures agree
+  Given today is 2026-08-10
+  And the TRM is 4000
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an account "Prestamos" in COP with balance 500000.00 COP
+  And an account "DolarApp" in USD with balance 1000.00 USD
+  And the user transfers sending 100.00 USD from "DolarApp" and receiving 410000.00 COP into "Nu Debito"
+  When the user moves the sending side of the transfer to "Prestamos" for 410000.00 COP
+  Then the transfer sends 410000.00 COP from "Prestamos" and receives 410000.00 COP into "Nu Debito"
+  And "DolarApp" has balance 1000.00 USD
+  And "Prestamos" has balance 90000.00 COP
+  And "Nu Debito" has balance 1410000.00 COP
 ```
 
 ## AC-12 — A transfer across currencies asks for both figures
@@ -455,6 +502,14 @@ Scenario: The two sides of a crossing transfer are allowed to disagree
 
 ## AC-13 — Moving a leg into another currency offers the converted figure
 
+Only one currency pair is in play, so moving *either* leg of a crossing transfer
+lands the pair in a single currency — where AC-11 fixes the figure at the other
+half's and the owner has nothing left to state. The backend scenario therefore
+moves a leg the other way, *out* of the shared currency, the one move where the
+owner's figure is still free. It states `105.00 USD` against a `400000.00 COP`
+half whose conversion at 4000 is `100.00`, so the figure stored can only have
+come from the owner.
+
 ```gherkin
 Scenario: The converted figure arrives filled in, exactly as when confirming
   Given the app is open
@@ -465,6 +520,17 @@ Scenario: The converted figure arrives filled in, exactly as when confirming
   When the owner opens the receiving side of the transfer
   And the owner chooses the account "DolarApp"
   Then the amount offered is 100.00 USD
+
+Scenario: A leg landing in the currency the other half already holds is offered the other half's figure
+  Given the app is open
+  And the TRM is 4000
+  And an account "Nu Debito" in COP
+  And an account "Prestamos" in COP
+  And an account "DolarApp" in USD
+  And a recorded transfer sending 100.00 USD from "DolarApp" and receiving 410000.00 COP into "Nu Debito"
+  When the owner opens the sending side of the transfer
+  And the owner chooses the account "Prestamos"
+  Then the amount offered is 410000.00 COP
 
 Scenario: A movement in another currency is read in its own currency
   Given the app is open
@@ -490,11 +556,11 @@ Scenario: The figure the owner states is the one stored
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And an account "Prestamos" in COP with balance 500000.00 COP
   And an account "DolarApp" in USD with balance 1000.00 USD
-  And the user transfers sending 100.00 USD from "DolarApp" and receiving 400000.00 COP into "Nu Debito"
-  When the user moves the sending side of the transfer to "Prestamos" for 420000.00 COP
-  Then the transfer sends 420000.00 COP from "Prestamos" and receives 400000.00 COP into "Nu Debito"
-  And "DolarApp" has balance 1000.00 USD
-  And "Prestamos" has balance 80000.00 COP
+  And the user transfers 400000.00 COP from "Prestamos" to "Nu Debito" dated 2026-08-10
+  When the user moves the sending side of the transfer to "DolarApp" for 105.00 USD
+  Then the transfer sends 105.00 USD from "DolarApp" and receives 400000.00 COP into "Nu Debito"
+  And "DolarApp" has balance 895.00 USD
+  And "Prestamos" has balance 500000.00 COP
   And "Nu Debito" has balance 1400000.00 COP
 ```
 

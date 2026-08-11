@@ -25,7 +25,7 @@ import {
   type Transaction,
 } from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { amountForAccount, currencyOf, formatCents } from "@/lib/money"
+import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { findCounterpart } from "@/lib/transfers"
 import { useTagNames } from "@/lib/use-tag-names"
@@ -79,7 +79,7 @@ function statedCorrection({
 }) {
   const isTransfer = tx.type === "transfer"
   const moved = accountId !== tx.account_id
-  const currency = moved ? currencyOf(accounts, accountId) : tx.currency
+  const currency = currencyForAccount(tx, accounts, accountId)
   const ridesWithTheMove = isTransfer && currency !== tx.currency
   const pairIsKnown = tx.transfer_group_id !== null && counterpart !== undefined
   const otherSide =
@@ -115,6 +115,30 @@ function statedCorrection({
     refusal: null,
     body: Object.keys(body).length > 0 ? body : null,
   }
+}
+
+/**
+ * The figure to offer once another account is chosen. A transfer's leg landing
+ * in the currency its other half already holds is offered that half's own
+ * figure, because two halves in one currency carry the same amount (AC-11);
+ * every other move is offered the same money restated at the app's rate
+ * (AC-13).
+ */
+function amountForChosenAccount({
+  amount,
+  from,
+  to,
+  usdCop,
+  counterpart,
+}: {
+  amount: number | null
+  from: string
+  to: string
+  usdCop: number | null
+  counterpart: Transaction | undefined
+}): number | null {
+  if (counterpart !== undefined && counterpart.currency === to) return counterpart.amount
+  return amountForAccount(amount, from, to, usdCop)
 }
 
 /** A correction the server refused after the balance-safe edit was already saved. */
@@ -250,10 +274,11 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
           value={accountId}
           onChange={(chosen) => {
             const next = chosen as number | null
+            const to = currencyOf(accountsQuery.data, next)
             setAccountId(next)
-            setAmount(
-              amountForAccount(amount, currency, currencyOf(accountsQuery.data, next), usdCop),
-            )
+            if (to !== currency) {
+              setAmount(amountForChosenAccount({ amount, from: currency, to, usdCop, counterpart }))
+            }
           }}
           queryKey={qk.accounts(false)}
           queryFn={() => listAccounts(false)}

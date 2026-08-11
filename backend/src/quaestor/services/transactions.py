@@ -599,7 +599,8 @@ def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: in
         ValidationError: the destination is archived, or the amount is missing
             when the currency changes, or not positive.
         TransferImbalance: the destination is where this transfer's other leg
-            already sits.
+            already sits, or the move would leave the pair's two halves
+            carrying different figures inside one currency.
         CorrectionNotApplied: a balance did not move as declared.
     """
     tx = get_transaction(session, tx_id)
@@ -610,6 +611,7 @@ def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: in
     def restate() -> None:
         if not retarget(session, tx, account_id, amount) and amount is not None:
             tx.amount = amount
+        _refuse_unequal_halves(session, tx)
 
     _restate(session, [tx], restate)
     session.refresh(tx)
@@ -627,6 +629,26 @@ def _refuse_transfer_collision(session: Session, tx: Transaction, account_id: in
         return
     if any(member.account_id == account_id for member in _group_members(session, tx)):
         raise TransferImbalance("source and destination cannot be the same account")
+
+
+def _refuse_unequal_halves(session: Session, leg: Transaction) -> None:
+    """In one currency a transfer's two halves are one number (AC-11).
+
+    Read from the pair as it stands rather than from what a caller asked for,
+    so the one rule covers both ways the halves can come to disagree: both
+    figures restated at once, and a single leg retargeted into the currency the
+    other half already holds. Money never appears or disappears between them.
+
+    A movement that is not a leg of a pair has no halves and is left alone.
+
+    Raises:
+        TransferImbalance: two different figures inside one currency.
+    """
+    if leg.type != TxType.transfer or leg.transfer_group_id is None:
+        return
+    out_side, in_side = _transfer_sides(session, leg)
+    if out_side.currency == in_side.currency and out_side.amount != in_side.amount:
+        raise TransferImbalance("the two sides of a transfer in one currency carry the same amount")
 
 
 def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
@@ -691,12 +713,11 @@ def correct_transfer(session: Session, tx_id: int, *, sent: int, received: int) 
     out_side, in_side = _transfer_sides(session, leg)
     require_positive(sent)
     require_positive(received)
-    if out_side.currency == in_side.currency and sent != received:
-        raise TransferImbalance("the two sides of a transfer in one currency carry the same amount")
 
     def restate() -> None:
         out_side.amount = sent
         in_side.amount = received
+        _refuse_unequal_halves(session, leg)
 
     _restate(session, [out_side, in_side], restate)
     session.refresh(leg)
