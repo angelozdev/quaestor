@@ -4,7 +4,7 @@ title: "An expired session makes every write report success — including the on
 severity: medium
 blocks_user: false
 workaround: "log in again and re-read the movement; nothing was saved, so redo the edit"
-status: investigating
+status: hardened
 
 source:
   kind: internal
@@ -57,10 +57,62 @@ gap_analysis:
     finding: "No test in the frontend suite mocks a 401 on a mutation. The suite pins what the app does when a write is refused with a 4xx that throws, and never what it does when the session simply expired — so a resolve-instead-of-throw has been invisible to it since the interceptor was written."
     followup_kind: add_verification
 
+pin_confirmation:
+  feature_refs:
+    - feature: "frontend/lib/api/client.ts"
+      spec_path: "frontend/lib/api/client.test.ts + frontend/components/transaction-edit-dialog.unauthorized.test.tsx"
+      red_run:
+        result: red
+        command: "cd frontend && pnpm vitest run lib/api/client.test.ts components/transaction-edit-dialog.unauthorized.test.tsx"
+        output: |
+          × refuses the write instead of resolving it as a saved movement
+            → promise resolved "undefined" instead of rejecting
+          × never claims the movement was updated, and keeps the dialog open
+            → expected "spy" to not be called at all, but has been called 1 times
+              1st spy call: [ "Transacción actualizada" ]
+          Tests  5 failed | 4 passed (9)
+      note: |
+        The component test mocks the axios ADAPTER rather than the api module,
+        so the real client, the real mutation and the real dialog are all in the
+        path — the existing dialog test mocks `@/lib/api/transactions` at module
+        level and can never reach the interceptor. The first draft of this test
+        waited on `toast.error` and failed with a bare "got 0 times", which
+        proves nothing about a false success; it was redrafted so the red output
+        prints the lie itself.
+
+fix_commits:
+  - "95f10d5 fix: an expired session stops reporting money it never moved"
+  - "Ships inside feature 012's branch rather than its own. Same trade the owner accepted for 2026-07-31-phantom-budget-assignment: splitting is not free here because the sibling currency fix touches app/(app)/to-pay/page.tsx, which 012 rewrote, and a separate branch guarantees a conflict on a file that moves balances."
+
+harden_results:
+  bug_line_mutation_confirmed: true
+  arch_check: "n/a — frontend only; `uv run lint-imports` governs the backend layers and is unaffected. `pnpm knip` clean, no unused exports introduced."
+  notes: |
+    Bug-line gate, run by the dispatcher and not taken from the agent's report:
+    the production files were reverted to HEAD with the new tests left in place.
+    **10 tests across 4 files went red**; restoring the fixes returned all 510 to
+    green. So the tests pin the defects and not the fixes.
+
+    Scope deviation, flagged for the owner: no `atdd:mutate` pass. The project's
+    mutation tool (`backend/scripts/mutate.py`) walks a Python AST and has no
+    frontend counterpart, so there is nothing to run over a TypeScript
+    interceptor. The bug-line gate is the half that matters here and it was run.
+    No separate three-subagent refine either — disproportionate for an
+    eleven-line change to one branch of one interceptor.
+
+    Blast radius measured rather than assumed: all 17 mutation call sites move
+    from `onSuccess` to `onError` on a 401, which is the fix applied app-wide.
+    Reads are unchanged — TanStack Query v5 already rejected any query resolving
+    `undefined`, so a 401'd read already errored and already spent its one retry
+    before this change. Same retry count, same redirect count. The `/auth`
+    bypass is unchanged and now pinned by a test that asserts only "no redirect",
+    deliberately not the English string, so it does not cement that leak as
+    contract.
+
 followups:
   - category: inadequate_verification
     action: "Pin the behaviour with a red test before fixing: a mutation whose request 401s must reject, must not call toast.success, and must not close its dialog."
-    status: open
+    status: applied
 ---
 
 # An expired session reports a saved movement — notes

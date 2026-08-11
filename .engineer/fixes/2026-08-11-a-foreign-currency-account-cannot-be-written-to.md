@@ -4,7 +4,7 @@ title: "Recording or planning money in a foreign-currency account fails with an 
 severity: high
 blocks_user: true
 workaround: "Creating a movement: press Crear a second time — the first attempt corrects the currency and the retry goes through. Planning a payment: no workaround; plan it against a peso account and move it afterwards with the correction dialog."
-status: investigating
+status: hardened
 
 source:
   kind: internal
@@ -68,10 +68,63 @@ gap_analysis:
     finding: "The frontend suite has no test that picks an account of a different currency in either the create dialog or the plan dialog and asserts what reaches the wire. Every existing test uses the default peso account, so a stale currency and an absent currency are both invisible to it."
     followup_kind: add_verification
 
+pin_confirmation:
+  feature_refs:
+    - feature: "frontend/app/(app)/to-pay/page.tsx + frontend/components/transaction-create-dialog.tsx"
+      spec_path: "frontend/app/(app)/to-pay/page.test.tsx + frontend/components/transaction-create-dialog.test.tsx"
+      red_run:
+        result: red
+        command: "cd frontend && pnpm vitest run 'app/(app)/to-pay/page.test.tsx' components/transaction-create-dialog.test.tsx"
+        output: |
+          FAIL  The payment is planned in dollars, cents and all
+          -   ObjectContaining { "amount": 155604, "currency": "USD" }
+          +   { "amount": 15560400, ... }            ← no currency key at all
+          FAIL  The amount box asks for dollars as soon as a dollar account is chosen
+          Unable to find an element with the text: Monto * (USD).
+          FAIL  The first press states the movement in dollars, cents and all
+          -     "amount": 155604, "currency": "USD",
+          +     "amount": 15560400, "currency": "COP",
+          FAIL  Dollars leaving for a peso account are asked for as two figures
+          Unable to find an element with the text: Monto enviado * (USD).
+      note: |
+        Five red tests, not the two the followup named: the transfer tab of the
+        create dialog turned out to be a third path with the same cause —
+        `isCrossCurrency` was computed from the same non-reactive reads, so a
+        dollar-to-peso transfer never revealed its second amount box and sent
+        pesos off a dollar account. The 1556.04 → 15560400 in two of the four is
+        the peso-mode MoneyInput swallowing the decimal point.
+
+fix_commits:
+  - "3cf13f4 fix: an account that holds dollars can be written to again"
+  - "Ships inside feature 012's branch rather than its own. Decision by the dispatcher, same trade the owner accepted for 2026-07-31-phantom-budget-assignment: app/(app)/to-pay/page.tsx was rewritten by 012, so a separate branch guarantees a conflict on a file that moves balances."
+
+harden_results:
+  bug_line_mutation_confirmed: true
+  arch_check: "n/a — frontend only. `pnpm knip` clean; the new `lib/use-form-values.ts` export is consumed by both dialogs."
+  notes: |
+    Bug-line gate, run by the dispatcher and not taken from the agent's report:
+    the production files were reverted to HEAD with the new tests left in place.
+    **10 tests across 4 files went red**; restoring the fixes returned all 510 to
+    green. So the tests pin the defects and not the fixes.
+
+    Scope deviation, flagged for the owner: no `atdd:mutate` pass, for the same
+    reason as its sibling — `backend/scripts/mutate.py` walks a Python AST and
+    has no frontend counterpart. No separate three-subagent refine either.
+
+    The grep the artifact's notes asked for was run across the whole frontend and
+    classified every `state.values` / `getFieldValue` site. Two were the defect
+    and are fixed. Five in `recurring/page.tsx` were left and turned out to hide
+    a third instance of the same symptom from the opposite direction — a currency
+    constant nobody ever wired to an account — filed separately as
+    `2026-08-11-a-recurring-charge-cannot-live-in-a-dollar-account`. The rest are
+    correct: inside `form.Subscribe` selectors, inside submit handlers, or already
+    reactive through `useStore` (`funds/create-form.tsx:100`, the precedent the
+    new hook generalises).
+
 followups:
   - category: inadequate_verification
     action: "Pin both before fixing: picking a USD account in the create dialog must put USD on the wire on the FIRST submit; planning against a USD account must send currency USD."
-    status: open
+    status: applied
   - category: missing_ac
     action: "Decide whether planning a payment in a foreign currency is in scope at all, and if so state it as an AC before implementing."
     status: open
