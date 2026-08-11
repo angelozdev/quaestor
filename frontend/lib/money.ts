@@ -64,6 +64,24 @@ export function convertCents(
   return null
 }
 
+/**
+ * The figure to offer after the owner picks another account: the same money
+ * restated in that account's currency, unchanged when the currency is the same,
+ * and null when there is nothing to restate or no usable rate.
+ *
+ * One helper for both screens that offer an account: correcting a movement and
+ * confirming a payment behave identically on purpose (ADR-0051).
+ */
+export function amountForAccount(
+  cents: number | null,
+  from: string,
+  to: string,
+  usdCop: number | null,
+): number | null {
+  if (cents === null) return null
+  return convertCents(cents, from, to, usdCop)
+}
+
 /** The currency an account holds, or pesos when the account is not known yet. */
 export function currencyOf(
   accounts: { id: number; currency: string }[] | undefined,

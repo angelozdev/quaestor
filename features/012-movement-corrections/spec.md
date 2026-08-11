@@ -256,6 +256,19 @@ Scenario: Moving to an account in another currency carries the amount with it
   Then "Nu Debito" has balance 1000000.00 COP
   And "DolarApp" has balance 900.00 USD
   And that expense is for 100.00 USD
+
+@backend
+Scenario: The account and the real amount are corrected in the same act, in one currency
+  Given today is 2026-08-10
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an account "RappiCard" in COP with balance 0.00 COP
+  And an expense category "Servicios"
+  And the user registers an expense of 100000.00 COP from "Nu Debito" paying "Tigo" in category "Servicios"
+  When the user moves that expense to "RappiCard" for 420000.00 COP
+  Then "Nu Debito" has balance 1000000.00 COP
+  And "RappiCard" has balance -420000.00 COP
+  And that expense is for 420000.00 COP
+  And that expense came out of "RappiCard"
 ```
 
 ## AC-8 — A movement's amount can be corrected on its own
@@ -290,6 +303,17 @@ Scenario: What the category spent follows the corrected figure
   And the user corrects that expense to 120000.00 COP
   When the user views the current month's report
   Then the spending for "Servicios" shows 120000.00 COP
+
+@backend
+Scenario: The amount is restated while the account it came out of is named again
+  Given today is 2026-08-10
+  And an account "Nu Debito" in COP with balance 1000000.00 COP
+  And an expense category "Servicios"
+  And the user registers an expense of 100000.00 COP from "Nu Debito" paying "Tigo" in category "Servicios"
+  When the user moves that expense to "Nu Debito" for 120000.00 COP
+  Then "Nu Debito" has balance 880000.00 COP
+  And that expense is for 120000.00 COP
+  And that expense came out of "Nu Debito"
 ```
 
 ## AC-9 — A corrected movement is still the same movement
@@ -361,6 +385,24 @@ Scenario: The two sides stay one transfer
 ## AC-11 — In a same-currency transfer the two halves always carry the same amount
 
 ```gherkin
+Scenario: A transfer in one currency shows the half being corrected what it is worth
+  Given the app is open
+  And an account "Nu Debito" in COP
+  And an account "Prestamos" in COP
+  And a recorded transfer sending 200000.00 COP from "Prestamos" and receiving 200000.00 COP into "Nu Debito"
+  When the owner opens the sending side of the transfer
+  Then the amount offered is 200000.00 COP
+
+Scenario: Restating one half on the screen restates both halves
+  Given the app is open
+  And an account "Nu Debito" in COP
+  And an account "Prestamos" in COP
+  And a recorded transfer sending 200000.00 COP from "Prestamos" and receiving 200000.00 COP into "Nu Debito"
+  When the owner opens the sending side of the transfer
+  And the owner writes the amount 250000.00
+  And the owner saves the correction
+  Then the transfer is corrected to send 250000.00 COP and receive 250000.00 COP
+
 @backend
 Scenario: Correcting one half moves both
   Given today is 2026-08-10
@@ -423,6 +465,23 @@ Scenario: The converted figure arrives filled in, exactly as when confirming
   When the owner opens the receiving side of the transfer
   And the owner chooses the account "DolarApp"
   Then the amount offered is 100.00 USD
+
+Scenario: A movement in another currency is read in its own currency
+  Given the app is open
+  And an account "DolarApp" in USD
+  And a recorded expense of 100.00 USD from "DolarApp"
+  And the list of accounts has not arrived yet
+  When the owner opens that expense
+  Then the amount offered is 100.00 USD
+
+Scenario: A figure written before the list of accounts arrives keeps its cents
+  Given the app is open
+  And an account "DolarApp" in USD
+  And a recorded expense of 100.00 USD from "DolarApp"
+  And the list of accounts has not arrived yet
+  When the owner opens that expense
+  And the owner writes the amount 87.52
+  Then the amount offered is 87.52 USD
 
 @backend
 Scenario: The figure the owner states is the one stored
@@ -625,6 +684,16 @@ Scenario: What it will ask for follows the correction
 ## AC-21 — A correction that changes nothing changes nothing
 
 ```gherkin
+Scenario: An emptied amount is not saved as a correction
+  Given the app is open
+  And an account "Nu Debito" in COP
+  And a recorded expense of 100000.00 COP from "Nu Debito"
+  When the owner opens that expense
+  And the owner clears the amount
+  And the owner saves the correction
+  Then the movement is not corrected
+  And the owner is not told the movement was updated
+
 @backend
 Scenario: Saving without changing anything leaves every balance where it was
   Given today is 2026-08-10

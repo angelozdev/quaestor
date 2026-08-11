@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { convertCents, currencyOf, formatCents, formatRate, impliedRate } from "./money"
+import {
+  amountForAccount,
+  convertCents,
+  currencyOf,
+  formatCents,
+  formatRate,
+  impliedRate,
+} from "./money"
 
 describe("impliedRate", () => {
   it("is received over sent", () => {
@@ -60,6 +67,20 @@ describe("convertCents", () => {
 
   it("offers nothing for a pair of currencies the single rate does not span", () => {
     expect(convertCents(100, "EUR", "COP", 4000)).toBeNull()
+  })
+})
+
+describe("amountForAccount", () => {
+  it("keeps the figure when the account picked holds the same currency", () => {
+    expect(amountForAccount(42_000_000, "COP", "COP", 4000)).toBe(42_000_000)
+  })
+
+  it("restates the figure in the currency the account picked holds", () => {
+    expect(amountForAccount(40_000_000, "COP", "USD", 4000)).toBe(10_000)
+  })
+
+  it("has nothing to restate when no figure was written", () => {
+    expect(amountForAccount(null, "COP", "USD", 4000)).toBeNull()
   })
 })
 

@@ -54,6 +54,12 @@ def _require_account(session: Session, account_id: int) -> Account:
     return acc
 
 
+def require_positive(amount: int) -> None:
+    """A movement is worth something or it is not a movement (AC-24)."""
+    if amount <= 0:
+        raise ValidationError("amount must be > 0")
+
+
 def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
     """A meta is pointed at by a purchase, and by nothing else (AC-23, AC-25).
 
@@ -89,8 +95,7 @@ def _record(
     meta_id: int | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    require_positive(amount)
     if not is_supported(currency):
         raise ValidationError(f"unsupported currency: {currency}")
     acc = _require_account(session, account_id)
@@ -301,8 +306,7 @@ def transfer(
         NotFound: Either account does not exist.
     """
     categories.resolve_for_movement(session, TxType.transfer, category_id)
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    require_positive(amount)
     if amount_received is not None and amount_received <= 0:
         raise ValidationError("amount_received must be > 0")
     if from_account_id == to_account_id:
@@ -554,9 +558,9 @@ def retarget(session: Session, tx: Transaction, account_id: int, amount: int | N
     it and never applies one of its own here (ADR-0051). That case consumes
     `amount` and returns True.
 
-    A destination in the same currency leaves the figure alone and returns False,
-    so each caller states its own rule about an amount it did not need —
-    correcting refuses one, confirming takes it as the real amount.
+    A destination in the same currency can hold the old figure, so it is left
+    alone and False is returned: an amount the caller carries is still its to
+    apply, and both correcting and confirming take it as the real amount.
 
     Raises:
         NotFound: the account does not exist.
@@ -575,44 +579,50 @@ def retarget(session: Session, tx: Transaction, account_id: int, amount: int | N
     return crosses
 
 
-def require_positive(amount: int) -> None:
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
-
-
-def _retarget_only(session: Session, tx: Transaction, account_id: int, amount: int | None) -> None:
-    if not retarget(session, tx, account_id, amount) and amount is not None:
-        raise ValidationError("an amount is only stated when the account holds another currency")
-
-
 def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: int | None = None) -> Transaction:
     """Move a movement to the account it really came out of, or went into.
 
-    Both balances move by the same figure. Nothing else about the movement
+    The account it left gets back exactly what it gave up, and the destination
+    gives up what the movement is worth there. Nothing else about the movement
     changes: it keeps its date, payee, category, tags, meta and the recurring
     due date it hangs from — which is what deleting and recreating cannot do
     (ADR-0038, ADR-0051). A leg of a transfer moves on its own; its counterpart
     is left alone.
 
-    `amount` restates the figure in the destination's currency and is required
-    exactly when that currency differs.
+    `amount` is the real figure and is stated in the destination's currency. It
+    is required when that currency differs, since the old figure cannot survive
+    the change, and optional when it does not — the account and the real amount
+    are corrected in one act, exactly as confirming a payment does (AC-2, AC-7).
 
     Raises:
         NotFound: no such transaction, or no such account.
         ValidationError: the destination is archived, or the amount is missing
-            when the currency changes, given when it does not, or not positive.
+            when the currency changes, or not positive.
         TransferImbalance: the destination is where this transfer's other leg
             already sits.
         CorrectionNotApplied: a balance did not move as declared.
     """
     tx = get_transaction(session, tx_id)
     _refuse_transfer_collision(session, tx, account_id)
-    _restate(session, [tx], lambda: _retarget_only(session, tx, account_id, amount))
+    if amount is not None:
+        require_positive(amount)
+
+    def restate() -> None:
+        if not retarget(session, tx, account_id, amount) and amount is not None:
+            tx.amount = amount
+
+    _restate(session, [tx], restate)
     session.refresh(tx)
     return tx
 
 
 def _refuse_transfer_collision(session: Session, tx: Transaction, account_id: int) -> None:
+    """A transfer's two sides cannot sit on one account: that is not a transfer.
+
+    `TransferImbalance` is the class `transfer` already raises for the same
+    refusal at creation time, so a pair that cannot exist is named the same way
+    whether it is being made or being corrected (AC-22).
+    """
     if tx.type != TxType.transfer or tx.transfer_group_id is None:
         return
     if any(member.account_id == account_id for member in _group_members(session, tx)):
@@ -672,8 +682,9 @@ def correct_transfer(session: Session, tx_id: int, *, sent: int, received: int) 
 
     Raises:
         NotFound: no such transaction.
-        ValidationError: not a transfer, a side missing, a figure that is not
-            positive, or two different figures inside one currency.
+        ValidationError: not a transfer, a side missing, or a figure that is not
+            positive.
+        TransferImbalance: two different figures inside one currency.
         CorrectionNotApplied: a balance did not move as declared.
     """
     leg = get_transaction(session, tx_id)

@@ -22,7 +22,7 @@ import { getFx } from "@/lib/api/fx"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
 import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate, yearMonthOf } from "@/lib/date"
-import { convertCents, currencyOf, formatCents } from "@/lib/money"
+import { amountForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
@@ -254,12 +254,14 @@ export default function ToPayPage() {
                   onChange={(chosen) => {
                     const next = chosen as number | null
                     setCAccountId(next)
-                    const to = currencyOf(accounts.data, next)
-                    if (to !== confirmCurrency) {
-                      setCAmount(
-                        convertCents(cAmount ?? confirming.amount, confirmCurrency, to, usdCop),
-                      )
-                    }
+                    setCAmount(
+                      amountForAccount(
+                        cAmount ?? confirming.amount,
+                        confirmCurrency,
+                        currencyOf(accounts.data, next),
+                        usdCop,
+                      ),
+                    )
                   }}
                   queryKey={qk.accounts(false)}
                   queryFn={() => listAccounts(false)}

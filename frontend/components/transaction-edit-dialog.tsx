@@ -17,9 +17,15 @@ import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
 import { getFx } from "@/lib/api/fx"
 import { correctTransaction, listTransactions, updateTransaction } from "@/lib/api/transactions"
-import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import {
+  type Account,
+  ApiError,
+  applyApiErrorsToForm,
+  type CorrectionBody,
+  type Transaction,
+} from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { convertCents, currencyOf, formatCents } from "@/lib/money"
+import { amountForAccount, currencyOf, formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { findCounterpart } from "@/lib/transfers"
 import { useTagNames } from "@/lib/use-tag-names"
@@ -36,17 +42,93 @@ function valuesFromTx(tx: Transaction): TransactionEditValues {
   }
 }
 
-function TransferPairInfo({ tx }: { tx: Transaction }) {
+/** The other leg of the transfer this movement belongs to, once it has arrived. */
+function useCounterpart(tx: Transaction): Transaction | undefined {
   const groupFilter = { transfer_group_id: tx.transfer_group_id ?? undefined }
   const siblings = useQuery({
     queryKey: qk.transactions(groupFilter),
     queryFn: () => listTransactions(groupFilter),
+    enabled: tx.transfer_group_id !== null,
   })
+  return findCounterpart(siblings.data, tx)
+}
+
+/**
+ * A correction states only what the owner changed, so an untouched field is
+ * never restated: the account when it moved, the amount when it was rewritten,
+ * and a transfer's two figures together — the only route to what a transfer
+ * moved, since a side is never restated on its own (AC-11, AC-12, ADR-0051).
+ *
+ * `refusal` is why a save would state nothing it could apply, so nothing is
+ * written and nothing is reported as written.
+ */
+function statedCorrection({
+  tx,
+  accounts,
+  counterpart,
+  accountId,
+  amount,
+  counterpartAmount,
+}: {
+  tx: Transaction
+  accounts: Account[] | undefined
+  counterpart: Transaction | undefined
+  accountId: number | null
+  amount: number | null
+  counterpartAmount: number | null
+}) {
+  const isTransfer = tx.type === "transfer"
+  const moved = accountId !== tx.account_id
+  const currency = moved ? currencyOf(accounts, accountId) : tx.currency
+  const ridesWithTheMove = isTransfer && currency !== tx.currency
+  const pairIsKnown = tx.transfer_group_id !== null && counterpart !== undefined
+  const otherSide =
+    isTransfer && !moved && counterpart !== undefined && counterpart.currency !== tx.currency
+      ? counterpart
+      : null
+  const amountIsAsked = !isTransfer || ridesWithTheMove || pairIsKnown
+  const amountRestated = amount !== tx.amount
+  const counterpartRestated = otherSide !== null && counterpartAmount !== otherSide.amount
+  const refuse = (refusal: string) => ({ currency, otherSide, amountIsAsked, refusal, body: null })
+
+  if (accountId === null) return refuse("Elige la cuenta del movimiento.")
+  if (amountIsAsked && amount === null) return refuse("Escribe el monto del movimiento.")
+  if (otherSide !== null && counterpartAmount === null)
+    return refuse("Escribe los dos montos de la transferencia.")
+  if (isTransfer && moved && amountRestated && !ridesWithTheMove)
+    return refuse("Mueve la transferencia de cuenta o corrige su monto, de a uno.")
+
+  const other = otherSide === null ? amount : counterpartAmount
+  const figuresRestated = amountRestated || counterpartRestated
+  const body: CorrectionBody = {}
+  if (moved) body.account_id = accountId
+  if (isTransfer && pairIsKnown && !moved && figuresRestated && amount !== null && other !== null) {
+    body.sent = tx.transfer_direction === "out" ? amount : other
+    body.received = tx.transfer_direction === "out" ? other : amount
+  } else if (amountRestated && amount !== null && (!isTransfer || ridesWithTheMove)) {
+    body.amount = amount
+  }
+  return {
+    currency,
+    otherSide,
+    amountIsAsked,
+    refusal: null,
+    body: Object.keys(body).length > 0 ? body : null,
+  }
+}
+
+/** A correction the server refused after the balance-safe edit was already saved. */
+class CorrectionRefused extends Error {
+  constructor(readonly cause: unknown) {
+    super(cause instanceof ApiError ? cause.message : "Error")
+  }
+}
+
+function TransferPairInfo({ tx, counterpart }: { tx: Transaction; counterpart?: Transaction }) {
   const accounts = useQuery({
     queryKey: qk.accounts(true),
     queryFn: () => listAccounts(true),
   })
-  const counterpart = findCounterpart(siblings.data, tx)
   const accountName = (id: number) =>
     accounts.data?.find((a) => a.id === id)?.name ?? `cuenta #${id}`
 
@@ -76,34 +158,40 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const monthOfPurchase = tx.type === "expense" ? yearMonthOf(tx.date) : null
   const [accountId, setAccountId] = useState<number | null>(tx.account_id)
   const [amount, setAmount] = useState<number | null>(tx.amount)
+  const [statedOther, setStatedOther] = useState<number | null | undefined>(undefined)
   const accountsQuery = useQuery({
     queryKey: qk.accounts(false),
     queryFn: () => listAccounts(false),
   })
   const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
-  const currency = currencyOf(accountsQuery.data, accountId)
-  const restated = accountId !== tx.account_id || amount !== tx.amount
-  const amountRidesWithTheMove = isTransfer && currency !== tx.currency
-  const amountIsStatedHere = !isTransfer || amountRidesWithTheMove
+  const counterpart = useCounterpart(tx)
+  const counterpartAmount = statedOther === undefined ? (counterpart?.amount ?? null) : statedOther
+  const { currency, otherSide, amountIsAsked, refusal, body } = statedCorrection({
+    tx,
+    accounts: accountsQuery.data,
+    counterpart,
+    accountId,
+    amount,
+    counterpartAmount,
+  })
+  const sending = tx.transfer_direction === "out"
 
   const form = useTanStackForm({
     defaultValues: valuesFromTx(tx),
     validators: { onChange: txEditSchema(isTransfer) },
     onSubmit: async ({ value }) => {
+      if (refusal !== null) {
+        toast.error(refusal)
+        return
+      }
       update.mutate(value)
     },
   })
 
   const update = useMutation({
     mutationFn: async (values: TransactionEditValues) => {
-      if (restated) {
-        await correctTransaction(tx.id, {
-          account_id: accountId ?? undefined,
-          amount: amount ?? undefined,
-        })
-      }
-      return updateTransaction(tx.id, {
+      const edited = await updateTransaction(tx.id, {
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         date: values.date,
         category_id: values.categoryId,
@@ -111,16 +199,29 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         tags: values.tags,
         meta_id: values.metaId,
       })
+      if (body === null) return edited
+      try {
+        return await correctTransaction(tx.id, body)
+      } catch (e: unknown) {
+        throw new CorrectionRefused(e)
+      }
     },
     onSuccess: () => {
       toast.success("Transacción actualizada")
-      invalidate(qc, "transactionWrite")
       onDone()
     },
     onError: (e: unknown) => {
-      applyApiErrorsToForm(form, e)
-      toast.error(e instanceof ApiError ? e.message : "Error")
+      const cause = e instanceof CorrectionRefused ? e.cause : e
+      applyApiErrorsToForm(form, cause)
+      toast.error(
+        e instanceof CorrectionRefused
+          ? `Se guardaron los datos, pero el monto y la cuenta quedaron como estaban: ${e.message}`
+          : cause instanceof ApiError
+            ? cause.message
+            : "Error",
+      )
     },
+    onSettled: () => invalidate(qc, "transactionWrite"),
   })
 
   return (
@@ -136,8 +237,11 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         className="space-y-2 rounded-lg border p-3 text-sm"
         style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
       >
-        {tx.transfer_group_id && <TransferPairInfo tx={tx} />}
-        <p>{tx.type}</p>
+        {tx.transfer_group_id && <TransferPairInfo tx={tx} counterpart={counterpart} />}
+        <p>
+          {tx.type}
+          {!amountIsAsked && ` · ${formatCents(tx.amount, tx.currency)}`}
+        </p>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="tx-edit-account">Cuenta</Label>
@@ -147,18 +251,39 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
           onChange={(chosen) => {
             const next = chosen as number | null
             setAccountId(next)
-            const to = currencyOf(accountsQuery.data, next)
-            if (to !== currency && amount !== null)
-              setAmount(convertCents(amount, currency, to, usdCop))
+            setAmount(
+              amountForAccount(amount, currency, currencyOf(accountsQuery.data, next), usdCop),
+            )
           }}
           queryKey={qk.accounts(false)}
           queryFn={() => listAccounts(false)}
         />
       </div>
-      {amountIsStatedHere && (
+      {amountIsAsked && (
         <div className="space-y-1.5">
-          <Label htmlFor="tx-edit-amount">Monto ({currency})</Label>
+          <Label htmlFor="tx-edit-amount">
+            {otherSide === null
+              ? `Monto (${currency})`
+              : sending
+                ? `Monto enviado (${currency})`
+                : `Monto recibido (${currency})`}
+          </Label>
           <MoneyInput id="tx-edit-amount" currency={currency} value={amount} onChange={setAmount} />
+        </div>
+      )}
+      {otherSide !== null && (
+        <div className="space-y-1.5">
+          <Label htmlFor="tx-edit-counterpart-amount">
+            {sending
+              ? `Monto recibido (${otherSide.currency})`
+              : `Monto enviado (${otherSide.currency})`}
+          </Label>
+          <MoneyInput
+            id="tx-edit-counterpart-amount"
+            currency={otherSide.currency}
+            value={counterpartAmount}
+            onChange={setStatedOther}
+          />
         </div>
       )}
       <form.Field name="payee">

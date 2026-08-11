@@ -18,9 +18,9 @@ import {
 import { TransferReceivedField } from "@/components/transfer-received-field"
 import { listAccounts } from "@/lib/api/accounts"
 import { createTransaction, createTransfer as createTransferApi } from "@/lib/api/transactions"
-import { type Account, ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { yearMonthOf } from "@/lib/date"
-import { finiteOrNull } from "@/lib/money"
+import { currencyOf, finiteOrNull } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useTagNames } from "@/lib/use-tag-names"
 import {
@@ -61,11 +61,6 @@ const TRANSFER_DEFAULTS: TxTransferValues = {
   amountReceived: Number.NaN,
   date: new Date().toISOString().slice(0, 10),
   notes: "",
-}
-
-function currencyOf(accounts: Account[] | undefined, id: number | null): string {
-  if (id === null) return "COP"
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
 }
 
 type FieldWithErrors = { state: { meta: { errors: unknown[] } } }

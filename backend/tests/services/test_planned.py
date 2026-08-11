@@ -567,6 +567,44 @@ def test_confirm_planned_transfer_stores_both_leg_directions(session):
     assert confirmed.transfer_direction == TransferDirection.in_
 
 
+def test_confirming_a_planned_transfer_against_another_account_is_refused(session):
+    """It would report the other account charged and charge the planned one.
+
+    A planned transfer builds its pair from its own destination and the default
+    source account, so an account named here reaches neither leg.
+    """
+    from quaestor.services import settings as settings_svc
+
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    other = accounts.create_account(session, "RappiCard", AccountType.credit, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+
+    with pytest.raises(ValidationError):
+        planned.confirm_payment(session, tx.id, account_id=other.id)
+
+    assert transactions.list_transactions(session, status="posted", type=TxType.transfer) == []
+    assert accounts.get_account(session, src.id).balance == 1_000_000
+    assert accounts.get_account(session, dst.id).balance == 0
+    assert accounts.get_account(session, other.id).balance == 0
+
+
+def test_confirming_a_planned_transfer_against_its_own_account_still_works(session):
+    from quaestor.services import settings as settings_svc
+
+    src = accounts.create_account(session, "Checking", AccountType.debit, "COP", balance=1_000_000)
+    dst = accounts.create_account(session, "Savings", AccountType.savings, "COP", balance=0)
+    settings_svc.update_settings(session, default_source_account_id=src.id)
+    tx = _planned_transfer(session, dst.id, amount=100_000)
+
+    confirmed = planned.confirm_payment(session, tx.id, account_id=dst.id)
+
+    assert confirmed.status == TxStatus.posted
+    assert accounts.get_account(session, src.id).balance == 900_000
+    assert accounts.get_account(session, dst.id).balance == 100_000
+
+
 def test_confirmed_planned_transfer_deletes_as_a_pair(session):
     from quaestor.services import settings as settings_svc
 
