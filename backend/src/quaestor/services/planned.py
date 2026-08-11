@@ -198,6 +198,7 @@ def confirm_payment(
     tx_id: int,
     amount: int | None = None,
     date: Date | None = None,
+    account_id: int | None = None,
 ) -> Transaction:
     """planned -> posted; the only such transition. Fires post-confirm hooks.
 
@@ -206,10 +207,17 @@ def confirm_payment(
     real posted pair (Task 9). Everything (post + hooks) runs in one
     transaction; any failure rolls back.
 
+    `account_id` names the account the payment actually came out of, which the
+    plan chose weeks earlier and reality may have moved (ADR-0051). The account
+    charged is the one named here; the obligation behind the payment keeps
+    declaring its own, so this is an exception for one month and never a move.
+    An account holding another currency takes `amount` restated in it.
+
     Raises:
-        NotFound: the tx does not exist.
+        NotFound: the tx does not exist, or no such account.
         IllegalTransition: the tx is not `planned`.
-        ValidationError: a non-positive adjusted amount.
+        ValidationError: a non-positive adjusted amount, an archived account, or
+            a missing amount when the account holds another currency.
     """
     tx = _tx.get_transaction(session, tx_id)
     if tx.status != TxStatus.planned:
@@ -218,12 +226,13 @@ def confirm_payment(
         if tx.type == TxType.transfer:
             result = _materialize_planned_transfer(session, tx, amount, date)
         else:
+            if account_id is not None and _tx.retarget(session, tx, account_id, amount):
+                amount = None
             if amount is not None:
                 tx.amount = amount
             if date is not None:
                 tx.date = date
-            if tx.amount <= 0:
-                raise ValidationError("amount must be > 0")
+            _tx.require_positive(tx.amount)
             acc = _require_account(session, tx.account_id)
             acc.balance += delta_balance(tx.type, tx.amount)
             tx.status = TxStatus.posted

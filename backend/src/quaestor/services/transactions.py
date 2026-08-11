@@ -546,35 +546,43 @@ def _restate(session: Session, rows: list[Transaction], mutate: Callable[[], Non
         raise
 
 
-def _retarget(session: Session, tx: Transaction, account_id: int, amount: int | None) -> None:
-    """Point `tx` at another account, carrying its amount across a currency change.
+def retarget(session: Session, tx: Transaction, account_id: int, amount: int | None) -> bool:
+    """Point `tx` at another account and say whether `amount` was consumed doing it.
 
-    A destination in another currency needs the amount restated in it: the app
-    offers the conversion on screen and never applies one of its own here. A
-    destination in the same currency takes no amount, so a figure passed by
-    mistake cannot slip through as a silent correction.
+    A destination in another currency cannot hold the old figure, so the amount
+    must be restated in it: the app offers the conversion where the owner can see
+    it and never applies one of its own here (ADR-0051). That case consumes
+    `amount` and returns True.
+
+    A destination in the same currency leaves the figure alone and returns False,
+    so each caller states its own rule about an amount it did not need —
+    correcting refuses one, confirming takes it as the real amount.
 
     Raises:
         NotFound: the account does not exist.
-        ValidationError: the account is archived, the amount is missing when the
-            currency changes, or given when it does not.
+        ValidationError: the account is archived, or the amount is missing or
+            not positive when the currency changes.
     """
     account = _require_account(session, account_id)
-    if account.currency == tx.currency:
-        if amount is not None:
-            raise ValidationError("an amount is only stated when the account holds another currency")
-    elif amount is None:
-        raise ValidationError(f"moving to {account.currency} needs the amount in {account.currency}")
-    else:
-        _require_positive(amount)
+    crosses = account.currency != tx.currency
+    if crosses:
+        if amount is None:
+            raise ValidationError(f"moving to {account.currency} needs the amount in {account.currency}")
+        require_positive(amount)
         tx.amount = amount
         tx.currency = account.currency
     tx.account_id = account_id
+    return crosses
 
 
-def _require_positive(amount: int) -> None:
+def require_positive(amount: int) -> None:
     if amount <= 0:
         raise ValidationError("amount must be > 0")
+
+
+def _retarget_only(session: Session, tx: Transaction, account_id: int, amount: int | None) -> None:
+    if not retarget(session, tx, account_id, amount) and amount is not None:
+        raise ValidationError("an amount is only stated when the account holds another currency")
 
 
 def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: int | None = None) -> Transaction:
@@ -599,7 +607,7 @@ def move_to_account(session: Session, tx_id: int, *, account_id: int, amount: in
     """
     tx = get_transaction(session, tx_id)
     _refuse_transfer_collision(session, tx, account_id)
-    _restate(session, [tx], lambda: _retarget(session, tx, account_id, amount))
+    _restate(session, [tx], lambda: _retarget_only(session, tx, account_id, amount))
     session.refresh(tx)
     return tx
 
@@ -625,7 +633,7 @@ def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
         CorrectionNotApplied: the balance did not move as declared.
     """
     tx = get_transaction(session, tx_id)
-    _require_positive(amount)
+    require_positive(amount)
 
     def restate() -> None:
         tx.amount = amount

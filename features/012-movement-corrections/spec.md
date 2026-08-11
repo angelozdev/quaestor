@@ -184,7 +184,8 @@ Scenario: Its peso value is read at the rate of the day it is read
   And an expense category "Hogar"
   And a planned payment of 400000.00 COP to "Hogaru" from "Nu Debito" due in 2 days in category "Hogar"
   And the user confirms the payment to "Hogaru" from "DolarApp" for 100.00 USD
-  When the user sets the TRM to 5000
+  And the user sets the TRM to 5000
+  When the user views the current month's report
   Then that movement is for 100.00 USD
   And the spending for "Hogar" shows 500000.00 COP
 ```
@@ -199,6 +200,7 @@ Scenario: The obligation still names the account it was declared against
   And an account "RappiCard" in COP with balance 0.00 COP
   And an expense category "Hogar"
   And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hogaru" from "RappiCard"
   Then "Hogaru" is still declared against "Nu Debito"
 
@@ -209,6 +211,7 @@ Scenario: Next month asks against the declared account again
   And an account "RappiCard" in COP with balance 0.00 COP
   And an expense category "Hogar"
   And a repeating payment of 400000.00 COP to "Hogaru" from "Nu Debito" every 1 month starting on 2026-08-01 in category "Hogar", waiting for approval
+  And the daily run happens
   And the user confirms the payment to "Hogaru" from "RappiCard"
   When the obligations that have come due are raised again
   Then the payment to "Hogaru" is waiting to be resolved

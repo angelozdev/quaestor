@@ -23,9 +23,9 @@ from quaestor.domain.errors import (
     TransferImbalance,
     ValidationError,
 )
-from quaestor.domain.models import Account, OccurrenceStatus, Transaction, TxType
+from quaestor.domain.models import Account, OccurrenceStatus, RecurringItem, Transaction, TxStatus, TxType
 from quaestor.domain.money import major_to_cents
-from quaestor.services import accounts, occurrences, transactions
+from quaestor.services import accounts, occurrences, planned, transactions
 from sqlalchemy import event
 from sqlmodel import select
 
@@ -34,15 +34,29 @@ from .fx_read_time import _DEC
 from .world import MISSING_ID, World
 
 _SIGNED = r"-?\d+(?:\.\d+)?"
-_KIND = r"expense|income|charge"
-_TYPE_OF = {"expense": TxType.expense, "income": TxType.income, "charge": TxType.expense}
+_KIND = r"expense|income|charge|movement"
+_TYPE_OF = {"expense": TxType.expense, "income": TxType.income, "charge": TxType.expense, "movement": None}
+
+
+def _waiting_payment(world: World, payee: str | None = None) -> Transaction:
+    """The payment still waiting to be confirmed — by payee when one is named."""
+    stmt = select(Transaction).where(Transaction.status == TxStatus.planned)
+    if payee is not None:
+        stmt = stmt.where(Transaction.payee == payee)
+    rows = world.session.exec(stmt.order_by(Transaction.id)).all()
+    if not rows:
+        named = f" to {payee!r}" if payee else ""
+        raise AssertionError(f"no payment{named} is waiting in this scenario")
+    return rows[0]
 
 
 def _subject(world: World, kind: str) -> Transaction:
     """The most recent movement of this kind — what *that expense* refers to."""
-    rows = world.session.exec(
-        select(Transaction).where(Transaction.type == _TYPE_OF[kind]).order_by(Transaction.id.desc())
-    ).all()
+    stmt = select(Transaction).order_by(Transaction.id.desc())
+    wanted = _TYPE_OF[kind]
+    if wanted is not None:
+        stmt = stmt.where(Transaction.type == wanted)
+    rows = world.session.exec(stmt).all()
     if not rows:
         raise AssertionError(f"no {kind} was recorded earlier in the scenario")
     return rows[0]
@@ -131,6 +145,49 @@ def when_move_transfer_side(world: World, side: str, account: str, amount: str |
 def when_correct_amount(world: World, kind: str, amount: str, currency: str) -> None:
     tx = _subject(world, kind)
     world.attempt(transactions.correct_amount, world.session, tx.id, amount=major_to_cents(amount))
+
+
+@step(
+    r'the user (?:confirms|tries to confirm) the payment to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"'
+    r"(?: for (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}))?"
+)
+def when_confirm_from_account(world: World, payee: str, account: str, amount: str | None, currency: str | None) -> None:
+    tx = _waiting_payment(world, payee)
+    world.attempt(
+        planned.confirm_payment,
+        world.session,
+        tx.id,
+        amount=major_to_cents(amount) if amount else None,
+        account_id=world.account_id_or_missing(account),
+    )
+
+
+@step(r'the user moves the payment still waiting to "(?P<account>[^"]+)"')
+def when_move_waiting_payment(world: World, account: str) -> None:
+    tx = _waiting_payment(world)
+    world.attempt(
+        transactions.move_to_account,
+        world.session,
+        tx.id,
+        account_id=world.account_id_or_missing(account),
+    )
+
+
+@step(r'the payment still waiting to "(?P<payee>[^"]+)" is against "(?P<account>[^"]+)"')
+def then_waiting_payment_account(world: World, payee: str, account: str) -> None:
+    world.require_clean(f"reading which account the payment to {payee!r} is against")
+    tx = _waiting_payment(world, payee)
+    expected = world.accounts[account]
+    assert tx.account_id == expected, f"expected account {expected}, got {tx.account_id}"
+
+
+@step(r'"(?P<name>[^"]+)" is still declared against "(?P<account>[^"]+)"')
+def then_obligation_account_unchanged(world: World, name: str, account: str) -> None:
+    world.require_clean(f"reading the account {name!r} is declared against")
+    item = world.session.exec(select(RecurringItem).where(RecurringItem.payee == name)).first()
+    assert item is not None, f"no repeating obligation to {name!r} exists in this scenario"
+    expected = world.accounts[account]
+    assert item.account_id == expected, f"expected account {expected}, got {item.account_id}"
 
 
 @step(r"that (?P<kind>" + _KIND + r') came out of "(?P<account>[^"]+)"')
