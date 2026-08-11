@@ -17,6 +17,8 @@ could only be exercised by the code it checks would prove nothing.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from quaestor.domain.errors import (
     CorrectionNotApplied,
     NotFound,
@@ -30,12 +32,28 @@ from sqlalchemy import event
 from sqlmodel import select
 
 from . import step
-from .fx_read_time import _DEC
+from .fx_read_time import _DEC, _rest_client
 from .world import MISSING_ID, World
 
 _SIGNED = r"-?\d+(?:\.\d+)?"
 _KIND = r"expense|income|charge|movement"
 _TYPE_OF = {"expense": TxType.expense, "income": TxType.income, "charge": TxType.expense, "movement": None}
+
+
+_CORRECTION_SURFACE = ("correct_transaction", "correct_amount", "correct_transfer", "move_to_account")
+_BALANCE_MOVING_FIELDS = ("account_id", "account", "amount", "currency", "sent", "received")
+
+
+def _assistant_correction_surface() -> list[str]:
+    """Every way the assistant could restate a movement. Expected empty (AC-28)."""
+    from quaestor import mcp as _mcp
+    from quaestor.mcp.tools.transactions import UpdateTransactionInput
+
+    found = [field for field in _BALANCE_MOVING_FIELDS if field in UpdateTransactionInput.model_fields]
+    for path in Path(_mcp.__file__).parent.rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        found.extend(verb for verb in _CORRECTION_SURFACE if f'name="{verb}"' in text)
+    return sorted(set(found))
 
 
 def _waiting_payment(world: World, payee: str | None = None) -> Transaction:
@@ -310,6 +328,36 @@ def then_told_archived(world: World) -> None:
     err = world.last_error
     assert isinstance(err, ValidationError), f"expected ValidationError, got {err!r}"
     assert "archived" in str(err), f"the refusal does not mention the account being archived: {err}"
+
+
+@step(r"the assistant is asked to (?:move that expense to another account|change what that expense is worth)")
+def when_assistant_asked_to_correct(world: World) -> None:
+    """What the assistant could do about it, which is meant to be nothing (AC-28).
+
+    Read from the tool surface itself rather than from a conversation: the
+    refusal is that no such tool exists, and a tool that does not exist cannot
+    be called to prove it.
+    """
+    world.assistant_correction_surface = _assistant_correction_surface()
+
+
+@step(r"they try to correct that expense")
+def when_correct_without_session(world: World) -> None:
+    """The correction over the wire, with no session behind it (AC-27)."""
+    tx = _subject(world, "expense")
+
+    def action() -> None:
+        client, _ = _rest_client(world)
+        world.denied_status = client.post(f"/api/transactions/{tx.id}/correction", json={"amount": 1}).status_code
+
+    world.attempt(action)
+
+
+@step(r"the assistant cannot do it")
+def then_assistant_cannot(world: World) -> None:
+    found = getattr(world, "assistant_correction_surface", None)
+    assert found is not None, "the assistant was never asked in this scenario"
+    assert found == [], f"the assistant exposes a way to correct a movement: {', '.join(found)}"
 
 
 @step(r"the user is told the two sides of a transfer in one currency carry the same amount")
