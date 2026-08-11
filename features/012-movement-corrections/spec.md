@@ -432,10 +432,11 @@ Scenario: The figure the owner states is the one stored
   And an account "Prestamos" in COP with balance 500000.00 COP
   And an account "DolarApp" in USD with balance 1000.00 USD
   And the user transfers sending 100.00 USD from "DolarApp" and receiving 400000.00 COP into "Nu Debito"
-  When the user moves the receiving side of the transfer to "Prestamos" for 420000.00 COP
-  Then the transfer sends 100.00 USD from "DolarApp" and receives 420000.00 COP into "Prestamos"
-  And "Nu Debito" has balance 1000000.00 COP
-  And "Prestamos" has balance 920000.00 COP
+  When the user moves the sending side of the transfer to "Prestamos" for 420000.00 COP
+  Then the transfer sends 420000.00 COP from "Prestamos" and receives 400000.00 COP into "Nu Debito"
+  And "DolarApp" has balance 1000.00 USD
+  And "Prestamos" has balance 80000.00 COP
+  And "Nu Debito" has balance 1400000.00 COP
 ```
 
 ## AC-14 — The screen stops telling the owner to delete and recreate

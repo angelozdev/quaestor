@@ -147,6 +147,48 @@ def when_correct_amount(world: World, kind: str, amount: str, currency: str) -> 
     world.attempt(transactions.correct_amount, world.session, tx.id, amount=major_to_cents(amount))
 
 
+@step(r"the user (?:corrects|tries to correct) the transfer to (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})")
+def when_correct_transfer_one_figure(world: World, amount: str, currency: str) -> None:
+    """One currency, one number: the same figure is stated for both sides."""
+    cents = major_to_cents(amount)
+    world.attempt(transactions.correct_transfer, world.session, _leg(world, "sending").id, sent=cents, received=cents)
+
+
+@step(
+    r"the user (?:corrects|tries to correct) the transfer to send (?P<sent>" + _DEC + r") (?P<sent_cur>[A-Z]{3})"
+    r" and receive (?P<received>" + _DEC + r") (?P<recv_cur>[A-Z]{3})"
+)
+def when_correct_transfer_both_figures(world: World, sent: str, sent_cur: str, received: str, recv_cur: str) -> None:
+    world.attempt(
+        transactions.correct_transfer,
+        world.session,
+        _leg(world, "sending").id,
+        sent=major_to_cents(sent),
+        received=major_to_cents(received),
+    )
+
+
+@step(
+    r"the transfer sends (?P<sent>" + _DEC + r") (?P<sent_cur>[A-Z]{3}) from \"(?P<src>[^\"]+)\""
+    r" and receives (?P<received>" + _DEC + r") (?P<recv_cur>[A-Z]{3}) into \"(?P<dst>[^\"]+)\""
+)
+def then_transfer_reads(
+    world: World, sent: str, sent_cur: str, src: str, received: str, recv_cur: str, dst: str
+) -> None:
+    world.require_clean("reading the two sides of the transfer")
+    out_side, in_side = _leg(world, "sending"), _leg(world, "receiving")
+    for side, amount, currency, account, label in (
+        (out_side, sent, sent_cur, src, "sent"),
+        (in_side, received, recv_cur, dst, "received"),
+    ):
+        expected = major_to_cents(amount)
+        assert side.amount == expected, f"{label}: expected {expected}, got {side.amount}"
+        assert side.currency == currency, f"{label}: expected {currency}, got {side.currency}"
+        assert side.account_id == world.accounts[account], (
+            f"{label}: expected account {world.accounts[account]}, got {side.account_id}"
+        )
+
+
 @step(
     r'the user (?:confirms|tries to confirm) the payment to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"'
     r"(?: for (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}))?"
@@ -268,6 +310,13 @@ def then_told_archived(world: World) -> None:
     err = world.last_error
     assert isinstance(err, ValidationError), f"expected ValidationError, got {err!r}"
     assert "archived" in str(err), f"the refusal does not mention the account being archived: {err}"
+
+
+@step(r"the user is told the two sides of a transfer in one currency carry the same amount")
+def then_told_sides_must_match(world: World) -> None:
+    err = world.last_error
+    assert isinstance(err, TransferImbalance), f"expected TransferImbalance, got {err!r}"
+    assert "same amount" in str(err), f"the refusal does not say the two sides carry the same amount: {err}"
 
 
 @step(r"the user is told the two sides of a transfer cannot be the same account")

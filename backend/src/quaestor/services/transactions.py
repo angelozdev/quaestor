@@ -643,6 +643,48 @@ def correct_amount(session: Session, tx_id: int, *, amount: int) -> Transaction:
     return tx
 
 
+def _transfer_sides(session: Session, leg: Transaction) -> tuple[Transaction, Transaction]:
+    """The (sent, received) sides of the pair this leg belongs to."""
+    if leg.type != TxType.transfer or leg.transfer_group_id is None:
+        raise ValidationError(f"transaction {leg.id} is not part of a transfer")
+    sides = {member.transfer_direction: member for member in (leg, *_group_members(session, leg))}
+    out_side, in_side = sides.get(TransferDirection.out), sides.get(TransferDirection.in_)
+    if out_side is None or in_side is None:
+        raise ValidationError(f"transfer {leg.transfer_group_id} does not have both of its sides")
+    return out_side, in_side
+
+
+def correct_transfer(session: Session, tx_id: int, *, sent: int, received: int) -> Transaction:
+    """Restate what a transfer moved, on both of its sides at once.
+
+    In one currency the two sides are one number, so they are stated as one and
+    disagreeing is refused — money never appears or disappears between the halves
+    of a transfer that never left its currency. Across currencies they are
+    genuinely two numbers, since the rate the bank used is not the app's, and
+    each side takes its own (AC-11, AC-12).
+
+    Raises:
+        NotFound: no such transaction.
+        ValidationError: not a transfer, a side missing, a figure that is not
+            positive, or two different figures inside one currency.
+        CorrectionNotApplied: a balance did not move as declared.
+    """
+    leg = get_transaction(session, tx_id)
+    out_side, in_side = _transfer_sides(session, leg)
+    require_positive(sent)
+    require_positive(received)
+    if out_side.currency == in_side.currency and sent != received:
+        raise TransferImbalance("the two sides of a transfer in one currency carry the same amount")
+
+    def restate() -> None:
+        out_side.amount = sent
+        in_side.amount = received
+
+    _restate(session, [out_side, in_side], restate)
+    session.refresh(leg)
+    return leg
+
+
 def _delete_tag_links(session: Session, tx_ids: list[int]) -> None:
     session.exec(delete(TransactionTag).where(TransactionTag.transaction_id.in_(tx_ids)))
 
