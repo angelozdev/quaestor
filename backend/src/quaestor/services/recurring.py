@@ -22,7 +22,6 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.recurrence import due_dates, has_ended
 from . import categories, occurrences
-from . import transactions as _tx
 
 _UNSET = object()
 
@@ -57,6 +56,42 @@ def _require_account(session: Session, account_id: int) -> Account:
     if acc.archived:
         raise ValidationError(f"account {account_id} is archived")
     return acc
+
+
+def _account_holding(session: Session, account_id: int) -> Account:
+    """The account an obligation already points at, archived or not.
+
+    Retiring an account must not freeze the obligations that name it: the
+    remedy for one of those is to move it elsewhere, and refusing every edit
+    would take that remedy away too.
+
+    Raises:
+        NotFound: the account does not exist.
+    """
+    acc = session.get(Account, account_id)
+    if acc is None:
+        raise NotFound(f"account {account_id} not found")
+    return acc
+
+
+def _require_chargeable(mode: RecurringMode, currency: str, account_currency: str) -> None:
+    """An obligation that pays itself is stated in the currency its account holds.
+
+    The price is the merchant's and the account decides what is debited
+    (ADR-0053), so the two are free to differ — except when nobody is there to
+    say what the debit really was. A charge that posts itself copies the
+    obligation's figure straight onto its account's balance, so a peso price
+    paying itself from a dollar account would add pesos to a dollar balance.
+
+    Raises:
+        ValidationError: the obligation pays itself and the two disagree.
+    """
+    if mode == RecurringMode.auto and currency != account_currency:
+        raise ValidationError(
+            f"an obligation that pays itself must be stated in {account_currency}, "
+            f"the currency its account holds: restate it in {account_currency}, "
+            f"or set it to wait for approval and state the real figure when it arrives"
+        )
 
 
 def create_recurring(
@@ -110,8 +145,7 @@ def create_recurring(
     if end_date is not None and end_date < start_date:
         raise ValidationError("end_date must be on or after start_date")
     acc = _require_account(session, account_id)
-    if currency != acc.currency:
-        raise ValidationError(f"currency {currency} does not match account currency {acc.currency}")
+    _require_chargeable(mode, currency, acc.currency)
     as_of = declared_on or Date.today()
     if start_date < as_of:
         occurrences.guard_offer_size(
@@ -186,6 +220,7 @@ def update_recurring(
     payee: str | None = None,
     mode: RecurringMode | None = None,
     amount: int | None = None,
+    currency: str | None = None,
     category_id=_UNSET,
     account_id: int | None = None,
     interval_unit: IntervalUnit | None = None,
@@ -194,18 +229,19 @@ def update_recurring(
     end_date=_UNSET,
     today: Date | None = None,
 ) -> RecurringItem:
-    """Edit a recurring item. `type` is immutable; the currency follows the account.
+    """Edit a recurring item. `type` is immutable; the price and the account are not.
 
     Changes affect only future un-materialized occurrences (materialize_due reads
     current fields), so a turn already charged keeps the currency and the figure it
-    was written with; that one is restated on its own through a correction
-    (ADR-0052).
+    was written with; that one is restated on its own through a correction.
 
-    Moving the obligation to an account holding another currency takes `amount`
-    restated in that currency — the contract a posted movement already answers
-    (`transactions.retarget`, ADR-0051). The currency is never stated on its own:
-    the account determines it, so a second field could only agree redundantly or
-    disagree wrongly.
+    `amount` and `currency` are the price the merchant charges and travel
+    together; `account_id` is where it is debited from. They are free to
+    disagree — 99900 COP is what the charge costs however it is paid — except
+    when the obligation pays itself, where `_require_chargeable` refuses
+    (ADR-0053). Moving to another account therefore restates nothing on its own:
+    the caller passes the new price when the owner accepted the conversion, and
+    leaves it alone when he did not.
 
     `category_id=_UNSET`/`end_date=_UNSET` leave unchanged; `end_date=None`
     clears it. `category_id=None` does not clear the category — an obligation
@@ -213,14 +249,61 @@ def update_recurring(
 
     Raises:
         NotFound: the item or a new account does not exist.
-        ValidationError: amount <= 0, interval_count < 1, end_date < start_date,
-            an archived account, a move to an account in another currency with no
-            amount restated in it, or any refusal from
-            `categories.resolve_for_movement`.
+        ValidationError: amount <= 0, an unsupported currency, interval_count < 1,
+            end_date < start_date, an archived destination account, an obligation
+            left paying itself in a currency its account does not hold, or any
+            refusal from `categories.resolve_for_movement`.
     """
     item = session.get(RecurringItem, recurring_id)
     if item is None:
         raise NotFound(f"recurring item {recurring_id} not found")
+    try:
+        return _apply_edit(
+            session,
+            item,
+            name=name,
+            payee=payee,
+            mode=mode,
+            amount=amount,
+            currency=currency,
+            category_id=category_id,
+            account_id=account_id,
+            interval_unit=interval_unit,
+            interval_count=interval_count,
+            start_date=start_date,
+            end_date=end_date,
+            today=today,
+        )
+    except Exception:
+        session.rollback()
+        raise
+
+
+def _apply_edit(
+    session: Session,
+    item: RecurringItem,
+    *,
+    name: str | None,
+    payee: str | None,
+    mode: RecurringMode | None,
+    amount: int | None,
+    currency: str | None,
+    category_id,
+    account_id: int | None,
+    interval_unit: IntervalUnit | None,
+    interval_count: int | None,
+    start_date: Date | None,
+    end_date,
+    today: Date | None,
+) -> RecurringItem:
+    """Write the edit onto `item`, or raise leaving the caller to undo it.
+
+    Every field is applied before the whole obligation is judged, because the
+    rules that can refuse it — the price against its account, the end against
+    the start — read fields the same edit may have changed. Nothing here
+    rolls back: `update_recurring` owns that, so a refusal cannot leave the
+    row half-changed in the session it was read from.
+    """
     if name is not None:
         item.name = name
     if payee is not None:
@@ -232,6 +315,10 @@ def update_recurring(
         if amount <= 0:
             raise ValidationError("amount must be > 0")
         item.amount = amount
+    if currency is not None:
+        if not is_supported(currency):
+            raise ValidationError(f"unsupported currency: {currency}")
+        item.currency = currency
     if interval_unit is not None:
         item.interval_unit = IntervalUnit(interval_unit)
     if interval_count is not None:
@@ -264,7 +351,9 @@ def update_recurring(
             ],
         )
     if account_id is not None:
-        _tx.retarget(session, item, account_id, amount)
+        _require_account(session, account_id)
+        item.account_id = account_id
+    _require_chargeable(item.mode, item.currency, _account_holding(session, item.account_id).currency)
     if category_id is not _UNSET:
         item.category_id = categories.resolve_for_movement(session, item.type, category_id)
     session.add(item)

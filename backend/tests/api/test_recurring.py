@@ -113,7 +113,7 @@ def test_patch_recurring_across_currencies_needs_the_amount_restated(client, eng
     r = client.patch(f"/api/recurring/{rid}", json={"account_id": usd}, headers=auth)
 
     assert r.status_code == 422, r.text
-    assert "needs the amount in USD" in r.json()["detail"]
+    assert "must be stated in USD" in r.json()["detail"]
 
 
 def test_patch_recurring_across_currencies_restates_the_charge(client, engine, auth, expense_category):
@@ -121,7 +121,11 @@ def test_patch_recurring_across_currencies_restates_the_charge(client, engine, a
     with Session(engine) as s:
         usd = accounts.create_account(s, "DolarApp", "debit", "USD", balance=0).id
 
-    r = client.patch(f"/api/recurring/{rid}", json={"account_id": usd, "amount": 2935}, headers=auth)
+    r = client.patch(
+        f"/api/recurring/{rid}",
+        json={"account_id": usd, "amount": 2935, "currency": "USD"},
+        headers=auth,
+    )
 
     assert r.status_code == 200, r.text
     assert (r.json()["currency"], r.json()["amount"], r.json()["account_id"]) == ("USD", 2935, usd)

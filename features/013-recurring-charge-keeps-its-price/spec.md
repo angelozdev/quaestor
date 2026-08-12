@@ -90,7 +90,7 @@ Scenario: A dollar price on a peso account is accepted just the same
 @backend
 Scenario: Saving the rule needs no rate at all
   Given today is 2026-07-01
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
   When the user declares a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
@@ -178,7 +178,7 @@ Scenario: A rule that agrees with its account shows one figure only
 ```gherkin
 Scenario: The converted figure disappears, the price stays
   Given the app is open
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD
   And a repeating charge "Hevy Pro" of 400000.00 COP from "DolarApp"
   When the owner opens the repeating obligations
@@ -204,7 +204,7 @@ Scenario: The turn arrives as a charge waiting for approval
 @backend
 Scenario: The charge is born even with no rate set
   Given today is 2026-07-15
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
   And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
@@ -265,7 +265,8 @@ Scenario: The movement keeps the dollars, not the pesos
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" for 102.00 USD
   Then "Hevy Pro" was charged 102.00 USD 2026-07-15
   And the turn of "Hevy Pro" due 2026-07-15 is recorded as paid
@@ -276,7 +277,8 @@ Scenario: Confirming without restating it is refused
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user tries to confirm the payment to "Hevy Pro"
   Then the confirmation is rejected
   And "DolarApp" has balance 1000.00 USD
@@ -287,7 +289,8 @@ Scenario: The rule keeps its own price after the charge is recorded
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" for 102.00 USD
   Then "Hevy Pro" is described as 400000.00 COP every 1 year
 ```
@@ -301,7 +304,8 @@ Scenario: The dollar account falls by the dollars, never by the pesos
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" for 102.00 USD
   Then "DolarApp" has balance 898.00 USD
 
@@ -311,7 +315,8 @@ Scenario: Accepting the offered figure moves exactly that
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" for 100.00 USD
   Then "DolarApp" has balance 900.00 USD
 ```
@@ -321,7 +326,7 @@ Scenario: Accepting the offered figure moves exactly that
 ```gherkin
 Scenario: The box arrives empty and says why
   Given the app is open
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD
   And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
   When the owner opens the confirmation
@@ -331,10 +336,11 @@ Scenario: The box arrives empty and says why
 @backend
 Scenario: A figure written by hand is taken without any rate
   Given today is 2026-07-15
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" for 102.00 USD
   Then "Hevy Pro" was charged 102.00 USD 2026-07-15
   And "DolarApp" has balance 898.00 USD
@@ -350,7 +356,8 @@ Scenario: The account that really paid is the one charged
   And an account "DolarApp" in USD with balance 1000.00 USD
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   When the user confirms the payment to "Hevy Pro" from "Nu Debito" for 400000.00 COP
   Then "Nu Debito" has balance 600000.00 COP
   And "DolarApp" has balance 1000.00 USD
@@ -385,7 +392,7 @@ Scenario: It can still pay itself
 @backend
 Scenario: Nothing is converted anywhere along the way
   Given today is 2026-07-15
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
   And a repeating payment of 40.00 USD to "Opal" from "DolarApp" every 1 month starting 2026-07-15 in category "Suscripciones", paying itself
@@ -492,7 +499,8 @@ Scenario: A recorded charge keeps its figure when the rule's price changes
   And the TRM is 4000
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   And the user confirms the payment to "Hevy Pro" for 102.00 USD
   When the user changes the amount of "Hevy Pro" to 440000.00 COP
   Then "Hevy Pro" was charged 102.00 USD 2026-07-15
@@ -505,7 +513,8 @@ Scenario: A recorded charge keeps its figure when the rule's account changes
   And an account "DolarApp" in USD with balance 1000.00 USD
   And an account "Nu Debito" in COP with balance 1000000.00 COP
   And a category "Suscripciones"
-  And a payment waiting to "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a repeating payment of 400000.00 COP to "Hevy Pro" from "DolarApp" every 1 year starting 2026-07-15 in category "Suscripciones", waiting for approval
+  And the daily run happens
   And the user confirms the payment to "Hevy Pro" for 102.00 USD
   When the user moves "Hevy Pro" to the account "Nu Debito"
   Then "Hevy Pro" was charged 102.00 USD 2026-07-15
@@ -666,7 +675,7 @@ Scenario: A different rate produces the very same price
 @backend
 Scenario: No rate at all produces the very same price
   Given today is 2026-08-11
-  And no TRM is set
+  And no TRM has been set
   And an account "DolarApp" in USD with balance 1000.00 USD
   And a category "Suscripciones"
   And a repeating payment of 37.20 USD to "Smart Fit" from "DolarApp" every 1 month starting 2026-08-01 in category "Suscripciones", paying itself
@@ -704,5 +713,16 @@ Scenario: A movement that came from no rule shows nothing extra
   And a movement to "Amazon" recorded as 25.00 USD from "DolarApp"
   When the owner opens the movement
   Then the movement reads 25.00 USD
+  And the movement names no rule price
+
+Scenario: A charge from a rule that was switched off shows nothing extra
+  Given the app is open
+  And the TRM is 4000
+  And an account "DolarApp" in USD
+  And a repeating charge "Hevy Pro" of 400000.00 COP from "DolarApp"
+  And a charge to "Hevy Pro" recorded as 102.00 USD from "DolarApp"
+  And "Hevy Pro" has been switched off
+  When the owner opens the movement
+  Then the movement reads 102.00 USD
   And the movement names no rule price
 ```

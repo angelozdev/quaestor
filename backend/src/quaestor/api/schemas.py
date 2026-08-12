@@ -272,6 +272,7 @@ class RecurringUpdate(BaseModel):
     payee: str | None = None
     mode: RecurringMode | None = None
     amount: int | None = Field(default=None, gt=0)
+    currency: str | None = None
     category_id: int | None = None
     account_id: int | None = None
     interval_unit: IntervalUnit | None = None

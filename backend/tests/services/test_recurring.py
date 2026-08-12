@@ -263,7 +263,7 @@ def test_a_turn_already_on_the_board_is_restated_one_at_a_time(session):
     item = _netflix_on(session, cop.id, mode=RecurringMode.manual)
     january = occurrences.materialize_due(session, date(2026, 1, 1)).created[0]
 
-    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935, currency="USD")
     waiting = session.get(Transaction, january.transaction_id)
     assert (waiting.currency, waiting.amount, waiting.account_id) == ("COP", 2_590_000, cop.id)
 
@@ -278,8 +278,19 @@ def test_moving_a_charge_to_another_currency_needs_the_amount_restated_in_it(ses
     usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
     item = _netflix_on(session, cop.id)
 
-    with pytest.raises(ValidationError, match="moving to USD needs the amount in USD"):
+    with pytest.raises(ValidationError, match="must be stated in USD"):
         recurring.update_recurring(session, item.id, account_id=usd.id)
+
+
+def test_a_charge_that_waits_for_approval_keeps_its_price_across_the_move(session):
+    """The price is the merchant's; only a self-paying charge has to follow its account (ADR-0053)."""
+    cop = accounts.create_account(session, "COP acct", AccountType.debit, "COP", balance=0)
+    usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
+    item = _netflix_on(session, cop.id, mode=RecurringMode.manual)
+
+    moved = recurring.update_recurring(session, item.id, account_id=usd.id)
+
+    assert (moved.account_id, moved.currency, moved.amount) == (usd.id, "COP", 2_590_000)
 
 
 def test_a_charge_moved_to_another_currency_is_stated_in_that_currency(session):
@@ -287,7 +298,7 @@ def test_a_charge_moved_to_another_currency_is_stated_in_that_currency(session):
     usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
     item = _netflix_on(session, cop.id)
 
-    moved = recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    moved = recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935, currency="USD")
 
     assert (moved.account_id, moved.currency, moved.amount) == (usd.id, "USD", 2935)
 
@@ -307,7 +318,7 @@ def test_future_turns_of_a_moved_charge_are_charged_in_the_new_currency(session)
     usd = accounts.create_account(session, "USD acct", AccountType.debit, "USD", balance=0)
     item = _netflix_on(session, cop.id)
 
-    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935, currency="USD")
     created = occurrences.materialize_due(session, date(2026, 1, 1)).created
 
     charged = [session.get(Transaction, occ.transaction_id) for occ in created]
@@ -320,7 +331,7 @@ def test_a_turn_already_charged_keeps_the_currency_it_was_written_with(session):
     item = _netflix_on(session, cop.id)
     january = occurrences.materialize_due(session, date(2026, 1, 1)).created[0]
 
-    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935)
+    recurring.update_recurring(session, item.id, account_id=usd.id, amount=2935, currency="USD")
     february = occurrences.materialize_due(session, date(2026, 2, 1)).created[0]
 
     already = session.get(Transaction, january.transaction_id)
