@@ -1,4 +1,4 @@
-> ▶ CP3 Spec — 6/7 criteria met | NEXT: el dueño — leer spec.md y aprobarlo, luego /engineer.plan | BLOCKED: none
+> ▶ CP4 Plan — 8/8 criteria met | NEXT: implementar rebanadas 1 y 2 (backend) contra los specs rojos | BLOCKED: none
 
 # Progress — 013 recurring-charge-keeps-its-price
 
@@ -11,8 +11,8 @@ Una regla recurrente guarda el precio del comercio, no la moneda de la cuenta.
 |---|---|---|---|
 | 1.5 | Ready | done | 2026-08-11T1658-feature-init.md |
 | 2 | ACs | done — aprobados por el dueño 2026-08-11, tras la revisión contra otros sistemas | 2026-08-11T1745-discover-acs-review.md |
-| 3 | Spec | **rojo** — 38/47 tests de servicio fallan; falta la aprobación del dueño | 2026-08-11T1815-atdd.md |
-| 4 | Plan | — | — |
+| 3 | Spec | done — aprobado por el dueño 2026-08-11; **rojo**, 38/47 tests de servicio fallan | 2026-08-11T1815-atdd.md |
+| 4 | Plan | done — ADR-0053 aceptada, reemplaza la 0052; runbook para la migración | 2026-08-11T1756-plan.md |
 | 5 | Implement | — | — |
 | 6 | Refine | — | — |
 | 7 | Verify | — | — |
@@ -99,3 +99,4 @@ datos. 013 se queda con el comportamiento de hoy (AC-14).
 | 2026-08-11T1723 | discover-acs | main | 20 criterios; leer el motor convirtió una preferencia en necesidad — AC-2 evita un hueco de plata |
 | 2026-08-11T1745 | discover-acs (revisión) | main | medido contra GnuCash, Firefly III, Lunch Money, Stripe e IAS 21; AC-13 partido por modo, AC-21 agregado |
 | 2026-08-11T1815 | atdd | main | 53 escenarios, 38/47 rojos en la guarda correcta; dos escenarios vacíos por colisión de nombre, detectados y renombrados |
+| 2026-08-11T1756 | plan | main | la arquitectura es un borrado más un invariante; el motor no cambia una línea y confirmar es una; ADR-0053 reemplaza la 0052; runbook de 7 pasos para la migración |
