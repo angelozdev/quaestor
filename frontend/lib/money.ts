@@ -115,10 +115,15 @@ export function currencyHeldBy(
   return accounts?.find((a) => a.id === id)?.currency ?? null
 }
 
-/** The currency an account holds, or pesos when the account is not known yet. */
+/**
+ * The currency an account holds, or pesos when the account is not known yet.
+ *
+ * For a screen that has nothing else to fall back on — a blank form, where no
+ * movement is on hand to keep the figure honest until the accounts arrive.
+ */
 export function currencyOf(
   accounts: { id: number; currency: string }[] | undefined,
   id: number | null,
 ): string {
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
+  return currencyHeldBy(accounts, id) ?? "COP"
 }

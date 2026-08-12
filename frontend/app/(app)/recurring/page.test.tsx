@@ -318,3 +318,36 @@ describe("013 — the repeating obligations show the price and what it comes to"
     )
   })
 })
+
+/**
+ * The create dialog is not mounted on anything, so it survives being closed.
+ *
+ * Every other money box in the app hangs off a keyed child and starts fresh
+ * with it; this one is state on the screen, so what the owner stated last time
+ * outlives the charge it belonged to unless the reset reaches it too.
+ */
+describe("013 — a saved charge leaves nothing behind in the next one", () => {
+  it("The amount box is empty again when the dialog is reopened", async () => {
+    const user = userEvent.setup()
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    createRecurring.mockResolvedValue({ ...NETFLIX, id: 99 })
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Nuevo" }))
+    await user.type(screen.getByLabelText(/Nombre/), "Hevy Pro")
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: NU.name }))
+    await user.type(within(fieldUnder(/^Monto \*/)).getByRole("textbox"), "99900")
+    await user.click(screen.getByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: SUSCRIPCIONES.name }))
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+    await waitFor(() => expect(createRecurring).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole("button", { name: "Nuevo" }))
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+
+    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("")
+  })
+})

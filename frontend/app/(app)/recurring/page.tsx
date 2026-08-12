@@ -496,9 +496,22 @@ export default function RecurringPage() {
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
   const createValues = useFormValues(createForm)
   const createCurrency = createValues.currency
-  const createMoney = useAmountBox({ cents: null, currency: "COP" }, (cents) =>
+  const createMoney = useAmountBox({ cents: null, currency: BLANK_CHARGE.currency }, (cents) =>
     createForm.setFieldValue("amount", cents ?? Number.NaN),
   )
+
+  /**
+   * Empty the form and the price box together.
+   *
+   * The create dialog hangs off the screen rather than off a charge, so it
+   * outlives the one just saved — and a box emptied on its own would still be
+   * holding what the owner stated last time, ready to offer it converted the
+   * next time he picks an account.
+   */
+  function startANewCharge() {
+    createForm.reset(createDefaults)
+    createMoney.write(null, BLANK_CHARGE.currency)
+  }
 
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
@@ -530,7 +543,7 @@ export default function RecurringPage() {
     onSuccess: () => {
       done("Recurrente creado")
       setCreating(false)
-      createForm.reset(createDefaults)
+      startANewCharge()
     },
     onError: (e: unknown) => {
       applyApiErrorsToForm(createForm, e)

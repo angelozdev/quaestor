@@ -73,20 +73,16 @@ def _restate(connection, name: str, frm: tuple[int, str], to: tuple[int, str], *
 
 def restate_stored_prices(session) -> None:
     """Apply the restatement through an open session — the acceptance path."""
-    for row in _RESTATED:
-        _restate(session.connection(), row["name"], row["was"], row["now"], mode=_WAITING)
+    _restate_all(session.connection())
 
 
-def revert_stored_prices(session) -> None:
-    """Put the two prices back, and only the prices."""
+def _restate_all(connection) -> None:
     for row in _RESTATED:
-        _restate(session.connection(), row["name"], row["now"], row["was"])
+        _restate(connection, row["name"], row["was"], row["now"], mode=_WAITING)
 
 
 def upgrade() -> None:
-    connection = op.get_bind()
-    for row in _RESTATED:
-        _restate(connection, row["name"], row["was"], row["now"], mode=_WAITING)
+    _restate_all(op.get_bind())
 
 
 def downgrade() -> None:
