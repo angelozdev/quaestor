@@ -571,10 +571,12 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
     start = unsaved.start_month
     agg = load_month(session, start)
     walked = _walk(agg, unsaved)
+    crowded = _crowded(unsaved, walked.ask.charges)
     return FundPreview(
         category_id=category_id,
         would_ask=walked.ask.amount,
-        warning=_warning(unsaved, walked.ask.charges),
+        warning=_warning(unsaved, crowded),
+        crowded=crowded,
         has_something_to_spread=any(o.can_be_spread for o in _obligations(agg, category_id, start)),
     )
 
@@ -602,14 +604,17 @@ def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
     )
 
 
-def _warning(fund: Fund, charges: tuple[FundCharge, ...]) -> str | None:
-    """The announcement AC-24 asks for, said about the charge it is true of.
+def _warning(fund: Fund, crowded: FundCharge | None) -> str | None:
+    """The announcement AC-24 asks for, for a surface that renders nothing itself.
 
     It names the obligation and quotes that obligation's own figure. Quoting
     the fund's total mixed what does spread with what cannot, and frightened
     the owner with a number nobody was ever going to pay at once (ADR-0054).
+
+    The screen does not read this — it words the same charge in the owner's own
+    language and money format. This is what the assistant prints, which is the
+    one surface with nowhere else to compose it.
     """
-    crowded = _crowded(fund, charges)
     if crowded is None:
         return None
     return (

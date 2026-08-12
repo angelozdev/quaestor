@@ -104,6 +104,7 @@ let month: MonthAvailable
 let startMonths: Record<number, string>
 let wouldAsk: Partial<Record<FundRule, number>>
 let spreadable: Record<number, boolean>
+let crowded: FundCharge | null
 
 function showing(funds: FundStatus[]) {
   month = {
@@ -203,6 +204,7 @@ beforeEach(() => {
   startMonths = {}
   wouldAsk = {}
   spreadable = {}
+  crowded = null
   showing([])
   moneyAvailable.mockImplementation(async () => month)
   listFunds.mockImplementation(async () => fundLinesOf(month.funds))
@@ -211,6 +213,7 @@ beforeEach(() => {
     category_id: body.category_id,
     would_ask: wouldAsk[body.rule] ?? 0,
     warning: null,
+    crowded,
     has_something_to_spread: spreadable[body.category_id] ?? false,
   }))
   deleteFund.mockResolvedValue(undefined)
@@ -1170,5 +1173,57 @@ describe("014 AC-14 — the rule is not offered where nothing can be spread", ()
     await chooseCategory(user, SERVICIOS.name)
 
     expect(await screen.findByRole("radio", { name: THE_RULE })).toBeInTheDocument()
+  })
+})
+
+describe("014 AC-11, AC-12 — the announcement is about the charge that cannot be spread", () => {
+  const SEGURO = charge({
+    name: "Seguro",
+    costs: 600_000_000,
+    charge_month: "2026-09",
+    asks: 600_000_000,
+    can_be_spread: true,
+  })
+
+  async function startAFundOn(category: { id: number; name: string }) {
+    const user = setup()
+    renderPage()
+    await startCreating(user, "fondo")
+    await chooseCategory(user, category.name)
+    await chooseRule(user, "Pago mis suscripciones mes a mes")
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+    return user
+  }
+
+  it("names the charge and quotes its own figure, not the fund's", async () => {
+    wouldAsk = { "from-recurring": 605_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
+    crowded = SEGURO
+    await startAFundOn(SERVICIOS)
+
+    const said = await screen.findByRole("alert")
+    expect(said).toHaveTextContent("Seguro")
+    expect(said).toHaveTextContent("$ 6.000.000")
+    expect(said).not.toHaveTextContent("$ 6.050.000")
+    expect(said).toHaveTextContent("septiembre de 2026")
+  })
+
+  it("lets the owner go ahead anyway", async () => {
+    wouldAsk = { "from-recurring": 605_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
+    crowded = SEGURO
+    const user = await startAFundOn(SERVICIOS)
+
+    await user.click(await screen.findByRole("button", { name: "Crear de todos modos" }))
+    await waitFor(() => expect(createFund).toHaveBeenCalled())
+  })
+
+  it("says nothing when every charge has months to spread over", async () => {
+    wouldAsk = { "from-recurring": 10_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
+    await startAFundOn(SERVICIOS)
+
+    await waitFor(() => expect(createFund).toHaveBeenCalled())
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 })

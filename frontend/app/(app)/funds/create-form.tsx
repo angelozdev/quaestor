@@ -8,9 +8,11 @@ import { toast } from "sonner"
 import { MoneyInput } from "@/components/money-input"
 import { listCategories } from "@/lib/api/categories"
 import { createFund, previewFund } from "@/lib/api/funds"
-import type { FundCreate, FundPreview, FundRule } from "@/lib/api/types"
+import type { FundCharge, FundCreate, FundPreview, FundRule } from "@/lib/api/types"
 import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
+import { monthAndYearOf } from "@/lib/date"
 import { accumulatesAs, type FundShape } from "@/lib/funds"
+import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input, Label, Select } from "@/ui"
 import { type CreateFundValues, createFundSchema } from "./funds.schema"
@@ -82,6 +84,20 @@ function offerTheRule(rule: FundRule, preview: FundPreview | undefined): boolean
   return preview.has_something_to_spread || preview.would_ask === 0
 }
 
+/**
+ * The announcement, about the charge that has no month to spread over.
+ *
+ * Worded here rather than taken from the preview because this is where the
+ * owner's language and money format live — the service hands over the charge
+ * and lets each surface say it its own way (ADR-0054).
+ */
+function announcementFor(crowded: FundCharge, startMonth: string): string {
+  return (
+    `${crowded.name} cobra en ${monthAndYearOf(crowded.charge_month)} y no queda mes para repartirlo: ` +
+    `los ${formatCents(crowded.asks, "COP")} caen enteros en ${monthAndYearOf(startMonth)}.`
+  )
+}
+
 export function CreateFundForm({
   shape,
   month,
@@ -145,8 +161,8 @@ export function CreateFundForm({
   const ask = useMutation({
     mutationFn: (v: CreateFundValues) => previewFund(bodyOf(v, shape)),
     onSuccess: (preview, v) => {
-      if (preview.warning === null) create.mutate(v)
-      else setWarning(preview.warning)
+      if (preview.crowded == null) create.mutate(v)
+      else setWarning(announcementFor(preview.crowded, v.startMonth))
     },
     onError: onErr,
   })

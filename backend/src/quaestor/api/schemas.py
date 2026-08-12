@@ -413,12 +413,23 @@ class FundLineOut(BaseModel):
     accumulates: bool
 
 
+class FundChargeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    costs: int
+    charge_month: str
+    asks: int
+    can_be_spread: bool
+
+
 class FundPreviewOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     category_id: int
     would_ask: int
     warning: str | None
+    crowded: FundChargeOut | None = None
     has_something_to_spread: bool = False
 
 
@@ -473,16 +484,6 @@ class GroupSectionOut(BaseModel):
     group: str
     total: int
     pct: float
-
-
-class FundChargeOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    name: str
-    costs: int
-    charge_month: str
-    asks: int
-    can_be_spread: bool
 
 
 class FundStatusOut(BaseModel):

@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 0/6 criteria met | NEXT: rebanada 3, las pantallas | BLOCKED: none
+> ▶ CP5 Implement — 0/6 criteria met | NEXT: CP6 refine, con agent_id distinto | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,7 +14,7 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
-| 5 | Implement | en curso — rebanadas 1 y 2 verdes; 28/28 de servicio, 1.190 unitarias, 626 de aceptación | — |
+| 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | — |
 
 ## Las dos reglas de las que sale todo
 
@@ -39,6 +39,31 @@ decidida por el dueño y escrita** en ADR-0054 → Costos y en el tercer grupo d
 La corrección del aviso sí le llega gratis, porque lo imprime tal cual.
 
 ## Verification reports
+
+### CP5 — rebanada 4, el navegador (sandbox)
+
+Conducido contra el sandbox el 2026-08-12. Cada criterio, leído en pantalla:
+
+| | Lo que se leyó |
+|---|---|
+| AC-1, AC-2, AC-4 | `$ 180.000` y debajo `Internet — vence este mes · $ 80.000` y `Dominio — se guarda para agosto de 2027 · $ 100.000 de $ 1.200.000` |
+| AC-3 | «vence este mes» contra «se guarda para agosto de 2027» |
+| AC-6 | omitir Internet lo sacó del desglose y bajó el total a `$ 100.000` |
+| AC-8 | sin cobros vivos este mes: «Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados.» |
+| AC-9 | sin cobros en la categoría: «La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre.» |
+| AC-11, AC-12 | el aviso saltó, nombró el Seguro y citó `$ 6.000.000` — no los `$ 6.050.000` del fondo |
+| AC-13 | con Internet mensual + Dominio anual el fondo se creó **sin aviso**; hoy habría avisado |
+| AC-14 | «Pago mis suscripciones mes a mes» desapareció en una categoría de solo mensuales, y la selección cayó a la primera regla |
+
+**Dos defectos que solo el navegador vio, y los dos en texto que esta feature
+escribió:** el aviso salía en inglés en una app en español, y con la plata sin
+formatear (`6000000.00` donde toda la pantalla dice `$ 6.000.000`). El servicio
+pasó a reportar el cobro y la pantalla a escribir la frase, que es donde vive el
+idioma y el formato. El asistente sigue recibiendo su cadena, sin tocarlo.
+
+El aviso **no tenía ni un test de pantalla** — el navegador era lo único que lo
+ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
+(citar el total en vez del cobro lo pone rojo).
 
 ### CP5 — rebanadas 1 y 2
 

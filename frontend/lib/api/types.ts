@@ -177,6 +177,7 @@ export interface FundPreview {
   category_id: number
   would_ask: number
   warning: string | null
+  crowded: FundCharge | null
   has_something_to_spread: boolean
 }
 

@@ -206,6 +206,12 @@ class MonthRates:
 class FundPreview:
     """What a fund would ask before it exists, and the warning it carries (AC-24).
 
+    `crowded` is the charge the warning is about: one that could be spread and
+    has no month to spread over. It travels beside `warning` rather than
+    instead of it because the two surfaces word it differently — the screen
+    says it in Spanish with the owner's own money format, while the assistant
+    prints the sentence it is handed (ADR-0054).
+
     `has_something_to_spread` answers the category rather than the rule being
     previewed: a category whose charges all land every month can only ever ask
     zero from the obligations rule, so it is not offered one (ADR-0054).
@@ -214,6 +220,7 @@ class FundPreview:
     category_id: int
     would_ask: int
     warning: str | None = None
+    crowded: FundCharge | None = None
     has_something_to_spread: bool = False
 
 
