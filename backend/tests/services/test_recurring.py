@@ -563,6 +563,107 @@ def test_a_charge_from_a_rule_that_was_switched_off_carries_no_price(session):
     assert recurring.prices_by_transaction(session, [tx]) == {}
 
 
+def test_an_obligation_may_end_on_the_day_it_starts(session):
+    """Only an end date *before* the start is refused (007 AC-18, 013 AC-16).
+
+    Ending on the start date is how a single charge is declared: the end date is
+    itself a due date, so that one turn still falls due.
+    """
+    acc = _acc(session)
+    item = declare_existing(
+        session,
+        name="Hevy Pro",
+        payee="Hevy Pro",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=9_990_000,
+        currency="COP",
+        category_id=a_category(session),
+        account_id=acc.id,
+        interval_unit=IntervalUnit.year,
+        interval_count=1,
+        start_date=date(2026, 7, 15),
+        end_date=date(2026, 7, 15),
+    )
+
+    created = occurrences.materialize_due(session, date(2026, 7, 15)).created
+
+    assert item.end_date == item.start_date
+    assert [occ.due_date for occ in created] == [date(2026, 7, 15)]
+
+
+def test_an_edit_may_end_an_obligation_on_the_day_it_starts(session):
+    """The same boundary on the editing door (007 AC-18, "the same rules hold when editing")."""
+    acc = _acc(session)
+    item = _netflix_on(session, acc.id)
+
+    ended = recurring.update_recurring(session, item.id, end_date=item.start_date)
+
+    assert ended.end_date == ended.start_date
+    with pytest.raises(ValidationError):
+        recurring.update_recurring(session, item.id, end_date=date(2025, 12, 31))
+
+
+def test_the_price_an_edit_refuses_starts_at_zero_and_not_above_it(session):
+    """Editing refuses a price of zero or below, and nothing above it (007 AC-18)."""
+    acc = _acc(session)
+    item = _netflix_on(session, acc.id)
+
+    assert recurring.update_recurring(session, item.id, amount=1).amount == 1
+    with pytest.raises(ValidationError):
+        recurring.update_recurring(session, item.id, amount=0)
+
+
+def test_the_cadence_can_be_edited_down_to_every_single_period(session):
+    """Editing the cadence takes from the next due date onward (007 AC-14), and
+    only a cadence below one period is refused (007 AC-18)."""
+    acc = _acc(session)
+    item = declare_existing(
+        session,
+        name="Smart Fit",
+        payee="Smart Fit",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=12_000_000,
+        currency="COP",
+        category_id=a_category(session),
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=3,
+        start_date=date(2026, 1, 1),
+    )
+
+    assert recurring.update_recurring(session, item.id, interval_count=1).interval_count == 1
+    created = occurrences.materialize_due(session, date(2026, 3, 1)).created
+
+    assert [occ.due_date for occ in created] == [date(2026, 1, 1), date(2026, 2, 1), date(2026, 3, 1)]
+    with pytest.raises(ValidationError):
+        recurring.update_recurring(session, item.id, interval_count=0)
+
+
+def test_an_edit_that_resubmits_the_same_start_date_offers_nothing(session):
+    """Passed dates are offered when the start is *moved back* (007 AC-12).
+
+    A form that sends every field back sends the start date unchanged too, so
+    an ordinary price edit must not put the obligation's own turns up for a
+    decision — that would take them off the engine's hands and out of to-pay.
+    """
+    acc = _acc(session)
+    item = _netflix_on(session, acc.id, mode=RecurringMode.manual)
+
+    recurring.update_recurring(
+        session,
+        item.id,
+        amount=2_900_000,
+        start_date=item.start_date,
+        today=date(2026, 6, 1),
+    )
+    created = occurrences.materialize_due(session, date(2026, 6, 1)).created
+
+    assert occurrences.pending_dates(session, item.id) == []
+    assert len(created) == 6
+
+
 def test_a_whole_page_of_charges_costs_one_read_of_the_rules(session):
     """A page of charges must not turn into one query per row (ADR-0028)."""
     dolarapp = _acc(session, "USD")

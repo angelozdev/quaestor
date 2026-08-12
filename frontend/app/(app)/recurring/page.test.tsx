@@ -351,3 +351,57 @@ describe("013 — a saved charge leaves nothing behind in the next one", () => {
     expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("")
   })
 })
+
+/**
+ * Saying the price is in another currency relabels the figure; it never converts
+ * it.
+ *
+ * The number the owner typed is the merchant's price, and the app has no
+ * business restating it because he corrected which currency he meant. Converting
+ * here would be the money hole in its quietest form: an obligation that pays
+ * itself would go on charging the converted figure every period.
+ */
+describe("013 — naming the price's currency does not restate the price", () => {
+  const OPAL: Recurring = {
+    ...NETFLIX,
+    id: 12,
+    name: "Opal",
+    payee: "Opal",
+    mode: "manual",
+    amount: 4_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+  }
+
+  async function openOpalAndSayPesos(user: ReturnType<typeof userEvent.setup>) {
+    listRecurring.mockResolvedValue([OPAL])
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+    await user.click(screen.getByRole("combobox", { name: "Moneda del precio *" }))
+    await user.click(await screen.findByRole("option", { name: "Pesos (COP)" }))
+  }
+
+  it("The figure stays exactly as the owner typed it", async () => {
+    const user = userEvent.setup()
+    await openOpalAndSayPesos(user)
+
+    expect(screen.getByText("Monto * (COP)")).toBeInTheDocument()
+    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("40")
+  })
+
+  it("The price that reaches the charge is the one on screen", async () => {
+    const user = userEvent.setup()
+    await openOpalAndSayPesos(user)
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateRecurring).toHaveBeenCalledTimes(1))
+    expect(updateRecurring).toHaveBeenCalledWith(
+      OPAL.id,
+      expect.objectContaining({ currency: "COP", amount: 4_000 }),
+    )
+  })
+})

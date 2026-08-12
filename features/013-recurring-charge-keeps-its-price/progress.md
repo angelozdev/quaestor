@@ -1,4 +1,4 @@
-> ▶ CP7 Verify — 4/4 criteria met | NEXT: /engineer.atdd-mutate para CP8 sobre services/recurring.py, con un agent_id distinto de main-session, refiner-independent y verifier-independent | BLOCKED: none
+> ▶ CP8 Harden — 9/9 criteria met | NEXT: el merge a main, que CHARTER §7 deja en manos del dueño | BLOCKED: none
 
 # Progress — 013 recurring-charge-keeps-its-price
 
@@ -17,7 +17,7 @@ reales el 2026-08-12 con el dueño delante.
 | 5 | Implement | done — las cinco rebanadas, migración incluida | 2026-08-11T2230-implement.md |
 | 6 | Refine | done — firmado por un refinador independiente que encontró un defecto que la primera pasada no vio | 2026-08-12T0900-refine-independent.md |
 | 7 | Verify | done — CRAP sobre el diff con cobertura real; el riesgo de plata es bajo y medido, y dos huecos de prueba quedan nombrados | 2026-08-12T0930-crap-analyzer.md |
-| 8 | Harden | — | — |
+| 8 | Harden | done — mutación sobre `services/recurring.py`: 98,7% tras cinco pruebas, y los tres mutantes del invariante mueren en el peldaño más barato | 2026-08-12T1000-mutation.md |
 
 ## Las dos reglas de las que sale todo
 
@@ -106,3 +106,4 @@ datos. 013 se queda con el comportamiento de hoy (AC-14).
 | 2026-08-12T0840 | refine (pasada, sin firma) | main | tres limpiezas, las tres elegidas por el dueño; `currencyForAccount` muere y el que queda no puede inventar pesos. Firma inválida: mismo agente que implementó |
 | 2026-08-12T0900 | refine | refiner-independent | firma válida de CP6. Coincide con la pasada anterior y **encuentra lo que no vio**: el diálogo de crear dejaba el precio del cobro anterior en la casilla del siguiente |
 | 2026-08-12T0930 | crap-analyzer | verifier-independent | firma de CP7. Backend 94,46% y frontend 90,68%; `money.ts` sin una rama sin cubrir. El riesgo de plata es bajo por cuatro razones comprobadas, no supuestas. Queda uno: el diálogo de confirmar cae a la moneda del cobro mientras no conoce la cuenta. Y dos huecos reales: «Moneda del precio» no la ejecuta ninguna prueba, y la costura de la AC-21 tampoco — esa se sondeó en vivo y está bien |
+| 2026-08-12T1000 | atdd-mutate | hardener-independent | firma de CP8. 76 mutantes, 89,5% de entrada y **98,7%** tras cinco pruebas; 100% ajustado por el único equivalente, probado sobre 1.344 combinaciones. Los tres mutantes de `_require_chargeable` mueren en el peldaño más barato: el hueco de plata no volvió. Los ocho supervivientes cayeron todos en puntos delgados viejos de `update_recurring`, ninguno en código de esta feature; el que cuesta plata es que una edición que reenvía la misma fecha de inicio contara como moverla atrás. Ningún defecto en el código y nada bajo `backend/src` tocado |
