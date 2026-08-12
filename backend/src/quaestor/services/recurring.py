@@ -51,15 +51,6 @@ def _reject_manual_income(type: TxType, mode: RecurringMode) -> None:
         )
 
 
-def _require_account(session: Session, account_id: int) -> Account:
-    acc = session.get(Account, account_id)
-    if acc is None:
-        raise NotFound(f"account {account_id} not found")
-    if acc.archived:
-        raise ValidationError(f"account {account_id} is archived")
-    return acc
-
-
 def _account_holding(session: Session, account_id: int) -> Account:
     """The account an obligation already points at, archived or not.
 
@@ -73,6 +64,19 @@ def _account_holding(session: Session, account_id: int) -> Account:
     acc = session.get(Account, account_id)
     if acc is None:
         raise NotFound(f"account {account_id} not found")
+    return acc
+
+
+def _require_account(session: Session, account_id: int) -> Account:
+    """An account an obligation may be pointed at — which a retired one may not.
+
+    Raises:
+        NotFound: the account does not exist.
+        ValidationError: the account is archived.
+    """
+    acc = _account_holding(session, account_id)
+    if acc.archived:
+        raise ValidationError(f"account {account_id} is archived")
     return acc
 
 

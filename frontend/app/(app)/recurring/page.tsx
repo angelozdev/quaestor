@@ -60,6 +60,31 @@ const CURRENCY_ITEMS = [
   { value: "USD", label: "Dólares (USD)" },
 ]
 
+/**
+ * The currency the price is stated in — the merchant's, not the account's
+ * (ADR-0053).
+ *
+ * Picking one is the owner restating the figure he already wrote, so the box
+ * holding it is told as well; otherwise a later account change would restate
+ * from a currency he had already left behind.
+ */
+function PriceCurrencyField({
+  id,
+  value,
+  onPick,
+}: {
+  id: string
+  value: string
+  onPick: (currency: string) => void
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>Moneda del precio *</Label>
+      <Select id={id} value={value} onValueChange={(v) => v && onPick(v)} items={CURRENCY_ITEMS} />
+    </div>
+  )
+}
+
 const UNIT_SINGULAR: Record<IntervalUnit, string> = {
   day: "día",
   week: "semana",
@@ -366,19 +391,14 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
         </editForm.Field>
         <editForm.Field name="currency">
           {(field) => (
-            <div className="space-y-1.5">
-              <Label htmlFor="recurring-edit-currency">Moneda del precio *</Label>
-              <Select
-                id="recurring-edit-currency"
-                value={field.state.value as string}
-                onValueChange={(v) => {
-                  if (!v) return
-                  field.handleChange(v as never)
-                  money.write(money.stated.cents, v)
-                }}
-                items={CURRENCY_ITEMS}
-              />
-            </div>
+            <PriceCurrencyField
+              id="recurring-edit-currency"
+              value={field.state.value as string}
+              onPick={(currency) => {
+                field.handleChange(currency as never)
+                money.write(money.stated.cents, currency)
+              }}
+            />
           )}
         </editForm.Field>
       </div>
@@ -736,19 +756,14 @@ export default function RecurringPage() {
               </createForm.Field>
               <createForm.Field name="currency">
                 {(field) => (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="recurring-create-currency">Moneda del precio *</Label>
-                    <Select
-                      id="recurring-create-currency"
-                      value={field.state.value as string}
-                      onValueChange={(v) => {
-                        if (!v) return
-                        field.handleChange(v as never)
-                        createMoney.write(createMoney.stated.cents, v)
-                      }}
-                      items={CURRENCY_ITEMS}
-                    />
-                  </div>
+                  <PriceCurrencyField
+                    id="recurring-create-currency"
+                    value={field.state.value as string}
+                    onPick={(currency) => {
+                      field.handleChange(currency as never)
+                      createMoney.write(createMoney.stated.cents, currency)
+                    }}
+                  />
                 )}
               </createForm.Field>
             </div>

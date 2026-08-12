@@ -26,7 +26,7 @@ import {
 import { yearMonthOf } from "@/lib/date"
 import {
   amountForAccount,
-  currencyForAccount,
+  currencyHeldBy,
   currencyOf,
   formatCents,
   type StatedAmount,
@@ -220,7 +220,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
   const counterpart = useCounterpart(tx)
   const counterpartAmount = statedOther === undefined ? (counterpart?.amount ?? null) : statedOther
-  const currency = currencyForAccount(tx, accountsQuery.data, accountId)
+  const currency = currencyHeldBy(accountsQuery.data, accountId) ?? tx.currency
   const { otherSide, amountIsAsked, missing, refusal, body } = statedCorrection({
     tx,
     counterpart,

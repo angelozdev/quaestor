@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   amountForAccount,
   convertCents,
-  currencyForAccount,
+  currencyHeldBy,
   currencyOf,
   formatCents,
   formatRate,
@@ -115,22 +115,21 @@ describe("currencyOf", () => {
   })
 })
 
-describe("currencyForAccount", () => {
+describe("currencyHeldBy", () => {
   const accounts = [
     { id: 1, currency: "COP" },
     { id: 3, currency: "USD" },
   ]
-  const inDollars = { account_id: 3, currency: "USD" }
 
-  it("reads the movement's own currency while it stays on its account", () => {
-    expect(currencyForAccount(inDollars, undefined, 3)).toBe("USD")
+  it("says nothing while the list of accounts has not arrived", () => {
+    expect(currencyHeldBy(undefined, 3)).toBeNull()
   })
 
-  it("reads the chosen account's currency once the movement moves", () => {
-    expect(currencyForAccount(inDollars, accounts, 1)).toBe("COP")
+  it("reads the chosen account's currency once the list is there", () => {
+    expect(currencyHeldBy(accounts, 1)).toBe("COP")
   })
 
-  it("has only the list to read when there is no movement yet", () => {
-    expect(currencyForAccount(null, accounts, 3)).toBe("USD")
+  it("says nothing about an account the list does not hold", () => {
+    expect(currencyHeldBy(accounts, 99)).toBeNull()
   })
 })
