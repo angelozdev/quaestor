@@ -1,9 +1,10 @@
-> ▶ CP4 Plan — 8/8 criteria met | NEXT: implementar rebanadas 1 y 2 (backend) contra los specs rojos | BLOCKED: none
+> ▶ CP5 Implement — 6/7 criteria met | NEXT: correr runbook.md paso 5 (la migración) con el dueño delante | BLOCKED: la migración no se ha corrido contra datos reales
 
 # Progress — 013 recurring-charge-keeps-its-price
 
 Una regla recurrente guarda el precio del comercio, no la moneda de la cuenta.
-21 criterios, 53 escenarios. **Rojo**, que es donde debe estar.
+21 criterios, 54 escenarios. **Verde**, salvo la migración, que está escrita
+y sin correr contra los datos reales.
 
 ## Checkpoints
 
@@ -13,7 +14,7 @@ Una regla recurrente guarda el precio del comercio, no la moneda de la cuenta.
 | 2 | ACs | done — aprobados por el dueño 2026-08-11, tras la revisión contra otros sistemas | 2026-08-11T1745-discover-acs-review.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-11; **rojo**, 38/47 tests de servicio fallan | 2026-08-11T1815-atdd.md |
 | 4 | Plan | done — ADR-0053 aceptada, reemplaza la 0052; runbook para la migración | 2026-08-11T1756-plan.md |
-| 5 | Implement | — | — |
+| 5 | Implement | done salvo la migración — 4 de 5 rebanadas, navegador incluido | 2026-08-11T2230-implement.md |
 | 6 | Refine | — | — |
 | 7 | Verify | — | — |
 | 8 | Harden | — | — |
@@ -100,3 +101,4 @@ datos. 013 se queda con el comportamiento de hoy (AC-14).
 | 2026-08-11T1745 | discover-acs (revisión) | main | medido contra GnuCash, Firefly III, Lunch Money, Stripe e IAS 21; AC-13 partido por modo, AC-21 agregado |
 | 2026-08-11T1815 | atdd | main | 53 escenarios, 38/47 rojos en la guarda correcta; dos escenarios vacíos por colisión de nombre, detectados y renombrados |
 | 2026-08-11T1756 | plan | main | la arquitectura es un borrado más un invariante; el motor no cambia una línea y confirmar es una; ADR-0053 reemplaza la 0052; runbook de 7 pasos para la migración |
+| 2026-08-11T2230 | implement | main | rebanadas 1, 2, 3 y 5; cuatro defectos encontrados y arreglados, uno mío de verdad; el navegador vio el saldo caer por los dólares y nunca por los pesos; la migración sigue sin correr |

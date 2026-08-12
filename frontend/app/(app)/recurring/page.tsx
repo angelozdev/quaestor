@@ -152,7 +152,7 @@ function offerTheAccountsCurrency({
   const to = currencyOf(accounts, chosen)
   if (to === stated.currency) return
   setCurrency(to)
-  offer(amountForAccount(stated, to, usdCop))
+  if (stated.cents !== null) offer(amountForAccount(stated, to, usdCop))
 }
 
 /**
