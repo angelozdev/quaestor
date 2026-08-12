@@ -631,3 +631,53 @@ describe("012 — moving a leg and restating what the transfer moved are two sav
     expect(correctTransaction).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Feature 013 — a charge records what the account was debited; the rule it came
+ * from holds what the merchant charges. Read from the rule rather than stored,
+ * the price stays what it was however the rate moves afterwards (AC-21).
+ *
+ * The server decides when there is anything to say: it sends the two fields only
+ * for a charge from a live rule that states another currency, so the screen's
+ * whole job is to show them when they are there and nothing when they are not.
+ */
+describe("013 — a charge carries the price of the rule it came from", () => {
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+  })
+
+  it("The recorded charge carries its rule's price beside it", () => {
+    renderDialog(
+      makeTransaction({
+        amount: 10_200,
+        currency: "USD",
+        account_id: 3,
+        rule_amount: 40_000_000,
+        rule_currency: "COP",
+      }),
+    )
+
+    expect(screen.getByText("Precio de la regla: $ 400.000")).toBeInTheDocument()
+  })
+
+  it("A charge whose rule agrees with its account shows nothing extra", () => {
+    renderDialog(makeTransaction({ amount: 4_000, currency: "USD", account_id: 3 }))
+
+    expect(screen.queryByText(/Precio de la regla/)).not.toBeInTheDocument()
+  })
+
+  it("A movement that came from no rule shows nothing extra", () => {
+    renderDialog(
+      makeTransaction({ payee: "Amazon", amount: 2_500, currency: "USD", account_id: 3 }),
+    )
+
+    expect(screen.queryByText(/Precio de la regla/)).not.toBeInTheDocument()
+  })
+
+  it("A charge from a rule that was switched off shows nothing extra", () => {
+    renderDialog(makeTransaction({ amount: 10_200, currency: "USD", account_id: 3 }))
+
+    expect(screen.queryByText(/Precio de la regla/)).not.toBeInTheDocument()
+  })
+})

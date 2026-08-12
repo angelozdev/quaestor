@@ -98,6 +98,20 @@ export function amountForAccount(
   return convertCents(stated.cents, stated.currency, to, usdCop)
 }
 
+/**
+ * The currency an account holds, or null while the accounts have not arrived.
+ *
+ * The null is what lets a screen fall back to the figure it is already holding
+ * rather than to pesos: a dollar payment read before the list of accounts must
+ * not be offered in pesos on the strength of a list nobody has seen yet.
+ */
+export function currencyHeldBy(
+  accounts: { id: number; currency: string }[] | undefined,
+  id: number | null,
+): string | null {
+  return accounts?.find((a) => a.id === id)?.currency ?? null
+}
+
 /** The currency an account holds, or pesos when the account is not known yet. */
 export function currencyOf(
   accounts: { id: number; currency: string }[] | undefined,

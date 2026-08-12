@@ -13,6 +13,7 @@ export const recurringCreateSchema = z
     name: requiredString,
     payee: z.string().max(500, messages.max500).optional(),
     amount: positiveCents,
+    currency: z.enum(["COP", "USD"], { message: messages.opcionInvalida }),
     categoryId: z.number().nullable(),
     newCategory: z.string().trim().max(120, messages.max120),
     accountId: z.number().nullable(),

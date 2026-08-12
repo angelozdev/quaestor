@@ -231,3 +231,90 @@ describe("a recurring charge is stated in the currency its account holds", () =>
     )
   })
 })
+
+/**
+ * Feature 013 — an obligation holds the merchant's price and its account decides
+ * what is debited (ADR-0053), so a row has two figures to carry: the price, and
+ * what it comes to in the account that pays it.
+ *
+ * Hevy Pro is priced at 400.000 pesos and paid from a dollar account, which is
+ * exactly the shape ADR-0052 refused to store and this feature exists to allow.
+ */
+describe("013 — the repeating obligations show the price and what it comes to", () => {
+  const HEVY: Recurring = {
+    ...NETFLIX,
+    id: 11,
+    name: "Hevy Pro",
+    payee: "Hevy",
+    mode: "manual",
+    amount: 40_000_000,
+    currency: "COP",
+    account_id: DOLARAPP.id,
+  }
+  const OPAL: Recurring = {
+    ...NETFLIX,
+    id: 12,
+    name: "Opal",
+    payee: "Opal",
+    mode: "manual",
+    amount: 4_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+  }
+
+  function rowFor(name: string) {
+    const cell = screen.getByText(name).closest("tr")
+    if (!cell) throw new Error(`no row for ${name}`)
+    return cell
+  }
+
+  beforeEach(() => {
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+  })
+
+  it("The row carries both figures", async () => {
+    listRecurring.mockResolvedValue([HEVY])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Hevy Pro")
+
+    await waitFor(() => expect(rowFor("Hevy Pro")).toHaveTextContent("$ 400.000"))
+    expect(rowFor("Hevy Pro")).toHaveTextContent("≈ US$ 100.00")
+  })
+
+  it("A rule that agrees with its account shows one figure only", async () => {
+    listRecurring.mockResolvedValue([OPAL])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+
+    await waitFor(() => expect(rowFor("Opal")).toHaveTextContent("US$ 40.00"))
+    expect(rowFor("Opal")).not.toHaveTextContent("≈")
+  })
+
+  it("The converted figure disappears, the price stays", async () => {
+    getFx.mockRejectedValue(new Error("no TRM has been set"))
+    listRecurring.mockResolvedValue([HEVY])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Hevy Pro")
+
+    await waitFor(() => expect(rowFor("Hevy Pro")).toHaveTextContent("$ 400.000"))
+    expect(rowFor("Hevy Pro")).not.toHaveTextContent("≈")
+    expect(screen.queryByText(/No se pudo/)).not.toBeInTheDocument()
+  })
+
+  it("The move offers a figure in the new account's currency", async () => {
+    const user = userEvent.setup()
+    listRecurring.mockResolvedValue([OPAL])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: NU.name }))
+
+    expect(screen.getByText("Monto * (COP)")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("160000"),
+    )
+  })
+})

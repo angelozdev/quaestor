@@ -20,12 +20,17 @@ import { ScreenHelp } from "@/components/screen-help"
 import { listAccounts } from "@/lib/api/accounts"
 import { getFx } from "@/lib/api/fx"
 import { confirmPayment, planPayment, skipPlanned, toPay } from "@/lib/api/planned"
-import { ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
+import { type Account, ApiError, applyApiErrorsToForm, type Transaction } from "@/lib/api/types"
 import { formatDate, yearMonthOf } from "@/lib/date"
-import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
+import {
+  amountForAccount,
+  currencyHeldBy,
+  currencyOf,
+  formatCents,
+  type StatedAmount,
+} from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useFormValues } from "@/lib/use-form-values"
-import { useStatedAmount } from "@/lib/use-stated-amount"
 import { Badge, Button, Dialog, DialogPopup, DialogTitle, Input, Label, Textarea } from "@/ui"
 import { type PlanPaymentValues, planPaymentSchema } from "./to-pay.schema"
 
@@ -75,15 +80,109 @@ const PLAN_DEFAULTS: PlanPaymentValues = {
   notes: undefined,
 }
 
+/**
+ * The dialog that confirms one payment, mounted on the payment itself.
+ *
+ * A charge holds the merchant's price and its account decides what is debited
+ * (ADR-0053), so what this dialog asks for is the account's currency, not the
+ * charge's. It opens with the price restated into it — a suggestion the owner
+ * replaces with what the bank really took (AC-7, AC-9).
+ */
+function ConfirmPaymentForm({
+  charge,
+  accounts,
+  usdCop,
+  onDone,
+}: {
+  charge: Transaction
+  accounts: Account[] | undefined
+  usdCop: number | null
+  onDone: () => void
+}) {
+  const qc = useQueryClient()
+  const [accountId, setAccountId] = useState<number | null>(charge.account_id)
+  const [date, setDate] = useState(charge.date)
+  const [written, setWritten] = useState<StatedAmount | undefined>(undefined)
+  const currency = currencyHeldBy(accounts, accountId) ?? charge.currency
+  const stated = written ?? { cents: charge.amount, currency: charge.currency }
+  const amount = amountForAccount(stated, currency, usdCop)
+
+  const confirm = useMutation({
+    mutationFn: () =>
+      confirmPayment(charge.id, {
+        amount: amount ?? undefined,
+        date: date || undefined,
+        account_id: accountId ?? undefined,
+      }),
+    onSuccess: () => {
+      toast.success("Pago confirmado")
+      invalidate(qc, "plannedWrite")
+      onDone()
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+  })
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        confirm.mutate()
+      }}
+      className="space-y-4"
+    >
+      <div className="space-y-1.5">
+        <Label htmlFor="confirm-account">Cuenta</Label>
+        <EntitySelect
+          id="confirm-account"
+          value={accountId}
+          onChange={(chosen) => setAccountId(chosen as number | null)}
+          queryKey={qk.accounts(false)}
+          queryFn={() => listAccounts(false)}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="confirm-amount">Monto real ({currency})</Label>
+        <MoneyInput
+          id="confirm-amount"
+          currency={currency}
+          value={amount}
+          onChange={(cents) => setWritten({ cents, currency })}
+        />
+        {charge.currency !== currency && (
+          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {`El cobro es de ${formatCents(charge.amount, charge.currency)}`}
+            {amount === null && `, y sin tasa configurada no hay nada que ofrecerte en ${currency}`}
+            .
+          </p>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="confirm-date">Fecha</Label>
+        <Input
+          id="confirm-date"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onDone}>
+          Cancelar
+        </Button>
+        <Button type="submit" disabled={confirm.isPending}>
+          {confirm.isPending ? "…" : "Confirmar"}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
 export default function ToPayPage() {
   const qc = useQueryClient()
   const [scope, setScope] = useState<Scope>("week")
   const { since, until } = windowFor(scope)
 
   const [confirming, setConfirming] = useState<Transaction | null>(null)
-  const confirmMoney = useStatedAmount({ cents: null, currency: "COP" })
-  const [cDate, setCDate] = useState("")
-  const [cAccountId, setCAccountId] = useState<number | null>(null)
 
   const [planning, setPlanning] = useState(false)
 
@@ -99,7 +198,6 @@ export default function ToPayPage() {
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
   const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
-  const confirmCurrency = currencyForAccount(confirming, accounts.data, cAccountId)
 
   const planValues = useFormValues(planForm)
   const planCurrency = currencyOf(accounts.data, planValues.accountId)
@@ -110,21 +208,6 @@ export default function ToPayPage() {
     invalidate(qc, "plannedWrite")
   }
 
-  const confirm = useMutation({
-    mutationFn: () => {
-      if (!confirming) throw new Error("confirming transaction is required")
-      return confirmPayment(confirming.id, {
-        amount: confirmMoney.amount ?? undefined,
-        date: cDate || undefined,
-        account_id: cAccountId ?? undefined,
-      })
-    },
-    onSuccess: () => {
-      done("Pago confirmado")
-      setConfirming(null)
-    },
-    onError: onErr,
-  })
   const skip = useMutation({
     mutationFn: (id: number) => skipPlanned(id),
     onSuccess: () => done("Pago omitido"),
@@ -154,13 +237,6 @@ export default function ToPayPage() {
       onErr(e)
     },
   })
-
-  function openConfirm(item: Transaction) {
-    setConfirming(item)
-    confirmMoney.write(item.amount, item.currency)
-    setCDate(item.date)
-    setCAccountId(item.account_id)
-  }
 
   return (
     <div className="space-y-10">
@@ -209,7 +285,7 @@ export default function ToPayPage() {
                       key={item.id}
                       item={item}
                       isOverdueRow
-                      onConfirm={() => openConfirm(item)}
+                      onConfirm={() => setConfirming(item)}
                       onSkip={() => skip.mutate(item.id)}
                       skipPending={skip.isPending}
                     />
@@ -226,7 +302,7 @@ export default function ToPayPage() {
                       key={item.id}
                       item={item}
                       isOverdueRow={false}
-                      onConfirm={() => openConfirm(item)}
+                      onConfirm={() => setConfirming(item)}
                       onSkip={() => skip.mutate(item.id)}
                       skipPending={skip.isPending}
                     />
@@ -242,57 +318,13 @@ export default function ToPayPage() {
         <DialogPopup className="max-w-sm">
           <DialogTitle>Confirmar pago</DialogTitle>
           {confirming && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                confirm.mutate()
-              }}
-              className="space-y-4"
-            >
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm-account">Cuenta</Label>
-                <EntitySelect
-                  id="confirm-account"
-                  value={cAccountId}
-                  onChange={(chosen) => {
-                    const next = chosen as number | null
-                    const to = currencyOf(accounts.data, next)
-                    setCAccountId(next)
-                    if (to !== confirmCurrency) {
-                      confirmMoney.offer(amountForAccount(confirmMoney.stated, to, usdCop))
-                    }
-                  }}
-                  queryKey={qk.accounts(false)}
-                  queryFn={() => listAccounts(false)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm-amount">Monto real ({confirmCurrency})</Label>
-                <MoneyInput
-                  id="confirm-amount"
-                  currency={confirmCurrency}
-                  value={confirmMoney.amount}
-                  onChange={(cents) => confirmMoney.write(cents, confirmCurrency)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm-date">Fecha</Label>
-                <Input
-                  id="confirm-date"
-                  type="date"
-                  value={cDate}
-                  onChange={(e) => setCDate(e.target.value)}
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={confirm.isPending}>
-                  {confirm.isPending ? "…" : "Confirmar"}
-                </Button>
-              </div>
-            </form>
+            <ConfirmPaymentForm
+              key={confirming.id}
+              charge={confirming}
+              accounts={accounts.data}
+              usdCop={usdCop}
+              onDone={() => setConfirming(null)}
+            />
           )}
         </DialogPopup>
       </Dialog>

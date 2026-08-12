@@ -12,6 +12,7 @@ from quaestor.domain.models import (
     TxType,
 )
 from quaestor.services import accounts, occurrences, recurring, transactions
+from sqlalchemy import event
 
 from tests.support.categories import a_category
 from tests.support.recurring import declare_existing
@@ -494,3 +495,94 @@ def test_the_user_switching_it_off_stays_distinguishable_from_it_ending(session)
 
     assert session.get(RecurringItem, ended.id).active is True
     assert session.get(RecurringItem, off.id).active is False
+
+
+def _priced(session, account_id, *, amount, currency, name="Hevy Pro"):
+    return declare_existing(
+        session,
+        name=name,
+        payee=name,
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=amount,
+        currency=currency,
+        category_id=a_category(session),
+        account_id=account_id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 1, 1),
+    )
+
+
+def _charge(session, account_id, *, amount, currency, recurring_id=None):
+    tx = transactions.record_expense(
+        session,
+        account_id=account_id,
+        amount=amount,
+        currency=currency,
+        date=date(2026, 7, 10),
+        payee="Hevy Pro",
+        category_id=a_category(session),
+    )
+    tx.recurring_id = recurring_id
+    session.add(tx)
+    session.commit()
+    session.refresh(tx)
+    return tx
+
+
+def test_a_charge_carries_the_price_of_the_rule_that_made_it(session):
+    dolarapp = _acc(session, "USD")
+    rule = _priced(session, dolarapp.id, amount=40_000_000, currency="COP")
+    tx = _charge(session, dolarapp.id, amount=10_200, currency="USD", recurring_id=rule.id)
+
+    assert recurring.prices_by_transaction(session, [tx]) == {tx.id: (40_000_000, "COP")}
+
+
+def test_a_charge_whose_rule_agrees_with_it_carries_no_price(session):
+    dolarapp = _acc(session, "USD")
+    rule = _priced(session, dolarapp.id, amount=4_000, currency="USD", name="Opal")
+    tx = _charge(session, dolarapp.id, amount=4_000, currency="USD", recurring_id=rule.id)
+
+    assert recurring.prices_by_transaction(session, [tx]) == {}
+
+
+def test_a_movement_that_came_from_no_rule_carries_no_price(session):
+    dolarapp = _acc(session, "USD")
+    tx = _charge(session, dolarapp.id, amount=2_500, currency="USD")
+
+    assert recurring.prices_by_transaction(session, [tx]) == {}
+
+
+def test_a_charge_from_a_rule_that_was_switched_off_carries_no_price(session):
+    dolarapp = _acc(session, "USD")
+    rule = _priced(session, dolarapp.id, amount=40_000_000, currency="COP")
+    tx = _charge(session, dolarapp.id, amount=10_200, currency="USD", recurring_id=rule.id)
+    recurring.deactivate_recurring(session, rule.id)
+
+    assert recurring.prices_by_transaction(session, [tx]) == {}
+
+
+def test_a_whole_page_of_charges_costs_one_read_of_the_rules(session):
+    """A page of charges must not turn into one query per row (ADR-0028)."""
+    dolarapp = _acc(session, "USD")
+    rule = _priced(session, dolarapp.id, amount=40_000_000, currency="COP")
+    txs = [
+        _charge(session, dolarapp.id, amount=cents, currency="USD", recurring_id=rule.id)
+        for cents in (10_200, 9_900, 10_050)
+    ]
+    reads = []
+
+    def count(conn, cursor, statement, *rest):
+        if "recurring_item" in statement.lower():
+            reads.append(statement)
+
+    engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        prices = recurring.prices_by_transaction(session, txs)
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+
+    assert prices == {tx.id: (40_000_000, "COP") for tx in txs}
+    assert len(reads) == 1, f"a page of {len(txs)} charges read the rules {len(reads)} times"

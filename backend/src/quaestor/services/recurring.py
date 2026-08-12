@@ -6,6 +6,7 @@ the only module that writes a `RecurringOccurrence`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date as Date
 
 from sqlmodel import Session, select
@@ -17,6 +18,7 @@ from ..domain.models import (
     RecurringItem,
     RecurringMode,
     RecurringOccurrence,
+    Transaction,
     TxType,
 )
 from ..domain.money import is_supported
@@ -419,3 +421,33 @@ def skip_recurring(session: Session, recurring_id: int, due_date: Date) -> Recur
         NotFound: the recurring item does not exist.
     """
     return occurrences.skip(session, recurring_id, due_date)
+
+
+def prices_by_transaction(session: Session, txs: Sequence[Transaction]) -> dict[int, tuple[int, str]]:
+    """The merchant's price behind each charge, for the charges where it differs.
+
+    A charge records what the account was debited; the rule holds what the
+    merchant charges. The two only differ when the rule is stated in a currency
+    the charge is not, and only then is there anything to say. The price is read
+    from the rule already linked to the charge — nothing new is stored and no
+    rate is involved (ADR-0031, AC-21).
+
+    Rules the owner switched off are left out: carrying them would grow this read
+    path with every subscription ever cancelled, in exchange for a label on an
+    old charge.
+    """
+    wanted = {tx.recurring_id for tx in txs if tx.recurring_id is not None}
+    if not wanted:
+        return {}
+    rules = session.exec(
+        select(RecurringItem).where(
+            RecurringItem.id.in_(wanted),  # type: ignore[attr-defined]
+            RecurringItem.active,  # type: ignore[arg-type]
+        )
+    ).all()
+    price = {rule.id: (rule.amount, rule.currency) for rule in rules}
+    return {
+        tx.id: price[tx.recurring_id]
+        for tx in txs
+        if tx.recurring_id in price and price[tx.recurring_id][1] != tx.currency
+    }

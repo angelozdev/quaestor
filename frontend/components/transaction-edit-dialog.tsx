@@ -188,6 +188,21 @@ function TransferPairInfo({ tx, counterpart }: { tx: Transaction; counterpart?: 
   )
 }
 
+/**
+ * The merchant's price behind a charge, when the account was debited in another
+ * currency.
+ *
+ * The figure is read from the rule the charge came from, so it stays the price
+ * that was really charged however the rate moves afterwards — a July charge of
+ * US$32,10 keeps reading 99.900 COP in December (AC-21). A movement that came
+ * from no rule, or from one that agrees with its account, has nothing extra to
+ * say and says nothing.
+ */
+function RulePriceNote({ tx }: { tx: Transaction }) {
+  if (tx.rule_amount === null || tx.rule_currency === null) return null
+  return <p>Precio de la regla: {formatCents(tx.rule_amount, tx.rule_currency)}</p>
+}
+
 function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => void }) {
   const qc = useQueryClient()
   const tagSuggestions = useTagNames()
@@ -282,6 +297,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
           {tx.type}
           {!amountIsAsked && ` · ${formatCents(tx.amount, tx.currency)}`}
         </p>
+        <RulePriceNote tx={tx} />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="tx-edit-account">Cuenta</Label>

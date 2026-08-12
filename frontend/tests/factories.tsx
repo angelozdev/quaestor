@@ -54,6 +54,8 @@ export function makeTransaction(overrides: Partial<Transaction> = {}): Transacti
     source: "manual",
     created_at: "2026-07-10T00:00:00Z",
     tags: [],
+    rule_amount: null,
+    rule_currency: null,
     ...overrides,
   }
 }

@@ -27,7 +27,13 @@ import {
 } from "@/lib/api/recurring"
 import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
 import { hasEnded } from "@/lib/date"
-import { amountForAccount, currencyForAccount, currencyOf, formatCents } from "@/lib/money"
+import {
+  amountForAccount,
+  convertCents,
+  currencyOf,
+  formatCents,
+  type StatedAmount,
+} from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { useFormValues } from "@/lib/use-form-values"
 import { useAmountBox } from "@/lib/use-stated-amount"
@@ -48,6 +54,10 @@ const UNIT_ITEMS = [
   { value: "week", label: "Semana(s)" },
   { value: "month", label: "Mes(es)" },
   { value: "year", label: "Año(s)" },
+]
+const CURRENCY_ITEMS = [
+  { value: "COP", label: "Pesos (COP)" },
+  { value: "USD", label: "Dólares (USD)" },
 ]
 
 const UNIT_SINGULAR: Record<IntervalUnit, string> = {
@@ -72,6 +82,7 @@ const BLANK_CHARGE: RecurringCreateValues = {
   name: "",
   payee: "",
   amount: Number.NaN,
+  currency: "COP",
   categoryId: null,
   newCategory: "",
   accountId: null,
@@ -101,6 +112,7 @@ function boxesFor(charge: Recurring): RecurringCreateValues {
     name: charge.name,
     payee: charge.payee ?? "",
     amount: charge.amount,
+    currency: charge.currency as RecurringCreateValues["currency"],
     categoryId: charge.category_id,
     newCategory: "",
     accountId: charge.account_id,
@@ -111,6 +123,70 @@ function boxesFor(charge: Recurring): RecurringCreateValues {
     startDate: charge.start_date,
     endDate: charge.end_date ?? "",
   }
+}
+
+/**
+ * What picking an account proposes to the price boxes: the account's own
+ * currency, and the figure restated in it.
+ *
+ * A proposal, never a decision — the price belongs to the merchant, so the owner
+ * can put back the currency he was charged in and the figure he was charged
+ * (ADR-0053, AC-13). Restating always reads the figure he stated, so a trip out
+ * to another currency and back offers what the charge already held.
+ */
+function offerTheAccountsCurrency({
+  accounts,
+  chosen,
+  stated,
+  usdCop,
+  setCurrency,
+  offer,
+}: {
+  accounts: { id: number; currency: string }[] | undefined
+  chosen: number | null
+  stated: StatedAmount
+  usdCop: number | null
+  setCurrency: (currency: string) => void
+  offer: (cents: number | null) => void
+}) {
+  const to = currencyOf(accounts, chosen)
+  if (to === stated.currency) return
+  setCurrency(to)
+  offer(amountForAccount(stated, to, usdCop))
+}
+
+/**
+ * A charge's price, and what it comes to in the account that pays it.
+ *
+ * The price is the merchant's and is shown as stated; the converted figure is
+ * today's reading of it, marked as approximate because it is (ADR-0031). With no
+ * rate set there is nothing honest to add, so nothing is added — the price still
+ * reads (AC-4).
+ */
+function RulePrice({
+  charge,
+  accounts,
+  usdCop,
+}: {
+  charge: Recurring
+  accounts: { id: number; currency: string }[] | undefined
+  usdCop: number | null
+}) {
+  const settled = currencyOf(accounts, charge.account_id)
+  const converted =
+    settled === charge.currency
+      ? null
+      : convertCents(charge.amount, charge.currency, settled, usdCop)
+  return (
+    <span className="flex flex-col items-end">
+      <MoneyAmount cents={charge.amount} currency={charge.currency} type={charge.type} />
+      {converted !== null && (
+        <span className="text-xs tabular-nums" style={{ color: "var(--muted-foreground)" }}>
+          ≈ {formatCents(converted, settled)}
+        </span>
+      )}
+    </span>
+  )
 }
 
 const WHAT_A_RECURRING_CHARGE_IS = (
@@ -167,7 +243,7 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
   })
 
   const editValues = useFormValues(editForm)
-  const editCurrency = currencyForAccount(charge, accounts.data, editValues.accountId)
+  const editCurrency = editValues.currency
   const money = useAmountBox({ cents: charge.amount, currency: charge.currency }, (cents) =>
     editForm.setFieldValue("amount", cents ?? Number.NaN),
   )
@@ -177,6 +253,7 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
       updateRecurring(charge.id, {
         name: values.name,
         amount: values.amount,
+        currency: values.currency,
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
         category_id: values.categoryId,
         account_id: values.accountId ?? undefined,
@@ -244,9 +321,15 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
               value={field.state.value as number | null}
               onChange={(v) => {
                 const chosen = v as number | null
-                const to = currencyOf(accounts.data, chosen)
                 field.handleChange(chosen as never)
-                if (to !== editCurrency) money.offer(amountForAccount(money.stated, to, usdCop))
+                offerTheAccountsCurrency({
+                  accounts: accounts.data,
+                  chosen,
+                  stated: money.stated,
+                  usdCop,
+                  setCurrency: (c) => editForm.setFieldValue("currency", c as never),
+                  offer: money.offer,
+                })
               }}
               queryKey={qk.accounts(false)}
               queryFn={() => listAccounts(false)}
@@ -259,27 +342,46 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
           </div>
         )}
       </editForm.Field>
-      <editForm.Field name="amount">
-        {(field) => (
-          <div className="space-y-1.5">
-            <Label>Monto * ({editCurrency})</Label>
-            <MoneyInput
-              currency={editCurrency}
-              value={
-                typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                  ? (field.state.value as number)
-                  : null
-              }
-              onChange={(cents) => money.write(cents, editCurrency)}
-            />
-            {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-              <p className="text-xs text-destructive">
-                {String((field.state.meta.errors[0] as { message?: string })?.message)}
-              </p>
-            )}
-          </div>
-        )}
-      </editForm.Field>
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <editForm.Field name="amount">
+          {(field) => (
+            <div className="space-y-1.5">
+              <Label>Monto * ({editCurrency})</Label>
+              <MoneyInput
+                currency={editCurrency}
+                value={
+                  typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                    ? (field.state.value as number)
+                    : null
+                }
+                onChange={(cents) => money.write(cents, editCurrency)}
+              />
+              {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                <p className="text-xs text-destructive">
+                  {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                </p>
+              )}
+            </div>
+          )}
+        </editForm.Field>
+        <editForm.Field name="currency">
+          {(field) => (
+            <div className="space-y-1.5">
+              <Label htmlFor="recurring-edit-currency">Moneda del precio *</Label>
+              <Select
+                id="recurring-edit-currency"
+                value={field.state.value as string}
+                onValueChange={(v) => {
+                  if (!v) return
+                  field.handleChange(v as never)
+                  money.write(money.stated.cents, v)
+                }}
+                items={CURRENCY_ITEMS}
+              />
+            </div>
+          )}
+        </editForm.Field>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <editForm.Field name="intervalCount">
           {(field) => (
@@ -370,8 +472,13 @@ export default function RecurringPage() {
   })
 
   const accounts = useQuery({ queryKey: qk.accounts(false), queryFn: () => listAccounts(false) })
+  const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
+  const usdCop = fx.data ? Number(fx.data.usd_cop) : null
   const createValues = useFormValues(createForm)
-  const createCurrency = currencyOf(accounts.data, createValues.accountId)
+  const createCurrency = createValues.currency
+  const createMoney = useAmountBox({ cents: null, currency: "COP" }, (cents) =>
+    createForm.setFieldValue("amount", cents ?? Number.NaN),
+  )
 
   const [skipping, setSkipping] = useState<Recurring | null>(null)
   const [skipDate, setSkipDate] = useState("")
@@ -394,7 +501,7 @@ export default function RecurringPage() {
         interval_count: values.intervalCount,
         start_date: values.startDate,
         end_date: values.endDate ? values.endDate : null,
-        currency: createCurrency,
+        currency: values.currency,
         category_id: values.categoryId,
         new_category: values.newCategory.length > 0 ? values.newCategory : undefined,
         payee: values.payee && values.payee.length > 0 ? values.payee : undefined,
@@ -498,7 +605,7 @@ export default function RecurringPage() {
               key: "amount",
               header: "Monto",
               align: "right",
-              render: (r) => <MoneyAmount cents={r.amount} currency={r.currency} type={r.type} />,
+              render: (r) => <RulePrice charge={r} accounts={accounts.data} usdCop={usdCop} />,
             },
           ]}
           actionsAs="inline"
@@ -582,7 +689,18 @@ export default function RecurringPage() {
                   <Label>Cuenta *</Label>
                   <EntitySelect
                     value={field.state.value as number | null}
-                    onChange={(v) => field.handleChange(v as never)}
+                    onChange={(v) => {
+                      const chosen = v as number | null
+                      field.handleChange(chosen as never)
+                      offerTheAccountsCurrency({
+                        accounts: accounts.data,
+                        chosen,
+                        stated: createMoney.stated,
+                        usdCop,
+                        setCurrency: (c) => createForm.setFieldValue("currency", c as never),
+                        offer: createMoney.offer,
+                      })
+                    }}
                     queryKey={qk.accounts(false)}
                     queryFn={() => listAccounts(false)}
                   />
@@ -594,27 +712,46 @@ export default function RecurringPage() {
                 </div>
               )}
             </createForm.Field>
-            <createForm.Field name="amount">
-              {(field) => (
-                <div className="space-y-1.5">
-                  <Label>Monto * ({createCurrency})</Label>
-                  <MoneyInput
-                    currency={createCurrency}
-                    value={
-                      typeof field.state.value === "number" && Number.isFinite(field.state.value)
-                        ? (field.state.value as number)
-                        : null
-                    }
-                    onChange={(cents) => field.handleChange((cents ?? Number.NaN) as never)}
-                  />
-                  {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
-                    <p className="text-xs text-destructive">
-                      {String((field.state.meta.errors[0] as { message?: string })?.message)}
-                    </p>
-                  )}
-                </div>
-              )}
-            </createForm.Field>
+            <div className="grid grid-cols-[1fr_auto] gap-3">
+              <createForm.Field name="amount">
+                {(field) => (
+                  <div className="space-y-1.5">
+                    <Label>Monto * ({createCurrency})</Label>
+                    <MoneyInput
+                      currency={createCurrency}
+                      value={
+                        typeof field.state.value === "number" && Number.isFinite(field.state.value)
+                          ? (field.state.value as number)
+                          : null
+                      }
+                      onChange={(cents) => createMoney.write(cents, createCurrency)}
+                    />
+                    {(field.state.meta.errors[0] as { message?: string } | undefined)?.message && (
+                      <p className="text-xs text-destructive">
+                        {String((field.state.meta.errors[0] as { message?: string })?.message)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </createForm.Field>
+              <createForm.Field name="currency">
+                {(field) => (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="recurring-create-currency">Moneda del precio *</Label>
+                    <Select
+                      id="recurring-create-currency"
+                      value={field.state.value as string}
+                      onValueChange={(v) => {
+                        if (!v) return
+                        field.handleChange(v as never)
+                        createMoney.write(createMoney.stated.cents, v)
+                      }}
+                      items={CURRENCY_ITEMS}
+                    />
+                  </div>
+                )}
+              </createForm.Field>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <createForm.Field name="intervalCount">
                 {(field) => (

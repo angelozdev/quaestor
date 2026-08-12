@@ -484,3 +484,72 @@ describe("012 — an emptied box stays empty on the confirmation", () => {
     expect(confirmPayment.mock.calls[0][1].amount).toBeUndefined()
   })
 })
+
+/**
+ * Feature 013 — a charge waiting for approval carries the merchant's price,
+ * which its own account may not hold (ADR-0053). What the confirmation asks for
+ * is the figure that leaves the account, so it opens with the price restated
+ * into the account's currency — an offer, never a decision.
+ */
+describe("013 — the confirmation asks in the account's currency, not the charge's", () => {
+  const HEVY = makeTransaction({
+    id: 21,
+    payee: "Hevy Pro",
+    status: "planned",
+    amount: 40_000_000,
+    currency: "COP",
+    account_id: DOLARAPP.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+  const OPAL = makeTransaction({
+    id: 22,
+    payee: "Opal",
+    status: "planned",
+    amount: 4_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+    date: new Date().toISOString().slice(0, 10),
+  })
+
+  async function openConfirmationOf(charge: ReturnType<typeof makeTransaction>) {
+    const user = userEvent.setup()
+    toPay.mockResolvedValue({ overdue: [charge], upcoming: [], total_base: charge.amount })
+    listAccounts.mockResolvedValue([ACCOUNT, DOLARAPP])
+    render(<ToPayPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+    return user
+  }
+
+  it("A repeating charge priced in another currency offers its conversion", async () => {
+    await openConfirmationOf(HEVY)
+
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("100")
+  })
+
+  it("The owner replaces the conversion with what the bank really took", async () => {
+    const user = await openConfirmationOf(HEVY)
+    const amount = await screen.findByLabelText("Monto real (USD)")
+
+    await user.clear(amount)
+    await user.type(amount, "102.00")
+
+    expect(amount).toHaveValue("102.00")
+    await user.click(screen.getByRole("button", { name: "Confirmar" }))
+    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
+    expect(confirmPayment).toHaveBeenCalledWith(21, expect.objectContaining({ amount: 10_200 }))
+  })
+
+  it("A charge that agrees with its account is offered its own figure", async () => {
+    await openConfirmationOf(OPAL)
+
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("40")
+  })
+
+  it("The box arrives empty and says why", async () => {
+    getFx.mockRejectedValue(new Error("no TRM has been set"))
+    await openConfirmationOf(HEVY)
+
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("")
+    expect(screen.getByText(/sin tasa configurada/)).toBeInTheDocument()
+  })
+})

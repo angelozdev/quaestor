@@ -22,7 +22,7 @@ from ..domain.models import (
     TxType,
 )
 from ..domain.money import to_cop_cents
-from ..services import tags
+from ..services import recurring, tags
 
 
 class AccountCreate(BaseModel):
@@ -181,6 +181,8 @@ class TransactionOut(BaseModel):
     source: Source
     created_at: datetime
     tags: list[str] = []
+    rule_amount: int | None = None
+    rule_currency: str | None = None
 
     @classmethod
     def from_tx(
@@ -188,13 +190,20 @@ class TransactionOut(BaseModel):
         tx: Transaction,
         trm: Decimal | None,
         tag_names: list[str],
+        rule_price: tuple[int, str] | None = None,
     ) -> TransactionOut:
         """Serialize a Transaction, computing `cop_equivalent` at read time
-        when a TRM is available (ADR-0031) and attaching its tag names."""
+        when a TRM is available (ADR-0031) and attaching its tag names.
+
+        `rule_price` is what the merchant charges, present only on a charge whose
+        rule states another currency (AC-21); it is handed in rather than looked
+        up, so a list resolves every rule in one query."""
         out = cls.model_validate(tx)
         if trm is not None:
             out.cop_equivalent = to_cop_cents(tx.amount, tx.currency, trm)
         out.tags = tag_names
+        if rule_price is not None:
+            out.rule_amount, out.rule_currency = rule_price
         return out
 
     @classmethod
@@ -204,9 +213,10 @@ class TransactionOut(BaseModel):
         txs: list[Transaction],
         trm: Decimal | None,
     ) -> list[TransactionOut]:
-        """Serialize transactions, loading every tag name in one query."""
+        """Serialize transactions, loading every tag name and rule price in one query each."""
         names = tags.tag_names_by_transaction(session, [tx.id for tx in txs])
-        return [cls.from_tx(tx, trm, names[tx.id]) for tx in txs]
+        prices = recurring.prices_by_transaction(session, txs)
+        return [cls.from_tx(tx, trm, names[tx.id], prices.get(tx.id)) for tx in txs]
 
     @classmethod
     def from_one(
@@ -217,6 +227,17 @@ class TransactionOut(BaseModel):
     ) -> TransactionOut:
         """Serialize a single transaction with its tag names loaded."""
         return cls.from_txs(session, [tx], trm)[0]
+
+    @classmethod
+    def from_written(
+        cls,
+        session: Session,
+        tx: Transaction,
+        trm: Decimal | None,
+        tag_names: list[str],
+    ) -> TransactionOut:
+        """Serialize a movement whose tag names were just written, so they are not read back."""
+        return cls.from_tx(tx, trm, tag_names, recurring.prices_by_transaction(session, [tx]).get(tx.id))
 
 
 class TransferOut(BaseModel):
