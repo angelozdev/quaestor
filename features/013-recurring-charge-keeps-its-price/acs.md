@@ -191,15 +191,25 @@ traslado, un intervalo menor que uno, una fecha de fin anterior a la de inicio y
 una cuenta que no existe se siguen rechazando exactamente igual que hoy. Esta
 feature quita una atadura, no las demás.
 
-## AC-17: El asistente no cambia
+## AC-17: El asistente no se toca
 
 **Priority:** medium · **Type:** cross-cutting
 
-El asistente sigue exigiendo que la moneda de la regla coincida con la de su
-cuenta. La app y el asistente quedan diciendo cosas distintas **a propósito**:
-el dueño decidió el 2026-08-11 no gastar alcance ahí porque el asistente se va a
-deprecar. ADR-0006/0009 piden paridad; esta divergencia queda escrita en vez de
-descubierta.
+Ni una línea del asistente cambia. El dueño decidió el 2026-08-11 no gastar
+alcance ahí porque se va a deprecar, y lo confirmó el 2026-08-12: «no hagamos
+nada en el asistente».
+
+**La paridad de ADR-0006/0009 sale gratis igual.** El asistente declara un cobro
+recurrente por la misma capa de servicios que la pantalla, así que la regla vive
+en un solo sitio: al dejar que el precio y la cuenta discrepen, discrepan para
+los dos, y la negativa de AC-2 sigue en pie para los dos. Mantener una
+divergencia habría exigido **añadir** una guarda solo al asistente — gastar
+alcance en él, justo lo contrario de lo decidido.
+
+Esta redacción reemplaza la original, que anunciaba una divergencia deliberada.
+Era una predicción equivocada sobre la consecuencia de no hacer nada, no una
+decisión distinta: lo decidido —no tocar el asistente— se cumplió al pie de la
+letra.
 
 ## AC-18: Un cobro esperando en otra moneda cuenta por su propia moneda
 
