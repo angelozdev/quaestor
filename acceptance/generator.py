@@ -45,6 +45,18 @@ def _sanitize(name: str) -> str:
     return re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
 
 
+def _background(ir: dict) -> list[tuple[str, str]]:
+    """The steps every scenario runs first, as standard Gherkin gives them.
+
+    Emitted ahead of each scenario's own rather than into the ``world``
+    fixture, so a scenario reads as the whole list of what happened and a
+    background step is looked up in the same registry as any other. Dropping
+    them left a suite running on whatever the fixture happened to seed, which
+    is green for the wrong reason (found by feature 014's dollar charge).
+    """
+    return [(s["keyword"], s["text"]) for s in ir.get("background") or []]
+
+
 def _resolve_steps(scenario: dict, row: dict[str, str] | None) -> list[tuple[str, str]]:
     """Resolve <param> placeholders for one execution; fail-fast markers on gaps."""
     steps: list[tuple[str, str]] = []
@@ -93,6 +105,7 @@ def _emit_test_module(feature_dir: Path, ir: dict, only: set[str] | None) -> str
     ]
 
     seen: dict[str, int] = {}
+    background = _background(ir)
     for scenario in _selected(ir, only):
         base = f"test_{_sanitize(scenario['name'])}"
         seen[base] = seen.get(base, 0) + 1
@@ -101,7 +114,7 @@ def _emit_test_module(feature_dir: Path, ir: dict, only: set[str] | None) -> str
 
         out.append("")
         if not examples:
-            steps = _resolve_steps(scenario, None)
+            steps = background + _resolve_steps(scenario, None)
             out += [
                 f"def {fn_name}(world):",
                 f"    {('Scenario: ' + scenario['name'])!r}",
@@ -113,7 +126,7 @@ def _emit_test_module(feature_dir: Path, ir: dict, only: set[str] | None) -> str
         else:
             out.append('@pytest.mark.parametrize("steps", [')
             for i, row in enumerate(examples, start=1):
-                steps = _resolve_steps(scenario, row)
+                steps = background + _resolve_steps(scenario, row)
                 out += [
                     "    pytest.param([",
                     _steps_literal(steps, "        "),

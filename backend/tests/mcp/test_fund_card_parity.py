@@ -8,6 +8,13 @@ figures and deleting all three from the card left both test streams green.
 These are the tests that would have caught it. They compare the surfaces against
 the DTO rather than against each other, so a figure added to the fund and given
 to only one of them fails here.
+
+`NOT_ON_THE_CARD` is the third answer, and the only one that admits a gap: what
+the fund reports and the assistant is deliberately not given. Feature 014 put
+the breakdown there because the owner left that surface alone on purpose
+(ADR-0054, AC-18), and naming it is what keeps the divergence written instead
+of discovered. A field arrives in that tuple by decision; one that arrives by
+omission still fails the classification test.
 """
 
 from dataclasses import fields
@@ -31,6 +38,8 @@ DESCRIBES_THE_FUND = (
     "spreads_over",
     "whole_by",
 )
+
+NOT_ON_THE_CARD = ("charges",)
 
 
 def _status(**overrides) -> FundStatus:
@@ -62,7 +71,13 @@ def test_the_card_states_every_money_figure_the_fund_reports():
 
 def test_a_new_figure_on_the_fund_has_to_be_classified_before_it_ships():
     reported = {field.name for field in fields(FundStatus)}
-    assert reported - set(DESCRIBES_THE_FUND) == set(MONEY_FIGURES)
+    classified = set(DESCRIBES_THE_FUND) | set(NOT_ON_THE_CARD)
+    assert reported - classified == set(MONEY_FIGURES)
+
+
+def test_what_the_card_is_not_given_is_not_on_it():
+    card = format.fund_card(_status())
+    assert not [held_back for held_back in NOT_ON_THE_CARD if held_back in card]
 
 
 def test_the_screen_and_the_assistant_are_offered_the_same_fields():

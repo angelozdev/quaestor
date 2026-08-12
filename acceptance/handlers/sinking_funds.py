@@ -348,18 +348,22 @@ def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str)
 
 @step(
     r'a recurring charge "(?P<payee>[^"]+)" on "(?P<category>[^"]+)"'
-    r" of (?P<amount>" + _DEC + r") COP every (?P<unit>day|week|month|year),"
+    r" of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}) every (?P<unit>day|week|month|year),"
     r" next due (?P<due>" + _MONTH + r")"
 )
-def given_recurring_charge(world: World, payee: str, category: str, amount: str, unit: str, due: str) -> None:
+def given_recurring_charge(world: World, payee: str, category: str, amount: str, currency: str, unit: str, due: str):
     """A charge that repeats and whose next turn falls in a named month.
 
     Declared as of that first turn, so nothing about it is waiting for the
     owner's answer: what the fund reads is a live obligation, and a turn
     offered for approval would be a different scenario.
+
+    Charged to an account holding the same currency, because feature 013 made
+    an obligation that pays itself state its price in the currency its account
+    holds (ADR-0053) — a dollar charge on a peso account is refused there.
     """
     first = Date.fromisoformat(f"{due}-05")
-    world.attempt(
+    item = world.attempt(
         recurring.create_recurring,
         world.session,
         name=payee,
@@ -367,15 +371,16 @@ def given_recurring_charge(world: World, payee: str, category: str, amount: str,
         type=TxType.expense,
         mode=RecurringMode.auto,
         amount=_cents(amount),
-        currency="COP",
+        currency=currency,
         category_id=_spending_category_id(world, category),
-        account_id=_default_account_id(world, "COP"),
+        account_id=_default_account_id(world, currency),
         interval_unit=IntervalUnit(unit),
         interval_count=1,
         start_date=first,
         declared_on=first,
     )
     world.require_clean(f"declaring the recurring charge {payee!r}")
+    world.recurring_ids[payee] = item.id
 
 
 @step(r"an income of (?P<amount>" + _DEC + r") COP is due this month")
@@ -613,9 +618,24 @@ def when_try_archive_category(world: World, name: str) -> None:
     world.attempt(categories.archive_category, world.session, _category_id(world, name))
 
 
-@step(r"the user views the funds")
-def when_view_funds(world: World) -> None:
-    world.funds_view = world.attempt(_call, "list_funds", world.session)
+@step(r"the user (?P<mode>views|tries to view) the funds")
+def when_view_funds(world: World, mode: str) -> None:
+    """Open the funds screen: the list, and what each one asks for this month.
+
+    Listing alone converts nothing, so a fund with a dollar charge and no rate
+    would answer happily and only refuse later, on a step meant to read a
+    figure. Reading each fund's month here is what the screen does and what
+    puts the refusal where the scenario says it happens (014, AC-15).
+    """
+    world.funds_view = world.attempt(_read_the_funds_screen, world)
+
+
+def _read_the_funds_screen(world: World) -> list:
+    year_month = _month_of(world.today)
+    listed = _call("list_funds", world.session)
+    for line in listed:
+        _call("fund_status", world.session, line.fund_id, year_month)
+    return listed
 
 
 @step(r"the user views the money available this month")

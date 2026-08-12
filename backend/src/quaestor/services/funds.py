@@ -26,10 +26,10 @@ from datetime import timedelta
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import FundLine, FundPreview, FundStatus
+from ..domain.dtos import FundCharge, FundLine, FundPreview, FundStatus
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, Fund, FundRule, RecurringItem, Transaction, TxStatus, TxType
-from ..domain.money import to_cop_cents
+from ..domain.money import cents_to_major, to_cop_cents
 from ..domain.recurrence import next_due_on_or_after
 from ..domain.rules import (
     claim_holdings,
@@ -52,11 +52,18 @@ _DATED_RULES = (FundRule.from_recurring,)
 
 @dataclass(frozen=True)
 class _Ask:
-    """What a fund asks for one month, and what it learned working it out."""
+    """What a fund asks for one month, and what it learned working it out.
+
+    `charges` are the terms `amount` is the sum of. Keeping them is the whole
+    of ADR-0054's second half: the division was always done per obligation and
+    then thrown away, so the breakdown costs no reading and cannot fail to add
+    up — it *is* the addends.
+    """
 
     amount: int
     charge_month: str | None = None
     averaged_over: int | None = None
+    charges: tuple[FundCharge, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -73,12 +80,14 @@ class _Month:
 
 @dataclass(frozen=True)
 class _Obligation:
+    name: str
     required: int
     charge_month: str
+    can_be_spread: bool
 
 
 def _settled_by_spending(
-    agg: MonthAggregate, fund: Fund, year_month: str, turns: list[tuple[RecurringItem, list[Date]]]
+    agg: MonthAggregate, category_id: int, year_month: str, turns: list[tuple[RecurringItem, list[Date]]]
 ) -> set[int]:
     """The obligations whose turn this month the category's spending already paid.
 
@@ -91,7 +100,7 @@ def _settled_by_spending(
         ((due, item) for item, dues in turns for due in dues),
         key=lambda pair: (pair[0], pair[1].id),
     )
-    left = agg.spent_in(fund.category_id, year_month)
+    left = agg.spent_in(category_id, year_month)
     settled = set()
     for _, item in soonest_first:
         required = to_cop_cents(item.amount, item.currency, agg.trm)
@@ -100,6 +109,15 @@ def _settled_by_spending(
         left -= required
         settled.add(item.id)
     return settled
+
+
+def _turn_after(item: RecurringItem, year_month: str) -> str | None:
+    """The month of this obligation's first turn after `year_month`, if it has one."""
+    _, end = month_bounds(year_month)
+    after = next_due_on_or_after(
+        item.start_date, item.end_date, item.interval_unit, item.interval_count, end + timedelta(days=1)
+    )
+    return year_month_of(after) if after is not None else None
 
 
 def _charge_month_for(
@@ -117,39 +135,68 @@ def _charge_month_for(
         return None
     if dues and not settled:
         return year_month
-    _, end = month_bounds(year_month)
-    after = next_due_on_or_after(
-        item.start_date, item.end_date, item.interval_unit, item.interval_count, end + timedelta(days=1)
-    )
-    return year_month_of(after) if after is not None else None
+    return _turn_after(item, year_month)
 
 
-def _obligations(agg: MonthAggregate, fund: Fund, year_month: str) -> list[_Obligation]:
-    """What each obligation in the fund's category still needs, soonest charge first.
+def _can_be_spread(item: RecurringItem, charge_month: str) -> bool:
+    """Whether a whole month fits between this charge and the one after it (ADR-0054).
+
+    A charge that lands every month never leaves one, so the fund can only ever
+    ask it whole — which is why it is never the surprise the warning announces.
+    A charge with no turn after it is a one-off, and nothing forces it to be
+    asked in a single month.
+
+    Read from the obligation's own rhythm rather than from its declared
+    interval, so "every 45 days" and "every 6 weeks" answer by what they
+    actually do.
+    """
+    following = _turn_after(item, charge_month)
+    return following is None or months_to_fund(charge_month, following) > 1
+
+
+def _obligations(agg: MonthAggregate, category_id: int, year_month: str) -> list[_Obligation]:
+    """What each obligation in the category still needs, soonest charge first.
 
     Each obligation's turns for the month are worked out once here and handed to
     both readers: which turns the spending settled, and which charge the fund is
     filling for.
     """
-    turns = [(item, agg.turns_in(item, year_month)) for item in agg.obligations_in(fund.category_id)]
-    settled = _settled_by_spending(agg, fund, year_month, turns)
+    turns = [(item, agg.turns_in(item, year_month)) for item in agg.obligations_in(category_id)]
+    settled = _settled_by_spending(agg, category_id, year_month, turns)
     found = []
     for item, dues in turns:
         charge = _charge_month_for(agg, item, year_month, dues, item.id in settled)
         if charge is None:
             continue
-        found.append(_Obligation(required=to_cop_cents(item.amount, item.currency, agg.trm), charge_month=charge))
+        found.append(
+            _Obligation(
+                name=item.name,
+                required=to_cop_cents(item.amount, item.currency, agg.trm),
+                charge_month=charge,
+                can_be_spread=_can_be_spread(item, charge),
+            )
+        )
     return sorted(found, key=lambda o: o.charge_month)
 
 
 def _ask_from_obligations(agg: MonthAggregate, fund: Fund, year_month: str, holds: int) -> _Ask:
-    obligations = _obligations(agg, fund, year_month)
+    obligations = _obligations(agg, fund.category_id, year_month)
     claimed = claim_holdings(holds, [o.required for o in obligations])
-    amount = sum(
-        fund_ask_calc(o.required - taken, months_to_fund(year_month, o.charge_month))
+    charges = tuple(
+        FundCharge(
+            name=o.name,
+            costs=o.required,
+            charge_month=o.charge_month,
+            asks=fund_ask_calc(o.required - taken, months_to_fund(year_month, o.charge_month)),
+            can_be_spread=o.can_be_spread,
+        )
         for o, taken in zip(obligations, claimed, strict=True)
     )
-    return _Ask(amount, charge_month=obligations[0].charge_month if obligations else None)
+    return _Ask(
+        sum(charge.asks for charge in charges),
+        charge_month=charges[0].charge_month if charges else None,
+        charges=charges,
+    )
 
 
 def _window_months(agg: MonthAggregate, fund: Fund, year_month: str) -> list[str]:
@@ -311,6 +358,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         accumulates=fund.accumulates,
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),
+        charges=list(walked.ask.charges),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
@@ -520,37 +568,52 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
     stored = _validated_spec(session, category, _rule_of(spec.get("rule")), spec)
     unsaved = Fund(category_id=category_id, **stored)
     start = unsaved.start_month
-    walked = _walk(load_month(session, start), unsaved)
-    would_ask = walked.ask.amount
+    agg = load_month(session, start)
+    walked = _walk(agg, unsaved)
     return FundPreview(
         category_id=category_id,
-        would_ask=would_ask,
-        warning=_warning(unsaved, walked.ask.charge_month, would_ask),
+        would_ask=walked.ask.amount,
+        warning=_warning(unsaved, walked.ask.charges),
+        has_something_to_spread=any(o.can_be_spread for o in _obligations(agg, category_id, start)),
     )
 
 
-def _warning(fund: Fund, charge_month: str | None, would_ask: int) -> str | None:
-    """The refusal-shaped announcement AC-24 asks for, or nothing.
+def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
+    """The first charge that could have been spread and has no month to spread over.
 
-    A charge dated so close that no month is left to save in is the reachable
-    definition of a target that cannot be reached: the whole amount falls on
-    one month. Asked of the very divisor the ask uses, so the warning cannot
-    stay silent on a month it lands on — a charge the month after the start
-    still has to be whole by the end of the start month (AC-6).
+    Both halves are needed and neither alone is enough. Without the first, a
+    charge that lands every month answers yes forever — there are never months
+    between one turn and the next — which is how the announcement came to fire
+    in four categories that had nothing to announce (ADR-0054). Without the
+    second, a yearly charge a year out would be announced for no reason.
 
-    The date comes from whichever rule has one. Feature 009 withdrew
-    `target-by-date`, so today that is the soonest obligation filed under the
-    category — and the warning had to follow it there, because the surprise
-    belongs to the date and not to the rule that carried it.
+    Asked of the very divisor the ask uses, so it cannot stay silent on a month
+    the charge lands on: one the month after the start still has to be whole by
+    the end of the start month (003, AC-6).
     """
-    dated = charge_month
-    if dated is None:
-        return None
-    if months_to_fund(fund.start_month, dated) > 1:
+    return next(
+        (
+            charge
+            for charge in charges
+            if charge.can_be_spread and months_to_fund(fund.start_month, charge.charge_month) <= 1
+        ),
+        None,
+    )
+
+
+def _warning(fund: Fund, charges: tuple[FundCharge, ...]) -> str | None:
+    """The announcement AC-24 asks for, said about the charge it is true of.
+
+    It names the obligation and quotes that obligation's own figure. Quoting
+    the fund's total mixed what does spread with what cannot, and frightened
+    the owner with a number nobody was ever going to pay at once (ADR-0054).
+    """
+    crowded = _crowded(fund, charges)
+    if crowded is None:
         return None
     return (
-        f"{dated} leaves no month to save in, so the whole target falls on "
-        f"{fund.start_month}: it would ask {would_ask} at once"
+        f"{crowded.name} charges in {crowded.charge_month}, which leaves no month to save in: "
+        f"the whole {cents_to_major(crowded.asks)} COP falls on {fund.start_month}"
     )
 
 

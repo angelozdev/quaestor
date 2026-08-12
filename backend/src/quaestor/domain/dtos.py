@@ -22,6 +22,28 @@ class FundLine:
 
 
 @dataclass(frozen=True)
+class FundCharge:
+    """One term of what a fund asks: the charge it is filling for (ADR-0054).
+
+    `costs` is the whole charge in pesos and `asks` its share of this month,
+    which is `costs` less what the fund already holds against it, spread over
+    the months left before `charge_month`. A charge landing in the month being
+    read is due rather than being saved for, which is `charge_month` against
+    that month and is not carried apart.
+
+    `can_be_spread` says a whole month fits between this charge and the one
+    after it. A charge that lands every month never has one, which is why it
+    can never be the surprise the warning is about.
+    """
+
+    name: str
+    costs: int
+    charge_month: str
+    asks: int
+    can_be_spread: bool
+
+
+@dataclass(frozen=True)
 class FundStatus:
     """What one fund asks, holds and reports for one month (ADR-0043).
 
@@ -29,6 +51,10 @@ class FundStatus:
     into the next one, which is nothing at all for a fund that resets; and
     `next_month_has` is that carry plus what the rule asks then, so a screen
     can say what next month starts with without doing the arithmetic itself.
+
+    `charges` are the terms `asks` is the sum of, so the figure opens into
+    what produced it and nothing in it is unattributable (ADR-0054). Only the
+    rules that fill for dated charges have any.
 
     `averaged_over` is filled by the `average` rule only; `spreads_over` and
     `whole_by` by the rules that save toward a dated charge.
@@ -47,6 +73,7 @@ class FundStatus:
     accumulates: bool
     accumulation_is_implied: bool
     on_track: bool
+    charges: list[FundCharge] = field(default_factory=list)
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None
@@ -171,11 +198,17 @@ class MonthRates:
 
 @dataclass(frozen=True)
 class FundPreview:
-    """What a fund would ask before it exists, and the warning it carries (AC-24)."""
+    """What a fund would ask before it exists, and the warning it carries (AC-24).
+
+    `has_something_to_spread` answers the category rather than the rule being
+    previewed: a category whose charges all land every month can only ever ask
+    zero from the obligations rule, so it is not offered one (ADR-0054).
+    """
 
     category_id: int
     would_ask: int
     warning: str | None = None
+    has_something_to_spread: bool = False
 
 
 @dataclass(frozen=True)

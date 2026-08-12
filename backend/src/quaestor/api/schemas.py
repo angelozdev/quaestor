@@ -419,6 +419,7 @@ class FundPreviewOut(BaseModel):
     category_id: int
     would_ask: int
     warning: str | None
+    has_something_to_spread: bool = False
 
 
 class MonthRatesOut(BaseModel):
@@ -474,6 +475,16 @@ class GroupSectionOut(BaseModel):
     pct: float
 
 
+class FundChargeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    costs: int
+    charge_month: str
+    asks: int
+    can_be_spread: bool
+
+
 class FundStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -490,6 +501,7 @@ class FundStatusOut(BaseModel):
     accumulates: bool
     accumulation_is_implied: bool
     on_track: bool
+    charges: list[FundChargeOut] = []
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None

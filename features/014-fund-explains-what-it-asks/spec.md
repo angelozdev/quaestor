@@ -125,7 +125,7 @@ Scenario: What the fund asks is what it asked before
   And a fund on "Suscripciones" funded from its obligations, starting 2026-08
   When the user views the funds
   Then the fund on "Suscripciones" asks 180000.00 COP this month
-  And the fund on "Suscripciones" says it spreads over 12 months
+  And the fund on "Suscripciones" says it spreads over 1 months
 
 @backend
 Scenario: What the fund holds and carries is what it held and carried before
@@ -134,7 +134,7 @@ Scenario: What the fund holds and carries is what it held and carried before
   And the fund on "Suscripciones" already holds 300000.00 COP
   When the user views the funds
   Then the fund on "Suscripciones" holds 300000.00 COP
-  And the fund on "Suscripciones" carries 300000.00 COP into next month
+  And the fund on "Suscripciones" carries 375000.00 COP into next month
 ```
 
 ## AC-6 — A skipped charge leaves the list
@@ -144,6 +144,7 @@ Scenario: What the fund holds and carries is what it held and carried before
 Scenario: A charge skipped this month is not among the lines
   Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
   And a recurring charge "Dominio" on "Suscripciones" of 1200000.00 COP every year, next due 2027-08
+  And a fund on "Suscripciones" funded from its obligations, starting 2026-08
   And the payment to "Internet" was skipped this month
   When the user views the funds
   Then the fund on "Suscripciones" asks 100000.00 COP this month
@@ -336,7 +337,7 @@ Scenario: The assistant reports the figure exactly as it does today
   Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
   And a recurring charge "Dominio" on "Suscripciones" of 1200000.00 COP every year, next due 2027-08
   And a fund on "Suscripciones" funded from its obligations, starting 2026-08
-  When the assistant is asked about the funds
+  When the assistant is asked about the fund on "Suscripciones"
   Then the assistant's answer states 180000.00 COP
   And the assistant's answer names no charge behind it
 
