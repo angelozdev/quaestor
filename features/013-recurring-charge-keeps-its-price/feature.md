@@ -2,7 +2,7 @@
 title: "Un cobro recurrente guarda el precio del comercio, no la moneda de la cuenta"
 slug: recurring-charge-keeps-its-price
 number: 013
-status: ready
+status: done
 autonomy_level: medium
 branch: recurring-charge-keeps-its-price
 area: core
