@@ -26,6 +26,8 @@ export interface Transaction {
   source: string
   created_at: string
   tags: string[]
+  rule_amount: number | null
+  rule_currency: string | null
 }
 
 export interface Account {
@@ -195,6 +197,7 @@ export interface RecurringUpdate {
   payee?: string
   mode?: RecurringMode
   amount?: number
+  currency?: string
   category_id?: number | null
   account_id?: number
   interval_unit?: IntervalUnit

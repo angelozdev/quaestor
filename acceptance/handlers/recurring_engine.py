@@ -267,7 +267,7 @@ def when_declare_transfer(world: World, **kw) -> None:
 
 
 @step(
-    r"the assistant declares a repeating payment of"
+    r"the assistant (?:declares|tries to declare) a repeating payment of"
     r" (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
     r' to "(?P<payee>[^"]+)" from "(?P<account>[^"]+)"' + _DECLARATION
 )
@@ -285,7 +285,7 @@ def when_assistant_declares_payment(
     mode: str = "paying itself",
 ) -> None:
     def action():
-        temporal.create_recurring(
+        answer = temporal.create_recurring(
             world.session,
             temporal.CreateRecurringInput(
                 name=payee,
@@ -303,8 +303,9 @@ def when_assistant_declares_payment(
             ),
         )
         item = world.session.exec(select(RecurringItem).where(RecurringItem.name == payee)).first()
-        if item is not None:
-            world.recurring_ids[payee] = item.id
+        if item is None:
+            raise ValidationError(answer)
+        world.recurring_ids[payee] = item.id
 
     world.attempt(action)
 
@@ -357,11 +358,13 @@ def when_switch_back_on(world: World, name: str) -> None:
     r" to (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
 )
 def when_change_amount(world: World, name: str, amount: str, currency: str) -> None:
+    """The price and the currency it is quoted in travel together (ADR-0053)."""
     world.attempt(
         recurring.update_recurring,
         world.session,
         _item(world, name).id,
         amount=major_to_cents(amount),
+        currency=currency,
     )
 
 
@@ -415,13 +418,18 @@ def when_move_account(world: World, name: str, account: str) -> None:
     r" restating it at (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
 )
 def when_move_account_restated(world: World, name: str, account: str, amount: str, currency: str) -> None:
-    """Move the obligation and say what it is worth where it is going (ADR-0052)."""
+    """Move the obligation and restate its price where it is going (ADR-0053).
+
+    Restating is the owner accepting the conversion the app offered; declining
+    it is the plain move above, which leaves the price alone.
+    """
     world.attempt(
         recurring.update_recurring,
         world.session,
         _item(world, name).id,
         account_id=world.account_id_or_missing(account),
         amount=major_to_cents(amount),
+        currency=currency,
     )
 
 

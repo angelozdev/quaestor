@@ -89,6 +89,7 @@ _FEATURE_MODULES = (
     "named_goals",
     "planned_payments",
     "recurring_engine",
+    "recurring_price",
     "sinking_funds",
     "transactions_crud",
 )

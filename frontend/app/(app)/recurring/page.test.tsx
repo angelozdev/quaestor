@@ -231,3 +231,177 @@ describe("a recurring charge is stated in the currency its account holds", () =>
     )
   })
 })
+
+/**
+ * Feature 013 — an obligation holds the merchant's price and its account decides
+ * what is debited (ADR-0053), so a row has two figures to carry: the price, and
+ * what it comes to in the account that pays it.
+ *
+ * Hevy Pro is priced at 400.000 pesos and paid from a dollar account, which is
+ * exactly the shape ADR-0052 refused to store and this feature exists to allow.
+ */
+describe("013 — the repeating obligations show the price and what it comes to", () => {
+  const HEVY: Recurring = {
+    ...NETFLIX,
+    id: 11,
+    name: "Hevy Pro",
+    payee: "Hevy",
+    mode: "manual",
+    amount: 40_000_000,
+    currency: "COP",
+    account_id: DOLARAPP.id,
+  }
+  const OPAL: Recurring = {
+    ...NETFLIX,
+    id: 12,
+    name: "Opal",
+    payee: "Opal",
+    mode: "manual",
+    amount: 4_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+  }
+
+  function rowFor(name: string) {
+    const cell = screen.getByText(name).closest("tr")
+    if (!cell) throw new Error(`no row for ${name}`)
+    return cell
+  }
+
+  beforeEach(() => {
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+  })
+
+  it("The row carries both figures", async () => {
+    listRecurring.mockResolvedValue([HEVY])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Hevy Pro")
+
+    await waitFor(() => expect(rowFor("Hevy Pro")).toHaveTextContent("$ 400.000"))
+    expect(rowFor("Hevy Pro")).toHaveTextContent("≈ US$ 100.00")
+  })
+
+  it("A rule that agrees with its account shows one figure only", async () => {
+    listRecurring.mockResolvedValue([OPAL])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+
+    await waitFor(() => expect(rowFor("Opal")).toHaveTextContent("US$ 40.00"))
+    expect(rowFor("Opal")).not.toHaveTextContent("≈")
+  })
+
+  it("The converted figure disappears, the price stays", async () => {
+    getFx.mockRejectedValue(new Error("no TRM has been set"))
+    listRecurring.mockResolvedValue([HEVY])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Hevy Pro")
+
+    await waitFor(() => expect(rowFor("Hevy Pro")).toHaveTextContent("$ 400.000"))
+    expect(rowFor("Hevy Pro")).not.toHaveTextContent("≈")
+    expect(screen.queryByText(/No se pudo/)).not.toBeInTheDocument()
+  })
+
+  it("The move offers a figure in the new account's currency", async () => {
+    const user = userEvent.setup()
+    listRecurring.mockResolvedValue([OPAL])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: NU.name }))
+
+    expect(screen.getByText("Monto * (COP)")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("160000"),
+    )
+  })
+})
+
+/**
+ * The create dialog is not mounted on anything, so it survives being closed.
+ *
+ * Every other money box in the app hangs off a keyed child and starts fresh
+ * with it; this one is state on the screen, so what the owner stated last time
+ * outlives the charge it belonged to unless the reset reaches it too.
+ */
+describe("013 — a saved charge leaves nothing behind in the next one", () => {
+  it("The amount box is empty again when the dialog is reopened", async () => {
+    const user = userEvent.setup()
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    createRecurring.mockResolvedValue({ ...NETFLIX, id: 99 })
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Nuevo" }))
+    await user.type(screen.getByLabelText(/Nombre/), "Hevy Pro")
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: NU.name }))
+    await user.type(within(fieldUnder(/^Monto \*/)).getByRole("textbox"), "99900")
+    await user.click(screen.getByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: SUSCRIPCIONES.name }))
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+    await waitFor(() => expect(createRecurring).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole("button", { name: "Nuevo" }))
+    await user.click(within(fieldUnder("Cuenta *")).getByRole("combobox"))
+    await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
+
+    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("")
+  })
+})
+
+/**
+ * Saying the price is in another currency relabels the figure; it never converts
+ * it.
+ *
+ * The number the owner typed is the merchant's price, and the app has no
+ * business restating it because he corrected which currency he meant. Converting
+ * here would be the money hole in its quietest form: an obligation that pays
+ * itself would go on charging the converted figure every period.
+ */
+describe("013 — naming the price's currency does not restate the price", () => {
+  const OPAL: Recurring = {
+    ...NETFLIX,
+    id: 12,
+    name: "Opal",
+    payee: "Opal",
+    mode: "manual",
+    amount: 4_000,
+    currency: "USD",
+    account_id: DOLARAPP.id,
+  }
+
+  async function openOpalAndSayPesos(user: ReturnType<typeof userEvent.setup>) {
+    listRecurring.mockResolvedValue([OPAL])
+    listAccounts.mockResolvedValue([NU, DOLARAPP])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText("Opal")
+    await user.click(screen.getByRole("button", { name: "Editar" }))
+    await user.click(screen.getByRole("combobox", { name: "Moneda del precio *" }))
+    await user.click(await screen.findByRole("option", { name: "Pesos (COP)" }))
+  }
+
+  it("The figure stays exactly as the owner typed it", async () => {
+    const user = userEvent.setup()
+    await openOpalAndSayPesos(user)
+
+    expect(screen.getByText("Monto * (COP)")).toBeInTheDocument()
+    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("40")
+  })
+
+  it("The price that reaches the charge is the one on screen", async () => {
+    const user = userEvent.setup()
+    await openOpalAndSayPesos(user)
+
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(updateRecurring).toHaveBeenCalledTimes(1))
+    expect(updateRecurring).toHaveBeenCalledWith(
+      OPAL.id,
+      expect.objectContaining({ currency: "COP", amount: 4_000 }),
+    )
+  })
+})

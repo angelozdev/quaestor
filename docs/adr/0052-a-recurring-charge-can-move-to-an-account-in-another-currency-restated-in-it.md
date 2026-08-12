@@ -1,10 +1,10 @@
 # 0052. A recurring charge can move to an account in another currency, restated in it
 
-- **Status:** accepted
+- **Status:** superseded by 0053
 - **Date:** 2026-08-11
 - **Deciders:** Angelo
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** 0053
 
 ## Context and problem statement
 

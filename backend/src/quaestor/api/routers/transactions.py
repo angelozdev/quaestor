@@ -87,7 +87,7 @@ def create_transaction(body: TransactionCreate, session: Session = Depends(get_s
         meta_id=body.meta_id,
     )
     names = tags_service.set_transaction_tags(session, tx.id, body.tags) if body.tags is not None else []
-    return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
+    return TransactionOut.from_written(session, tx, fx.get_trm_or_none(session), names)
 
 
 @router.post("/transfer", response_model=TransferOut, status_code=201)
@@ -118,7 +118,7 @@ def update_transaction(tx_id: int, body: TransactionUpdate, session: Session = D
     tx = transactions.update_transaction(session, tx_id, **fields)
     if tag_names is not None:
         names = tags_service.set_transaction_tags(session, tx_id, tag_names)
-        return TransactionOut.from_tx(tx, fx.get_trm_or_none(session), names)
+        return TransactionOut.from_written(session, tx, fx.get_trm_or_none(session), names)
     return TransactionOut.from_one(session, tx, fx.get_trm_or_none(session))
 
 

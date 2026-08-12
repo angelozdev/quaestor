@@ -128,8 +128,11 @@ def test_transaction_wire_format_pins_cop_equivalent_and_drops_frozen_fx_fields(
         "source",
         "created_at",
         "tags",
+        "rule_amount",
+        "rule_currency",
     }
     assert row["cop_equivalent"] == 60_000
+    assert (row["rule_amount"], row["rule_currency"]) == (None, None)
 
 
 def test_report_totals_convert_usd_at_the_current_trm_not_a_frozen_rate(client, auth, expense_category):

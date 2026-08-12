@@ -210,9 +210,15 @@ def confirm_payment(
     plan chose weeks earlier and reality may have moved (ADR-0051). The account
     charged is the one named here; the obligation behind the payment keeps
     declaring its own, so this is an exception for one month and never a move.
-    An account holding another currency takes `amount` restated in it. A planned
-    transfer is the exception: it materializes into a pair built from the
-    accounts it already names, so naming another one here is refused.
+    A planned transfer is the exception: it materializes into a pair built from
+    the accounts it already names, so naming another one here is refused.
+
+    The account the payment lands on takes `amount` restated in its own
+    currency, whether the owner named another account or the payment was
+    already waiting in a currency its own account does not hold — which a
+    charge born from an obligation priced in the merchant's currency now is
+    (ADR-0053). Both go through the same door, so the account the payment
+    actually settles on is the one that decides what the figure is stated in.
 
     Raises:
         NotFound: the tx does not exist, or no such account.
@@ -229,7 +235,7 @@ def confirm_payment(
             _refuse_transfer_retarget(tx, account_id)
             result = _materialize_planned_transfer(session, tx, amount, date)
         else:
-            if account_id is not None and _tx.retarget(session, tx, account_id, amount):
+            if _tx.retarget(session, tx, account_id or tx.account_id, amount):
                 amount = None
             if amount is not None:
                 tx.amount = amount

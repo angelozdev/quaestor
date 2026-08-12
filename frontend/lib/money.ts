@@ -98,28 +98,32 @@ export function amountForAccount(
   return convertCents(stated.cents, stated.currency, to, usdCop)
 }
 
-/** The currency an account holds, or pesos when the account is not known yet. */
+/**
+ * The currency an account holds, or null while the accounts have not arrived.
+ *
+ * The null is what lets a screen fall back to the currency the movement it is
+ * showing already carries, rather than to pesos: a dollar figure read before the
+ * list of accounts must not be restated as pesos on the strength of a list
+ * nobody has seen yet. One helper for the three screens that offer an account —
+ * correcting a movement, confirming a payment and moving a repeating charge
+ * behave identically on purpose (ADR-0051).
+ */
+export function currencyHeldBy(
+  accounts: { id: number; currency: string }[] | undefined,
+  id: number | null,
+): string | null {
+  return accounts?.find((a) => a.id === id)?.currency ?? null
+}
+
+/**
+ * The currency an account holds, or pesos when the account is not known yet.
+ *
+ * For a screen that has nothing else to fall back on — a blank form, where no
+ * movement is on hand to keep the figure honest until the accounts arrive.
+ */
 export function currencyOf(
   accounts: { id: number; currency: string }[] | undefined,
   id: number | null,
 ): string {
-  return accounts?.find((a) => a.id === id)?.currency ?? "COP"
-}
-
-/**
- * The currency a movement is stated in while its account is being chosen: its
- * own until it moves, and the chosen account's from then on.
- *
- * A movement carries its currency the moment it is read, so a list of accounts
- * that has not arrived yet never restates a dollar figure as pesos. One helper
- * for both screens that offer an account: correcting a movement and confirming
- * a payment behave identically on purpose (ADR-0051).
- */
-export function currencyForAccount(
-  movement: { account_id: number; currency: string } | null,
-  accounts: { id: number; currency: string }[] | undefined,
-  chosen: number | null,
-): string {
-  if (movement !== null && chosen === movement.account_id) return movement.currency
-  return currencyOf(accounts, chosen)
+  return currencyHeldBy(accounts, id) ?? "COP"
 }
