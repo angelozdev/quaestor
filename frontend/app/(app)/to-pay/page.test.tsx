@@ -332,11 +332,51 @@ describe("012 — the confirmation reads the payment, not the list of accounts",
     const amount = await screen.findByLabelText("Monto real (USD)")
     await user.clear(amount)
     await user.type(amount, "87.52")
-    expect(amount).toHaveValue("87.52")
 
-    await user.click(screen.getByRole("button", { name: "Confirmar" }))
-    await waitFor(() => expect(confirmPayment).toHaveBeenCalledTimes(1))
-    expect(confirmPayment).toHaveBeenCalledWith(7, expect.objectContaining({ amount: 8_752 }))
+    expect(amount).toHaveValue("87.52")
+  })
+})
+
+/**
+ * Feature 013 — reading may go ahead on the charge's own currency, writing money
+ * may not.
+ *
+ * Since a charge may be priced in a currency its account does not hold, the
+ * currency on screen is a guess until the accounts arrive, and the account takes
+ * whatever figure it is sent at face value: 99.900 meant as pesos leaves a dollar
+ * account as US$ 99.900.
+ */
+describe("013 — confirming waits until the account's currency is known", () => {
+  it("Confirmar is unavailable while the list of accounts is still in flight", async () => {
+    await openConfirmationOfADollarPayment()
+    await screen.findByLabelText("Monto real (USD)")
+
+    expect(screen.getByRole("button", { name: "Confirmar" })).toBeDisabled()
+    expect(screen.getByText(/Buscando en qué moneda está la cuenta/)).toBeInTheDocument()
+  })
+
+  it("Confirmar comes back once the accounts arrive", async () => {
+    const user = userEvent.setup()
+    const charge = makeTransaction({
+      id: 31,
+      payee: "Hevy Pro",
+      status: "planned",
+      amount: 40_000_000,
+      currency: "COP",
+      account_id: DOLARAPP.id,
+      date: new Date().toISOString().slice(0, 10),
+    })
+    toPay.mockResolvedValue({ overdue: [charge], upcoming: [], total_base: charge.amount })
+    listAccounts.mockResolvedValue([ACCOUNT, DOLARAPP])
+    render(<ToPayPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+
+    expect(await screen.findByLabelText("Monto real (USD)")).toHaveValue("100")
+    const dialog = screen.getByRole("dialog", { name: "Confirmar pago" })
+    await waitFor(() =>
+      expect(within(dialog).getByRole("button", { name: "Confirmar" })).toBeEnabled(),
+    )
+    expect(screen.queryByText(/Buscando en qué moneda está la cuenta/)).not.toBeInTheDocument()
   })
 })
 

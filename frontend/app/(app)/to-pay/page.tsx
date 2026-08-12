@@ -87,6 +87,12 @@ const PLAN_DEFAULTS: PlanPaymentValues = {
  * (ADR-0053), so what this dialog asks for is the account's currency, not the
  * charge's. It opens with the price restated into it — a suggestion the owner
  * replaces with what the bank really took (AC-7, AC-9).
+ *
+ * Confirming waits for the accounts to arrive. Until they do, the currency of
+ * the figure the owner is looking at is a guess, and a figure sent in the wrong
+ * currency is taken at face value by the account it lands on: 99.900 meant as
+ * pesos would leave a dollar account as US$99.900. Reading may go ahead on the
+ * charge's own currency; writing money may not.
  */
 function ConfirmPaymentForm({
   charge,
@@ -103,7 +109,8 @@ function ConfirmPaymentForm({
   const [accountId, setAccountId] = useState<number | null>(charge.account_id)
   const [date, setDate] = useState(charge.date)
   const [written, setWritten] = useState<StatedAmount | undefined>(undefined)
-  const currency = currencyHeldBy(accounts, accountId) ?? charge.currency
+  const settled = currencyHeldBy(accounts, accountId)
+  const currency = settled ?? charge.currency
   const stated = written ?? { cents: charge.amount, currency: charge.currency }
   const amount = amountForAccount(stated, currency, usdCop)
 
@@ -156,6 +163,11 @@ function ConfirmPaymentForm({
           </p>
         )}
       </div>
+      {settled === null && (
+        <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+          Buscando en qué moneda está la cuenta…
+        </p>
+      )}
       <div className="space-y-1.5">
         <Label htmlFor="confirm-date">Fecha</Label>
         <Input
@@ -169,7 +181,7 @@ function ConfirmPaymentForm({
         <Button type="button" variant="outline" onClick={onDone}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={confirm.isPending}>
+        <Button type="submit" disabled={confirm.isPending || settled === null}>
           {confirm.isPending ? "…" : "Confirmar"}
         </Button>
       </div>
