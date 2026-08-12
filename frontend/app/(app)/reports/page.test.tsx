@@ -50,6 +50,8 @@ const RESTAURANTES_IS_A_CEILING: MonthlyReport = {
         accumulation_is_implied: false,
         on_track: true,
         averaged_over: null,
+        charges: [],
+        has_repeating_charges: false,
         spreads_over: null,
         whole_by: null,
       },

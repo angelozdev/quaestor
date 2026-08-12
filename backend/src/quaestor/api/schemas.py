@@ -502,6 +502,7 @@ class FundStatusOut(BaseModel):
     accumulation_is_implied: bool
     on_track: bool
     charges: list[FundChargeOut] = []
+    has_repeating_charges: bool = False
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None

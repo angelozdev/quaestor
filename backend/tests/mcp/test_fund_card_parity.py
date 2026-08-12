@@ -39,7 +39,7 @@ DESCRIBES_THE_FUND = (
     "whole_by",
 )
 
-NOT_ON_THE_CARD = ("charges",)
+NOT_ON_THE_CARD = ("charges", "has_repeating_charges")
 
 
 def _status(**overrides) -> FundStatus:

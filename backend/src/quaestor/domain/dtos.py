@@ -56,6 +56,11 @@ class FundStatus:
     what produced it and nothing in it is unattributable (ADR-0054). Only the
     rules that fill for dated charges have any.
 
+    `has_repeating_charges` is about the category, not the month, and exists
+    because an empty `charges` says two different things: every charge is
+    skipped or already paid, which passes, and the category has no repeating
+    charge left, which does not (AC-8 against AC-9).
+
     `averaged_over` is filled by the `average` rule only; `spreads_over` and
     `whole_by` by the rules that save toward a dated charge.
     """
@@ -74,6 +79,7 @@ class FundStatus:
     accumulation_is_implied: bool
     on_track: bool
     charges: list[FundCharge] = field(default_factory=list)
+    has_repeating_charges: bool = False
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None

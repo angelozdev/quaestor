@@ -13,9 +13,9 @@ import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { SkeletonRows } from "@/components/skeleton"
 import { StatusBadge } from "@/components/status-badge"
 import { deleteFund, listFunds, moneyAvailable } from "@/lib/api/funds"
-import type { FundStatus } from "@/lib/api/types"
+import type { FundCharge, FundStatus } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
-import { monthNameOf, nextYearMonth } from "@/lib/date"
+import { monthAndYearOf, monthNameOf, nextYearMonth } from "@/lib/date"
 import { type FundShape, nounOf, shapeOf, shapeSentence, whatItIs } from "@/lib/funds"
 import { formatCents } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
@@ -129,6 +129,59 @@ function nextMonthLine(fund: FundStatus): string {
     : `${next} vuelve a ${has}.`
 }
 
+/**
+ * What one charge contributes, and whether it leaves this month or stays.
+ *
+ * The whole charge is named only when it differs from the share, which is
+ * what makes the share legible: $ 100.000 means nothing until it is read as a
+ * twelfth of $ 1.200.000 (AC-2).
+ */
+function chargeLine(charge: FundCharge, month: string): string {
+  const when =
+    charge.charge_month === month
+      ? "vence este mes"
+      : `se guarda para ${monthAndYearOf(charge.charge_month)}`
+  const share = formatCents(charge.asks, "COP")
+  const figure =
+    charge.asks === charge.costs ? share : `${share} de ${formatCents(charge.costs, "COP")}`
+  return `${charge.name} — ${when} · ${figure}`
+}
+
+/** Why a fund that fills for charges is asking nothing at all this month. */
+function nothingToSetAside(fund: FundStatus): string {
+  return fund.has_repeating_charges
+    ? "Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados."
+    : "La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre. Bórralo, o registra un cobro."
+}
+
+/**
+ * The charges behind the figure, always under the row it explains.
+ *
+ * Only the rule that fills for charges has any — a fixed or averaged fund's
+ * figure is a single number the owner stated or the app averaged, and there is
+ * nothing to open it into.
+ */
+function FundCharges({ fund }: { fund: FundStatus }) {
+  if (fund.rule !== "from-recurring") return null
+  return (
+    <tr>
+      <td colSpan={6} className="px-3 pb-2.5" style={{ color: "var(--muted-foreground)" }}>
+        {fund.charges.length === 0 ? (
+          <p className="text-xs">{nothingToSetAside(fund)}</p>
+        ) : (
+          <ul className="space-y-0.5">
+            {fund.charges.map((charge) => (
+              <li key={`${charge.name}-${charge.charge_month}`} className="text-xs">
+                {chargeLine(charge, fund.year_month)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </td>
+    </tr>
+  )
+}
+
 function FundRow({
   fund,
   startedThisMonth,
@@ -140,49 +193,52 @@ function FundRow({
 }) {
   const shape = shapeOf(fund)
   return (
-    <tr
-      className="border-t transition-colors hover:bg-[var(--muted)]"
-      style={{ borderColor: "var(--border)" }}
-    >
-      <td className="px-3 py-2 align-top">
-        <div className="space-y-1">
-          <p className="font-medium">{fund.name}</p>
-          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            {keptLine(fund)}
-          </p>
-          <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-            {nextMonthLine(fund)}
-          </p>
-          {startedThisMonth && fund.holds === 0 && (
+    <>
+      <tr
+        className="border-t transition-colors hover:bg-[var(--muted)]"
+        style={{ borderColor: "var(--border)" }}
+      >
+        <td className="px-3 py-2 align-top">
+          <div className="space-y-1">
+            <p className="font-medium">{fund.name}</p>
             <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-              Tiene $0 porque empezó este mes.
+              {keptLine(fund)}
             </p>
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-2 align-top" style={{ color: "var(--muted-foreground)" }}>
-        {ruleLabel(fund.rule, shape)}
-      </td>
-      <td className="px-3 py-2 text-right align-top tabular-nums">
-        {formatCents(fund.asks, "COP")}
-      </td>
-      <td className="px-3 py-2 text-right align-top tabular-nums">
-        {formatCents(fund.holds, "COP")}
-      </td>
-      <td className="px-3 py-2 align-top">
-        <StatusBadge kind="onTrack" value={fund.on_track} />
-      </td>
-      <td className="px-3 py-2 text-right align-top">
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`Eliminar el ${shape} de ${fund.name}`}
-          onClick={onDelete}
-        >
-          Eliminar
-        </Button>
-      </td>
-    </tr>
+            <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+              {nextMonthLine(fund)}
+            </p>
+            {startedThisMonth && fund.holds === 0 && (
+              <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                Tiene $0 porque empezó este mes.
+              </p>
+            )}
+          </div>
+        </td>
+        <td className="px-3 py-2 align-top" style={{ color: "var(--muted-foreground)" }}>
+          {ruleLabel(fund.rule, shape)}
+        </td>
+        <td className="px-3 py-2 text-right align-top tabular-nums">
+          {formatCents(fund.asks, "COP")}
+        </td>
+        <td className="px-3 py-2 text-right align-top tabular-nums">
+          {formatCents(fund.holds, "COP")}
+        </td>
+        <td className="px-3 py-2 align-top">
+          <StatusBadge kind="onTrack" value={fund.on_track} />
+        </td>
+        <td className="px-3 py-2 text-right align-top">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Eliminar el ${shape} de ${fund.name}`}
+            onClick={onDelete}
+          >
+            Eliminar
+          </Button>
+        </td>
+      </tr>
+      <FundCharges fund={fund} />
+    </>
   )
 }
 

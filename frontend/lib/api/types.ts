@@ -151,15 +151,33 @@ export interface FundStatus {
   accumulates: boolean
   accumulation_is_implied: boolean
   on_track: boolean
+  charges: FundCharge[]
+  has_repeating_charges: boolean
   averaged_over: number | null
   spreads_over: number | null
   whole_by: string | null
+}
+
+/**
+ * One term of what a fund asks: the charge it is filling for.
+ *
+ * `costs` is the whole charge in pesos and `asks` its share of this month. A
+ * charge landing in the month being read is due rather than being saved for,
+ * which is `charge_month` against the fund's own month.
+ */
+export interface FundCharge {
+  name: string
+  costs: number
+  charge_month: string
+  asks: number
+  can_be_spread: boolean
 }
 
 export interface FundPreview {
   category_id: number
   would_ask: number
   warning: string | null
+  has_something_to_spread: boolean
 }
 
 /** `income − Σ funds.asks − uncovered = free`, exactly. */

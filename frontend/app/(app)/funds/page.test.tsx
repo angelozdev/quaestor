@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
-import type { FundCreate, FundRule, FundStatus, MonthAvailable } from "@/lib/api/types"
+import type { FundCharge, FundCreate, FundRule, FundStatus, MonthAvailable } from "@/lib/api/types"
 import { openHelpPanel } from "@/tests/factories"
 
 const { createFund, previewFund, moneyAvailable, deleteFund, listFunds, listCategories, toast } =
@@ -53,12 +53,46 @@ function fund(over: Partial<FundStatus> = {}): FundStatus {
     accumulates: true,
     accumulation_is_implied: false,
     on_track: true,
+    charges: [],
+    has_repeating_charges: false,
     averaged_over: null,
     spreads_over: null,
     whole_by: null,
     ...over,
   }
 }
+
+function charge(over: Partial<FundCharge> = {}): FundCharge {
+  return {
+    name: "Internet",
+    costs: 8_000_000,
+    charge_month: THIS_MONTH,
+    asks: 8_000_000,
+    can_be_spread: false,
+    ...over,
+  }
+}
+
+const INTERNET = charge()
+
+const DOMINIO = charge({
+  name: "Dominio",
+  costs: 120_000_000,
+  charge_month: "2027-08",
+  asks: 10_000_000,
+  can_be_spread: true,
+})
+
+const fillingFor = (charges: FundCharge[]) =>
+  fund({
+    fund_id: 3,
+    category_id: SERVICIOS.id,
+    name: SERVICIOS.name,
+    rule: "from-recurring",
+    asks: charges.reduce((total, line) => total + line.asks, 0),
+    charges,
+    has_repeating_charges: true,
+  })
 
 const presupuesto = (over: Partial<FundStatus> = {}) =>
   fund({ accumulates: false, carries: 0, next_month_has: 10_000_000, ...over })
@@ -69,6 +103,7 @@ const tecnologia = (over: Partial<FundStatus> = {}) =>
 let month: MonthAvailable
 let startMonths: Record<number, string>
 let wouldAsk: Partial<Record<FundRule, number>>
+let spreadable: Record<number, boolean>
 
 function showing(funds: FundStatus[]) {
   month = {
@@ -120,6 +155,24 @@ async function chooseRule(user: ReturnType<typeof setup>, label: string) {
 
 const under = async (heading: RegExp) => within(await screen.findByRole("table", { name: heading }))
 
+/** The pesos in a rendered figure: "$ 180.000" → 180000. */
+function pesosIn(text: string): number {
+  return Number((text.match(/[\d.]+/)?.[0] ?? "").replace(/\./g, ""))
+}
+
+/** What one breakdown line contributes, which is the first figure after its dash. */
+function shareIn(line: string): number {
+  return pesosIn(line.split("\u00b7")[1] ?? "")
+}
+
+const rowFor = (table: ReturnType<typeof within>, name: string) =>
+  table
+    .getAllByRole("row")
+    .find((row: HTMLElement) => within(row).queryByText(name) !== null) as HTMLElement
+
+/** What the row says the entry asks, which is its third cell. */
+const asked = (row: HTMLElement) => within(row).getAllByRole("cell")[2].textContent ?? ""
+
 const entriesUnder = (table: ReturnType<typeof within>) => table.getAllByRole("row").length - 1
 
 const THIS_SCREEN = "Fondos y presupuestos"
@@ -149,6 +202,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-08-15T12:00:00"))
   startMonths = {}
   wouldAsk = {}
+  spreadable = {}
   showing([])
   moneyAvailable.mockImplementation(async () => month)
   listFunds.mockImplementation(async () => fundLinesOf(month.funds))
@@ -157,6 +211,7 @@ beforeEach(() => {
     category_id: body.category_id,
     would_ask: wouldAsk[body.rule] ?? 0,
     warning: null,
+    has_something_to_spread: spreadable[body.category_id] ?? false,
   }))
   deleteFund.mockResolvedValue(undefined)
   createFund.mockImplementation(async (body: FundCreate) => {
@@ -352,6 +407,7 @@ describe("AC-5 — the rule picker names the job and carries a worked number", (
 
   it("The subscription rule says what it does with a real charge", async () => {
     wouldAsk = { "from-recurring": 10_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
     const user = setup()
     renderPage()
     await startCreating(user, "fondo")
@@ -364,6 +420,7 @@ describe("AC-5 — the rule picker names the job and carries a worked number", (
 
   it("The subscription rule says that it starts again on its own", async () => {
     wouldAsk = { "from-recurring": 10_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
     const user = setup()
     renderPage()
     await startCreating(user, "fondo")
@@ -1025,5 +1082,93 @@ describe("AC-40 — the fund no longer saves toward a date", () => {
     expect(offered).not.toContain("Junto una cantidad para una fecha")
     expect(screen.queryByLabelText("Objetivo * (COP)")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Mes objetivo *")).not.toBeInTheDocument()
+  })
+})
+
+describe("014 AC-1, AC-2, AC-4 — the figure opens into the charges that produced it", () => {
+  it("The row carries a line for every charge behind its figure", async () => {
+    showing([fillingFor([INTERNET, DOMINIO])])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    expect(table.getByText("$ 180.000")).toBeInTheDocument()
+    expect(table.getByText(/Internet —.*\$ 80\.000/)).toBeInTheDocument()
+    expect(table.getByText(/Dominio —.*\$ 100\.000/)).toBeInTheDocument()
+  })
+
+  it("A line says what the charge costs and when it lands", async () => {
+    showing([fillingFor([DOMINIO])])
+    renderPage()
+
+    const line = (await under(/Fondos/)).getByText(/^Dominio —/)
+    expect(line).toHaveTextContent("$ 1.200.000")
+    expect(line).toHaveTextContent("agosto de 2027")
+  })
+
+  it("The lines add up to what the row reads", async () => {
+    showing([fillingFor([INTERNET, DOMINIO])])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    const shares = table.getAllByRole("listitem").map((line) => shareIn(line.textContent ?? ""))
+    expect(shares.reduce((total, share) => total + share, 0)).toBe(180_000)
+    expect(pesosIn(asked(rowFor(table, SERVICIOS.name)))).toBe(180_000)
+  })
+})
+
+describe("014 AC-3 — what is due now reads differently from what is being saved", () => {
+  it("The row separates what leaves this month from what stays", async () => {
+    showing([fillingFor([INTERNET, DOMINIO])])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    expect(table.getByText(/^Internet —/)).toHaveTextContent("vence este mes")
+    expect(table.getByText(/^Dominio —/)).toHaveTextContent("se guarda para agosto de 2027")
+  })
+})
+
+describe("014 AC-8, AC-9 — a fund asking nothing says why", () => {
+  it("A fund with every charge skipped explains the empty month", async () => {
+    showing([fillingFor([])])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    expect(pesosIn(asked(rowFor(table, SERVICIOS.name)))).toBe(0)
+    expect(table.getByText(/no hay nada que apartar/)).toBeInTheDocument()
+  })
+
+  it("A fund left with no obligations at all says the category has none", async () => {
+    showing([fund({ ...fillingFor([]), has_repeating_charges: false })])
+    renderPage()
+
+    expect((await under(/Fondos/)).getByText(/ya no tiene cobros recurrentes/)).toBeInTheDocument()
+  })
+})
+
+describe("014 AC-14 — the rule is not offered where nothing can be spread", () => {
+  const THE_RULE = "Pago mis suscripciones mes a mes"
+
+  it("A category holding only monthly charges is not offered the rule", async () => {
+    wouldAsk = { "from-recurring": 25_000_000 }
+    spreadable = { [SERVICIOS.id]: false }
+    const user = setup()
+    renderPage()
+    await startCreating(user, "fondo")
+    await chooseCategory(user, SERVICIOS.name)
+
+    await waitFor(() =>
+      expect(screen.queryByRole("radio", { name: THE_RULE })).not.toBeInTheDocument(),
+    )
+  })
+
+  it("A category holding a charge that can be spread is offered the rule", async () => {
+    wouldAsk = { "from-recurring": 10_000_000 }
+    spreadable = { [SERVICIOS.id]: true }
+    const user = setup()
+    renderPage()
+    await startCreating(user, "fondo")
+    await chooseCategory(user, SERVICIOS.name)
+
+    expect(await screen.findByRole("radio", { name: THE_RULE })).toBeInTheDocument()
   })
 })

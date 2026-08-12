@@ -48,3 +48,14 @@ export function monthNameOf(yearMonth: string): string {
   const name = MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1)))
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
+
+/**
+ * A wire month with its year, mid-sentence: "2027-08" → "agosto de 2027".
+ *
+ * A charge a year out needs the year said, which `monthNameOf` leaves off
+ * because the months it names are always the one in view or the one after it.
+ */
+export function monthAndYearOf(yearMonth: string): string {
+  const [year, month] = yearMonth.split("-").map(Number)
+  return `${MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1)))} de ${year}`
+}

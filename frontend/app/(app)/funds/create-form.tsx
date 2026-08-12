@@ -8,7 +8,7 @@ import { toast } from "sonner"
 import { MoneyInput } from "@/components/money-input"
 import { listCategories } from "@/lib/api/categories"
 import { createFund, previewFund } from "@/lib/api/funds"
-import type { FundCreate, FundRule } from "@/lib/api/types"
+import type { FundCreate, FundPreview, FundRule } from "@/lib/api/types"
 import { ApiError, applyApiErrorsToForm } from "@/lib/api/types"
 import { accumulatesAs, type FundShape } from "@/lib/funds"
 import { invalidate, qk } from "@/lib/query"
@@ -66,6 +66,22 @@ function previewBody(
   return null
 }
 
+/**
+ * Whether a rule is worth offering for the category the owner picked.
+ *
+ * A category whose charges all land every month can only ever ask zero from
+ * the rule that fills for charges — there are no months between one turn and
+ * the next to spread over — so it is not offered one (AC-14).
+ *
+ * A category with nothing registered yet still is: the link beside the rule is
+ * how the owner registers the first charge, and taking it away would close the
+ * only door out of that state.
+ */
+function offerTheRule(rule: FundRule, preview: FundPreview | undefined): boolean {
+  if (rule !== "from-recurring" || preview === undefined) return true
+  return preview.has_something_to_spread || preview.would_ask === 0
+}
+
 export function CreateFundForm({
   shape,
   month,
@@ -112,6 +128,14 @@ export function CreateFundForm({
       }
     }),
   })
+
+  const offeredRules = offers
+    .filter((offer, index) => offerTheRule(offer.rule, previews[index]?.data))
+    .map((offer) => offer.rule)
+
+  if (offeredRules.length > 0 && !offeredRules.includes(values.rule)) {
+    form.setFieldValue("rule", offeredRules[0])
+  }
 
   const onErr = (e: unknown) => {
     applyApiErrorsToForm(form, e)
@@ -210,6 +234,7 @@ export function CreateFundForm({
               {shape === "fondo" ? "¿Cómo aparta la plata?" : "¿Cómo se pone el tope?"}
             </legend>
             {offers.map((offer, index) => {
+              if (!offeredRules.includes(offer.rule)) return null
               const wouldAsk = previews[index]?.data?.would_ask ?? null
               const why = ruleConsequence(offer.rule, shape, {
                 wouldAsk,

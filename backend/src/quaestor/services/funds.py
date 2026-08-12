@@ -359,6 +359,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),
         charges=list(walked.ask.charges),
+        has_repeating_charges=bool(agg.obligations_in(fund.category_id)),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
