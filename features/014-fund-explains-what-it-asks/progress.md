@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 0/6 criteria met | NEXT: CP6 refine, con agent_id distinto | BLOCKED: none
+> ▶ CP5 Implement — 7/7 criteria met | NEXT: /engineer.refine for CP6, agent_id distinto | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,7 +14,7 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
-| 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | — |
+| 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | 2026-08-12T1745-implement.md |
 
 ## Las dos reglas de las que sale todo
 
@@ -80,6 +80,8 @@ ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
 - 2026-08-12T1210 — discover-acs: 18 criterios, 9 altos.
 - 2026-08-12T1245 — atdd: 32 escenarios, 25 `@backend` y 7 de pantalla.
 - 2026-08-12T1320 — plan: ADR-0054, cuatro rebanadas, sin runbook.
+- 2026-08-12T1745 — implement: las cuatro rebanadas; dos defectos que solo el
+  navegador y el pipeline vieron.
 
 ## Defectos encontrados durante CP5, y no por las suites
 
