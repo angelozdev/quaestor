@@ -1,4 +1,4 @@
-> ▶ CP6 Refine — 4/4 criteria met | NEXT: /engineer.crap-analyzer para CP7, con agente fresco | BLOCKED: none
+> ▶ CP6 Refine — 4/4 criteria met, firma inválida | NEXT: que un agente fresco rehaga la revisión | BLOCKED: independencia de verificación (Principio 7) — la firma la puso el mismo agente que implementó
 
 # Progress — 013 recurring-charge-keeps-its-price
 
@@ -15,7 +15,7 @@ reales el 2026-08-12 con el dueño delante.
 | 3 | Spec | done — aprobado por el dueño 2026-08-11; **rojo**, 38/47 tests de servicio fallan | 2026-08-11T1815-atdd.md |
 | 4 | Plan | done — ADR-0053 aceptada, reemplaza la 0052; runbook para la migración | 2026-08-11T1756-plan.md |
 | 5 | Implement | done — las cinco rebanadas, migración incluida | 2026-08-11T2230-implement.md |
-| 6 | Refine | done — tres limpiezas, un ayudante menos | 2026-08-12T0840-refine.md |
+| 6 | Refine | trabajo hecho y verde, **firma inválida** — mismo `agent_id` que CP5 | 2026-08-12T0840-refine.md |
 | 7 | Verify | — | — |
 | 8 | Harden | — | — |
 
