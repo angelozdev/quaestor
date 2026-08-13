@@ -69,6 +69,19 @@ def _meta_id(world: World, name: str) -> int:
     return ids[name]
 
 
+def _meta_held_in(world: World, name: str, currency: str) -> int:
+    """The meta's id, refusing a step that names a currency it is not held in.
+
+    A contribution carries no currency of its own — it is put by in the meta's
+    (AC-26) — so a step saying USD to a meta held in COP would read as a
+    conversion that never happens, and pass.
+    """
+    meta_id = _meta_id(world, name)
+    held = world.session.get(_Meta, meta_id).currency
+    assert held == currency, f"the meta {name!r} is held in {held}, not {currency}"
+    return meta_id
+
+
 def _status(world: World, name: str, year_month: str | None = None):
     month = year_month or _today(world)
     agg = load_month(world.session, month)
@@ -469,10 +482,10 @@ def when_skip_planned(world: World) -> None:
 # --------------------------------------------------------------- the acts
 
 
-@step(rf'the user contributes (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)"')
-def when_contribute(world: World, amount: str, name: str) -> None:
+@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)"')
+def when_contribute(world: World, amount: str, currency: str, name: str) -> None:
     try:
-        world.last_contributed_to = _meta_id(world, name)
+        world.last_contributed_to = _meta_held_in(world, name, currency)
         world.last_put_in = service.contribute(
             world.session, world.last_contributed_to, year_month=_today(world), amount=_cents(amount)
         ).amount
@@ -481,9 +494,9 @@ def when_contribute(world: World, amount: str, name: str) -> None:
         world.contribution_refusal = str(exc)
 
 
-@step(rf'a contribution of (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
-def given_contribution(world: World, amount: str, name: str, month: str) -> None:
-    world.last_contributed_to = _meta_id(world, name)
+@step(rf'a contribution of (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
+def given_contribution(world: World, amount: str, currency: str, name: str, month: str) -> None:
+    world.last_contributed_to = _meta_held_in(world, name, currency)
     service.contribute(world.session, world.last_contributed_to, year_month=month, amount=_cents(amount))
 
 

@@ -130,11 +130,9 @@ class _Month:
     """What one month did to a meta.
 
     `contributed` is what the meta **took** of what the owner offered by hand,
-    which is not always what he offered: the room is recomputed on every read,
+    which is not always the whole of it: the room is recomputed on every read,
     so lowering the amount or dating the purchase before this month can leave
-    part of a contribution that fitted when it was made with nowhere to go. The
-    month is charged this figure and never the stored row, or the difference
-    would leave the money available without reaching the meta (AC-14).
+    part of a contribution that fitted when it was made with nowhere to go.
     """
 
     opening: int
@@ -302,12 +300,12 @@ class MetaFold:
     it leaves the rest in the month (AC-14), and charging the offer would take
     that rest out of the money available without it reaching anything. Cancelled
     metas are in it for the same reason `asks` counts them — charging one side
-    and not the other would hand him that money twice. `released` is what came back to the month,
-    from cancellations and from amounts lowered below what the meta already
-    held (AC-15, AC-16); it is read for that one month and never again, so
-    November cannot give back what October already gave. `uncovered` is what
-    each linked purchase cost past what its meta had (AC-12), the seam where
-    double counting would enter.
+    and not the other would hand him that money twice. `released` is what came
+    back to the month, from cancellations and from amounts lowered below what
+    the meta already held (AC-15, AC-16); it is read for that one month and
+    never again, so November cannot give back what October already gave.
+    `uncovered` is what each linked purchase cost past what its meta had
+    (AC-12), the seam where double counting would enter.
 
     All of it comes out of one walk per meta, because walking the metas is the
     dominant cost of the month's read path.
@@ -401,9 +399,10 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
     """What one linked purchase cost past what its meta had, in COP cents.
 
     A linked movement is out of its category's spending entirely (`spent_in`
-    drops it), so the only thing it can cost the month is its own excess — what
-    it cost, less what the meta opened the month with, less what it asks now
-    (AC-12).
+    drops it), so the only thing it can cost the month is its own excess: only
+    what the meta cannot cover costs the month (AC-43), and what it can cover
+    is what it holds. Measuring against the instalment alone charged a hand
+    contribution once as a contribution and again as a gap (AC-13, AC-14).
     """
     spent = sum(
         agg.to_cop_cents(tx)
@@ -412,9 +411,8 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
     )
     if not spent:
         return 0
-    month = walked.month
     return to_cop_cents(
-        uncovered_excess_calc(_to_meta_currency(agg, meta, spent), month.opening, month.ask),
+        uncovered_excess_calc(_to_meta_currency(agg, meta, spent), walked.month.holds),
         meta.currency,
         agg.trm,
     )

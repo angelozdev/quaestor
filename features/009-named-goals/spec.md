@@ -494,6 +494,21 @@ Scenario: The meta's amount is not rewritten to the price paid
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user records an expense of 9000000.00 COP in category "Tecnologia" linked to the meta "Celular"
   Then the meta "Celular" wants 8000000.00 COP by 2026-12
+
+@backend
+Scenario: Only what a meta filled by hand did not cover leaves the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user records an expense of 7000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the meta "Celular" holds 6000000.00 COP this month
+  And the breakdown shows uncovered spending of 1000000.00 COP
+  And the money available this month is 3000000.00 COP
 ```
 
 ## AC-14 — A contribution larger than what is missing is trimmed to fit
@@ -539,6 +554,16 @@ Scenario: Lowering the amount below what was contributed leaves the rest in the 
   Then the meta "Celular" holds 5000000.00 COP this month
   And the breakdown shows 1200000.00 COP contributed by hand
   And the money available this month is 3200000.00 COP
+
+@backend
+Scenario: A contribution to a meta in dollars reaches the month at the rate
+  Given today is 2026-10-10
+  And the TRM is 4000
+  And a meta "Portatil" of 1200.00 USD by 2026-12, opened 2026-10
+  When the user contributes 800.00 USD to "Portatil"
+  And the user views the money available this month
+  Then the meta "Portatil" holds 1200.00 USD this month
+  And the breakdown shows 3200000.00 COP contributed by hand
 
 @backend
 Scenario: A meta that had already finished leaves the whole contribution in the month
@@ -1600,6 +1625,34 @@ Scenario: A purchase owed but not yet paid leaves the meta asking the month afte
   And a planned expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
   When the user views the metas for 2026-11
   Then the meta "Celular" held 4000000.00 COP that month
+
+@backend
+Scenario: A purchase a meta filled by hand covers costs the month nothing more
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user records an expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows uncovered spending of 0.00 COP
+  And the money available this month is 4000000.00 COP
+
+@backend
+Scenario: A planned purchase a meta filled by hand covers costs the month nothing
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user plans an expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows uncovered spending of 0.00 COP
+  And the money available this month is 4000000.00 COP
 ```
 
 ## AC-44 — The metas list puts what needs an answer first

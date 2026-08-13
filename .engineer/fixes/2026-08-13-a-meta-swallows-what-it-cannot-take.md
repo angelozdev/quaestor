@@ -4,7 +4,7 @@ title: "A contribution the meta cannot take is still charged to the month"
 severity: high
 blocks_user: false
 workaround: "remove the contribution and make it again — contribute() trims at write time, so the row is rewritten to what now fits"
-status: pinned-pending
+status: refined
 
 source:
   kind: user
@@ -38,16 +38,21 @@ pin_confirmation:
       spec_path: "features/009-named-goals/spec.md"
       red_run:
         result: red
-        command: "acceptance/handlers run_scenario over the two candidate scenarios (spec.md not yet touched — permission pending)"
+        command: "./run-acceptance-tests.sh features/009-named-goals"
         output: |
-          RED  Lowering the amount below what the meta already took leaves the rest in the month
-               contributed 320000000, expected 120000000
-               the money available is 120000000, expected 320000000
-          RED  A meta that had already finished leaves the whole contribution in the month
-               contributed 320000000, expected 0
-               the money available is 180000000, expected 500000000
+          FAILED test_009_named_goals.py::test_lowering_the_amount_below_what_was_contributed_leaves_the_rest_in_the_month
+                 contributed 320000000, expected 120000000
+          FAILED test_009_named_goals.py::test_a_meta_that_had_already_finished_leaves_the_whole_contribution_in_the_month
+                 contributed 320000000, expected 0
+          2 failed, 133 passed in 7.14s
 
-fix_commits: []
+          Each scenario's `money available` assertion was proven red on its own,
+          with the `contributed` line removed so it could be reached:
+          the money available is 120000000, expected 320000000
+          the money available is 180000000, expected 500000000
+
+fix_commits:
+  - "9e22458 fix(009): the month charged a contribution the meta never took"
 
 harden_results:
   mutation_score: null

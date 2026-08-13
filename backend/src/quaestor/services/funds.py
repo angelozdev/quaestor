@@ -322,7 +322,7 @@ def _overspill(walked: _Month) -> int:
     One reading, two readers: the money the overspill costs the month, and
     whether the fund lost ground keeping it.
     """
-    return uncovered_excess_calc(walked.spent, walked.opening, walked.ask.amount)
+    return uncovered_excess_calc(walked.spent, walked.opening + walked.ask.amount)
 
 
 def _on_track(walked: _Month) -> bool:
