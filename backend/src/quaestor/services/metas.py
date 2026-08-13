@@ -135,7 +135,6 @@ class _Month:
     part of a contribution that fitted when it was made with nowhere to go.
     """
 
-    opening: int
     ask: int
     holds: int
     released: int = 0
@@ -186,13 +185,13 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
     taken only up to the amount.
     """
     if _finished_before(agg, meta, month):
-        return _Month(opening=opening, ask=0, holds=opening)
+        return _Month(ask=0, holds=opening)
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
-        return _Month(opening=opening, ask=0, holds=amount, released=opening - amount)
+        return _Month(ask=0, holds=amount, released=opening - amount)
     ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
     contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
-    return _Month(opening=opening, ask=ask, holds=opening + ask + contributed, contributed=contributed)
+    return _Month(ask=ask, holds=opening + ask + contributed, contributed=contributed)
 
 
 @dataclass(frozen=True)
@@ -216,7 +215,7 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Walked:
     rather than one per branch of the month.
     """
     if agg.year_month < meta.start_month:
-        return _Walked(_Month(opening=0, ask=0, holds=0), finished=False)
+        return _Walked(_Month(ask=0, holds=0), finished=False)
     finished = _bought_in(agg, meta) is not None
     month, opening = meta.start_month, meta.stated_opening or 0
     while month < agg.year_month:
