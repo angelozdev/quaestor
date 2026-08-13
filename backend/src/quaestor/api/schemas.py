@@ -567,6 +567,7 @@ class MetaContributionOut(BaseModel):
     meta_id: int
     year_month: str
     amount: int
+    returned_month: str | None = None
 
 
 class MetaPreviewOut(BaseModel):

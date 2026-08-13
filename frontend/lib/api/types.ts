@@ -510,6 +510,7 @@ export interface MetaContribution {
   meta_id: number
   year_month: string
   amount: number
+  returned_month: string | null
 }
 
 export interface MonthSplit {

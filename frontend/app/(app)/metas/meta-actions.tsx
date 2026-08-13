@@ -202,6 +202,9 @@ function TextAsk({
  * Removing one is not destructive to the meta: the month it was made in gets
  * its money back and the instalments that follow rise again, which is the
  * remedy a contribution typed into the wrong meta had none of.
+ *
+ * One a cancellation gave back (ADR-0055) is struck through and says so: it is
+ * still the owner's history, and it is no longer part of what the meta holds.
  */
 function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => void }) {
   const queryClient = useQueryClient()
@@ -229,13 +232,29 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
       {list.data && list.data.length > 0 && (
         <ul className="space-y-1">
           {list.data.map((contribution) => (
-            <li key={contribution.id} className="flex items-center gap-3 text-sm">
+            <li key={contribution.id} className="flex flex-wrap items-center gap-3 text-sm">
               <span style={{ color: "var(--muted-foreground)" }}>
                 {monthNameOf(contribution.year_month)} {contribution.year_month.slice(0, 4)}
               </span>
-              <span className="tabular-nums">
+              <span
+                className={
+                  contribution.returned_month === null
+                    ? "tabular-nums"
+                    : "tabular-nums line-through"
+                }
+                style={
+                  contribution.returned_month === null
+                    ? undefined
+                    : { color: "var(--muted-foreground)" }
+                }
+              >
                 {formatCents(contribution.amount, meta.currency)}
               </span>
+              {contribution.returned_month !== null && (
+                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                  Te lo devolvimos al cancelar la meta.
+                </span>
+              )}
               <Button
                 variant="ghost"
                 size="sm"

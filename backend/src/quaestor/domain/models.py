@@ -195,6 +195,12 @@ class MetaContribution(SQLModel, table=True):
     (AC-42). Nothing generates these: there is no month-end routine, no
     proposal to confirm and no source account — which is what separates this
     from the `goal_contribution` table migration 0012 removed.
+
+    `returned_month` is the month a cancellation handed this contribution back
+    (ADR-0055). It is written when the meta is restored, never when it is
+    cancelled: restoring is the act that separates the meta's two lives, and a
+    cancellation nobody undoes leaves its month reading exactly as it stood. A
+    returned row stays listed and no month reads it again.
     """
 
     __tablename__ = "meta_contribution"
@@ -202,6 +208,7 @@ class MetaContribution(SQLModel, table=True):
     meta_id: Annotated[int, Field(foreign_key="meta.id")]
     year_month: str
     amount: Annotated[int, Field(sa_type=BigInteger)]
+    returned_month: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 

@@ -68,3 +68,4 @@ New ADRs are created with the `adr` skill:
 | 0052 | A recurring charge can move to an account in another currency, restated in it | superseded by 0053 | 2026-08-11 |
 | 0053 | El precio de un cobro recurrente es el del comercio, y su cuenta decide en qué moneda se paga | accepted | 2026-08-11 |
 | 0054 | El aviso de un fondo trata sobre una obligación que no se puede repartir, y el fondo reporta los términos de su cifra | accepted | 2026-08-12 |
+| 0055 | Restaurar una meta abre una vida nueva, y los aportes de la anterior quedan marcados como devueltos | accepted | 2026-08-13 |

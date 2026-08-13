@@ -1114,6 +1114,32 @@ Scenario: An archived meta is not offered when an expense is recorded
   Given a meta "Celular" of 8000000.00 COP by 2026-12 that has been cancelled
   When the owner starts recording an expense
   Then the meta "Celular" is not offered to link
+
+@backend
+Scenario: A restored meta does not charge again a contribution the cancellation gave back
+  Given today is 2026-08-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 1000000.00 COP to "Portatil" made 2026-08
+  And the meta "Portatil" was cancelled 2026-08
+  When the user restores the meta "Portatil"
+  Then the meta "Portatil" asks 1000000.00 COP this month
+  And the meta "Portatil" holds 1000000.00 COP this month
+
+@backend
+Scenario: A meta that was never cancelled goes on counting its contributions
+  Given today is 2026-08-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-08
+  When the user contributes 1000000.00 COP to "Portatil"
+  Then the meta "Portatil" holds 2000000.00 COP this month
+
+@backend
+Scenario: A contribution made in a month the restore left behind is given back too
+  Given today is 2026-09-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-07
+  And a contribution of 1000000.00 COP to "Portatil" made 2026-07
+  And the meta "Portatil" was cancelled 2026-08
+  When the user restores the meta "Portatil"
+  Then the meta "Portatil" lists a contribution of 1000000.00 COP made 2026-07 given back when it was cancelled
 ```
 
 ## AC-30 — The metas screen says what a meta is
@@ -1692,6 +1718,11 @@ Scenario: Removing a contribution raises the instalments that had dropped
   And a contribution of 2000000.00 COP to "Celular" made 2026-09
   When the user removes that contribution
   Then the meta "Celular" asks 1600000.00 COP this month
+
+Scenario: A contribution given back by a cancellation is listed as such
+  Given a meta "Portatil" that lists a contribution of 1000000.00 COP made 2026-08, given back when it was cancelled
+  When the owner opens the contributions of "Portatil"
+  Then the contribution of 1000000.00 COP is shown as given back when the meta was cancelled
 ```
 
 ## AC-43 — A planned expense is netted against its meta the same way

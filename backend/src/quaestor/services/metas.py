@@ -566,7 +566,12 @@ def remove_contribution(session: Session, contribution_id: int) -> None:
 
 
 def contributions_of(session: Session, meta_id: int) -> list[MetaContribution]:
-    """Every contribution made to one meta, oldest first (AC-42)."""
+    """Every contribution made to one meta, oldest first (AC-42).
+
+    The ones a restore gave back are here too, carrying the month it happened.
+    The list is the owner's history; what a month reads is a narrower question
+    the aggregate answers.
+    """
     rows = session.exec(select(MetaContribution).where(MetaContribution.meta_id == meta_id)).all()
     return sorted(rows, key=lambda r: (r.year_month, r.id))
 
@@ -628,6 +633,12 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     restored in and fills from zero. Resuming with the old holdings would give
     the owner the same money twice.
 
+    That is why the contributions of the life just ended are stamped with the
+    month the cancellation gave them back (ADR-0055). They stay listed (AC-42)
+    and no month reads them again. Restoring is the act that stamps them, not
+    cancelling: a cancellation nobody undoes leaves its own month reading what
+    it read, give-back included.
+
     A meta that was never cancelled is refused: restoring rewrites its start
     month and drops what the owner stated it already had, which on a running
     meta would throw away the history every figure is derived from.
@@ -647,6 +658,10 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     if meta.closed:
         raise ValidationError(f"the meta {meta.name!r} was bought and closed, so there is nothing to bring back")
     _refuse_name_already_held(session, meta.name, excluding=meta.id)
+    for row in contributions_of(session, meta.id):
+        if row.returned_month is None:
+            row.returned_month = meta.cancelled_month
+            session.add(row)
     meta.archived = False
     meta.closed = False
     meta.cancelled_month = None

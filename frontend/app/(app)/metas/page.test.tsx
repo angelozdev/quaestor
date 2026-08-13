@@ -361,7 +361,7 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
   it("Every contribution is listed with its month and its amount", async () => {
     listMetas.mockResolvedValue([meta()])
     listContributions.mockResolvedValue([
-      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000, returned_month: null },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -375,7 +375,7 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
   it("Any of them can be removed", async () => {
     listMetas.mockResolvedValue([meta()])
     listContributions.mockResolvedValue([
-      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000, returned_month: null },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -384,6 +384,20 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
     await user.click(await screen.findByRole("button", { name: "Quitar" }))
 
     await waitFor(() => expect(removeContribution).toHaveBeenCalledWith(4))
+  })
+
+  it("A contribution given back by a cancellation is listed as such", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 100_000_000, returned_month: "2026-08" },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    expect(await screen.findByText("$ 1.000.000")).toHaveClass("line-through")
+    expect(screen.getByText("Te lo devolvimos al cancelar la meta.")).toBeInTheDocument()
   })
 
   it("A meta nobody put money into says so", async () => {
