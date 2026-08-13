@@ -348,11 +348,19 @@ def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str)
 
 @step(
     r'a recurring charge "(?P<payee>[^"]+)" on "(?P<category>[^"]+)"'
-    r" of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}) every (?P<unit>day|week|month|year),"
+    r" of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3})"
+    r" every (?:(?P<count>\d+) )?(?P<unit>day|week|month|year)s?,"
     r" next due (?P<due>" + _MONTH + r")"
 )
 def given_recurring_charge(
-    world: World, payee: str, category: str, amount: str, currency: str, unit: str, due: str
+    world: World,
+    payee: str,
+    category: str,
+    amount: str,
+    currency: str,
+    unit: str,
+    due: str,
+    count: str | None = None,
 ) -> None:
     """A charge that repeats and whose next turn falls in a named month.
 
@@ -377,7 +385,7 @@ def given_recurring_charge(
         category_id=_spending_category_id(world, category),
         account_id=_default_account_id(world, currency),
         interval_unit=IntervalUnit(unit),
-        interval_count=1,
+        interval_count=int(count or 1),
         start_date=first,
         declared_on=first,
     )

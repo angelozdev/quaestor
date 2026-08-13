@@ -1,4 +1,4 @@
-> ▶ CP7 Verify — 4/4 criteria met | NEXT: mutación para CP8, agent_id distinto | BLOCKED: none
+> ▶ CP8 Harden — 4/4 criteria met | NEXT: mergear a main | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,6 +14,7 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
+| 8 | Harden | done — mutación exhaustiva, 85,2% en `funds.py`; **ninguna cifra sobrevive** y los 7 huecos cerrados | 2026-08-12T2100-mutation.md |
 | 7 | Verify | done — verificador independiente; **cuatro cifras equivocadas** y tres criterios que no podían fallar | 2026-08-12T2000-crap-analyzer.md |
 | 6 | Refine | done — refinador independiente; 9 hallazgos, 7 aplicados, y un **defecto real** que el AC-13 prohibía | 2026-08-12T1900-refine.md |
 | 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | 2026-08-12T1745-implement.md |
@@ -41,6 +42,24 @@ decidida por el dueño y escrita** en ADR-0054 → Costos y en el tercer grupo d
 La corrección del aviso sí le llega gratis, porque lo imprime tal cual.
 
 ## Verification reports
+
+### CP8 — mutación
+
+161 mutantes, exhaustivo, sobre `services/funds.py` y `domain/dtos.py`.
+
+```
+funds.py   142 mutantes · 121 muertos · 21 vivos → 85,2%
+```
+
+**Ni un mutante que mueva una cifra sobrevivió.** Todo lo que reescribe la
+división, el reclamo del saldo, el pliegue, el techo y la aritmética de meses
+murió, casi todo en menos de diez segundos. Lo que un fondo pide, tiene y pasa
+está protegido de verdad.
+
+Los 21 vivos están fuera de la aritmética. Siete eran huecos reales, en los
+mismos tres sitios que CP7 llamó delgados, y el peor permitía que un fondo vivo
+dijera «bórralo» con las 1.824 pruebas verdes. Los siete cerrados, y cada
+escenario nuevo comprobado volviendo a correr su propio mutante.
 
 ### CP7 — verificación independiente
 
@@ -139,6 +158,8 @@ ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
   de comportamiento y un paso que medía lo que no era.
 - 2026-08-12T2000 — crap-analyzer (independiente): cuatro cifras equivocadas y
   tres criterios incapaces de fallar; los cinco arreglados.
+- 2026-08-12T2100 — mutación (independiente): 85,2% en `funds.py`, ninguna cifra
+  sobrevive, siete huecos cerrados y cada uno probado contra su mutante.
 
 ## Defectos encontrados durante CP5, y no por las suites
 

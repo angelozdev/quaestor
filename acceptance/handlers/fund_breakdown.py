@@ -42,6 +42,7 @@ from .sinking_funds import (
     _status,
     given_fund_from_obligations,
     given_recurring_charge,
+    previewed,
     warning_shown,
 )
 from .world import World
@@ -291,6 +292,25 @@ def given_stops_repeating(world: World, payee: str, month: str) -> None:
     _, item.end_date = month_bounds(month)
     world.session.add(item)
     world.session.commit()
+
+
+@step(r'the fund on "(?P<fund>[^"]+)" still has a repeating charge')
+def then_still_has_a_repeating_charge(world: World, fund: str) -> None:
+    left = getattr(_status(world, fund), "has_repeating_charges", None)
+    assert left is True, f"the fund on {fund!r} says its category is finished while a charge is still coming"
+
+
+@step(r"the category has (?P<what>something|nothing) to spread")
+def then_category_spreadable(world: World, what: str) -> None:
+    """What decides whether the rule is offered at all (AC-14).
+
+    Read off the preview rather than off a screen, because the screen only ever
+    sees what this field says and a mocked one proves nothing about it.
+    """
+    spreadable = getattr(previewed(world), "has_something_to_spread", None)
+    assert spreadable is (what == "something"), (
+        f"the category reports has_something_to_spread={spreadable}, expected {what!r} to spread"
+    )
 
 
 @step(r'the fund on "(?P<fund>[^"]+)" has no repeating charge left')

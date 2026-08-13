@@ -200,6 +200,30 @@ Scenario: A fund left with no obligations at all says the category has none
 
 ```gherkin
 @backend
+Scenario: A fund filling for a live charge still counts it
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
+  And a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  When the user views the funds
+  Then the fund on "Suscripciones" still has a repeating charge
+
+@backend
+Scenario: A rule that ran out months ago is not one the fund is waiting for
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-05
+  And "Internet" stops repeating after 2026-05
+  And a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  When the user views the funds
+  Then the fund on "Suscripciones" has no repeating charge left
+
+@backend
+Scenario: One live charge is enough, beside a rule that ran out
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
+  And a recurring charge "Viejo" on "Suscripciones" of 50000.00 COP every month, next due 2026-05
+  And "Viejo" stops repeating after 2026-05
+  And a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  When the user views the funds
+  Then the fund on "Suscripciones" still has a repeating charge
+
+@backend
 Scenario: A charge whose rule has run out is not a charge the fund is waiting for
   Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
   And "Internet" stops repeating after 2026-08
@@ -261,6 +285,19 @@ Scenario: Two charges with no months to spread over are both named
   And the warning states 6500000.00 COP
 
 @backend
+Scenario: A charge that lands every two months is announced when it has no month left
+  Given a recurring charge "Peaje" on "Auto" of 400000.00 COP every 2 months, next due 2026-09
+  When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08
+  Then the warning names "Peaje"
+  And the warning states 400000.00 COP
+
+@backend
+Scenario: A single cent still has no month to fall in
+  Given a recurring charge "Seguro" on "Auto" of 6000000.00 COP every year, next due 2026-09
+  When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08, opening with 5999999.99 COP
+  Then the warning states 0.01 COP
+
+@backend
 Scenario: Nothing is announced when the fund already holds what the charge needs
   Given a recurring charge "Seguro" on "Auto" of 6000000.00 COP every year, next due 2026-09
   When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08, opening with 6000000.00 COP
@@ -311,6 +348,21 @@ Scenario Outline: The four categories that warn today stop warning
 ```
 
 ## AC-14 — The rule is not offered where nothing can be spread
+
+```gherkin
+@backend
+Scenario: A category mixing a monthly charge with a yearly one has something to spread
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
+  And a recurring charge "Dominio" on "Suscripciones" of 1200000.00 COP every year, next due 2027-08
+  When the user starts creating a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  Then the category has something to spread
+
+@backend
+Scenario: A category holding only monthly charges has nothing to spread
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
+  When the user starts creating a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  Then the category has nothing to spread
+```
 
 ```gherkin
 Scenario: A category holding only monthly charges is not offered the rule
