@@ -291,3 +291,10 @@ def given_stops_repeating(world: World, payee: str, month: str) -> None:
     _, item.end_date = month_bounds(month)
     world.session.add(item)
     world.session.commit()
+
+
+@step(r'the fund on "(?P<fund>[^"]+)" has no repeating charge left')
+def then_no_repeating_charge_left(world: World, fund: str) -> None:
+    status = _status(world, fund)
+    left = getattr(status, "has_repeating_charges", None)
+    assert left is False, f"the fund on {fund!r} still counts a charge it will never be asked for"

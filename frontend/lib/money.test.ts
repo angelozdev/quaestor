@@ -7,6 +7,7 @@ import {
   formatCents,
   formatRate,
   impliedRate,
+  sharesAddingTo,
 } from "./money"
 
 describe("impliedRate", () => {
@@ -131,5 +132,24 @@ describe("currencyHeldBy", () => {
 
   it("says nothing about an account the list does not hold", () => {
     expect(currencyHeldBy(accounts, 99)).toBeNull()
+  })
+})
+
+describe("sharesAddingTo — the parts add up to the whole on screen", () => {
+  it("gives the leftover peso to the largest centavos", () => {
+    expect(sharesAddingTo([33_333_334, 33_333_334], 66_666_668)).toEqual([33_333_400, 33_333_300])
+  })
+
+  it("leaves an exact division alone", () => {
+    expect(sharesAddingTo([50_000_000, 50_000_000], 100_000_000)).toEqual([50_000_000, 50_000_000])
+  })
+
+  it("what the screen shows adds up to what the row shows", () => {
+    const total = 66_666_668
+    const shown = sharesAddingTo([33_333_334, 33_333_334], total)
+    const pesos = shown.map((cents) => Number(formatCents(cents, "COP").replace(/\D/g, "")))
+    expect(pesos.reduce((a, b) => a + b, 0)).toBe(
+      Number(formatCents(total, "COP").replace(/\D/g, "")),
+    )
   })
 })

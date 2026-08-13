@@ -104,7 +104,7 @@ let month: MonthAvailable
 let startMonths: Record<number, string>
 let wouldAsk: Partial<Record<FundRule, number>>
 let spreadable: Record<number, boolean>
-let crowded: FundCharge | null
+let crowded: FundCharge[]
 
 function showing(funds: FundStatus[]) {
   month = {
@@ -204,7 +204,7 @@ beforeEach(() => {
   startMonths = {}
   wouldAsk = {}
   spreadable = {}
-  crowded = null
+  crowded = []
   showing([])
   moneyAvailable.mockImplementation(async () => month)
   listFunds.mockImplementation(async () => fundLinesOf(month.funds))
@@ -1198,7 +1198,7 @@ describe("014 AC-11, AC-12 — the announcement is about the charge that cannot 
   it("names the charge and quotes its own figure, not the fund's", async () => {
     wouldAsk = { "from-recurring": 605_000_000 }
     spreadable = { [SERVICIOS.id]: true }
-    crowded = SEGURO
+    crowded = [SEGURO]
     await startAFundOn(SERVICIOS)
 
     const said = await screen.findByRole("alert")
@@ -1211,7 +1211,7 @@ describe("014 AC-11, AC-12 — the announcement is about the charge that cannot 
   it("lets the owner go ahead anyway", async () => {
     wouldAsk = { "from-recurring": 605_000_000 }
     spreadable = { [SERVICIOS.id]: true }
-    crowded = SEGURO
+    crowded = [SEGURO]
     const user = await startAFundOn(SERVICIOS)
 
     await user.click(await screen.findByRole("button", { name: "Crear de todos modos" }))
@@ -1248,5 +1248,24 @@ describe("014 AC-14 — the rule withdrawn under the owner's feet", () => {
       expect(screen.queryByRole("radio", { name: THE_RULE })).not.toBeInTheDocument(),
     )
     expect(screen.getByRole("radio", { name: "Aparto un monto fijo cada mes" })).toBeChecked()
+  })
+})
+
+describe("014 AC-4 — the lines add up to the figure above them", () => {
+  it("The lines add up to the figure above them, in whole pesos", async () => {
+    const third = charge({
+      name: "Uno",
+      costs: 100_000_000,
+      charge_month: "2026-11",
+      asks: 33_333_334,
+    })
+    showing([fillingFor([third, charge({ ...third, name: "Dos" })])])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    const row = pesosIn(asked(rowFor(table, SERVICIOS.name)))
+    const lines = table.getAllByRole("listitem").map((line) => shareIn(line.textContent ?? ""))
+    expect(row).toBe(666_667)
+    expect(lines.reduce((total, share) => total + share, 0)).toBe(row)
   })
 })

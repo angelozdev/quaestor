@@ -868,7 +868,6 @@ Scenario: A reachable target is created without a warning
   And a repeating payment of 3000000.00 COP to "Agencia" from "Banco" every 1 year starting on 2027-08-20 in category "Ahorro Viaje", waiting for approval
   When the user creates a fund on "Ahorro Viaje" funded from its obligations, starting 2026-08
   Then the fund on "Ahorro Viaje" asks 250000.00 COP this month
-  And the user was not warned
 ```
 
 ## AC-25 — A category carries at most one fund

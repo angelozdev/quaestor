@@ -164,6 +164,24 @@ def _can_be_spread(item: RecurringItem, charge_month: str) -> bool:
     return following is None or months_to_fund(charge_month, following) > 1
 
 
+def _still_charges(agg: MonthAggregate, item: RecurringItem, year_month: str) -> bool:
+    """Whether this obligation has a turn that will actually happen, now or later.
+
+    A turn the owner skipped is not going to happen, and a rule left switched on
+    past its end date has none coming. Either alone leaves the fund with nothing
+    to set aside this month; both together leave the category finished — and
+    those are the two different sentences AC-8 and AC-9 ask for.
+    """
+    if any(not agg.was_skipped(item.id, due) for due in agg.turns_in(item, year_month)):
+        return True
+    return _turn_after(item, year_month, item.end_date) is not None
+
+
+def _still_charges_in(agg: MonthAggregate, category_id: int, year_month: str) -> bool:
+    """Whether the category holds any obligation still due something."""
+    return any(_still_charges(agg, item, year_month) for item in agg.obligations_in(category_id))
+
+
 def _obligations(agg: MonthAggregate, category_id: int, year_month: str) -> list[_Obligation]:
     """What each obligation in the category still needs, soonest charge first.
 
@@ -369,7 +387,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),
         charges=list(walked.ask.charges),
-        has_repeating_charges=bool(agg.obligations_in(fund.category_id)),
+        has_repeating_charges=_still_charges_in(agg, fund.category_id, year_month),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
@@ -586,13 +604,13 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
         category_id=category_id,
         would_ask=walked.ask.amount,
         warning=_warning(unsaved, crowded),
-        crowded=crowded,
+        crowded=list(crowded),
         has_something_to_spread=any(o.can_be_spread for o in _obligations(agg, category_id, start)),
     )
 
 
-def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
-    """The first charge that could have been spread and has no month to spread over.
+def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> tuple[FundCharge, ...]:
+    """Every charge that could have been spread and has no month to spread over.
 
     Both halves are needed and neither alone is enough. Without the first, a
     charge that lands every month answers yes forever — there are never months
@@ -603,34 +621,36 @@ def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
     Asked of the very divisor the ask uses, so it cannot stay silent on a month
     the charge lands on: one the month after the start still has to be whole by
     the end of the start month (003, AC-6).
+
+    All of them and not the first, because the announcement quotes what falls,
+    and naming one of two understates it as badly as quoting the fund's total
+    overstated it. A charge asking nothing is left out: the fund already holds
+    what it needs, so nothing falls on anyone.
     """
-    return next(
-        (
-            charge
-            for charge in charges
-            if charge.can_be_spread and months_to_fund(fund.start_month, charge.charge_month) <= 1
-        ),
-        None,
+    return tuple(
+        charge
+        for charge in charges
+        if charge.can_be_spread and charge.asks > 0 and months_to_fund(fund.start_month, charge.charge_month) <= 1
     )
 
 
-def _warning(fund: Fund, crowded: FundCharge | None) -> str | None:
+def _warning(fund: Fund, crowded: tuple[FundCharge, ...]) -> str | None:
     """The announcement AC-24 asks for, for a surface that renders nothing itself.
 
-    It names the obligation and quotes that obligation's own figure. Quoting
-    the fund's total mixed what does spread with what cannot, and frightened
-    the owner with a number nobody was ever going to pay at once (ADR-0054).
+    It names the obligations and quotes what they add up to. Quoting the fund's
+    total mixed what does spread with what cannot and frightened the owner with
+    a number nobody was going to pay at once; quoting one of several does the
+    opposite and promises a month cheaper than it is (ADR-0054).
 
-    The screen does not read this — it words the same charge in the owner's own
+    The screen does not read this — it words the same charges in the owner's own
     language and money format. This is what the assistant prints, which is the
     one surface with nowhere else to compose it.
     """
-    if crowded is None:
+    if not crowded:
         return None
-    return (
-        f"{crowded.name} charges in {crowded.charge_month}, which leaves no month to save in: "
-        f"the whole {cents_to_major(crowded.asks)} COP falls on {fund.start_month}"
-    )
+    named = ", ".join(charge.name for charge in crowded)
+    falls = sum(charge.asks for charge in crowded)
+    return f"{named} leaves no month to save in: the whole {cents_to_major(falls)} COP falls on {fund.start_month}"
 
 
 def set_fund(session: Session, fund_id: int, **changes) -> Fund:

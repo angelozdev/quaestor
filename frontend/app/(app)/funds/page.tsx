@@ -17,7 +17,7 @@ import type { FundCharge, FundStatus } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
 import { monthAndYearOf, monthNameOf, nextYearMonth } from "@/lib/date"
 import { type FundShape, nounOf, shapeOf, shapeSentence, whatItIs } from "@/lib/funds"
-import { formatCents } from "@/lib/money"
+import { formatCents, sharesAddingTo } from "@/lib/money"
 import { invalidate, qk } from "@/lib/query"
 import { Button, Input } from "@/ui"
 import { CreateFundForm } from "./create-form"
@@ -144,13 +144,17 @@ function nextMonthLine(fund: FundStatus): string {
  * The whole charge is named only when it differs from the share, which is
  * what makes the share legible: $ 100.000 means nothing until it is read as a
  * twelfth of $ 1.200.000 (AC-2).
+ *
+ * `shownAsks` is the share after the row's rounding has been shared out, so the
+ * lines add up to the figure above them (AC-4). It is the charge's own share to
+ * the peso, and differs from `asks` by centavos only.
  */
-function chargeLine(charge: FundCharge, month: string): string {
+function chargeLine(charge: FundCharge, month: string, shownAsks: number): string {
   const when =
     charge.charge_month === month
       ? "vence este mes"
       : `se guarda para ${monthAndYearOf(charge.charge_month)}`
-  const share = formatCents(charge.asks, "COP")
+  const share = formatCents(shownAsks, "COP")
   const figure =
     charge.asks === charge.costs ? share : `${share} de ${formatCents(charge.costs, "COP")}`
   return `${charge.name} — ${when} · ${figure}`
@@ -172,6 +176,10 @@ function nothingToSetAside(fund: FundStatus): string {
  */
 function FundCharges({ fund }: { fund: FundStatus }) {
   if (fund.rule !== "from-recurring") return null
+  const shown = sharesAddingTo(
+    fund.charges.map((charge) => charge.asks),
+    fund.asks,
+  )
   return (
     <tr>
       <td
@@ -183,9 +191,9 @@ function FundCharges({ fund }: { fund: FundStatus }) {
           <p className="text-xs">{nothingToSetAside(fund)}</p>
         ) : (
           <ul className="space-y-0.5">
-            {fund.charges.map((charge) => (
+            {fund.charges.map((charge, index) => (
               <li key={`${charge.name}-${charge.charge_month}`} className="text-xs">
-                {chargeLine(charge, fund.year_month)}
+                {chargeLine(charge, fund.year_month, shown[index])}
               </li>
             ))}
           </ul>

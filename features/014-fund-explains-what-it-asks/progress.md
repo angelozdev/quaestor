@@ -1,4 +1,4 @@
-> ▶ CP6 Refine — 4/4 criteria met | NEXT: crap-analyzer for CP7, agent_id distinto | BLOCKED: none
+> ▶ CP7 Verify — 4/4 criteria met | NEXT: mutación para CP8, agent_id distinto | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,6 +14,7 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
+| 7 | Verify | done — verificador independiente; **cuatro cifras equivocadas** y tres criterios que no podían fallar | 2026-08-12T2000-crap-analyzer.md |
 | 6 | Refine | done — refinador independiente; 9 hallazgos, 7 aplicados, y un **defecto real** que el AC-13 prohibía | 2026-08-12T1900-refine.md |
 | 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | 2026-08-12T1745-implement.md |
 
@@ -40,6 +41,32 @@ decidida por el dueño y escrita** en ADR-0054 → Costos y en el tercer grupo d
 La corrección del aviso sí le llega gratis, porque lo imprime tal cual.
 
 ## Verification reports
+
+### CP7 — verificación independiente
+
+Un tercer agente, que ni escribió ni refinó esto, buscó **dónde la plata puede
+estar mal**. Encontró cuatro, todas reproducidas:
+
+```
+dos cobros sin meses    el fondo pediría 6.500.000, el aviso decía 6.000.000
+la fila y sus líneas    $ 666.667 sobre $ 333.333 + $ 333.333 = $ 666.666
+saldo inicial suficiente  el aviso citaba "0,00 COP"
+regla con fecha vencida   decía "omitidos o ya pagados" donde la categoría terminó
+```
+
+La primera es la ADR-0054 **al revés**: mató el aviso que exageraba citando el
+total, y éste subestimaba citando un cobro de dos.
+
+Y encontró que **los escenarios del AC-13 no podían fallar** — pasaban todos con
+`preview_fund` reventando. Eso lo causó mi propia corrección en CP6, que aflojó
+un accesor para no romper un escenario de la 003. La 003 perdió esa línea, que
+nunca probó nada, y el paso volvió a ser estricto: con `preview_fund` reventando
+ahora caen 13 escenarios.
+
+**Lo que no se movió, y es lo más fuerte del informe:** el `funds.py` de `main`
+cargado al lado del de esta rama, 19 fixtures × 21 meses × 16 campos — **cero
+diferencias**, contra 837 al perturbar el divisor de `main` en un centavo. El
+AC-5 se sostiene medido, no supuesto.
 
 ### CP6 — refinado independiente
 
@@ -110,6 +137,8 @@ ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
   navegador y el pipeline vieron.
 - 2026-08-12T1900 — refine (independiente): 9 hallazgos, 7 aplicados, un defecto
   de comportamiento y un paso que medía lo que no era.
+- 2026-08-12T2000 — crap-analyzer (independiente): cuatro cifras equivocadas y
+  tres criterios incapaces de fallar; los cinco arreglados.
 
 ## Defectos encontrados durante CP5, y no por las suites
 

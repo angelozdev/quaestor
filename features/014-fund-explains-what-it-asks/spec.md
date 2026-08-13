@@ -74,6 +74,12 @@ Scenario: The lines add up to what the fund asks
   When the user views the funds
   Then the lines on "Suscripciones" add up to what it asks
 
+Scenario: The lines add up to the figure above them, in whole pesos
+  Given the app is open
+  And a fund on "Suscripciones" asking 666666.68 COP, filling for "Uno" at 333333.34 and "Dos" at 333333.34
+  When the owner opens the funds
+  Then the lines under "Suscripciones" add up to what the row reads
+
 Scenario: The row carries a line for every charge behind its figure
   Given the app is open
   And a fund on "Suscripciones" asking 180000.00 COP, filling for "Internet" at 80000.00 and "Dominio" at 100000.00
@@ -192,6 +198,17 @@ Scenario: A fund left with no obligations at all says the category has none
   Then the row for "Suscripciones" says the category has no repeating charge left
 ```
 
+```gherkin
+@backend
+Scenario: A charge whose rule has run out is not a charge the fund is waiting for
+  Given a recurring charge "Internet" on "Suscripciones" of 80000.00 COP every month, next due 2026-08
+  And "Internet" stops repeating after 2026-08
+  And a fund on "Suscripciones" funded from its obligations, starting 2026-08
+  And the payment to "Internet" was skipped this month
+  When the user views the funds
+  Then the fund on "Suscripciones" has no repeating charge left
+```
+
 ## AC-10 — A charge in another currency reads in pesos
 
 ```gherkin
@@ -233,6 +250,21 @@ Scenario: The warning quotes the charge, not the whole fund
   And a recurring charge "Lavado" on "Auto" of 50000.00 COP every month, next due 2026-08
   When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08
   Then the warning states 6000000.00 COP
+
+@backend
+Scenario: Two charges with no months to spread over are both named
+  Given a recurring charge "Seguro" on "Auto" of 6000000.00 COP every year, next due 2026-09
+  And a recurring charge "SOAT" on "Auto" of 500000.00 COP every year, next due 2026-09
+  When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08
+  Then the warning names "Seguro"
+  And the warning names "SOAT"
+  And the warning states 6500000.00 COP
+
+@backend
+Scenario: Nothing is announced when the fund already holds what the charge needs
+  Given a recurring charge "Seguro" on "Auto" of 6000000.00 COP every year, next due 2026-09
+  When the user starts creating a fund on "Auto" funded from its obligations, starting 2026-08, opening with 6000000.00 COP
+  Then the user was not warned
 
 @backend
 Scenario: The owner may create it anyway

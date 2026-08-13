@@ -866,14 +866,8 @@ def previewed(world: World):
 
 
 def warning_shown(world: World) -> str | None:
-    """What the preview announced, or nothing at all — a missing preview included.
-
-    Lenient where `previewed` is strict, and deliberately so: *the user was not
-    warned* is true of a scenario that created the fund outright without ever
-    previewing, and 003 has one that does exactly that.
-    """
-    preview = getattr(world, "fund_preview", None)
-    return getattr(preview, "warning", None) if preview is not None else None
+    """What the preview announced, or nothing at all."""
+    return getattr(previewed(world), "warning", None)
 
 
 @step(r"the user is warned it would ask (?P<amount>" + _DEC + r") COP this month")
@@ -885,7 +879,14 @@ def then_warned_would_ask(world: World, amount: str) -> None:
 
 @step(r"the user was not warned")
 def then_not_warned(world: World) -> None:
-    said = warning_shown(world)
+    """Nothing was announced — and something did the announcing.
+
+    Strict about the preview on purpose. While it tolerated a missing one, this
+    step passed for a scenario whose preview never ran at all, which is how
+    every AC-13 scenario went green with `preview_fund` raising (found at CP7).
+    An absence is only worth asserting where a presence was possible.
+    """
+    said = getattr(previewed(world), "warning", None)
     assert said is None, f"the fund warned when it should not have: {said!r}"
 
 

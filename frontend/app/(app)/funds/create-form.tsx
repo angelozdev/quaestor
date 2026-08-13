@@ -99,11 +99,14 @@ function offerTheRule(rule: FundRule, preview: FundPreview | undefined): boolean
  * owner's language and money format live — the service hands over the charge
  * and lets each surface say it its own way (ADR-0054).
  */
-function announcementFor(crowded: FundCharge, startMonth: string): string {
-  return (
-    `${crowded.name} cobra en ${monthAndYearOf(crowded.charge_month)} y no queda mes para repartirlo: ` +
-    `los ${formatCents(crowded.asks, "COP")} caen enteros en ${monthAndYearOf(startMonth)}.`
-  )
+function announcementFor(crowded: FundCharge[], startMonth: string): string {
+  const falls = crowded.reduce((total, charge) => total + charge.asks, 0)
+  const named = crowded.map((charge) => charge.name)
+  const who =
+    named.length === 1
+      ? `${named[0]} cobra en ${monthAndYearOf(crowded[0].charge_month)} y no queda mes para repartirlo`
+      : `${named.slice(0, -1).join(", ")} y ${named.at(-1)} no tienen meses para repartirse`
+  return `${who}: los ${formatCents(falls, "COP")} caen enteros en ${monthAndYearOf(startMonth)}.`
 }
 
 export function CreateFundForm({
@@ -173,7 +176,7 @@ export function CreateFundForm({
   const ask = useMutation({
     mutationFn: (v: CreateFundValues) => previewFund(bodyOf(v, shape)),
     onSuccess: (preview, v) => {
-      if (preview.crowded == null) create.mutate(v)
+      if (preview.crowded.length === 0) create.mutate(v)
       else setWarning(announcementFor(preview.crowded, v.startMonth))
     },
     onError: onErr,
