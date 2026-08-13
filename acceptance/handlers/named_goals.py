@@ -300,6 +300,12 @@ def then_told_amount(world: World) -> None:
     assert "above zero" in getattr(world, "meta_refusal", "")
 
 
+@step(r"the user is told a meta cannot already hold more than it costs")
+def then_told_opening_over_amount(world: World) -> None:
+    said = getattr(world, "meta_refusal", "")
+    assert "already hold more than" in said, f"the refusal said {said!r}"
+
+
 @step(r"the user is told that name is already held by another meta")
 def then_told_name_held(world: World) -> None:
     assert "already holds the name" in getattr(world, "meta_refusal", "")
@@ -482,16 +488,25 @@ def when_skip_planned(world: World) -> None:
 # --------------------------------------------------------------- the acts
 
 
-@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)"')
-def when_contribute(world: World, amount: str, currency: str, name: str) -> None:
+def _contribute(world: World, amount: str, currency: str, name: str, month: str) -> None:
     try:
         world.last_contributed_to = _meta_held_in(world, name, currency)
         world.last_put_in = service.contribute(
-            world.session, world.last_contributed_to, year_month=_today(world), amount=_cents(amount)
+            world.session, world.last_contributed_to, year_month=month, amount=_cents(amount)
         ).amount
     except _REJECTED as exc:
         world.session.rollback()
         world.contribution_refusal = str(exc)
+
+
+@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)"')
+def when_contribute(world: World, amount: str, currency: str, name: str) -> None:
+    _contribute(world, amount, currency, name, _today(world))
+
+
+@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)" for (?P<month>{_MONTH})')
+def when_contribute_into(world: World, amount: str, currency: str, name: str, month: str) -> None:
+    _contribute(world, amount, currency, name, month)
 
 
 @step(rf'a contribution of (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
@@ -503,6 +518,12 @@ def given_contribution(world: World, amount: str, currency: str, name: str, mont
 @step(r"the contribution is rejected")
 def then_contribution_rejected(world: World) -> None:
     assert getattr(world, "contribution_refusal", None), "the contribution was accepted, expected a refusal"
+
+
+@step(r"the user is told the meta did not exist that month")
+def then_told_meta_not_yet(world: World) -> None:
+    said = getattr(world, "contribution_refusal", "")
+    assert "did not exist" in said, f"the refusal said {said!r}"
 
 
 @step(rf"the user is told (?P<amount>{_DEC}) COP was put in, which is what was missing")

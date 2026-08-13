@@ -533,9 +533,13 @@ filled it.
 - **Priority:** high
 - **Type:** happy-path
 
-`Aportar` adds money to a meta on any month. What it adds comes out of that
-month's money available, and what the meta asks for the remaining months drops
-accordingly.
+`Aportar` adds money to a meta on any month the meta has run in. What it adds
+comes out of that month's money available, and what the meta asks for the
+remaining months drops accordingly.
+
+A month before the meta was opened is refused: there is nothing there to save
+into. Past months the meta did run in are not — a meta opened in January takes
+a contribution into March exactly as it takes one into today.
 
 A meta entering September holding $1.600.000 asks its own $1.600.000 that
 month. A $2.000.000 contribution is charged **on top**: September costs
@@ -830,6 +834,10 @@ contribution is money set aside **now** and costs the month it is made.
 
 The statement is made for a month and never re-read afterwards, the same way a
 fund's is (product ADR-041).
+
+What is stated cannot exceed the amount: saying the meta already holds more
+than the thing costs is refused. Stating exactly the amount is not — that meta
+is simply born complete.
 
 ## AC-35: Deleting the linked movement reopens the meta
 

@@ -380,6 +380,22 @@ Scenario: What drops is every instalment after it
   And a contribution of 2000000.00 COP to "Celular" made 2026-09
   Then the meta "Celular" asks 933333.34 COP this month
   And the money available this month is 4066666.66 COP
+
+@backend
+Scenario: A contribution into a month the meta never ran in is refused
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10
+  When the user contributes 1000000.00 COP to "Celular" for 2026-08
+  Then the contribution is rejected
+  And the user is told the meta did not exist that month
+  And the meta "Celular" holds 2666666.67 COP this month
+
+@backend
+Scenario: A past month the meta did run in still takes a contribution
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user contributes 1000000.00 COP to "Celular" for 2026-09
+  Then the meta "Celular" holds 5466666.67 COP this month
 ```
 
 ## AC-11 — A meta can be edited while it runs
@@ -1215,6 +1231,24 @@ Scenario: The statement is made for one month and never re-read
   Given today is 2026-10-10
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08 stating it already held 3000000.00 COP
   Then the meta "Celular" holds 6000000.00 COP this month
+
+@backend
+Scenario: A meta cannot be told it already holds more than the thing costs
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 8000000.00 COP
+  Then the meta is rejected
+  And the user is told a meta cannot already hold more than it costs
+  And the money available this month is 5000000.00 COP
+
+@backend
+Scenario: A meta told it already holds exactly what it costs is born full
+  Given today is 2026-10-10
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 5000000.00 COP
+  Then the meta "Celular" holds 5000000.00 COP this month
+  And the meta "Celular" asks 0.00 COP this month
 ```
 
 ## AC-35 — Deleting the linked movement reopens the meta

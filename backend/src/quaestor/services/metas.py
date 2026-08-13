@@ -71,7 +71,15 @@ def _refuse_name_already_held(session: Session, name: str, *, excluding: int | N
         raise ValidationError(f"another meta already holds the name {name!r}")
 
 
-def _validate_spec(name: str, amount: int, target_month: str, today_month: str) -> None:
+def _validate_spec(
+    name: str, amount: int, target_month: str, today_month: str, stated_opening: int | None = None
+) -> None:
+    """Every refusal a meta's spec earns, in the one place both writers pass through.
+
+    `stated_opening` is only ever handed in by `create_meta`, because it is
+    stated once and never edited — but the ceiling belongs here rather than
+    there, so a later writer cannot reach the columns without meeting it.
+    """
     if not name or not name.strip():
         raise ValidationError("a meta needs a name")
     if amount <= 0:
@@ -79,6 +87,8 @@ def _validate_spec(name: str, amount: int, target_month: str, today_month: str) 
     require_year_month(target_month, "target_month")
     if target_month < today_month:
         raise ValidationError(f"there is no way to save into the past: {target_month} is behind {today_month}")
+    if stated_opening is not None and stated_opening > amount:
+        raise ValidationError("a meta cannot already hold more than it costs")
 
 
 def _contributions_in(agg: MonthAggregate, meta: Meta, month: str) -> int:
@@ -438,13 +448,22 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
     made is not always the newest one on record and cannot be found again by
     re-reading the history.
 
+    Money may go into any month the meta has run in, past ones included, but not
+    into one before it was opened: the fold starts at `start_month`, so a row
+    behind it is read by nothing and would sit in the meta's history as money
+    the owner believes he saved (AC-10).
+
     Raises:
         NotFound: no such meta.
-        ValidationError: an amount at or below zero, or a cancelled meta.
+        ValidationError: an amount at or below zero, a cancelled meta, or a
+            month the meta had not been opened in yet.
     """
     meta = _require_meta(session, meta_id)
+    require_year_month(year_month)
     if meta.archived:
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no contribution")
+    if year_month < meta.start_month:
+        raise ValidationError(f"the meta {meta.name!r} did not exist in {year_month}")
     if amount <= 0:
         raise ValidationError("a contribution needs an amount above zero")
     room = _room_left(session, meta, year_month)
@@ -592,7 +611,7 @@ def create_meta(
             target month, a target month already behind, or a name a live meta
             already holds.
     """
-    _validate_spec(name, amount, target_month, today)
+    _validate_spec(name, amount, target_month, today, stated_opening)
     _refuse_name_already_held(session, name)
     meta = Meta(
         name=name.strip(),
