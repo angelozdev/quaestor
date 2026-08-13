@@ -4,7 +4,7 @@ title: "Restoring a cancelled meta charges its month a contribution it had alrea
 severity: medium
 blocks_user: false
 workaround: "remove the contribution from the meta's history before restoring it — `Ver aportes` lists it"
-status: investigating
+status: hardened
 
 source:
   kind: internal
@@ -39,12 +39,44 @@ investigation:
   match_mode: auto
   candidates_considered: 1
 
-fix_commits: []
+pin_confirmation:
+  feature_refs:
+    - ref: "features/009-named-goals"
+      red_run:
+        result: red
+        command: "./run-acceptance-tests.sh features/009-named-goals"
+        output: |
+          FAILED test_a_restored_meta_does_not_charge_again_a_contribution_the_cancellation_gave_back
+            AssertionError: the meta 'Portatil' holds 200000000, expected 100000000
+          FAILED test_a_contribution_made_in_a_month_the_restore_left_behind_is_given_back_too
+            AttributeError: 'MetaContribution' object has no attribute 'returned_month'
+          2 failed, 153 passed
+        note: |
+          The guard scenario shipped beside them and was GREEN from the first
+          run by design — a meta never cancelled goes on counting its
+          contributions, so the new filter cannot over-reach.
+
+fix_commits:
+  - d70b3ad
+  - c9afeb9
+  - 24f2411
 
 harden_results:
   mutation_score: null
-  arch_check: null
-  bug_line_mutation_confirmed: false
+  arch_check: "Contracts: 2 kept, 0 broken (cd backend && uv run lint-imports)"
+  bug_line_mutation_confirmed: true
+  bug_line_evidence: |
+    Three load-bearing lines, each mutated by hand and each killed:
+      1. the stamping loop in `restore_meta` removed → 2 failed, 1 passed
+      2. `MetaContribution.returned_month.is_(None)` dropped from the
+         aggregate's WHERE → 2 failed, 1 passed
+      3. `if row.returned_month is None` removed (the second-cancellation
+         guard) → the whole 1190-test backend suite stayed GREEN, and only
+         `test_a_second_cancellation_leaves_the_first_ones_give_back_month_alone`,
+         written for exactly this, went red. That guard had no test at all
+         until c9afeb9.
+    The frontend half was proven red the same way: stashing `meta-actions.tsx`
+    left 1 failed | 32 passed.
 
 gap_analysis: []
 
