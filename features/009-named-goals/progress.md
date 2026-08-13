@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: done — merged to `main` 2026-08-10 as `ae5f0ae` | BLOCKED: none
+> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/meta-keeps-only-what-fits` into `main` (CHARTER §7), after driving it in a browser | BLOCKED: none
 
 # Progress — 009 named-goals
 
@@ -167,3 +167,14 @@ three not-found tests. The residue fell from eleven lines to none.
   stays `in-progress` until `cp6-independent-review` merges. Roadmap items
   `named-goals` and `withdraw-target-by-date` still in-progress for the same
   reason.
+
+## Fix applied — 2026-08-13-a-meta-swallows-what-it-cannot-take
+- Severity: high; user-blocking: no
+- Followups: 3 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-meta-swallows-what-it-cannot-take.md`
+
+Two money defects were found in the merged code on 2026-08-12 by a browser QA
+sweep and by the independent verifier of the fix that followed. Both were the
+same sentence — nothing tied what a meta took of a hand contribution to what
+the month was charged for it — and neither could be seen by mutation, because
+the code and the tests agreed.

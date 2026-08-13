@@ -4,7 +4,7 @@ title: "The month charges a hand contribution the meta never took, and charges t
 severity: high
 blocks_user: false
 workaround: "remove the contribution and make it again — contribute() trims at write time, so the row is rewritten to what now fits. No workaround for the double charge: unlink the purchase or do not contribute in the month you buy in."
-status: hardened
+status: closed
 
 source:
   kind: user
@@ -91,11 +91,16 @@ pin_confirmation:
 fix_commits:
   - "9e22458 fix(009): the month charged a contribution the meta never took"
   - "f509133 fix(009): the month charged the same contribution a second time"
+  - "779823c refactor(009): the walk stops carrying what nobody reads"
 
 harden_results:
-  mutation_score: null
+  mutation_score: 0.959
   arch_check: "pass — cd backend && uv run lint-imports: Contracts: 2 kept, 0 broken"
   bug_line_mutation_confirmed: true
+  introversion: "ok — 17 findings project-wide, 0 in backend/tests/services, backend/tests/api or the metas/month area"
+  mutation_detail: "backend/src/quaestor/services/metas.py, isolated worktree at 779823c, 4-stage ladder (focused unit, 009 acceptance, all 11 acceptance dirs, full backend suite), every stage green-gated on untouched source. 169 mutants, 162 killed, 7 alive, 23.5 min. All 7 read and judged equivalent: four `frozen=True` on dataclasses built once and only read; `opening > amount` -> `>=`, whose arms coincide exactly at equality including the new `contributed`; two on the `if amount else 0` arm no reachable state enters. An eighth survivor was NOT equivalent and was closed by deleting the code: `_Month.opening` lost its last reader when `_meta_uncovered` moved to `holds`."
+
+handoff_path: .engineer/handoffs/2026-08-13-a-meta-swallows-what-it-cannot-take-close.md
 
 gap_analysis:
   - category: incomplete_spec
