@@ -142,6 +142,36 @@ def test_a_restored_meta_comes_back_running_rather_than_finished(session):
     assert restored.closed is False
 
 
+def test_a_contribution_the_cancellation_never_gave_back_is_not_marked_as_given_back(session):
+    """A month can only hand back what it had already been given.
+
+    The fold sums contributions dated at or before the cancellation month, so
+    one dated after it was never in the released figure. Marking it would take
+    from a month that never got it — 100.000 out of nothing.
+    """
+    meta = _meta(session, amount=50_000_000)
+    metas.contribute(session, meta.id, year_month="2026-08", amount=100_000)
+    metas.cancel_meta(session, meta.id, year_month="2026-07")
+
+    metas.restore_meta(session, meta.id, today="2026-08")
+
+    assert [r.returned_month for r in metas.contributions_of(session, meta.id)] == [None]
+    assert _reported(session, "2026-08", "Moto").holds == _reported(session, "2026-08", "Moto").asks + 100_000
+
+
+def test_a_meta_cannot_come_back_in_a_month_behind_the_one_it_left_in(session):
+    """Restoring clears the month that released the money.
+
+    Doing it behind the cancellation would leave the months in between holding
+    what no month gives back, and the cancellation month with nothing to say.
+    """
+    meta = _meta(session)
+    metas.cancel_meta(session, meta.id, year_month="2026-08")
+
+    with pytest.raises(ValidationError, match="cannot come back"):
+        metas.restore_meta(session, meta.id, today="2026-07")
+
+
 def test_a_second_cancellation_leaves_the_first_ones_give_back_month_alone(session):
     """Each contribution says which cancellation gave it back, not the newest one.
 
