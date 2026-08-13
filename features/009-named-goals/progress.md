@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/meta-keeps-only-what-fits` into `main` (CHARTER §7), after driving it in a browser | BLOCKED: none
+> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/meta-keeps-only-what-fits` into `main` (CHARTER §7) | BLOCKED: none
 
 # Progress — 009 named-goals
 

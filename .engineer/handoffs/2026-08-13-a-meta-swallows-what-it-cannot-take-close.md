@@ -55,8 +55,30 @@ exit_criteria:
     evidence: "Seven equivalent with reasons in the artifact. The eighth, from the first sweep, was not equivalent and was closed by deleting `_Month.opening` rather than by writing a test for a value nothing reads."
   - criterion: "the fix is driven in a browser (CHARTER §6)"
     verified_by: human
-    met: false
-    evidence: "NOT DONE AND NOT CLAIMED. The defect was found in the browser and reproduced there; the fix has been verified only by the three suites and by figures read in cents at the services layer. The sandbox is still up. This is the one criterion left for the owner, and it belongs before the merge."
+    met: true
+    evidence: |
+      Chrome MCP against the sandbox (SQLite .dev-data/, TRM 3142) on 2026-08-13,
+      on the meta the QA sweep had left behind as the reproduction.
+
+      DEFECT ONE. `QA Portatil` wants US$400, holds US$400, asks US$20 — so it
+      took US$80 of a US$120 contribution. Reportes now reads
+      `Puesto a mano en una meta − $ 251.360`, which is US$80 × 3142. It read
+      $377.040 the day before, the whole US$120. The breakdown adds up to the
+      peso: 3.000.013 − 89.000 − 150.000 − 5.000.000 − 62.840 − 251.360 −
+      10.901.593 = −13.454.780, the figure on screen. The month charges
+      62.840 + 251.360 = US$100, exactly what the meta's holdings grew by.
+
+      DEFECT TWO. A US$400 expense on Ahorros USD, linked to `QA Portatil`,
+      recorded through the transaction dialog. `Sin fondo que lo cubra` stayed
+      at $10.901.593 and the money available stayed at −13.454.780 — the
+      purchase cost the month nothing beyond what the meta had already set
+      aside, which is AC-43 verbatim. Under the old code it would have added
+      max(400 − 300 − 20, 0) = US$80 = $251.360 and the month would have read
+      −13.706.140. The purchase itself is visible as
+      `Por categoría · Tecnología $ 1.256.800`.
+
+      It also covers the currency: both figures are a dollar meta read in
+      pesos, which is what the amended §6 asks for.
 status: complete
 ---
 
@@ -92,6 +114,8 @@ muerto.
 ## Lo que queda
 
 - El dueño mergea `fix/meta-keeps-only-what-fits` a `main` (CHARTER §7).
-- **Antes del merge**, conducirlo en el navegador: es el único criterio de
-  salida sin cumplir, y el defecto salió del navegador.
+  Todos los criterios de salida están cumplidos, el navegador incluido.
 - Los dos vecinos filtrados, con la decisión de producto ya tomada.
+- En el sandbox queda el movimiento `VERIFY doble cobro` (US$400 sobre
+  Ahorros USD, ligado a `QA Portatil`), que es la reproducción del segundo
+  defecto. Se deja como se dejaron las demás filas `VERIFY`.
