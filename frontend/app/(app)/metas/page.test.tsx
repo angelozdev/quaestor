@@ -200,6 +200,23 @@ describe("AC-45 — the form says what the meta will ask before it is created", 
     expect(screen.getByRole("alert")).toHaveTextContent(/más de lo que tu mes tiene/)
     expect(screen.getByRole("button", { name: "Crear de todos modos" })).toBeInTheDocument()
   })
+
+  it("The form says so instead of quoting a figure", async () => {
+    previewMeta.mockRejectedValue(new Error("a meta cannot already hold more than it costs"))
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText("Celular")
+    await user.click(screen.getByRole("button", { name: "Nueva meta" }))
+    await user.type(screen.getByLabelText("Nombre *"), "Casa")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "5000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-12")
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/no se puede crear la meta/),
+    )
+    expect(screen.queryByText(/al mes/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Crear" })).toBeDisabled()
+  })
 })
 
 describe("AC-5 — the navigation offers Metas", () => {

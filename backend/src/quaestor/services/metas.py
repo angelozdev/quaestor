@@ -23,7 +23,7 @@ import this. Both read the same `MonthAggregate` and hand their folds to
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from sqlmodel import Session, select
@@ -196,14 +196,23 @@ def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
     return _wanted_as_of(meta, agg.amendments.get(meta.id, ()), month)
 
 
-def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
-    """What one month does to a meta that entered it holding `opening`.
+def _spent_on_the_thing(agg: MonthAggregate, meta: Meta, month: str) -> int:
+    """What the purchases linked to this meta took out of it in one month.
+
+    In the meta's own currency, and posted only: money that has not left yet
+    has bought nothing (AC-43).
+    """
+    spent = sum(agg.to_cop_cents(tx) for tx in agg.linked_to(meta.id) if year_month_of(tx.date) == month)
+    return _to_meta_currency(agg, meta, spent) if spent else 0
+
+
+def _saved_in(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
+    """What one month sets aside for a meta that entered it holding `opening`.
 
     A meta stops the month after its purchase and keeps what it had: the thing
     is bought, and asking again would set money aside for something the owner
     already owns. The purchase month itself still asks, because what it asks is
-    part of what covered the purchase (AC-12). Nothing is freed either — that
-    money is in the thing (AC-39).
+    part of what covered the purchase (AC-12).
 
     Holding more than the meta wants means the owner lowered the amount below
     what it already had: the meta asks nothing and hands the excess back — but
@@ -225,6 +234,23 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded:
         contributed=contributed,
         funded=funded + ask + contributed,
     )
+
+
+def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
+    """What one month does to a meta: what it saved, less what it bought.
+
+    A purchase leaves `funded` the way it leaves the account — what went into
+    the thing is spent and can be handed back to nobody (AC-39). Only what the
+    months put in past the price is still the owner's, and that is what a later
+    "keep it, with another amount" (AC-8) may release. It is taken off here
+    rather than in each of `_saved_in`'s three branches, so the rule is one
+    line and a month cannot answer it two ways.
+    """
+    saved = _saved_in(agg, meta, month, opening, funded)
+    spent = _spent_on_the_thing(agg, meta, month)
+    if not spent:
+        return saved
+    return replace(saved, funded=max(saved.funded - spent, 0))
 
 
 @dataclass(frozen=True)
@@ -300,7 +326,7 @@ def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = 
         closed=meta.closed,
         waiting=target < agg.year_month and not bought and not meta.closed,
         cancelled=cancelled,
-        released=_released_by(agg, meta, walked) if cancelled else to_cop_cents(month.released, meta.currency, agg.trm),
+        released=_gave_back(agg, meta, walked, cancelled),
     )
 
 
@@ -363,8 +389,8 @@ def fold(agg: MonthAggregate) -> MetaFold:
         + [_status(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled],
         asks=sum(_ask_in_cop(agg, meta, walked[meta.id]) for meta in charged),
         contributed=sum(to_cop_cents(walked[meta.id].month.contributed, meta.currency, agg.trm) for meta in charged),
-        released=sum(to_cop_cents(walked[meta.id].month.released, meta.currency, agg.trm) for meta in agg.metas)
-        + sum(_released_by(agg, meta, walked[meta.id]) for meta in cancelled),
+        released=sum(_gave_back(agg, meta, walked[meta.id], cancelled=False) for meta in agg.metas)
+        + sum(_gave_back(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled),
         uncovered=sum(_meta_uncovered(agg, meta, walked[meta.id]) for meta in agg.metas),
     )
 
@@ -460,15 +486,24 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
     return round(cop_cents / float(agg.trm))
 
 
-def _released_by(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
-    """What cancelling one meta hands back to the month.
+def _gave_back(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool) -> int:
+    """Everything one meta hands back to this month, in COP cents.
 
-    Everything it held, as far as the months put it there (AC-15). What the
-    owner stated he already had came out of no month, so handing it back would
-    give him money the app never took — the mint product ADR-014 exists to
-    prevent.
+    Two acts free money and a month may hold both: lowering the amount below
+    what the meta had (AC-16), which the walk already answered, and cancelling
+    it (AC-15), which hands back what is left. Reading only the second is how a
+    meta lowered and cancelled in one month gave back the pennies it had been
+    left with instead of the months' own money.
+
+    Cancelling frees everything it holds as far as the months put it there.
+    What the owner stated he already had came out of no month, and what the
+    purchase took is in the thing, so neither goes back to anybody.
     """
-    return to_cop_cents(min(walked.month.holds, walked.month.funded), meta.currency, agg.trm)
+    month = walked.month
+    freed = month.released
+    if cancelled:
+        freed += min(month.holds, month.funded)
+    return to_cop_cents(freed, meta.currency, agg.trm)
 
 
 def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> MetaContribution:

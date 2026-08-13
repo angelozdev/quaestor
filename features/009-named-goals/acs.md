@@ -967,6 +967,13 @@ $8.000.000 it held while the linked expense stayed excluded from both its
 category's fund and the uncovered term (AC-25) — a real purchase would vanish
 from the month and its money would reappear.
 
+**Keeping the meta with a new amount (AC-8) is the third act, and it frees
+only what the purchase did not eat.** Five instalments of $1.000.000 against a
+$5.000.000 phone leave nothing to come back: the money is in the phone. The
+same five against a $3.000.000 phone leave $2.000.000, which is still the
+owner's and no thing is holding — that much, and never more, returns to the
+month he says it in.
+
 Closing is the owner saying *the thing is bought*, so it is refused as of a
 month in which the meta did not yet exist. Nothing was bought in a month before
 the meta opened and nothing finished in it, so there is nothing to close.
