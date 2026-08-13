@@ -4,7 +4,7 @@ title: "A recurring charge cannot be created in, or moved to, an account that ho
 severity: high
 blocks_user: true
 workaround: "none from the screen. The charge has to be created against a peso account, and each occurrence corrected to the dollar account by hand once it is posted."
-status: hardened
+status: closed
 
 source:
   kind: internal
@@ -91,7 +91,7 @@ fix_commits:
   - "Ships inside feature 012's branch, same trade as its two siblings."
 
 harden_results:
-  mutation_score: 0.877
+  mutation_score: 0.987
   bug_line_mutation_confirmed: true
   arch_check: "`uv run lint-imports` → 2 contracts kept, 0 broken, after `recurring.py` gained an import of `transactions as _tx`. The arrow points the way `planned.py` already established; `test_the_transaction_service_never_learns_about_recurring_items` still holds."
   notes: |
@@ -108,6 +108,21 @@ harden_results:
     assigns `item.amount` before calling it. That line is dead on the recurring
     path and is recorded rather than removed; `services/recurring.py` is in no
     feature's mutation opt-in list, a debt ADR-0052 itself names.
+
+    **CORRECTED 2026-08-13 — the figures below are the sweep of 2026-08-11 and
+    no longer describe this module.** A fresh adjudicator re-swept `main`
+    (1d172f4) and found **76 mutants, 75 killed, 1 survivor, 98.7%**; the one
+    left is proven equivalent. The original reading is kept because it is what
+    the fix shipped against, and because the gap between the two is the point:
+    seven real gaps sat open for a day and were closed by another feature's
+    CP8, not by this fix's.
+
+    ALSO SETTLED: `row.amount = amount` in `retarget` is **not dead**. It only
+    ever looked dead on the recurring path, and that path is gone —
+    `services/recurring.py` no longer calls `retarget` at all. Two live callers
+    remain, `planned.confirm_payment` and `transactions.move_to_account`, and
+    in both the assignment inside `retarget` is the only one that runs.
+    Deleting it turns 4 backend tests and 12 acceptance scenarios red. It stays.
 
     `services/recurring.py` was swept for the first time — it is in no feature's
     mutation opt-in list, the debt ADR-0052 names. **65 mutants, 57 killed,
@@ -136,6 +151,11 @@ gap_analysis:
     finding: "AC-19's two scenarios passed because a keyword was misspelled: World.attempt caught the TypeError as a rejection. They would have passed against an empty function. The same escape hatch sat in named_goals.py and sinking_funds.py, putting 41 more rejection scenarios one typo away from the same vacuity, and AttributeError was in the tuple too — a misspelled attribute would have read as a refusal."
     followup_kind: add_verification
 
+fix_commits:
+  - "0e75c93 feat: a recurring charge can live in, and move to, an account that holds dollars"
+
+handoff_path: .engineer/handoffs/2026-08-13-the-three-of-august-11-close.md
+
 followups:
   - category: inadequate_verification
     action: "Pin before fixing: creating a recurring charge against a USD account must send currency USD, and moving an existing one to a USD account must restate its currency."
@@ -147,8 +167,8 @@ followups:
     action: "Remove TypeError and AttributeError from every acceptance handler's rejection tuple, so a misspelled keyword can never read as a refusal again."
     status: applied
   - category: inadequate_verification
-    action: "Adjudicate the 8 survivors of services/recurring.py against feature 007's ACs, on a fresh agent — real gap, equivalent mutant or unreachable state, one verdict each. Write nothing until that is decided. Also settle the dead `row.amount = amount` in retarget, which a control proved unreachable on the recurring path."
-    status: open
+    action: "Done 2026-08-13 by a fresh adjudicator, which re-swept the module rather than reading the three-day-old report — and the report was stale on both counts. TODAY: 76 mutants, 75 killed, ONE survivor, 98.7%. Seven of the eight were killed on 2026-08-12 by fab23cb, out of feature 013's own CP8, and the adjudicator proved that rather than assuming it: re-sweeping those exact sites with only those five tests deselected brought all seven back alive. All seven were REAL GAPS, each mapped to an explicit clause — AC-18 refuses an end date `before` the start, not on it; AC-18 refuses an amount `zero or negative`, not one centavo; AC-18 refuses a cadence `less than one period`, not one; AC-12 fires when a start date is `moved back`, not resubmitted. Each of the five tests asserts BOTH sides of its boundary, so none can pass by pinning whichever side the code takes. The one survivor left, `create_recurring:156` `<`→`<=` on `start_date == today`, is a proven equivalent mutant: an 8.800-case differential over start x unit x count x end x mode x declared-on hashes identically for pristine, AST round-trip and mutant, with the sibling site one line down as a non-vacuity control. Reachability was checked through the API router and not only the service: every mutated branch is reachable with a 200."
+    status: applied
 ---
 
 # A recurring charge cannot live in a dollar account — notes

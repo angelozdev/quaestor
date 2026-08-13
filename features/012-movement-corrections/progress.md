@@ -113,3 +113,17 @@ vacuity. Removed everywhere; the suite did not move.
 | 2026-08-11T1030 | harden (CP8) | fresh agent | 157 mutants across 3 modules; 5 survivors and the right answer for all 5 was to write nothing, each guarding a state the domain cannot produce (proved by enumerating every row constructor and a read-only production census); `_restate` zero survivors; `api/routers/transactions.py` swept beyond policy at 22/22 |
 | 2026-08-11T1400 | browser pass | main | 4 more defects with everything green: an expired session reporting money it never moved, a dollar account unwritable on 3 screens, a recurring edit dialog that opened blank and never sent its request; all fixed, 2 rules added to CHARTER §6 |
 | 2026-08-11T1500 | merge | owner-authorised | `1be357d` on main — 27 commits, 63 files, +7.302/−443 |
+
+## Fix applied — 2026-08-11-expired-session-reports-a-saved-movement
+- Severity: medium; user-blocking: no
+- Followups: 1 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-11-expired-session-reports-a-saved-movement.md`
+
+## Fix applied — 2026-08-11-a-foreign-currency-account-cannot-be-written-to
+- Severity: high; user-blocking: yes; workaround: Creating a movement: press Crear a second time — the first attempt corrects the currency and the retry goes through. Planning a payment: no workaround; plan it against a peso account and move it afterwards with the correction dialog.
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-11-a-foreign-currency-account-cannot-be-written-to.md`
+
+Both were filed out of 012's own verification and fixed on separate
+commits; they sat at `hardened` for two days before the record caught up.
+See the closure handoff for what the delay cost.

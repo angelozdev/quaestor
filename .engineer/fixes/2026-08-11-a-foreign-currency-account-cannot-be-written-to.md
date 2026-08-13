@@ -4,7 +4,7 @@ title: "Recording or planning money in a foreign-currency account fails with an 
 severity: high
 blocks_user: true
 workaround: "Creating a movement: press Crear a second time — the first attempt corrects the currency and the retry goes through. Planning a payment: no workaround; plan it against a peso account and move it afterwards with the correction dialog."
-status: hardened
+status: closed
 
 source:
   kind: internal
@@ -100,6 +100,7 @@ fix_commits:
 
 harden_results:
   bug_line_mutation_confirmed: true
+  mutation_score: "n/a — frontend only. The fix changed `to-pay/page.tsx` and `transaction-create-dialog.tsx`; `backend/scripts/mutate.py` mutates Python and the project has no JS mutation tool. The bug-line gate is the evidence in its place: reverting the production files with the new tests in place turned 10 tests across 4 files red."
   arch_check: "n/a — frontend only. `pnpm knip` clean; the new `lib/use-form-values.ts` export is consumed by both dialogs."
   notes: |
     Bug-line gate, run by the dispatcher and not taken from the agent's report:
@@ -121,13 +122,18 @@ harden_results:
     reactive through `useStore` (`funds/create-form.tsx:100`, the precedent the
     new hook generalises).
 
+fix_commits:
+  - "3cf13f4 fix: an account that holds dollars can be written to again"
+
+handoff_path: .engineer/handoffs/2026-08-13-the-three-of-august-11-close.md
+
 followups:
   - category: inadequate_verification
     action: "Pin both before fixing: picking a USD account in the create dialog must put USD on the wire on the FIRST submit; planning against a USD account must send currency USD."
     status: applied
   - category: missing_ac
-    action: "Decide whether planning a payment in a foreign currency is in scope at all, and if so state it as an AC before implementing."
-    status: open
+    action: "Settled 2026-08-13 by reading rather than writing: feature 006 AC-17 already governs it — a payment may not be planned \"in a currency that differs from the account's own\", so planning in the account's currency was always in scope and the fix made the screen obey a criterion that predated it. The gap this followup was really about — that nothing tested it — is closed: `to-pay/page.test.tsx`, `transaction-create-dialog.test.tsx` and `recurring/page.test.tsx` all pick a foreign-currency account now, and CHARTER §6 was amended the same day to require it."
+    status: applied
 ---
 
 # A foreign-currency account cannot be written to — notes

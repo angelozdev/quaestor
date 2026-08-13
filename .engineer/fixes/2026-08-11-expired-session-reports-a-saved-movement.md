@@ -4,7 +4,7 @@ title: "An expired session makes every write report success — including the on
 severity: medium
 blocks_user: false
 workaround: "log in again and re-read the movement; nothing was saved, so redo the edit"
-status: hardened
+status: closed
 
 source:
   kind: internal
@@ -86,6 +86,7 @@ fix_commits:
 
 harden_results:
   bug_line_mutation_confirmed: true
+  mutation_score: "n/a — frontend only. `backend/scripts/mutate.py` mutates Python; this fix changed `frontend/lib/api/client.ts` and its callers, and the project has no JS mutation tool (manifest `mutation.scope: changed_files`). The bug-line gate below is the evidence in its place, and it is the stronger one: reverting the production files with the new tests in place turned 10 tests across 4 files red."
   arch_check: "n/a — frontend only; `uv run lint-imports` governs the backend layers and is unaffected. `pnpm knip` clean, no unused exports introduced."
   notes: |
     Bug-line gate, run by the dispatcher and not taken from the agent's report:
@@ -108,6 +109,11 @@ harden_results:
     bypass is unchanged and now pinned by a test that asserts only "no redirect",
     deliberately not the English string, so it does not cement that leak as
     contract.
+
+fix_commits:
+  - "95f10d5 fix: an expired session stops reporting money it never moved"
+
+handoff_path: .engineer/handoffs/2026-08-13-the-three-of-august-11-close.md
 
 followups:
   - category: inadequate_verification
