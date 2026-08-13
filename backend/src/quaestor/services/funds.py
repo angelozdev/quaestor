@@ -111,11 +111,17 @@ def _settled_by_spending(
     return settled
 
 
-def _turn_after(item: RecurringItem, year_month: str) -> str | None:
-    """The month of this obligation's first turn after `year_month`, if it has one."""
+def _turn_after(item: RecurringItem, year_month: str, ends_on: Date | None) -> str | None:
+    """The month of this obligation's first turn after `year_month`, if it has one.
+
+    `ends_on` is handed in rather than read off the item because the two callers
+    ask different questions. What the fund fills for next stops at the end date;
+    whether a charge can be spread is about the cadence, which an end date does
+    not change.
+    """
     _, end = month_bounds(year_month)
     after = next_due_on_or_after(
-        item.start_date, item.end_date, item.interval_unit, item.interval_count, end + timedelta(days=1)
+        item.start_date, ends_on, item.interval_unit, item.interval_count, end + timedelta(days=1)
     )
     return year_month_of(after) if after is not None else None
 
@@ -135,22 +141,26 @@ def _charge_month_for(
         return None
     if dues and not settled:
         return year_month
-    return _turn_after(item, year_month)
+    return _turn_after(item, year_month, item.end_date)
 
 
 def _can_be_spread(item: RecurringItem, charge_month: str) -> bool:
-    """Whether a whole month fits between this charge and the one after it (ADR-0054).
+    """Whether a whole month fits between this charge and the next its cadence gives (ADR-0054).
 
     A charge that lands every month never leaves one, so the fund can only ever
     ask it whole — which is why it is never the surprise the warning announces.
-    A charge with no turn after it is a one-off, and nothing forces it to be
-    asked in a single month.
 
-    Read from the obligation's own rhythm rather than from its declared
-    interval, so "every 45 days" and "every 6 weeks" answer by what they
-    actually do.
+    Asked of the cadence and not of the calendar an end date cuts short. An
+    obligation ending on this very turn has no turn after it, and reading that
+    as "nothing forces it into one month" let a monthly charge in its last month
+    announce itself — the defect ADR-0054 exists to kill, in a narrower shape.
+    A charge that arrives every month does not stop being ordinary by being the
+    last of its kind (AC-13).
+
+    Read from the rhythm rather than from the declared interval, so "every 45
+    days" and "every 6 weeks" answer by what they actually do.
     """
-    following = _turn_after(item, charge_month)
+    following = _turn_after(item, charge_month, None)
     return following is None or months_to_fund(charge_month, following) > 1
 
 

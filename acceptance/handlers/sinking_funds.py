@@ -351,7 +351,9 @@ def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str)
     r" of (?P<amount>" + _DEC + r") (?P<currency>[A-Z]{3}) every (?P<unit>day|week|month|year),"
     r" next due (?P<due>" + _MONTH + r")"
 )
-def given_recurring_charge(world: World, payee: str, category: str, amount: str, currency: str, unit: str, due: str):
+def given_recurring_charge(
+    world: World, payee: str, category: str, amount: str, currency: str, unit: str, due: str
+) -> None:
     """A charge that repeats and whose next turn falls in a named month.
 
     Declared as of that first turn, so nothing about it is waiting for the
@@ -618,23 +620,26 @@ def when_try_archive_category(world: World, name: str) -> None:
     world.attempt(categories.archive_category, world.session, _category_id(world, name))
 
 
-@step(r"the user (?P<mode>views|tries to view) the funds")
-def when_view_funds(world: World, mode: str) -> None:
-    """Open the funds screen: the list, and what each one asks for this month.
-
-    Listing alone converts nothing, so a fund with a dollar charge and no rate
-    would answer happily and only refuse later, on a step meant to read a
-    figure. Reading each fund's month here is what the screen does and what
-    puts the refusal where the scenario says it happens (014, AC-15).
-    """
+@step(r"the user (?:views|tries to view) the funds")
+def when_view_funds(world: World) -> None:
     world.funds_view = world.attempt(_read_the_funds_screen, world)
 
 
 def _read_the_funds_screen(world: World) -> list:
-    year_month = _month_of(world.today)
+    """What the screen loads: the list of funds, and the month they live in.
+
+    `funds/page.tsx` calls `listFunds()` and `moneyAvailable(month)`, and
+    nothing else — never a status per row. Reading the month once is what makes
+    this step cost the same for five funds as for one, which is the shape AC-17
+    is about; reading it per fund would model the very thing that criterion
+    forbids.
+
+    The month is read at all, rather than only the list, because listing
+    converts nothing: a fund with a dollar charge and no rate would answer
+    happily and refuse later, on a step meant to read a figure (014, AC-15).
+    """
     listed = _call("list_funds", world.session)
-    for line in listed:
-        _call("fund_status", world.session, line.fund_id, year_month)
+    _call("available", world.session, _month_of(world.today))
     return listed
 
 
@@ -848,22 +853,40 @@ def _told(world: World, needles: tuple[str, ...], what: str) -> None:
     assert any(n.lower() in lowered for n in needles), f"the refusal did not say {what}: {said!r}"
 
 
-@step(r"the user is warned it would ask (?P<amount>" + _DEC + r") COP this month")
-def then_warned_would_ask(world: World, amount: str) -> None:
+def previewed(world: World):
+    """What the fund would ask before it exists, or a red naming its absence.
+
+    Strict, because a step that reads a figure off the preview has nothing to
+    say without one.
+    """
     preview = getattr(world, "fund_preview", None)
     if preview is None:
         raise AssertionError("nothing previewed what the fund would ask before creating it")
-    warning = _attr(preview, "warning", "the preview")
-    would_ask = _attr(preview, "would_ask", "the preview")
+    return preview
+
+
+def warning_shown(world: World) -> str | None:
+    """What the preview announced, or nothing at all — a missing preview included.
+
+    Lenient where `previewed` is strict, and deliberately so: *the user was not
+    warned* is true of a scenario that created the fund outright without ever
+    previewing, and 003 has one that does exactly that.
+    """
+    preview = getattr(world, "fund_preview", None)
+    return getattr(preview, "warning", None) if preview is not None else None
+
+
+@step(r"the user is warned it would ask (?P<amount>" + _DEC + r") COP this month")
+def then_warned_would_ask(world: World, amount: str) -> None:
+    would_ask = _attr(previewed(world), "would_ask", "the preview")
     assert would_ask == _cents(amount), f"the preview says it would ask {would_ask}, expected {_cents(amount)}"
-    assert warning, "the preview carries no warning"
+    assert warning_shown(world), "the preview carries no warning"
 
 
 @step(r"the user was not warned")
 def then_not_warned(world: World) -> None:
-    preview = getattr(world, "fund_preview", None)
-    warning = getattr(preview, "warning", None) if preview is not None else None
-    assert warning is None, f"the fund warned when it should not have: {warning!r}"
+    said = warning_shown(world)
+    assert said is None, f"the fund warned when it should not have: {said!r}"
 
 
 @step(r"no fund is listed")

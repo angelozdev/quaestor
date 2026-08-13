@@ -3,7 +3,7 @@
 import { useStore, useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { MoneyInput } from "@/components/money-input"
 import { listCategories } from "@/lib/api/categories"
@@ -19,6 +19,14 @@ import { type CreateFundValues, createFundSchema } from "./funds.schema"
 import { ruleConsequence, rulesFor } from "./rules"
 
 const DEFAULT_WINDOW = 3
+
+/**
+ * The rule to fall back on when the chosen one stops being offered.
+ *
+ * Always safe: `offerTheRule` only ever withdraws `from-recurring`, and every
+ * shape's rule list leads with this one.
+ */
+const FALLBACK_RULE: FundRule = "fixed"
 
 function defaults(month: string): CreateFundValues {
   return {
@@ -149,9 +157,13 @@ export function CreateFundForm({
     .filter((offer, index) => offerTheRule(offer.rule, previews[index]?.data))
     .map((offer) => offer.rule)
 
-  if (offeredRules.length > 0 && !offeredRules.includes(values.rule)) {
-    form.setFieldValue("rule", offeredRules[0])
-  }
+  const subscriptionsOffered = offeredRules.includes("from-recurring")
+
+  useEffect(() => {
+    if (!subscriptionsOffered && values.rule === "from-recurring") {
+      form.setFieldValue("rule", FALLBACK_RULE)
+    }
+  }, [subscriptionsOffered, values.rule, form])
 
   const onErr = (e: unknown) => {
     applyApiErrorsToForm(form, e)

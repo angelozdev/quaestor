@@ -23,6 +23,8 @@ Two steps measure rather than read, and both are deliberate:
 from __future__ import annotations
 
 from quaestor.domain.errors import MissingRate, QuaestorError
+from quaestor.domain.models import RecurringItem
+from quaestor.domain.rules import month_bounds
 from sqlalchemy import event
 from sqlalchemy import inspect as inspect_schema
 
@@ -40,6 +42,7 @@ from .sinking_funds import (
     _status,
     given_fund_from_obligations,
     given_recurring_charge,
+    warning_shown,
 )
 from .world import World
 
@@ -72,13 +75,10 @@ def _line(world: World, fund: str, charge: str):
 
 
 def _warning(world: World) -> str:
-    preview = getattr(world, "fund_preview", None)
-    if preview is None:
-        raise AssertionError("nothing previewed the fund before creating it")
-    warning = getattr(preview, "warning", None)
-    if not warning:
+    said = warning_shown(world)
+    if not said:
         raise AssertionError("the preview carries no warning")
-    return str(warning)
+    return said
 
 
 def _statements_reading(world: World, year_month: str) -> int:
@@ -275,3 +275,19 @@ def then_assistant_carries_no_warning(world: World) -> None:
     if answer is None:
         raise AssertionError("the assistant answered nothing")
     assert "⚠️" not in str(answer), f"the assistant still warns about a charge that lands every month: {answer!r}"
+
+
+@step(r'"(?P<payee>[^"]+)" stops repeating after (?P<month>' + _MONTH + r")")
+def given_stops_repeating(world: World, payee: str, month: str) -> None:
+    """The obligation's last turn is the one in `month` — nothing follows it.
+
+    Reachable from the app: the recurring form takes an optional end date. It is
+    the state in which a charge that arrives every month has no turn after it,
+    which is what AC-13 must survive.
+    """
+    item = world.session.get(RecurringItem, world.recurring_ids[payee])
+    if item is None:
+        raise AssertionError(f"no repeating charge {payee!r} in this scenario")
+    _, item.end_date = month_bounds(month)
+    world.session.add(item)
+    world.session.commit()

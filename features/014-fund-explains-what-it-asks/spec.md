@@ -258,6 +258,13 @@ Scenario: A monthly charge beside a well-spread yearly one is not a surprise eit
   Then the user was not warned
 
 @backend
+Scenario: A monthly charge in its last month is still not a surprise
+  Given a recurring charge "EPM" on "Services" of 250000.00 COP every month, next due 2026-08
+  And "EPM" stops repeating after 2026-08
+  When the user starts creating a fund on "Services" funded from its obligations, starting 2026-08
+  Then the user was not warned
+
+@backend
 Scenario Outline: The four categories that warn today stop warning
   Given a recurring charge "<monthly>" on "<category>" of <amount> COP every month, next due 2026-08
   When the user starts creating a fund on "<category>" funded from its obligations, starting 2026-08

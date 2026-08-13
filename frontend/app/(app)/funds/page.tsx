@@ -23,6 +23,15 @@ import { Button, Input } from "@/ui"
 import { CreateFundForm } from "./create-form"
 import { ruleLabel } from "./rules"
 
+/** What the table says about each entry, in the order it says it. */
+const COLUMNS = [
+  { label: "Categoría", align: "text-left" },
+  { label: "Regla", align: "text-left" },
+  { label: "Pide", align: "text-right" },
+  { label: "Tiene", align: "text-right" },
+  { label: "Estado", align: "text-left" },
+]
+
 const SECTIONS: { shape: FundShape; heading: string; says: string }[] = [
   {
     shape: "presupuesto",
@@ -165,7 +174,11 @@ function FundCharges({ fund }: { fund: FundStatus }) {
   if (fund.rule !== "from-recurring") return null
   return (
     <tr>
-      <td colSpan={6} className="px-3 pb-2.5" style={{ color: "var(--muted-foreground)" }}>
+      <td
+        colSpan={COLUMNS.length + 1}
+        className="px-3 pb-2.5"
+        style={{ color: "var(--muted-foreground)" }}
+      >
         {fund.charges.length === 0 ? (
           <p className="text-xs">{nothingToSetAside(fund)}</p>
         ) : (
@@ -271,21 +284,14 @@ function FundSection({
           <table aria-labelledby={headingId} className="w-full text-sm">
             <thead>
               <tr style={{ color: "var(--muted-foreground)" }}>
-                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
-                  Categoría
-                </th>
-                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
-                  Regla
-                </th>
-                <th className="px-3 pb-2 text-right text-xs font-medium uppercase tracking-wide">
-                  Pide
-                </th>
-                <th className="px-3 pb-2 text-right text-xs font-medium uppercase tracking-wide">
-                  Tiene
-                </th>
-                <th className="px-3 pb-2 text-left text-xs font-medium uppercase tracking-wide">
-                  Estado
-                </th>
+                {COLUMNS.map((column) => (
+                  <th
+                    key={column.label}
+                    className={`px-3 pb-2 ${column.align} text-xs font-medium uppercase tracking-wide`}
+                  >
+                    {column.label}
+                  </th>
+                ))}
                 <th className="w-28 px-3 pb-2" />
               </tr>
             </thead>

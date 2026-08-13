@@ -42,10 +42,14 @@ export function nextYearMonth(yearMonth: string): string {
 
 const MONTH_IN_SPANISH = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
 
+function spanishMonth(yearMonth: string): { name: string; year: number } {
+  const [year, month] = yearMonth.split("-").map(Number)
+  return { name: MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1))), year }
+}
+
 /** A wire month as the sentence names it: "2026-09" → "Septiembre". */
 export function monthNameOf(yearMonth: string): string {
-  const [year, month] = yearMonth.split("-").map(Number)
-  const name = MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1)))
+  const { name } = spanishMonth(yearMonth)
   return name.charAt(0).toUpperCase() + name.slice(1)
 }
 
@@ -56,6 +60,6 @@ export function monthNameOf(yearMonth: string): string {
  * because the months it names are always the one in view or the one after it.
  */
 export function monthAndYearOf(yearMonth: string): string {
-  const [year, month] = yearMonth.split("-").map(Number)
-  return `${MONTH_IN_SPANISH.format(new Date(Date.UTC(year, month - 1, 1)))} de ${year}`
+  const { name, year } = spanishMonth(yearMonth)
+  return `${name} de ${year}`
 }

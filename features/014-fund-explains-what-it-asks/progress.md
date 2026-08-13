@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 7/7 criteria met | NEXT: /engineer.refine for CP6, agent_id distinto | BLOCKED: none
+> ▶ CP6 Refine — 4/4 criteria met | NEXT: crap-analyzer for CP7, agent_id distinto | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,6 +14,7 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
+| 6 | Refine | done — refinador independiente; 9 hallazgos, 7 aplicados, y un **defecto real** que el AC-13 prohibía | 2026-08-12T1900-refine.md |
 | 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | 2026-08-12T1745-implement.md |
 
 ## Las dos reglas de las que sale todo
@@ -39,6 +40,31 @@ decidida por el dueño y escrita** en ADR-0054 → Costos y en el tercer grupo d
 La corrección del aviso sí le llega gratis, porque lo imprime tal cual.
 
 ## Verification reports
+
+### CP6 — refinado independiente
+
+Un agente que no escribió este código encontró **un defecto de comportamiento**
+que las tres suites verdes no vieron:
+
+```
+EPM 250.000 mensual, con fecha fin en su último turno
+→ can_be_spread=True → el aviso salta
+```
+
+`_can_be_spread` decía «sin turno siguiente → se puede repartir», defendiendo el
+cobro único. **No existe el cobro único**: un recurrente siempre repite y
+`end_date` es lo que lo detiene. Un cobro mensual en su último mes no tenía turno
+siguiente y por eso avisaba — el defecto que la ADR-0054 se escribió para matar,
+en forma más estrecha. Ahora se pregunta a la cadencia, no al calendario que la
+fecha fin recorta.
+
+Y encontró que **el paso `the user views the funds`, que yo reescribí en esta
+feature, modelaba lo que la pantalla no hace**: leía el estado de cada fondo (77
+consultas para cinco) donde `funds/page.tsx` carga `available` una vez (14, con
+cinco o con uno). El `Then` del AC-17 medía `available` y tiraba lo que el `When`
+había hecho.
+
+Siete de nueve hallazgos aplicados. Los dos que no, quedan escritos con su razón.
 
 ### CP5 — rebanada 4, el navegador (sandbox)
 
@@ -82,6 +108,8 @@ ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
 - 2026-08-12T1320 — plan: ADR-0054, cuatro rebanadas, sin runbook.
 - 2026-08-12T1745 — implement: las cuatro rebanadas; dos defectos que solo el
   navegador y el pipeline vieron.
+- 2026-08-12T1900 — refine (independiente): 9 hallazgos, 7 aplicados, un defecto
+  de comportamiento y un paso que medía lo que no era.
 
 ## Defectos encontrados durante CP5, y no por las suites
 

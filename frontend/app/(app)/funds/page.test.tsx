@@ -1227,3 +1227,26 @@ describe("014 AC-11, AC-12 — the announcement is about the charge that cannot 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 })
+
+describe("014 AC-14 — the rule withdrawn under the owner's feet", () => {
+  const THE_RULE = "Pago mis suscripciones mes a mes"
+
+  it("falls back to a rule that is still offered", async () => {
+    wouldAsk = { "from-recurring": 10_000_000 }
+    spreadable = { [SERVICIOS.id]: true, [MERCADO.id]: false }
+    const user = setup()
+    renderPage()
+    await startCreating(user, "fondo")
+    await chooseCategory(user, SERVICIOS.name)
+    await chooseRule(user, THE_RULE)
+    expect(screen.getByRole("radio", { name: THE_RULE })).toBeChecked()
+
+    wouldAsk = { "from-recurring": 25_000_000 }
+    await chooseCategory(user, MERCADO.name)
+
+    await waitFor(() =>
+      expect(screen.queryByRole("radio", { name: THE_RULE })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("radio", { name: "Aparto un monto fijo cada mes" })).toBeChecked()
+  })
+})
