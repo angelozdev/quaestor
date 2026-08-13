@@ -127,10 +127,21 @@ def _finished_before(agg: MonthAggregate, meta: Meta, month: str) -> bool:
 
 @dataclass(frozen=True)
 class _Month:
+    """What one month did to a meta.
+
+    `contributed` is what the meta **took** of what the owner offered by hand,
+    which is not always what he offered: the room is recomputed on every read,
+    so lowering the amount or dating the purchase before this month can leave
+    part of a contribution that fitted when it was made with nowhere to go. The
+    month is charged this figure and never the stored row, or the difference
+    would leave the money available without reaching the meta (AC-14).
+    """
+
     opening: int
     ask: int
     holds: int
     released: int = 0
+    contributed: int = 0
 
 
 def _wanted_as_of(meta: Meta, amendments: Iterable[MetaAmendment], month: str) -> tuple[int, str]:
@@ -183,7 +194,7 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
         return _Month(opening=opening, ask=0, holds=amount, released=opening - amount)
     ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
     contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
-    return _Month(opening=opening, ask=ask, holds=opening + ask + contributed)
+    return _Month(opening=opening, ask=ask, holds=opening + ask + contributed, contributed=contributed)
 
 
 @dataclass(frozen=True)
@@ -286,9 +297,12 @@ class MetaFold:
     first and forget the second is how a charge goes unnamed, which is what
     ADR-0049's postmortem is about.
 
-    `contributed` is what the owner set aside by hand this month, cancelled
-    metas included for the same reason — charging one side and not the other
-    would hand him that money twice. `released` is what came back to the month,
+    `contributed` is what the metas **took** of what the owner set aside by hand
+    this month, and never what he offered them: a meta with no room for all of
+    it leaves the rest in the month (AC-14), and charging the offer would take
+    that rest out of the money available without it reaching anything. Cancelled
+    metas are in it for the same reason `asks` counts them — charging one side
+    and not the other would hand him that money twice. `released` is what came back to the month,
     from cancellations and from amounts lowered below what the meta already
     held (AC-15, AC-16); it is read for that one month and never again, so
     November cannot give back what October already gave. `uncovered` is what
@@ -315,9 +329,7 @@ def fold(agg: MonthAggregate) -> MetaFold:
         lines=[_status(agg, meta, walked[meta.id]) for meta in agg.metas]
         + [_status(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled],
         asks=sum(_ask_in_cop(agg, meta, walked[meta.id]) for meta in charged),
-        contributed=sum(
-            to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in charged
-        ),
+        contributed=sum(to_cop_cents(walked[meta.id].month.contributed, meta.currency, agg.trm) for meta in charged),
         released=sum(to_cop_cents(walked[meta.id].month.released, meta.currency, agg.trm) for meta in agg.metas)
         + sum(_released_by(agg, meta, walked[meta.id]) for meta in cancelled),
         uncovered=sum(_meta_uncovered(agg, meta, walked[meta.id]) for meta in agg.metas),

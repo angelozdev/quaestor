@@ -525,6 +525,35 @@ Scenario: A meta that has finished takes no more money
   When the user contributes 2000000.00 COP to "Celular"
   Then the contribution is rejected
   And the meta "Celular" holds 2000000.00 COP this month
+
+@backend
+Scenario: Lowering the amount below what was contributed leaves the rest in the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 3200000.00 COP to "Celular" made 2026-10
+  When the user sets the meta "Celular" to want 5000000.00 COP
+  And the user views the money available this month
+  Then the meta "Celular" holds 5000000.00 COP this month
+  And the breakdown shows 1200000.00 COP contributed by hand
+  And the money available this month is 3200000.00 COP
+
+@backend
+Scenario: A meta that had already finished leaves the whole contribution in the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 3200000.00 COP to "Celular" made 2026-10
+  And a recorded expense of 3200000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-09-12
+  When the user views the money available this month
+  Then the meta "Celular" holds 3200000.00 COP this month
+  And the breakdown shows 0.00 COP contributed by hand
+  And the money available this month is 5000000.00 COP
 ```
 
 ## AC-15 — Cancelling gives back what was put by, in the month it is cancelled
