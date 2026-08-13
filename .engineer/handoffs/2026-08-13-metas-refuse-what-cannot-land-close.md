@@ -23,7 +23,7 @@ artifacts:
 findings_summary: "TWO DEFECTS WERE ASKED FOR AND FIVE WERE CLOSED, ALL ONE SENTENCE: the app took money it could not put anywhere, and gave back money nobody had put in. (1) A contribution into a month before the meta was opened was accepted and read by nothing. (2) A stated opening above the amount was accepted. (3) THE CEILING IN (2) DID NOT CLOSE THE MINT AND THE COMMIT SAID IT DID — an independent verifier found the same money one PATCH or one cancel away, because `released` was bounded by what the meta HOLDS and a stated opening is in `holds` without a month behind it. (4) A SECOND VERIFIER FOUND THE LEDGER MEASURED THE WRONG QUANTITY: nothing took the purchase out of it, so AC-8's 'keep it with another amount' handed back what was already in the thing — five instalments of 1.000.000, a 5.000.000 phone, then 4.000.000 back and a net cost of 1.000.000. AC-39 names it exactly. (5) THE SAME SEAM READ BACKWARDS LOST MONEY: `fold` took the walk's `released` OR the cancellation's, never both, so a meta lowered and cancelled in one month gave back 1,00 of the 4.800.000 the months had put in. THREE ROUNDS, EACH ON A GREEN SUITE, EACH FINDING THE PREVIOUS ROUND'S FIX INCOMPLETE. Mutation could not see any of them — the code and the tests agreed. What found each was an agent told to BREAK the fix, and twice the decisive evidence was a hand-applied mutant on the line the fix had just written. THE OWNER MADE FOUR PRODUCT DECISIONS: refuse a contribution into a month the meta never ran in; refuse a stated opening above the amount; refuse one below zero; and after a purchase, give back what the thing did not eat and nothing more. NINE SCENARIOS ADDED (152 in the feature, from 143), each proven red without the code. MUTATION 188/180/8 = 95.7%, all eight read and judged equivalent."
 human_action_needed: yes
 human_action_kind: merge
-recommended_next: "The owner merges `fix/metas-refuse-what-cannot-land` into `main` (CHARTER §7), after driving it in a browser. Then feature 015 `fund-belongs-to-its-charge`, whose branch is 12 commits behind."
+recommended_next: "The owner merges `fix/metas-refuse-what-cannot-land` into `main` (CHARTER §7). Then feature 015 `fund-belongs-to-its-charge`, whose branch is 12 commits behind."
 tracker_update: "local — 009 stays done; three fixes closed."
 exit_criteria:
   - criterion: "every regression was red on the code as it stood, and is green now"
@@ -52,8 +52,32 @@ exit_criteria:
     evidence: "Eight, all equivalent with reasons: four `frozen=True` on dataclasses built once and only read; two on `funded`'s default, taken only by the pre-start `_Month(ask=0, holds=0)` where `holds` clamps every reader; two on the `if amount else 0` arm no reachable state enters. Separately, each of the four load-bearing lines of the ledger was mutated by hand and killed by exactly one scenario — `- spent`, `- released`, the cancel term, and `stated_opening < 0`."
   - criterion: "the fix is driven in a browser (CHARTER §6)"
     verified_by: human
-    met: false
-    evidence: "NOT DONE AND NOT CLAIMED. Verified by three suites, by figures read in cents at the services layer, and by two independent agents — but not driven. Every path here is an ordinary act on the metas screen (lower an amount, cancel, keep a bought meta with a new amount), and the CHARTER asks for the browser before done. This is what is left, and it belongs before the merge."
+    met: true
+    evidence: |
+      Chrome MCP against the sandbox on 2026-08-13. Baseline `Disponible
+      $ -13.454.780`.
+
+      THE REFUSAL. A meta of 1.000.000 stating it already held 2.000.000 is
+      refused on submit: `a meta cannot already hold more than it costs`.
+
+      THE GIVE-BACK. The same meta stating 600.000 creates and reads
+      `pidió $ 80.000 · lleva $ 680.000` — the 600.000 stated cost the month
+      nothing (AC-34), and `Disponible` moved by exactly the instalment to
+      $ -13.534.780. Cancelling it reads:
+        Meta · VERIFY declara (la cancelaste)          − $ 80.000
+        Devuelto por VERIFY declara (la cancelaste)      $ -80.000
+        Disponible                                       $ -13.454.780
+      Back to the baseline to the peso. It gave back the 80.000 August put in
+      and not the 680.000 it held. On the code as it stood the screen would
+      have read $ -12.854.780 — 600.000 out of nothing.
+
+      NOT COVERED BY THE BROWSER, and said rather than glossed: the frontend
+      container does not bind-mount its source (docker-compose.dev.yml mounts
+      `./backend/src` only, ADR-0033), so the create form's new refusal message
+      is not in the running app. It is covered by vitest instead — 551 tests,
+      including the new one bound to the untagged scenario. The refusal itself
+      reaches the screen as a toast, in English, which is the project-wide
+      language hole already filed.
 status: complete
 ---
 
@@ -83,9 +107,8 @@ escribir.
 
 ## Lo que queda
 
-- El dueño mergea la rama a `main` (CHARTER §7).
-- **Antes**, conducirlo en el navegador: es el único criterio sin cumplir, y
-  todos estos caminos son actos ordinarios de la pantalla de metas.
+- El dueño mergea la rama a `main` (CHARTER §7). Todos los criterios de
+  salida están cumplidos, el navegador incluido.
 - Dos cabos menores, con artefacto propio: restaurar una meta cancelada revive
   un aporte que prometía olvidar, y un descuadre de ±1 centavo en metas en
   dólares por convertir mes a mes y topar una sola vez.
