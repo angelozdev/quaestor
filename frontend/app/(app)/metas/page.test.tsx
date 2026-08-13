@@ -400,6 +400,22 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
     expect(screen.getByText("Te lo devolvimos al cancelar la meta.")).toBeInTheDocument()
   })
 
+  it("Removing a given-back contribution does not claim its month got anything", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 100_000_000, returned_month: "2026-08" },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    await user.click(await screen.findByRole("button", { name: "Quitar" }))
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Quitamos el aporte de la lista."),
+    )
+  })
+
   it("A meta nobody put money into says so", async () => {
     listMetas.mockResolvedValue([meta()])
     listContributions.mockResolvedValue([])

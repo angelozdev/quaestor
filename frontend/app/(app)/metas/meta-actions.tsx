@@ -213,9 +213,9 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
     queryFn: () => listContributions(meta.meta_id),
   })
   const remove = useMutation({
-    mutationFn: (id: number) => removeContribution(id),
-    onSuccess: async () => {
-      toast.success(`El aporte volvió a su mes.`)
+    mutationFn: ({ id }: { id: number; givenBack: boolean }) => removeContribution(id),
+    onSuccess: async (_result, { givenBack }) => {
+      toast.success(givenBack ? "Quitamos el aporte de la lista." : "El aporte volvió a su mes.")
       await invalidate(queryClient, "metaWrite")
     },
     onError: (error: unknown) =>
@@ -253,7 +253,7 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
                   variant="ghost"
                   size="sm"
                   disabled={remove.isPending}
-                  onClick={() => remove.mutate(contribution.id)}
+                  onClick={() => remove.mutate({ id: contribution.id, givenBack })}
                 >
                   Quitar
                 </Button>
