@@ -641,6 +641,18 @@ Scenario: Cancelling gives back what the meta held and not a peso more
   Then the breakdown shows 2000000.00 COP contributed by hand
   And the breakdown shows 6800000.00 COP released by a cancelled meta
   And the money available this month is 8200000.00 COP
+
+@backend
+Scenario: Cancelling gives back only what the months put in
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10 stating it already held 3000000.00 COP
+  When the user cancels the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows 1666666.67 COP released by a cancelled meta
+  And the money available this month is 5000000.00 COP
 ```
 
 ## AC-16 — Lowering the amount below what is saved completes the meta
@@ -664,6 +676,18 @@ Scenario: A meta closed after being lowered leaves the screen too
   When the user sets the meta "Celular" to want 3000000.00 COP
   And the user closes the meta "Celular"
   Then the meta "Celular" is not listed
+
+@backend
+Scenario: Lowering below a stated opening gives back only what the months put in
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10 stating it already held 8000000.00 COP
+  When the user sets the meta "Celular" to want 3000000.00 COP
+  Then the meta "Celular" is complete
+  And the meta "Celular" holds 3000000.00 COP this month
+  And the money available this month is 5000000.00 COP
 ```
 
 ## AC-17 — Several metas run at once without interfering
@@ -1249,6 +1273,20 @@ Scenario: A meta told it already holds exactly what it costs is born full
   When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 5000000.00 COP
   Then the meta "Celular" holds 5000000.00 COP this month
   And the meta "Celular" asks 0.00 COP this month
+  And the meta "Celular" is running
+
+@backend
+Scenario: A meta cannot be told it already holds less than nothing
+  Given today is 2026-10-10
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held -5000000.00 COP
+  Then the meta is rejected
+  And the user is told a meta cannot already hold less than nothing
+
+@backend
+Scenario: The form refuses a statement the creation would refuse
+  Given today is 2026-10-10
+  When the user asks what a meta of 5000000.00 COP by 2026-12 would ask, stating it already held 8000000.00 COP
+  Then the form is refused an answer
 ```
 
 ## AC-35 — Deleting the linked movement reopens the meta

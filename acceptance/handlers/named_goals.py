@@ -191,8 +191,7 @@ def when_view_metas(world: World, month: str) -> None:
     world.metas_view = {found.name: found for found in service.statuses(agg)}
 
 
-@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask")
-def when_preview(world: World, amount: str, target: str, currency: str) -> None:
+def _preview(world: World, amount: str, target: str, currency: str, held: str | None) -> None:
     month = _today(world)
     income = month_service.available(world.session, month).income
     world.meta_preview = service.preview_meta(
@@ -202,8 +201,30 @@ def when_preview(world: World, amount: str, target: str, currency: str) -> None:
         income=income,
         trm=fx.get_trm(world.session),
         currency=currency,
+        stated_opening=_cents(held) if held is not None else None,
     )
     world.pending_meta = (_cents(amount), currency, target)
+
+
+@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask")
+def when_preview(world: World, amount: str, target: str, currency: str) -> None:
+    _preview(world, amount, target, currency, None)
+
+
+@step(
+    rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask, "
+    rf"stating it already held (?P<held>{_DEC}) (?:COP|USD)"
+)
+def when_preview_holding(world: World, amount: str, target: str, currency: str, held: str) -> None:
+    try:
+        _preview(world, amount, target, currency, held)
+    except _REJECTED as exc:
+        world.preview_refusal = str(exc)
+
+
+@step(r"the form is refused an answer")
+def then_preview_rejected(world: World) -> None:
+    assert getattr(world, "preview_refusal", None), "the form was given a figure, expected a refusal"
 
 
 @step(
@@ -304,6 +325,12 @@ def then_told_amount(world: World) -> None:
 def then_told_opening_over_amount(world: World) -> None:
     said = getattr(world, "meta_refusal", "")
     assert "already hold more than" in said, f"the refusal said {said!r}"
+
+
+@step(r"the user is told a meta cannot already hold less than nothing")
+def then_told_opening_negative(world: World) -> None:
+    said = getattr(world, "meta_refusal", "")
+    assert "already hold less than nothing" in said, f"the refusal said {said!r}"
 
 
 @step(r"the user is told that name is already held by another meta")

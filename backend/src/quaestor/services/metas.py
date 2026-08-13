@@ -87,8 +87,11 @@ def _validate_spec(
     require_year_month(target_month, "target_month")
     if target_month < today_month:
         raise ValidationError(f"there is no way to save into the past: {target_month} is behind {today_month}")
-    if stated_opening is not None and stated_opening > amount:
-        raise ValidationError("a meta cannot already hold more than it costs")
+    if stated_opening is not None:
+        if stated_opening < 0:
+            raise ValidationError("a meta cannot already hold less than nothing")
+        if stated_opening > amount:
+            raise ValidationError("a meta cannot already hold more than it costs")
 
 
 def _contributions_in(agg: MonthAggregate, meta: Meta, month: str) -> int:
@@ -143,12 +146,25 @@ class _Month:
     which is not always the whole of it: the room is recomputed on every read,
     so lowering the amount or dating the purchase before this month can leave
     part of a contribution that fitted when it was made with nowhere to go.
+
+    `funded` is what the months have actually put in, cumulative and net of
+    what has already gone back. It is not `holds`: what the owner stated he
+    already had costs no month (AC-34), so it is in the second and never in the
+    first. Nothing may be given back past it — releasing more than was ever
+    taken would mint money (AC-15, product ADR-014).
+
+    `overfilled` says the meta is holding more than it now wants, which is what
+    finishes it (AC-16). It is its own answer rather than `released > 0`
+    because the two come apart exactly where the mint was: a meta lowered below
+    a stated opening stops wanting more and hands back nothing.
     """
 
     ask: int
     holds: int
     released: int = 0
     contributed: int = 0
+    funded: int = 0
+    overfilled: bool = False
 
 
 def _wanted_as_of(meta: Meta, amendments: Iterable[MetaAmendment], month: str) -> tuple[int, str]:
@@ -180,7 +196,7 @@ def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
     return _wanted_as_of(meta, agg.amendments.get(meta.id, ()), month)
 
 
-def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Month:
+def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
     """What one month does to a meta that entered it holding `opening`.
 
     A meta stops the month after its purchase and keeps what it had: the thing
@@ -190,18 +206,25 @@ def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Mon
     money is in the thing (AC-39).
 
     Holding more than the meta wants means the owner lowered the amount below
-    what it already had: the excess is freed and the meta asks nothing. A month
-    never overfills either — a contribution larger than what is missing is
-    taken only up to the amount.
+    what it already had: the meta asks nothing and hands the excess back — but
+    only as far as `funded`, because a month cannot be given what it never
+    gave. A month never overfills either: a contribution larger than what is
+    missing is taken only up to the amount.
     """
     if _finished_before(agg, meta, month):
-        return _Month(ask=0, holds=opening)
+        return _Month(ask=0, holds=opening, funded=funded)
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
-        return _Month(ask=0, holds=amount, released=opening - amount)
+        released = min(opening - amount, funded)
+        return _Month(ask=0, holds=amount, released=released, funded=funded - released, overfilled=True)
     ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
     contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
-    return _Month(ask=ask, holds=opening + ask + contributed, contributed=contributed)
+    return _Month(
+        ask=ask,
+        holds=opening + ask + contributed,
+        contributed=contributed,
+        funded=funded + ask + contributed,
+    )
 
 
 @dataclass(frozen=True)
@@ -210,7 +233,7 @@ class _Walked:
 
     Two acts finish a meta and neither is a field on it: the purchase, which the
     aggregate carries, and lowering the amount below what it already held
-    (AC-16), which only exists as a released month inside the fold. Both are
+    (AC-16), which only exists as an overfilled month inside the fold. Both are
     answered by the one walk that produced the figures, so nothing folds twice.
     """
 
@@ -222,18 +245,21 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Walked:
     """Fold the meta forward to the month this aggregate holds (ADR-0046).
 
     What a month holds is what the next one opens with — one rule, one line,
-    rather than one per branch of the month.
+    rather than one per branch of the month. What the months have put in
+    travels the same way, because it is the ceiling on what any of them can
+    ever get back, and it starts at nothing: the meta opens with what the owner
+    stated he already had, and no month paid for that (AC-34).
     """
     if agg.year_month < meta.start_month:
         return _Walked(_Month(ask=0, holds=0), finished=False)
     finished = _bought_in(agg, meta) is not None
-    month, opening = meta.start_month, meta.stated_opening or 0
+    month, opening, funded = meta.start_month, meta.stated_opening or 0, 0
     while month < agg.year_month:
-        step = _month_of(agg, meta, month, opening)
-        finished = finished or step.released > 0
-        opening, month = step.holds, next_year_month(month)
-    last = _month_of(agg, meta, month, opening)
-    return _Walked(last, finished or last.released > 0)
+        step = _month_of(agg, meta, month, opening, funded)
+        finished = finished or step.overfilled
+        opening, funded, month = step.holds, step.funded, next_year_month(month)
+    last = _month_of(agg, meta, month, opening, funded)
+    return _Walked(last, finished or last.overfilled)
 
 
 def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = False) -> MetaStatus:
@@ -257,7 +283,7 @@ def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = 
     month = walked.month
     amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
-    complete = _finished_before(agg, meta, next_year_month(agg.year_month)) or month.released > 0
+    complete = _finished_before(agg, meta, next_year_month(agg.year_month)) or month.overfilled
     progress = min(round(month.holds * 100 / amount), 100) if amount else 0
     return MetaStatus(
         meta_id=meta.id,
@@ -435,8 +461,14 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
 
 
 def _released_by(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
-    """What cancelling one meta hands back to the month: everything it held."""
-    return to_cop_cents(walked.month.holds, meta.currency, agg.trm)
+    """What cancelling one meta hands back to the month.
+
+    Everything it held, as far as the months put it there (AC-15). What the
+    owner stated he already had came out of no month, so handing it back would
+    give him money the app never took — the mint product ADR-014 exists to
+    prevent.
+    """
+    return to_cop_cents(min(walked.month.holds, walked.month.funded), meta.currency, agg.trm)
 
 
 def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> MetaContribution:
@@ -703,10 +735,11 @@ def preview_meta(
     weighing one against the other unconverted is what ADR-0049 names.
 
     Raises:
-        ValidationError: every refusal `create_meta` raises about the amount
-            and the month.
+        ValidationError: every refusal `create_meta` raises about the amount,
+            the month and what the owner says he already has — the form cannot
+            answer for a meta that will not be allowed to exist (AC-45).
     """
-    _validate_spec("preview", amount, target_month, today)
+    _validate_spec("preview", amount, target_month, today, stated_opening)
     months_left = months_to_meta(today, target_month)
     asks = meta_ask_calc(amount, stated_opening or 0, months_left)
     costs_the_month = to_cop_cents(asks, currency, trm)

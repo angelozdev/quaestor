@@ -608,6 +608,11 @@ $4.800.000 there. On a $5.000.000 income the month reads $8.200.000, never
 $9.800.000 — releasing more than was ever taken would mint money, which is what
 product ADR-014 exists to prevent.
 
+**What comes back is what the months put in**, and never more. A meta told at
+birth that it already held $3.000.000 (AC-34) took that from no month, so
+cancelling it hands back only the instalments it went on to charge. The same
+ceiling holds when the amount is lowered instead of cancelled (AC-16).
+
 This is **cancelling**, before the purchase. Closing a completed meta is a
 different act and releases nothing (AC-39).
 
@@ -835,9 +840,13 @@ contribution is money set aside **now** and costs the month it is made.
 The statement is made for a month and never re-read afterwards, the same way a
 fund's is (product ADR-041).
 
-What is stated cannot exceed the amount: saying the meta already holds more
-than the thing costs is refused. Stating exactly the amount is not — that meta
-is simply born complete.
+What is stated cannot exceed the amount, and cannot be below zero: saying the
+meta already holds more than the thing costs, or less than nothing, is refused.
+Stating exactly the amount is not — that meta simply asks nothing and waits for
+its purchase, the way any other that has filled up does (AC-17).
+
+The form answers the same way the creation does: a statement the app will not
+accept gets a refusal rather than a figure (AC-45).
 
 ## AC-35: Deleting the linked movement reopens the meta
 
