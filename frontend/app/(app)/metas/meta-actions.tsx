@@ -231,40 +231,35 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
       )}
       {list.data && list.data.length > 0 && (
         <ul className="space-y-1">
-          {list.data.map((contribution) => (
-            <li key={contribution.id} className="flex flex-wrap items-center gap-3 text-sm">
-              <span style={{ color: "var(--muted-foreground)" }}>
-                {monthNameOf(contribution.year_month)} {contribution.year_month.slice(0, 4)}
-              </span>
-              <span
-                className={
-                  contribution.returned_month === null
-                    ? "tabular-nums"
-                    : "tabular-nums line-through"
-                }
-                style={
-                  contribution.returned_month === null
-                    ? undefined
-                    : { color: "var(--muted-foreground)" }
-                }
-              >
-                {formatCents(contribution.amount, meta.currency)}
-              </span>
-              {contribution.returned_month !== null && (
-                <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
-                  Te lo devolvimos al cancelar la meta.
+          {list.data.map((contribution) => {
+            const givenBack = contribution.returned_month !== null
+            return (
+              <li key={contribution.id} className="flex flex-wrap items-center gap-3 text-sm">
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  {monthNameOf(contribution.year_month)} {contribution.year_month.slice(0, 4)}
                 </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(contribution.id)}
-              >
-                Quitar
-              </Button>
-            </li>
-          ))}
+                <span
+                  className={givenBack ? "tabular-nums line-through" : "tabular-nums"}
+                  style={givenBack ? { color: "var(--muted-foreground)" } : undefined}
+                >
+                  {formatCents(contribution.amount, meta.currency)}
+                </span>
+                {givenBack && (
+                  <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Te lo devolvimos al cancelar la meta.
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate(contribution.id)}
+                >
+                  Quitar
+                </Button>
+              </li>
+            )
+          })}
         </ul>
       )}
       <Button variant="ghost" size="sm" onClick={onDone}>
