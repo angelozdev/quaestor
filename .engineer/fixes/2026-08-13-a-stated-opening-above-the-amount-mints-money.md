@@ -4,7 +4,7 @@ title: "Saying a meta already held more than it costs hands the month money that
 severity: high
 blocks_user: false
 workaround: "raise the meta's amount to at least what was stated, or cancel it and open it again with the right figure — `stated_opening` cannot be edited"
-status: investigating
+status: closed
 
 source:
   kind: internal
@@ -30,16 +30,56 @@ investigation:
   match_mode: auto
   candidates_considered: 1
 
-fix_commits: []
+pin_confirmation:
+  feature_refs:
+    - feature: "features/009-named-goals"
+      spec_path: "features/009-named-goals/spec.md"
+      red_run:
+        result: red
+        command: "./run-acceptance-tests.sh features/009-named-goals"
+        output: |
+          The ceiling:
+          FAILED test_a_meta_cannot_be_told_it_already_holds_more_than_the_thing_costs
+                 the meta was accepted, expected a refusal
+          2 failed, 141 passed in 7.47s
+
+          The floor and the give-back, pinned after an independent verifier showed
+          the ceiling alone did not close the mint — metas.py reverted to HEAD and
+          the pipeline re-run:
+          FAILED test_cancelling_gives_back_only_what_the_months_put_in
+          FAILED test_lowering_below_a_stated_opening_gives_back_only_what_the_months_put_in
+          FAILED test_a_meta_cannot_be_told_it_already_holds_less_than_nothing
+          FAILED test_the_form_refuses_a_statement_the_creation_would_refuse
+          4 failed, 143 passed in 7.84s
+
+fix_commits:
+  - "32bcc7f fix(009): the app stops taking money it cannot put anywhere"
+  - "d4ef558 fix(009): a meta gives back only what the months put in"
 
 harden_results:
-  mutation_score: null
-  arch_check: null
-  bug_line_mutation_confirmed: false
+  mutation_score: 0.957
+  arch_check: "pass — cd backend && uv run lint-imports: Contracts: 2 kept, 0 broken"
+  bug_line_mutation_confirmed: true
 
-gap_analysis: []
+handoff_path: .engineer/handoffs/2026-08-13-metas-refuse-what-cannot-land-close.md
 
-followups: []
+gap_analysis:
+  - category: missing_ac
+    phase: discover-acs
+    finding: "AC-34 let the owner state what a meta already held and put no bounds on it at all — neither a ceiling at the amount nor a floor at zero. A negative statement made a 5.000.000 meta ask 10.000.000 over three months."
+    followup_kind: amend_ac
+  - category: incomplete_spec
+    phase: atdd
+    finding: "The ceiling alone does not close the mint, and the first fix claimed it did. AC-15 already said in words that releasing more than was ever taken would mint money, but no scenario put a stated opening in front of a give-back, so lowering the amount afterwards or cancelling reached the same money untouched. An independent verifier found it; the suites were green."
+    followup_kind: extend_spec
+
+followups:
+  - category: missing_ac
+    action: "AC-34 carries a ceiling and a floor; scenarios for both refusals, for stating exactly the amount, and for stating exactly zero — which is what the frontend actually sends"
+    status: applied
+  - category: incomplete_spec
+    action: "The walk carries `funded`; scenarios under AC-15 and AC-16 for cancelling and for lowering below a stated opening"
+    status: applied
 ---
 
 # A stated opening above the amount mints money

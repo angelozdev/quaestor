@@ -4,7 +4,7 @@ title: "A contribution into a month before the meta existed is accepted and reac
 severity: medium
 blocks_user: false
 workaround: "remove it from the meta's history and make it again in a month the meta ran in"
-status: investigating
+status: closed
 
 source:
   kind: internal
@@ -32,16 +32,42 @@ investigation:
   match_mode: auto
   candidates_considered: 1
 
-fix_commits: []
+pin_confirmation:
+  feature_refs:
+    - feature: "features/009-named-goals"
+      spec_path: "features/009-named-goals/spec.md"
+      red_run:
+        result: red
+        command: "./run-acceptance-tests.sh features/009-named-goals"
+        output: |
+          FAILED test_a_contribution_into_a_month_the_meta_never_ran_in_is_refused
+                 the contribution was accepted, expected a refusal
+          2 failed, 141 passed in 7.47s
+
+          Its boundary scenario — a past month the meta DID run in still takes a
+          contribution — was green before and after, so the refusal is pinned in
+          both directions.
+
+fix_commits:
+  - "32bcc7f fix(009): the app stops taking money it cannot put anywhere"
 
 harden_results:
-  mutation_score: null
-  arch_check: null
-  bug_line_mutation_confirmed: false
+  mutation_score: 0.957
+  arch_check: "pass — cd backend && uv run lint-imports: Contracts: 2 kept, 0 broken"
+  bug_line_mutation_confirmed: true
 
-gap_analysis: []
+handoff_path: .engineer/handoffs/2026-08-13-metas-refuse-what-cannot-land-close.md
 
-followups: []
+gap_analysis:
+  - category: missing_ac
+    phase: discover-acs
+    finding: "AC-10 said `Aportar` adds money 'on any month' and nothing ever asked which months a meta has. The write path trimmed to what fitted and the read path started at `start_month`, so the two disagreed about a month neither had been told about."
+    followup_kind: amend_ac
+
+followups:
+  - category: missing_ac
+    action: "AC-10 now says any month the meta has RUN in, with a scenario for the refusal and one holding down that a past month it did run in still takes a contribution"
+    status: applied
 ---
 
 # A contribution into a month the meta never ran in

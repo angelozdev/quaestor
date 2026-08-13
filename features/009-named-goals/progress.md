@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/meta-keeps-only-what-fits` into `main` (CHARTER §7) | BLOCKED: none
+> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/metas-refuse-what-cannot-land` into `main` (CHARTER §7), after driving it in a browser | BLOCKED: none
 
 # Progress — 009 named-goals
 
@@ -178,3 +178,24 @@ sweep and by the independent verifier of the fix that followed. Both were the
 same sentence — nothing tied what a meta took of a hand contribution to what
 the month was charged for it — and neither could be seen by mutation, because
 the code and the tests agreed.
+
+## Fix applied — 2026-08-13-a-contribution-into-a-month-the-meta-never-ran-in
+- Severity: medium; user-blocking: no
+- Followups: 1 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-contribution-into-a-month-the-meta-never-ran-in.md`
+
+## Fix applied — 2026-08-13-a-stated-opening-above-the-amount-mints-money
+- Severity: high; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-stated-opening-above-the-amount-mints-money.md`
+
+## Fix applied — 2026-08-13-a-meta-gives-back-money-no-month-ever-gave-it
+- Severity: high; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-meta-gives-back-money-no-month-ever-gave-it.md`
+
+Three more closed the same evening, and they are one sentence: the app took
+money it could not put anywhere and gave back money nobody had put in. Three
+rounds were needed, each on a green suite, each finding the previous round's
+fix incomplete. Mutation could not see any of them — the code and the tests
+agreed.
