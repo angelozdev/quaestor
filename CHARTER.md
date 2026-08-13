@@ -4,6 +4,9 @@ Signed off by Angelo on 2026-07-28 (DAE onboarding, Checkpoint 0).
 §2 amended 2026-07-29 — ADR-0030 alignment (cleanup C6), signed off by Angelo.
 §4 amended 2026-08-04 — feature 003 collapses envelopes and goals into the fund
 (product ADR-037, technical ADR-0043/0044), signed off by Angelo.
+§6 amended 2026-08-13 — the foreign-currency rule reaches the read path, not
+only screens that write (fix 2026-08-13-a-meta-swallows-what-it-cannot-take),
+signed off by Angelo.
 
 ## 1. Methodology
 
@@ -87,6 +90,14 @@ Default roles for the DAE pipeline:
   the wire. Decided 2026-08-11 after three defects hid behind 2.224 green tests:
   no test anywhere had ever chosen one, so a stale currency, an absent currency
   and a hard-coded one were all invisible.
+- **A figure the app converts is tested in another currency too, whether or
+  not anyone writes it.** Read-time conversion (ADR-0031) turns a foreign
+  amount into pesos on screens where the owner types nothing, and those are not
+  covered by the rule above. Every such figure needs at least one case held in
+  a currency other than COP. Amended 2026-08-13: no test anywhere contributed
+  to a meta in dollars, so hard-coding `"COP"` where the meta's own currency
+  belonged reported an 800 dollar contribution as $800 instead of $3.200.000 —
+  and passed 1.325 green tests.
 - **Green is not verified. A feature is driven in a browser before it is
   called done**, against the sandbox, checking balances in cents rather than
   reading the screen, which rounds. Feature 009 shipped a defect past a fully

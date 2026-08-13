@@ -544,3 +544,21 @@ true when they were written.)*
   that task because the *general* lesson outlives it: an AC satisfiable at
   either surface silently permits a hole in one of them, and this feature has
   30 such ACs.
+
+- C24. **A figure converted at read time has no foreign-currency case anywhere
+  but the metas.** Found 2026-08-13 by fix
+  `2026-08-13-a-meta-swallows-what-it-cannot-take`, by mutating the line the
+  fix had just written.
+
+  Hard-coding `"COP"` where the meta's own currency belonged reported an 800
+  dollar contribution as $800 instead of $3.200.000 and passed 1.325 green
+  tests: **no test in the project had ever contributed to a meta in dollars.**
+  CHARTER §6's foreign-currency rule was written for screens that *write*
+  money, and read-time conversion (ADR-0031) happens on screens where the owner
+  types nothing.
+
+  §6 was amended the same day to reach the read path, and the metas' own hole
+  is closed. **What is left is the sweep:** every other figure `to_cop_cents`
+  produces — the fund's asks, the month's income, the uncovered term, the
+  report's spending lines — still has no case held in a currency other than
+  COP. The amendment makes it required; nothing has audited it yet.
