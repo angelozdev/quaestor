@@ -23,6 +23,8 @@ Two steps measure rather than read, and both are deliberate:
 from __future__ import annotations
 
 from quaestor.domain.errors import MissingRate, QuaestorError
+from quaestor.domain.models import RecurringItem
+from quaestor.domain.rules import month_bounds
 from sqlalchemy import event
 from sqlalchemy import inspect as inspect_schema
 
@@ -40,6 +42,8 @@ from .sinking_funds import (
     _status,
     given_fund_from_obligations,
     given_recurring_charge,
+    previewed,
+    warning_shown,
 )
 from .world import World
 
@@ -72,13 +76,10 @@ def _line(world: World, fund: str, charge: str):
 
 
 def _warning(world: World) -> str:
-    preview = getattr(world, "fund_preview", None)
-    if preview is None:
-        raise AssertionError("nothing previewed the fund before creating it")
-    warning = getattr(preview, "warning", None)
-    if not warning:
+    said = warning_shown(world)
+    if not said:
         raise AssertionError("the preview carries no warning")
-    return str(warning)
+    return said
 
 
 def _statements_reading(world: World, year_month: str) -> int:
@@ -275,3 +276,45 @@ def then_assistant_carries_no_warning(world: World) -> None:
     if answer is None:
         raise AssertionError("the assistant answered nothing")
     assert "⚠️" not in str(answer), f"the assistant still warns about a charge that lands every month: {answer!r}"
+
+
+@step(r'"(?P<payee>[^"]+)" stops repeating after (?P<month>' + _MONTH + r")")
+def given_stops_repeating(world: World, payee: str, month: str) -> None:
+    """The obligation's last turn is the one in `month` — nothing follows it.
+
+    Reachable from the app: the recurring form takes an optional end date. It is
+    the state in which a charge that arrives every month has no turn after it,
+    which is what AC-13 must survive.
+    """
+    item = world.session.get(RecurringItem, world.recurring_ids[payee])
+    if item is None:
+        raise AssertionError(f"no repeating charge {payee!r} in this scenario")
+    _, item.end_date = month_bounds(month)
+    world.session.add(item)
+    world.session.commit()
+
+
+@step(r'the fund on "(?P<fund>[^"]+)" still has a repeating charge')
+def then_still_has_a_repeating_charge(world: World, fund: str) -> None:
+    left = getattr(_status(world, fund), "has_repeating_charges", None)
+    assert left is True, f"the fund on {fund!r} says its category is finished while a charge is still coming"
+
+
+@step(r"the category has (?P<what>something|nothing) to spread")
+def then_category_spreadable(world: World, what: str) -> None:
+    """What decides whether the rule is offered at all (AC-14).
+
+    Read off the preview rather than off a screen, because the screen only ever
+    sees what this field says and a mocked one proves nothing about it.
+    """
+    spreadable = getattr(previewed(world), "has_something_to_spread", None)
+    assert spreadable is (what == "something"), (
+        f"the category reports has_something_to_spread={spreadable}, expected {what!r} to spread"
+    )
+
+
+@step(r'the fund on "(?P<fund>[^"]+)" has no repeating charge left')
+def then_no_repeating_charge_left(world: World, fund: str) -> None:
+    status = _status(world, fund)
+    left = getattr(status, "has_repeating_charges", None)
+    assert left is False, f"the fund on {fund!r} still counts a charge it will never be asked for"

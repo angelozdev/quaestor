@@ -380,6 +380,22 @@ Scenario: What drops is every instalment after it
   And a contribution of 2000000.00 COP to "Celular" made 2026-09
   Then the meta "Celular" asks 933333.34 COP this month
   And the money available this month is 4066666.66 COP
+
+@backend
+Scenario: A contribution into a month the meta never ran in is refused
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10
+  When the user contributes 1000000.00 COP to "Celular" for 2026-08
+  Then the contribution is rejected
+  And the user is told the meta did not exist that month
+  And the meta "Celular" holds 2666666.67 COP this month
+
+@backend
+Scenario: A past month the meta did run in still takes a contribution
+  Given today is 2026-10-10
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user contributes 1000000.00 COP to "Celular" for 2026-09
+  Then the meta "Celular" holds 5466666.67 COP this month
 ```
 
 ## AC-11 — A meta can be edited while it runs
@@ -494,6 +510,21 @@ Scenario: The meta's amount is not rewritten to the price paid
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
   When the user records an expense of 9000000.00 COP in category "Tecnologia" linked to the meta "Celular"
   Then the meta "Celular" wants 8000000.00 COP by 2026-12
+
+@backend
+Scenario: Only what a meta filled by hand did not cover leaves the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user records an expense of 7000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the meta "Celular" holds 6000000.00 COP this month
+  And the breakdown shows uncovered spending of 1000000.00 COP
+  And the money available this month is 3000000.00 COP
 ```
 
 ## AC-14 — A contribution larger than what is missing is trimmed to fit
@@ -525,6 +556,45 @@ Scenario: A meta that has finished takes no more money
   When the user contributes 2000000.00 COP to "Celular"
   Then the contribution is rejected
   And the meta "Celular" holds 2000000.00 COP this month
+
+@backend
+Scenario: Lowering the amount below what was contributed leaves the rest in the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 3200000.00 COP to "Celular" made 2026-10
+  When the user sets the meta "Celular" to want 5000000.00 COP
+  And the user views the money available this month
+  Then the meta "Celular" holds 5000000.00 COP this month
+  And the breakdown shows 1200000.00 COP contributed by hand
+  And the money available this month is 3200000.00 COP
+
+@backend
+Scenario: A contribution to a meta in dollars reaches the month at the rate
+  Given today is 2026-10-10
+  And the TRM is 4000
+  And a meta "Portatil" of 1200.00 USD by 2026-12, opened 2026-10
+  When the user contributes 800.00 USD to "Portatil"
+  And the user views the money available this month
+  Then the meta "Portatil" holds 1200.00 USD this month
+  And the breakdown shows 3200000.00 COP contributed by hand
+
+@backend
+Scenario: A meta that had already finished leaves the whole contribution in the month
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 3200000.00 COP to "Celular" made 2026-10
+  And a recorded expense of 3200000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-09-12
+  When the user views the money available this month
+  Then the meta "Celular" holds 3200000.00 COP this month
+  And the breakdown shows 0.00 COP contributed by hand
+  And the money available this month is 5000000.00 COP
 ```
 
 ## AC-15 — Cancelling gives back what was put by, in the month it is cancelled
@@ -571,6 +641,18 @@ Scenario: Cancelling gives back what the meta held and not a peso more
   Then the breakdown shows 2000000.00 COP contributed by hand
   And the breakdown shows 6800000.00 COP released by a cancelled meta
   And the money available this month is 8200000.00 COP
+
+@backend
+Scenario: Cancelling gives back only what the months put in
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10 stating it already held 3000000.00 COP
+  When the user cancels the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows 1666666.67 COP released by a cancelled meta
+  And the money available this month is 5000000.00 COP
 ```
 
 ## AC-16 — Lowering the amount below what is saved completes the meta
@@ -594,6 +676,41 @@ Scenario: A meta closed after being lowered leaves the screen too
   When the user sets the meta "Celular" to want 3000000.00 COP
   And the user closes the meta "Celular"
   Then the meta "Celular" is not listed
+
+@backend
+Scenario: Lowering below a stated opening gives back only what the months put in
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-10 stating it already held 8000000.00 COP
+  When the user sets the meta "Celular" to want 3000000.00 COP
+  Then the meta "Celular" is complete
+  And the meta "Celular" holds 3000000.00 COP this month
+  And the money available this month is 5000000.00 COP
+
+@backend
+Scenario: A second lowering gives back only what is left of what the months put in
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08 stating it already held 5000000.00 COP
+  When the user sets the meta "Celular" to want 5200000.00 COP
+  And today is 2026-12-10
+  And the user sets the meta "Celular" to want 4000000.00 COP
+  Then the money available this month is 5200000.00 COP
+
+@backend
+Scenario: Lowering and cancelling in one month gives back both
+  Given today is 2026-11-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08
+  When the user sets the meta "Celular" to want 100.00 COP
+  And the user cancels the meta "Celular"
+  Then the money available this month is 9800000.00 COP
 ```
 
 ## AC-17 — Several metas run at once without interfering
@@ -997,6 +1114,32 @@ Scenario: An archived meta is not offered when an expense is recorded
   Given a meta "Celular" of 8000000.00 COP by 2026-12 that has been cancelled
   When the owner starts recording an expense
   Then the meta "Celular" is not offered to link
+
+@backend
+Scenario: A restored meta does not charge again a contribution the cancellation gave back
+  Given today is 2026-08-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-08
+  And a contribution of 1000000.00 COP to "Portatil" made 2026-08
+  And the meta "Portatil" was cancelled 2026-08
+  When the user restores the meta "Portatil"
+  Then the meta "Portatil" asks 1000000.00 COP this month
+  And the meta "Portatil" holds 1000000.00 COP this month
+
+@backend
+Scenario: A meta that was never cancelled goes on counting its contributions
+  Given today is 2026-08-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-08
+  When the user contributes 1000000.00 COP to "Portatil"
+  Then the meta "Portatil" holds 2000000.00 COP this month
+
+@backend
+Scenario: A contribution made in a month the restore left behind is given back too
+  Given today is 2026-09-10
+  And a meta "Portatil" of 5000000.00 COP by 2026-12, opened 2026-07
+  And a contribution of 1000000.00 COP to "Portatil" made 2026-07
+  And the meta "Portatil" was cancelled 2026-08
+  When the user restores the meta "Portatil"
+  Then the meta "Portatil" lists a contribution of 1000000.00 COP made 2026-07 given back when it was cancelled
 ```
 
 ## AC-30 — The metas screen says what a meta is
@@ -1161,6 +1304,49 @@ Scenario: The statement is made for one month and never re-read
   Given today is 2026-10-10
   And a meta "Celular" of 8000000.00 COP by 2026-12, opened 2026-08 stating it already held 3000000.00 COP
   Then the meta "Celular" holds 6000000.00 COP this month
+
+@backend
+Scenario: A meta cannot be told it already holds more than the thing costs
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 20000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 8000000.00 COP
+  Then the meta is rejected
+  And the user is told a meta cannot already hold more than it costs
+  And the money available this month is 5000000.00 COP
+
+@backend
+Scenario: A meta told it already holds exactly what it costs is born full
+  Given today is 2026-10-10
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 5000000.00 COP
+  Then the meta "Celular" holds 5000000.00 COP this month
+  And the meta "Celular" asks 0.00 COP this month
+  And the meta "Celular" is running
+
+@backend
+Scenario: A meta may be told it already holds nothing
+  Given today is 2026-10-10
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held 0.00 COP
+  Then the meta "Celular" asks 1666666.67 COP this month
+
+@backend
+Scenario: A meta cannot be told it already holds less than nothing
+  Given today is 2026-10-10
+  When the user creates a meta "Celular" of 5000000.00 COP by 2026-12 stating it already held -5000000.00 COP
+  Then the meta is rejected
+  And the user is told a meta cannot already hold less than nothing
+
+@backend
+Scenario: The form refuses a statement the creation would refuse
+  Given today is 2026-10-10
+  When the user asks what a meta of 5000000.00 COP by 2026-12 would ask, stating it already held 8000000.00 COP
+  Then the form is refused an answer
+
+Scenario: The form says so instead of quoting a figure
+  Given the owner is filling in a new meta
+  When what he has typed is something the app will not create
+  Then the form says so and stops offering to create it
 ```
 
 ## AC-35 — Deleting the linked movement reopens the meta
@@ -1392,6 +1578,32 @@ Scenario: A meta cannot be closed as of a month before it existed
   When the user closes the meta "Celular" as of 2026-07
   Then the close is rejected
   And the user is told a meta that is still running is cancelled, not closed
+
+@backend
+Scenario: Keeping a bought meta with a new amount frees nothing the thing ate
+  Given today is 2027-01-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 50000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 5000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 5000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-12-20
+  When the user sets the meta "Celular" to be wanted by 2027-06
+  And the user sets the meta "Celular" to want 1000000.00 COP
+  Then the money available this month is 5000000.00 COP
+
+@backend
+Scenario: Keeping a bought meta with a new amount frees what the thing left over
+  Given today is 2027-01-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 50000000.00 COP
+  And a repeating income of 5000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 5000000.00 COP by 2026-12, opened 2026-08
+  And a recorded expense of 3000000.00 COP in category "Tecnologia" linked to the meta "Celular" on 2026-12-20
+  When the user sets the meta "Celular" to be wanted by 2027-06
+  And the user sets the meta "Celular" to want 1000000.00 COP
+  Then the money available this month is 7000000.00 COP
 ```
 
 ## AC-40 — The fund no longer saves toward a date
@@ -1506,6 +1718,11 @@ Scenario: Removing a contribution raises the instalments that had dropped
   And a contribution of 2000000.00 COP to "Celular" made 2026-09
   When the user removes that contribution
   Then the meta "Celular" asks 1600000.00 COP this month
+
+Scenario: A contribution given back by a cancellation is listed as such
+  Given a meta "Portatil" that lists a contribution of 1000000.00 COP made 2026-08, given back when it was cancelled
+  When the owner opens the contributions of "Portatil"
+  Then the contribution of 1000000.00 COP is shown as given back when the meta was cancelled
 ```
 
 ## AC-43 — A planned expense is netted against its meta the same way
@@ -1571,6 +1788,34 @@ Scenario: A purchase owed but not yet paid leaves the meta asking the month afte
   And a planned expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular" this month
   When the user views the metas for 2026-11
   Then the meta "Celular" held 4000000.00 COP that month
+
+@backend
+Scenario: A purchase a meta filled by hand covers costs the month nothing more
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user records an expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows uncovered spending of 0.00 COP
+  And the money available this month is 4000000.00 COP
+
+@backend
+Scenario: A planned purchase a meta filled by hand covers costs the month nothing
+  Given today is 2026-10-10
+  And an income category "Salario"
+  And an account "Banco" in COP with balance 30000000.00 COP
+  And a repeating income of 10000000.00 COP from "Empresa" into "Banco" every 1 month starting on 2026-01-05 in category "Salario", paying itself
+  And an expense category "Tecnologia"
+  And a meta "Celular" of 6000000.00 COP by 2026-12, opened 2026-10
+  And a contribution of 4000000.00 COP to "Celular" made 2026-10
+  When the user plans an expense of 6000000.00 COP in category "Tecnologia" linked to the meta "Celular"
+  And the user views the money available this month
+  Then the breakdown shows uncovered spending of 0.00 COP
+  And the money available this month is 4000000.00 COP
 ```
 
 ## AC-44 — The metas list puts what needs an answer first

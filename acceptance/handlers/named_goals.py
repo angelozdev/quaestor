@@ -69,6 +69,19 @@ def _meta_id(world: World, name: str) -> int:
     return ids[name]
 
 
+def _meta_held_in(world: World, name: str, currency: str) -> int:
+    """The meta's id, refusing a step that names a currency it is not held in.
+
+    A contribution carries no currency of its own — it is put by in the meta's
+    (AC-26) — so a step saying USD to a meta held in COP would read as a
+    conversion that never happens, and pass.
+    """
+    meta_id = _meta_id(world, name)
+    held = world.session.get(_Meta, meta_id).currency
+    assert held == currency, f"the meta {name!r} is held in {held}, not {currency}"
+    return meta_id
+
+
 def _status(world: World, name: str, year_month: str | None = None):
     month = year_month or _today(world)
     agg = load_month(world.session, month)
@@ -178,8 +191,7 @@ def when_view_metas(world: World, month: str) -> None:
     world.metas_view = {found.name: found for found in service.statuses(agg)}
 
 
-@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask")
-def when_preview(world: World, amount: str, target: str, currency: str) -> None:
+def _preview(world: World, amount: str, target: str, currency: str, held: str | None) -> None:
     month = _today(world)
     income = month_service.available(world.session, month).income
     world.meta_preview = service.preview_meta(
@@ -189,8 +201,30 @@ def when_preview(world: World, amount: str, target: str, currency: str) -> None:
         income=income,
         trm=fx.get_trm(world.session),
         currency=currency,
+        stated_opening=_cents(held) if held is not None else None,
     )
     world.pending_meta = (_cents(amount), currency, target)
+
+
+@step(rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask")
+def when_preview(world: World, amount: str, target: str, currency: str) -> None:
+    _preview(world, amount, target, currency, None)
+
+
+@step(
+    rf"the user asks what a meta of (?P<amount>{_DEC}) (?P<currency>COP|USD) by (?P<target>{_MONTH}) would ask, "
+    rf"stating it already held (?P<held>{_DEC}) (?:COP|USD)"
+)
+def when_preview_holding(world: World, amount: str, target: str, currency: str, held: str) -> None:
+    try:
+        _preview(world, amount, target, currency, held)
+    except _REJECTED as exc:
+        world.preview_refusal = str(exc)
+
+
+@step(r"the form is refused an answer")
+def then_preview_rejected(world: World) -> None:
+    assert getattr(world, "preview_refusal", None), "the form was given a figure, expected a refusal"
 
 
 @step(
@@ -285,6 +319,18 @@ def then_told_no_past(world: World) -> None:
 @step(r"the user is told a meta needs an amount above zero")
 def then_told_amount(world: World) -> None:
     assert "above zero" in getattr(world, "meta_refusal", "")
+
+
+@step(r"the user is told a meta cannot already hold more than it costs")
+def then_told_opening_over_amount(world: World) -> None:
+    said = getattr(world, "meta_refusal", "")
+    assert "already hold more than" in said, f"the refusal said {said!r}"
+
+
+@step(r"the user is told a meta cannot already hold less than nothing")
+def then_told_opening_negative(world: World) -> None:
+    said = getattr(world, "meta_refusal", "")
+    assert "already hold less than nothing" in said, f"the refusal said {said!r}"
 
 
 @step(r"the user is told that name is already held by another meta")
@@ -469,27 +515,42 @@ def when_skip_planned(world: World) -> None:
 # --------------------------------------------------------------- the acts
 
 
-@step(rf'the user contributes (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)"')
-def when_contribute(world: World, amount: str, name: str) -> None:
+def _contribute(world: World, amount: str, currency: str, name: str, month: str) -> None:
     try:
-        world.last_contributed_to = _meta_id(world, name)
+        world.last_contributed_to = _meta_held_in(world, name, currency)
         world.last_put_in = service.contribute(
-            world.session, world.last_contributed_to, year_month=_today(world), amount=_cents(amount)
+            world.session, world.last_contributed_to, year_month=month, amount=_cents(amount)
         ).amount
     except _REJECTED as exc:
         world.session.rollback()
         world.contribution_refusal = str(exc)
 
 
-@step(rf'a contribution of (?P<amount>{_DEC}) COP to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
-def given_contribution(world: World, amount: str, name: str, month: str) -> None:
-    world.last_contributed_to = _meta_id(world, name)
+@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)"')
+def when_contribute(world: World, amount: str, currency: str, name: str) -> None:
+    _contribute(world, amount, currency, name, _today(world))
+
+
+@step(rf'the user contributes (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)" for (?P<month>{_MONTH})')
+def when_contribute_into(world: World, amount: str, currency: str, name: str, month: str) -> None:
+    _contribute(world, amount, currency, name, month)
+
+
+@step(rf'a contribution of (?P<amount>{_DEC}) (?P<currency>COP|USD) to "(?P<name>[^"]+)" made (?P<month>{_MONTH})')
+def given_contribution(world: World, amount: str, currency: str, name: str, month: str) -> None:
+    world.last_contributed_to = _meta_held_in(world, name, currency)
     service.contribute(world.session, world.last_contributed_to, year_month=month, amount=_cents(amount))
 
 
 @step(r"the contribution is rejected")
 def then_contribution_rejected(world: World) -> None:
     assert getattr(world, "contribution_refusal", None), "the contribution was accepted, expected a refusal"
+
+
+@step(r"the user is told the meta did not exist that month")
+def then_told_meta_not_yet(world: World) -> None:
+    said = getattr(world, "contribution_refusal", "")
+    assert "did not exist" in said, f"the refusal said {said!r}"
 
 
 @step(rf"the user is told (?P<amount>{_DEC}) COP was put in, which is what was missing")
@@ -508,6 +569,18 @@ def then_lists_contribution(world: World, name: str, amount: str, month: str) ->
     rows = service.contributions_of(world.session, _meta_id(world, name))
     assert any(r.amount == _cents(amount) and r.year_month == month for r in rows), (
         f"the meta {name!r} lists {[(r.year_month, r.amount) for r in rows]}"
+    )
+
+
+@step(
+    rf'the meta "(?P<name>[^"]+)" lists a contribution of (?P<amount>{_DEC}) COP '
+    rf"made (?P<month>{_MONTH}) given back when it was cancelled"
+)
+def then_lists_returned_contribution(world: World, name: str, amount: str, month: str) -> None:
+    rows = service.contributions_of(world.session, _meta_id(world, name))
+    listed = [(r.year_month, r.amount, r.returned_month) for r in rows]
+    assert any(r.amount == _cents(amount) and r.year_month == month and r.returned_month for r in rows), (
+        f"the meta {name!r} lists {listed}"
     )
 
 

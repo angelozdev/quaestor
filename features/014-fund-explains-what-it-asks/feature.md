@@ -2,7 +2,7 @@
 title: "Un fondo dice de dónde sale su cifra, y su aviso deja de mentir"
 slug: fund-explains-what-it-asks
 number: 014
-status: ready
+status: done
 autonomy_level: medium
 branch: fund-explains-what-it-asks
 area: funds

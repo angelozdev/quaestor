@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: done — merged to `main` 2026-08-10 as `ae5f0ae` | BLOCKED: none
+> ▶ CP8 Harden — 6/6 criteria met | NEXT: merge `fix/restore-gives-back-what-it-already-gave-back` into `main` (CHARTER §7) | BLOCKED: none
 
 # Progress — 009 named-goals
 
@@ -167,3 +167,47 @@ three not-found tests. The residue fell from eleven lines to none.
   stays `in-progress` until `cp6-independent-review` merges. Roadmap items
   `named-goals` and `withdraw-target-by-date` still in-progress for the same
   reason.
+
+## Fix applied — 2026-08-13-a-meta-swallows-what-it-cannot-take
+- Severity: high; user-blocking: no
+- Followups: 3 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-meta-swallows-what-it-cannot-take.md`
+
+Two money defects were found in the merged code on 2026-08-12 by a browser QA
+sweep and by the independent verifier of the fix that followed. Both were the
+same sentence — nothing tied what a meta took of a hand contribution to what
+the month was charged for it — and neither could be seen by mutation, because
+the code and the tests agreed.
+
+## Fix applied — 2026-08-13-a-contribution-into-a-month-the-meta-never-ran-in
+- Severity: medium; user-blocking: no
+- Followups: 1 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-contribution-into-a-month-the-meta-never-ran-in.md`
+
+## Fix applied — 2026-08-13-a-stated-opening-above-the-amount-mints-money
+- Severity: high; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-stated-opening-above-the-amount-mints-money.md`
+
+## Fix applied — 2026-08-13-a-meta-gives-back-money-no-month-ever-gave-it
+- Severity: high; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-a-meta-gives-back-money-no-month-ever-gave-it.md`
+
+Three more closed the same evening, and they are one sentence: the app took
+money it could not put anywhere and gave back money nobody had put in. Three
+rounds were needed, each on a green suite, each finding the previous round's
+fix incomplete. Mutation could not see any of them — the code and the tests
+agreed.
+
+## Fix applied — 2026-08-13-restoring-a-meta-revives-a-contribution-it-promised-to-forget
+- Severity: medium; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-restoring-a-meta-revives-a-contribution-it-promised-to-forget.md`
+- Restaurar una meta cancelada volvía a cobrar el aporte que la cancelación ya
+  había devuelto, y dejaba huérfano el de un mes anterior. `meta_contribution`
+  gana `returned_month` (ADR-0055, migración 0018), escrito por el restore y
+  acotado a lo que el mes de la cancelación realmente devolvió.
+- Un verificador independiente rompió el arreglo dos veces sobre una suite
+  verde, las dos evaporando plata; ambas reproducidas antes de aceptarlas.
+- Mutación `services/metas.py`: 197 / 189 / 8 = 95,9 %, los ocho equivalentes.

@@ -89,6 +89,7 @@ function WhatItWouldAsk({
   })
   const asks = preview.data?.asks ?? null
   const overTheMonth = preview.data?.over_the_month === true
+  const refused = preview.isError
 
   return (
     <>
@@ -97,12 +98,17 @@ function WhatItWouldAsk({
           Te pediría {formatCents(asks, body?.currency ?? "COP")} al mes.
         </p>
       )}
+      {refused && (
+        <p role="alert" className="text-sm" style={{ color: "var(--destructive)" }}>
+          Con esos números no se puede crear la meta.
+        </p>
+      )}
       {overTheMonth && (
         <p role="alert" className="text-sm" style={{ color: "var(--destructive)" }}>
           Es más de lo que tu mes tiene.
         </p>
       )}
-      <Button type="submit" disabled={body === null || pending}>
+      <Button type="submit" disabled={body === null || pending || refused}>
         {overTheMonth ? "Crear de todos modos" : "Crear"}
       </Button>
     </>

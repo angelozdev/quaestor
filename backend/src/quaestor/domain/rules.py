@@ -245,14 +245,16 @@ def monthly_rate_calc(amount: int, unit: IntervalUnit, count: int) -> int:
     return _ceil_div(amount * denominator, numerator * count)
 
 
-def uncovered_excess_calc(spent: int, opening: int, asks: int) -> int:
-    """What a category spent past everything its fund had for the month.
+def uncovered_excess_calc(spent: int, covered: int) -> int:
+    """What was spent past everything that was already set aside for it.
 
-    A fund's month holds what it opened with plus what it asks for; only what
-    goes past that leaves the money available, never the whole amount
-    (AC-13, product ADR-005).
+    Only the excess leaves the money available, never the whole amount (AC-13,
+    product ADR-005). What counts as covered is the caller's to say and the two
+    callers do not agree: a fund's month is what it opened with plus what it
+    asks, while a meta's is what it holds — which includes what the owner put
+    in by hand, and leaving that out charged him the same contribution twice.
     """
-    return max(spent - opening - asks, 0)
+    return max(spent - covered, 0)
 
 
 def available_calc(income: int, claimed: int, uncovered: int) -> int:

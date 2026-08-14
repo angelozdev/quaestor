@@ -533,9 +533,13 @@ filled it.
 - **Priority:** high
 - **Type:** happy-path
 
-`Aportar` adds money to a meta on any month. What it adds comes out of that
-month's money available, and what the meta asks for the remaining months drops
-accordingly.
+`Aportar` adds money to a meta on any month the meta has run in. What it adds
+comes out of that month's money available, and what the meta asks for the
+remaining months drops accordingly.
+
+A month before the meta was opened is refused: there is nothing there to save
+into. Past months the meta did run in are not — a meta opened in January takes
+a contribution into March exactly as it takes one into today.
 
 A meta entering September holding $1.600.000 asks its own $1.600.000 that
 month. A $2.000.000 contribution is charged **on top**: September costs
@@ -603,6 +607,11 @@ October is still charged the $1.600.000 instalment that put part of that
 $4.800.000 there. On a $5.000.000 income the month reads $8.200.000, never
 $9.800.000 — releasing more than was ever taken would mint money, which is what
 product ADR-014 exists to prevent.
+
+**What comes back is what the months put in**, and never more. A meta told at
+birth that it already held $3.000.000 (AC-34) took that from no month, so
+cancelling it hands back only the instalments it went on to charge. The same
+ceiling holds when the amount is lowered instead of cancelled (AC-16).
 
 This is **cancelling**, before the purchase. Closing a completed meta is a
 different act and releases nothing (AC-39).
@@ -748,6 +757,25 @@ Cancelling archives. An archived meta is out of the list, out of the money
 available and out of the create form's choices, and it can be restored. This is
 the project's uniform lifecycle for masters (ADR-0005).
 
+**Restoring opens a new life, and what the cancellation handed back is already
+spent.** Cancelling releases everything the months had put in (AC-15),
+contributions included, so a restored meta starts from nothing. Those
+contributions stay listed (AC-42), marked with the month the cancellation gave
+them back, and no month reads them again — a $1.000.000 put by hand into a meta
+cancelled and restored the same August would otherwise leave it holding
+$2.000.000 when August only ever put in $1.000.000, and one put in before the
+restore month would sit in the list read by nothing.
+
+**Only what that month actually released is spent.** A month hands back what it
+had already been given, so a contribution dated *after* the cancellation month
+was never in the figure it released: it is still the owner's, the restored meta
+goes on holding it, and calling it given back would lose $1.000.000 nobody
+returned.
+
+**A meta cannot come back in a month behind the one it left in.** Restoring
+clears the month that released the money, so doing it earlier would leave the
+months in between holding what nothing gives back.
+
 ## AC-30: The metas screen says what a meta is
 
 - **Priority:** medium
@@ -830,6 +858,14 @@ contribution is money set aside **now** and costs the month it is made.
 
 The statement is made for a month and never re-read afterwards, the same way a
 fund's is (product ADR-041).
+
+What is stated cannot exceed the amount, and cannot be below zero: saying the
+meta already holds more than the thing costs, or less than nothing, is refused.
+Stating exactly the amount is not — that meta simply asks nothing and waits for
+its purchase, the way any other that has filled up does (AC-17).
+
+The form answers the same way the creation does: a statement the app will not
+accept gets a refusal rather than a figure (AC-45).
 
 ## AC-35: Deleting the linked movement reopens the meta
 
@@ -950,6 +986,13 @@ $8.000.000 it held while the linked expense stayed excluded from both its
 category's fund and the uncovered term (AC-25) — a real purchase would vanish
 from the month and its money would reappear.
 
+**Keeping the meta with a new amount (AC-8) is the third act, and it frees
+only what the purchase did not eat.** Five instalments of $1.000.000 against a
+$5.000.000 phone leave nothing to come back: the money is in the phone. The
+same five against a $3.000.000 phone leave $2.000.000, which is still the
+owner's and no thing is holding — that much, and never more, returns to the
+month he says it in.
+
 Closing is the owner saying *the thing is bought*, so it is refused as of a
 month in which the meta did not yet exist. Nothing was bought in a month before
 the meta opened and nothing finished in it, so there is nothing to close.
@@ -1015,6 +1058,10 @@ and the month it was made in gets its money back in the money available.
 Without this, a $2.000.000 contribution typed into the wrong meta has one
 remedy — cancelling that meta entirely (AC-15), which releases everything it
 held and loses its history.
+
+A contribution a restore left behind (AC-29) is listed too, struck through and
+said to have been given back when the meta was cancelled. It can still be
+removed, and removing it moves no figure, because no month reads it.
 
 ## AC-43: A planned expense may be pointed at a meta and counts nothing until it posts
 

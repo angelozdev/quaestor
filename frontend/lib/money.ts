@@ -41,6 +41,32 @@ export function formatCents(cents: number, currency: string): string {
   return `$ ${formatted}`
 }
 
+/**
+ * The whole pesos each part shows, adjusted so they add up to the whole the
+ * total shows.
+ *
+ * Rounding every part on its own is individually right and jointly wrong: two
+ * shares of 333.333,34 each read as 333.333 while their total of 666.666,68
+ * reads as 666.667, leaving a peso nobody can point at. The parts with the
+ * largest centavos take the difference, which is how a bill is split.
+ *
+ * `parts` must add up to `total` in cents; that is what the caller is showing.
+ */
+export function sharesAddingTo(parts: number[], total: number): number[] {
+  const whole = Math.round(total / 100)
+  const shown = parts.map((cents) => Math.floor(cents / 100))
+  const byCentavos = parts
+    .map((cents, index) => ({ index, centavos: cents % 100 }))
+    .sort((a, b) => b.centavos - a.centavos)
+  let left = whole - shown.reduce((sum, pesos) => sum + pesos, 0)
+  for (const { index } of byCentavos) {
+    if (left <= 0) break
+    shown[index] += 1
+    left -= 1
+  }
+  return shown.map((pesos) => pesos * 100)
+}
+
 function wholePesos(cents: number): number {
   return Math.round(cents / 100) * 100
 }

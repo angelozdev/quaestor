@@ -183,12 +183,12 @@ def test_a_rate_refuses_a_cycle_it_cannot_read():
 
 
 def test_only_the_excess_past_a_fund_leaves_the_money_available():
-    assert uncovered_excess_calc(spent=350_000_00, opening=0, asks=200_000_00) == 150_000_00
+    assert uncovered_excess_calc(spent=350_000_00, covered=200_000_00) == 150_000_00
 
 
 def test_spending_inside_what_a_fund_had_leaves_nothing_uncovered():
-    assert uncovered_excess_calc(spent=150_000_00, opening=0, asks=200_000_00) == 0
-    assert uncovered_excess_calc(spent=447_300_00, opening=447_300_00, asks=74_550_00) == 0
+    assert uncovered_excess_calc(spent=150_000_00, covered=200_000_00) == 0
+    assert uncovered_excess_calc(spent=447_300_00, covered=447_300_00 + 74_550_00) == 0
 
 
 def test_the_breakdown_is_income_less_every_ask_less_what_no_fund_covers():

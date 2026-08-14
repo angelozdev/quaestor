@@ -429,7 +429,7 @@ class FundPreviewOut(BaseModel):
     category_id: int
     would_ask: int
     warning: str | None
-    crowded: FundChargeOut | None = None
+    crowded: list[FundChargeOut] = []
     has_something_to_spread: bool = False
 
 
@@ -567,6 +567,7 @@ class MetaContributionOut(BaseModel):
     meta_id: int
     year_month: str
     amount: int
+    returned_month: str | None
 
 
 class MetaPreviewOut(BaseModel):

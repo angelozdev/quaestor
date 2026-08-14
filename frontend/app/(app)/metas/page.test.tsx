@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
-import type { MetaCreate, MetaStatus } from "@/lib/api/types"
+import { ApiError, type MetaCreate, type MetaStatus } from "@/lib/api/types"
 import { openHelpPanel } from "@/tests/factories"
 
 const {
@@ -51,6 +51,7 @@ vi.mock("sonner", () => ({ toast }))
 
 import { GROUPS } from "@/components/app-shell"
 
+import { worthAskingAgain } from "../../providers"
 import MetasPage from "./page"
 
 const THIS_MONTH = new Date().toISOString().slice(0, 7)
@@ -77,7 +78,7 @@ function meta(over: Partial<MetaStatus> = {}): MetaStatus {
 }
 
 function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: worthAskingAgain } } })
   return render(
     <QueryClientProvider client={client}>
       <MetasPage />
@@ -199,6 +200,25 @@ describe("AC-45 — the form says what the meta will ask before it is created", 
     await waitFor(() => expect(screen.getByText(/40\.000\.000 al mes/)).toBeInTheDocument())
     expect(screen.getByRole("alert")).toHaveTextContent(/más de lo que tu mes tiene/)
     expect(screen.getByRole("button", { name: "Crear de todos modos" })).toBeInTheDocument()
+  })
+
+  it("The form says so instead of quoting a figure", async () => {
+    previewMeta.mockRejectedValue(
+      new ApiError(422, "ValidationError", "a meta cannot already hold more than it costs"),
+    )
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText("Celular")
+    await user.click(screen.getByRole("button", { name: "Nueva meta" }))
+    await user.type(screen.getByLabelText("Nombre *"), "Casa")
+    await user.type(screen.getByLabelText("Cuánto * (COP)"), "5000000")
+    await user.type(screen.getByLabelText("Cuándo *"), "2026-12")
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/no se puede crear la meta/),
+    )
+    expect(screen.queryByText(/al mes/)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Crear" })).toBeDisabled()
   })
 })
 
@@ -344,7 +364,7 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
   it("Every contribution is listed with its month and its amount", async () => {
     listMetas.mockResolvedValue([meta()])
     listContributions.mockResolvedValue([
-      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000, returned_month: null },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -358,7 +378,7 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
   it("Any of them can be removed", async () => {
     listMetas.mockResolvedValue([meta()])
     listContributions.mockResolvedValue([
-      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000 },
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 200_000_000, returned_month: null },
     ])
     const user = userEvent.setup()
     renderPage()
@@ -367,6 +387,36 @@ describe("AC-42 — a contribution is a listed record, and it can be removed", (
     await user.click(await screen.findByRole("button", { name: "Quitar" }))
 
     await waitFor(() => expect(removeContribution).toHaveBeenCalledWith(4))
+  })
+
+  it("A contribution given back by a cancellation is listed as such", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 100_000_000, returned_month: "2026-08" },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    expect(await screen.findByText("$ 1.000.000")).toHaveClass("line-through")
+    expect(screen.getByText("Te lo devolvimos al cancelar la meta.")).toBeInTheDocument()
+  })
+
+  it("Removing a given-back contribution does not claim its month got anything", async () => {
+    listMetas.mockResolvedValue([meta()])
+    listContributions.mockResolvedValue([
+      { id: 4, meta_id: 1, year_month: "2026-08", amount: 100_000_000, returned_month: "2026-08" },
+    ])
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole("button", { name: "Ver aportes" }))
+
+    await user.click(await screen.findByRole("button", { name: "Quitar" }))
+
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith("Quitamos el aporte de la lista."),
+    )
   })
 
   it("A meta nobody put money into says so", async () => {

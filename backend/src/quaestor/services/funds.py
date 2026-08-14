@@ -111,11 +111,17 @@ def _settled_by_spending(
     return settled
 
 
-def _turn_after(item: RecurringItem, year_month: str) -> str | None:
-    """The month of this obligation's first turn after `year_month`, if it has one."""
+def _turn_after(item: RecurringItem, year_month: str, ends_on: Date | None) -> str | None:
+    """The month of this obligation's first turn after `year_month`, if it has one.
+
+    `ends_on` is handed in rather than read off the item because the two callers
+    ask different questions. What the fund fills for next stops at the end date;
+    whether a charge can be spread is about the cadence, which an end date does
+    not change.
+    """
     _, end = month_bounds(year_month)
     after = next_due_on_or_after(
-        item.start_date, item.end_date, item.interval_unit, item.interval_count, end + timedelta(days=1)
+        item.start_date, ends_on, item.interval_unit, item.interval_count, end + timedelta(days=1)
     )
     return year_month_of(after) if after is not None else None
 
@@ -135,23 +141,45 @@ def _charge_month_for(
         return None
     if dues and not settled:
         return year_month
-    return _turn_after(item, year_month)
+    return _turn_after(item, year_month, item.end_date)
 
 
 def _can_be_spread(item: RecurringItem, charge_month: str) -> bool:
-    """Whether a whole month fits between this charge and the one after it (ADR-0054).
+    """Whether a whole month fits between this charge and the next its cadence gives (ADR-0054).
 
     A charge that lands every month never leaves one, so the fund can only ever
     ask it whole — which is why it is never the surprise the warning announces.
-    A charge with no turn after it is a one-off, and nothing forces it to be
-    asked in a single month.
 
-    Read from the obligation's own rhythm rather than from its declared
-    interval, so "every 45 days" and "every 6 weeks" answer by what they
-    actually do.
+    Asked of the cadence and not of the calendar an end date cuts short. An
+    obligation ending on this very turn has no turn after it, and reading that
+    as "nothing forces it into one month" let a monthly charge in its last month
+    announce itself — the defect ADR-0054 exists to kill, in a narrower shape.
+    A charge that arrives every month does not stop being ordinary by being the
+    last of its kind (AC-13).
+
+    Read from the rhythm rather than from the declared interval, so "every 45
+    days" and "every 6 weeks" answer by what they actually do.
     """
-    following = _turn_after(item, charge_month)
+    following = _turn_after(item, charge_month, None)
     return following is None or months_to_fund(charge_month, following) > 1
+
+
+def _still_charges(agg: MonthAggregate, item: RecurringItem, year_month: str) -> bool:
+    """Whether this obligation has a turn that will actually happen, now or later.
+
+    A turn the owner skipped is not going to happen, and a rule left switched on
+    past its end date has none coming. Either alone leaves the fund with nothing
+    to set aside this month; both together leave the category finished — and
+    those are the two different sentences AC-8 and AC-9 ask for.
+    """
+    if any(not agg.was_skipped(item.id, due) for due in agg.turns_in(item, year_month)):
+        return True
+    return _turn_after(item, year_month, item.end_date) is not None
+
+
+def _still_charges_in(agg: MonthAggregate, category_id: int, year_month: str) -> bool:
+    """Whether the category holds any obligation still due something."""
+    return any(_still_charges(agg, item, year_month) for item in agg.obligations_in(category_id))
 
 
 def _obligations(agg: MonthAggregate, category_id: int, year_month: str) -> list[_Obligation]:
@@ -294,7 +322,7 @@ def _overspill(walked: _Month) -> int:
     One reading, two readers: the money the overspill costs the month, and
     whether the fund lost ground keeping it.
     """
-    return uncovered_excess_calc(walked.spent, walked.opening, walked.ask.amount)
+    return uncovered_excess_calc(walked.spent, walked.opening + walked.ask.amount)
 
 
 def _on_track(walked: _Month) -> bool:
@@ -359,7 +387,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),
         charges=list(walked.ask.charges),
-        has_repeating_charges=bool(agg.obligations_in(fund.category_id)),
+        has_repeating_charges=_still_charges_in(agg, fund.category_id, year_month),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
@@ -576,13 +604,13 @@ def preview_fund(session: Session, category_id: int, **spec) -> FundPreview:
         category_id=category_id,
         would_ask=walked.ask.amount,
         warning=_warning(unsaved, crowded),
-        crowded=crowded,
+        crowded=list(crowded),
         has_something_to_spread=any(o.can_be_spread for o in _obligations(agg, category_id, start)),
     )
 
 
-def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
-    """The first charge that could have been spread and has no month to spread over.
+def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> tuple[FundCharge, ...]:
+    """Every charge that could have been spread and has no month to spread over.
 
     Both halves are needed and neither alone is enough. Without the first, a
     charge that lands every month answers yes forever — there are never months
@@ -593,34 +621,36 @@ def _crowded(fund: Fund, charges: tuple[FundCharge, ...]) -> FundCharge | None:
     Asked of the very divisor the ask uses, so it cannot stay silent on a month
     the charge lands on: one the month after the start still has to be whole by
     the end of the start month (003, AC-6).
+
+    All of them and not the first, because the announcement quotes what falls,
+    and naming one of two understates it as badly as quoting the fund's total
+    overstated it. A charge asking nothing is left out: the fund already holds
+    what it needs, so nothing falls on anyone.
     """
-    return next(
-        (
-            charge
-            for charge in charges
-            if charge.can_be_spread and months_to_fund(fund.start_month, charge.charge_month) <= 1
-        ),
-        None,
+    return tuple(
+        charge
+        for charge in charges
+        if charge.can_be_spread and charge.asks > 0 and months_to_fund(fund.start_month, charge.charge_month) <= 1
     )
 
 
-def _warning(fund: Fund, crowded: FundCharge | None) -> str | None:
+def _warning(fund: Fund, crowded: tuple[FundCharge, ...]) -> str | None:
     """The announcement AC-24 asks for, for a surface that renders nothing itself.
 
-    It names the obligation and quotes that obligation's own figure. Quoting
-    the fund's total mixed what does spread with what cannot, and frightened
-    the owner with a number nobody was ever going to pay at once (ADR-0054).
+    It names the obligations and quotes what they add up to. Quoting the fund's
+    total mixed what does spread with what cannot and frightened the owner with
+    a number nobody was going to pay at once; quoting one of several does the
+    opposite and promises a month cheaper than it is (ADR-0054).
 
-    The screen does not read this — it words the same charge in the owner's own
+    The screen does not read this — it words the same charges in the owner's own
     language and money format. This is what the assistant prints, which is the
     one surface with nowhere else to compose it.
     """
-    if crowded is None:
+    if not crowded:
         return None
-    return (
-        f"{crowded.name} charges in {crowded.charge_month}, which leaves no month to save in: "
-        f"the whole {cents_to_major(crowded.asks)} COP falls on {fund.start_month}"
-    )
+    named = ", ".join(charge.name for charge in crowded)
+    falls = sum(charge.asks for charge in crowded)
+    return f"{named} leaves no month to save in: the whole {cents_to_major(falls)} COP falls on {fund.start_month}"
 
 
 def set_fund(session: Session, fund_id: int, **changes) -> Fund:

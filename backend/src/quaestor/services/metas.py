@@ -23,7 +23,7 @@ import this. Both read the same `MonthAggregate` and hand their folds to
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from sqlmodel import Session, select
@@ -71,7 +71,15 @@ def _refuse_name_already_held(session: Session, name: str, *, excluding: int | N
         raise ValidationError(f"another meta already holds the name {name!r}")
 
 
-def _validate_spec(name: str, amount: int, target_month: str, today_month: str) -> None:
+def _validate_spec(
+    name: str, amount: int, target_month: str, today_month: str, stated_opening: int | None = None
+) -> None:
+    """Every refusal a meta's spec earns, in the one place both writers pass through.
+
+    `stated_opening` is only ever handed in by `create_meta`, because it is
+    stated once and never edited — but the ceiling belongs here rather than
+    there, so a later writer cannot reach the columns without meeting it.
+    """
     if not name or not name.strip():
         raise ValidationError("a meta needs a name")
     if amount <= 0:
@@ -79,6 +87,11 @@ def _validate_spec(name: str, amount: int, target_month: str, today_month: str) 
     require_year_month(target_month, "target_month")
     if target_month < today_month:
         raise ValidationError(f"there is no way to save into the past: {target_month} is behind {today_month}")
+    if stated_opening is not None:
+        if stated_opening < 0:
+            raise ValidationError("a meta cannot already hold less than nothing")
+        if stated_opening > amount:
+            raise ValidationError("a meta cannot already hold more than it costs")
 
 
 def _contributions_in(agg: MonthAggregate, meta: Meta, month: str) -> int:
@@ -127,10 +140,31 @@ def _finished_before(agg: MonthAggregate, meta: Meta, month: str) -> bool:
 
 @dataclass(frozen=True)
 class _Month:
-    opening: int
+    """What one month did to a meta.
+
+    `contributed` is what the meta **took** of what the owner offered by hand,
+    which is not always the whole of it: the room is recomputed on every read,
+    so lowering the amount or dating the purchase before this month can leave
+    part of a contribution that fitted when it was made with nowhere to go.
+
+    `funded` is what the months have actually put in, cumulative and net of
+    what has already gone back. It is not `holds`: what the owner stated he
+    already had costs no month (AC-34), so it is in the second and never in the
+    first. Nothing may be given back past it — releasing more than was ever
+    taken would mint money (AC-15, product ADR-014).
+
+    `overfilled` says the meta is holding more than it now wants, which is what
+    finishes it (AC-16). It is its own answer rather than `released > 0`
+    because the two come apart exactly where the mint was: a meta lowered below
+    a stated opening stops wanting more and hands back nothing.
+    """
+
     ask: int
     holds: int
     released: int = 0
+    contributed: int = 0
+    funded: int = 0
+    overfilled: bool = False
 
 
 def _wanted_as_of(meta: Meta, amendments: Iterable[MetaAmendment], month: str) -> tuple[int, str]:
@@ -162,28 +196,61 @@ def _wanted_in(agg: MonthAggregate, meta: Meta, month: str) -> tuple[int, str]:
     return _wanted_as_of(meta, agg.amendments.get(meta.id, ()), month)
 
 
-def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int) -> _Month:
-    """What one month does to a meta that entered it holding `opening`.
+def _spent_on_the_thing(agg: MonthAggregate, meta: Meta, month: str) -> int:
+    """What the purchases linked to this meta took out of it in one month.
+
+    In the meta's own currency, and posted only: money that has not left yet
+    has bought nothing (AC-43).
+    """
+    spent = sum(agg.to_cop_cents(tx) for tx in agg.linked_to(meta.id) if year_month_of(tx.date) == month)
+    return _to_meta_currency(agg, meta, spent) if spent else 0
+
+
+def _saved_in(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
+    """What one month sets aside for a meta that entered it holding `opening`.
 
     A meta stops the month after its purchase and keeps what it had: the thing
     is bought, and asking again would set money aside for something the owner
     already owns. The purchase month itself still asks, because what it asks is
-    part of what covered the purchase (AC-12). Nothing is freed either — that
-    money is in the thing (AC-39).
+    part of what covered the purchase (AC-12).
 
     Holding more than the meta wants means the owner lowered the amount below
-    what it already had: the excess is freed and the meta asks nothing. A month
-    never overfills either — a contribution larger than what is missing is
-    taken only up to the amount.
+    what it already had: the meta asks nothing and hands the excess back — but
+    only as far as `funded`, because a month cannot be given what it never
+    gave. A month never overfills either: a contribution larger than what is
+    missing is taken only up to the amount.
     """
     if _finished_before(agg, meta, month):
-        return _Month(opening=opening, ask=0, holds=opening)
+        return _Month(ask=0, holds=opening, funded=funded)
     amount, target = _wanted_in(agg, meta, month)
     if opening > amount:
-        return _Month(opening=opening, ask=0, holds=amount, released=opening - amount)
+        released = min(opening - amount, funded)
+        return _Month(ask=0, holds=amount, released=released, funded=funded - released, overfilled=True)
     ask = meta_ask_calc(amount, opening, months_to_meta(month, target))
     contributed = min(_contributions_in(agg, meta, month), max(amount - opening - ask, 0))
-    return _Month(opening=opening, ask=ask, holds=opening + ask + contributed)
+    return _Month(
+        ask=ask,
+        holds=opening + ask + contributed,
+        contributed=contributed,
+        funded=funded + ask + contributed,
+    )
+
+
+def _month_of(agg: MonthAggregate, meta: Meta, month: str, opening: int, funded: int) -> _Month:
+    """What one month does to a meta: what it saved, less what it bought.
+
+    A purchase leaves `funded` the way it leaves the account — what went into
+    the thing is spent and can be handed back to nobody (AC-39). Only what the
+    months put in past the price is still the owner's, and that is what a later
+    "keep it, with another amount" (AC-8) may release. It is taken off here
+    rather than in each of `_saved_in`'s three branches, so the rule is one
+    line and a month cannot answer it two ways.
+    """
+    saved = _saved_in(agg, meta, month, opening, funded)
+    spent = _spent_on_the_thing(agg, meta, month)
+    if not spent:
+        return saved
+    return replace(saved, funded=max(saved.funded - spent, 0))
 
 
 @dataclass(frozen=True)
@@ -192,7 +259,7 @@ class _Walked:
 
     Two acts finish a meta and neither is a field on it: the purchase, which the
     aggregate carries, and lowering the amount below what it already held
-    (AC-16), which only exists as a released month inside the fold. Both are
+    (AC-16), which only exists as an overfilled month inside the fold. Both are
     answered by the one walk that produced the figures, so nothing folds twice.
     """
 
@@ -204,18 +271,21 @@ def _walk(agg: MonthAggregate, meta: Meta) -> _Walked:
     """Fold the meta forward to the month this aggregate holds (ADR-0046).
 
     What a month holds is what the next one opens with — one rule, one line,
-    rather than one per branch of the month.
+    rather than one per branch of the month. What the months have put in
+    travels the same way, because it is the ceiling on what any of them can
+    ever get back, and it starts at nothing: the meta opens with what the owner
+    stated he already had, and no month paid for that (AC-34).
     """
     if agg.year_month < meta.start_month:
-        return _Walked(_Month(opening=0, ask=0, holds=0), finished=False)
+        return _Walked(_Month(ask=0, holds=0), finished=False)
     finished = _bought_in(agg, meta) is not None
-    month, opening = meta.start_month, meta.stated_opening or 0
+    month, opening, funded = meta.start_month, meta.stated_opening or 0, 0
     while month < agg.year_month:
-        step = _month_of(agg, meta, month, opening)
-        finished = finished or step.released > 0
-        opening, month = step.holds, next_year_month(month)
-    last = _month_of(agg, meta, month, opening)
-    return _Walked(last, finished or last.released > 0)
+        step = _month_of(agg, meta, month, opening, funded)
+        finished = finished or step.overfilled
+        opening, funded, month = step.holds, step.funded, next_year_month(month)
+    last = _month_of(agg, meta, month, opening, funded)
+    return _Walked(last, finished or last.overfilled)
 
 
 def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = False) -> MetaStatus:
@@ -239,7 +309,7 @@ def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = 
     month = walked.month
     amount, target = _wanted_in(agg, meta, agg.year_month)
     bought = _bought(agg, meta)
-    complete = _finished_before(agg, meta, next_year_month(agg.year_month)) or month.released > 0
+    complete = _finished_before(agg, meta, next_year_month(agg.year_month)) or month.overfilled
     progress = min(round(month.holds * 100 / amount), 100) if amount else 0
     return MetaStatus(
         meta_id=meta.id,
@@ -256,7 +326,7 @@ def _status(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool = 
         closed=meta.closed,
         waiting=target < agg.year_month and not bought and not meta.closed,
         cancelled=cancelled,
-        released=_released_by(agg, meta, walked) if cancelled else to_cop_cents(month.released, meta.currency, agg.trm),
+        released=_gave_back(agg, meta, walked, cancelled),
     )
 
 
@@ -286,14 +356,17 @@ class MetaFold:
     first and forget the second is how a charge goes unnamed, which is what
     ADR-0049's postmortem is about.
 
-    `contributed` is what the owner set aside by hand this month, cancelled
-    metas included for the same reason — charging one side and not the other
-    would hand him that money twice. `released` is what came back to the month,
-    from cancellations and from amounts lowered below what the meta already
-    held (AC-15, AC-16); it is read for that one month and never again, so
-    November cannot give back what October already gave. `uncovered` is what
-    each linked purchase cost past what its meta had (AC-12), the seam where
-    double counting would enter.
+    `contributed` is what the metas **took** of what the owner set aside by hand
+    this month, and never what he offered them: a meta with no room for all of
+    it leaves the rest in the month (AC-14), and charging the offer would take
+    that rest out of the money available without it reaching anything. Cancelled
+    metas are in it for the same reason `asks` counts them — charging one side
+    and not the other would hand him that money twice. `released` is what came
+    back to the month, from cancellations and from amounts lowered below what
+    the meta already held (AC-15, AC-16); it is read for that one month and
+    never again, so November cannot give back what October already gave.
+    `uncovered` is what each linked purchase cost past what its meta had
+    (AC-12), the seam where double counting would enter.
 
     All of it comes out of one walk per meta, because walking the metas is the
     dominant cost of the month's read path.
@@ -315,11 +388,9 @@ def fold(agg: MonthAggregate) -> MetaFold:
         lines=[_status(agg, meta, walked[meta.id]) for meta in agg.metas]
         + [_status(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled],
         asks=sum(_ask_in_cop(agg, meta, walked[meta.id]) for meta in charged),
-        contributed=sum(
-            to_cop_cents(_contributions_in(agg, meta, agg.year_month), meta.currency, agg.trm) for meta in charged
-        ),
-        released=sum(to_cop_cents(walked[meta.id].month.released, meta.currency, agg.trm) for meta in agg.metas)
-        + sum(_released_by(agg, meta, walked[meta.id]) for meta in cancelled),
+        contributed=sum(to_cop_cents(walked[meta.id].month.contributed, meta.currency, agg.trm) for meta in charged),
+        released=sum(_gave_back(agg, meta, walked[meta.id], cancelled=False) for meta in agg.metas)
+        + sum(_gave_back(agg, meta, walked[meta.id], cancelled=True) for meta in cancelled),
         uncovered=sum(_meta_uncovered(agg, meta, walked[meta.id]) for meta in agg.metas),
     )
 
@@ -389,9 +460,10 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
     """What one linked purchase cost past what its meta had, in COP cents.
 
     A linked movement is out of its category's spending entirely (`spent_in`
-    drops it), so the only thing it can cost the month is its own excess — what
-    it cost, less what the meta opened the month with, less what it asks now
-    (AC-12).
+    drops it), so the only thing it can cost the month is its own excess: only
+    what the meta cannot cover costs the month (AC-43), and what it can cover
+    is what it holds. Measuring against the instalment alone charged a hand
+    contribution once as a contribution and again as a gap (AC-13, AC-14).
     """
     spent = sum(
         agg.to_cop_cents(tx)
@@ -400,9 +472,8 @@ def _meta_uncovered(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
     )
     if not spent:
         return 0
-    month = walked.month
     return to_cop_cents(
-        uncovered_excess_calc(_to_meta_currency(agg, meta, spent), month.opening, month.ask),
+        uncovered_excess_calc(_to_meta_currency(agg, meta, spent), walked.month.holds),
         meta.currency,
         agg.trm,
     )
@@ -415,9 +486,24 @@ def _to_meta_currency(agg: MonthAggregate, meta: Meta, cop_cents: int) -> int:
     return round(cop_cents / float(agg.trm))
 
 
-def _released_by(agg: MonthAggregate, meta: Meta, walked: _Walked) -> int:
-    """What cancelling one meta hands back to the month: everything it held."""
-    return to_cop_cents(walked.month.holds, meta.currency, agg.trm)
+def _gave_back(agg: MonthAggregate, meta: Meta, walked: _Walked, cancelled: bool) -> int:
+    """Everything one meta hands back to this month, in COP cents.
+
+    Two acts free money and a month may hold both: lowering the amount below
+    what the meta had (AC-16), which the walk already answered, and cancelling
+    it (AC-15), which hands back what is left. Reading only the second is how a
+    meta lowered and cancelled in one month gave back the pennies it had been
+    left with instead of the months' own money.
+
+    Cancelling frees everything it holds as far as the months put it there.
+    What the owner stated he already had came out of no month, and what the
+    purchase took is in the thing, so neither goes back to anybody.
+    """
+    month = walked.month
+    freed = month.released
+    if cancelled:
+        freed += min(month.holds, month.funded)
+    return to_cop_cents(freed, meta.currency, agg.trm)
 
 
 def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) -> MetaContribution:
@@ -429,13 +515,22 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
     made is not always the newest one on record and cannot be found again by
     re-reading the history.
 
+    Money may go into any month the meta has run in, past ones included, but not
+    into one before it was opened: the fold starts at `start_month`, so a row
+    behind it is read by nothing and would sit in the meta's history as money
+    the owner believes he saved (AC-10).
+
     Raises:
         NotFound: no such meta.
-        ValidationError: an amount at or below zero, or a cancelled meta.
+        ValidationError: an amount at or below zero, a cancelled meta, or a
+            month the meta had not been opened in yet.
     """
     meta = _require_meta(session, meta_id)
+    require_year_month(year_month)
     if meta.archived:
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no contribution")
+    if year_month < meta.start_month:
+        raise ValidationError(f"the meta {meta.name!r} did not exist in {year_month}")
     if amount <= 0:
         raise ValidationError("a contribution needs an amount above zero")
     room = _room_left(session, meta, year_month)
@@ -471,9 +566,31 @@ def remove_contribution(session: Session, contribution_id: int) -> None:
 
 
 def contributions_of(session: Session, meta_id: int) -> list[MetaContribution]:
-    """Every contribution made to one meta, oldest first (AC-42)."""
+    """Every contribution made to one meta, oldest first (AC-42).
+
+    The ones a restore gave back are here too, carrying the month it happened.
+    The list is the owner's history; what a month reads is a narrower question
+    the aggregate answers.
+    """
     rows = session.exec(select(MetaContribution).where(MetaContribution.meta_id == meta_id)).all()
     return sorted(rows, key=lambda r: (r.year_month, r.id))
+
+
+def _given_back_by(session: Session, meta: Meta) -> list[MetaContribution]:
+    """The contributions a cancellation actually handed back (ADR-0055).
+
+    Money is released by the month the meta was cancelled in, and that month
+    can only give back what it had already been given: the fold sums rows dated
+    at or before it. A contribution dated later was never in the released
+    figure, so marking it would take money out of a month that never got it.
+
+    A row already carrying a month belongs to an earlier life and keeps it.
+    """
+    return [
+        row
+        for row in contributions_of(session, meta.id)
+        if row.returned_month is None and row.year_month <= (meta.cancelled_month or "")
+    ]
 
 
 def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
@@ -533,6 +650,18 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     restored in and fills from zero. Resuming with the old holdings would give
     the owner the same money twice.
 
+    That is why the contributions the cancellation handed back are stamped with
+    the month it happened (ADR-0055). They stay listed (AC-42) and no month
+    reads them again. Restoring is the act that stamps them, not cancelling: a
+    cancellation nobody undoes leaves its own month reading what it read,
+    give-back included. Only what the cancellation month released is stamped —
+    `_given_back_by` says which, and a contribution dated after it was never in
+    that figure.
+
+    A month earlier than the cancellation is refused: the meta cannot come back
+    before it left, and letting it would clear the month that released its
+    money while the months before went on holding it.
+
     A meta that was never cancelled is refused: restoring rewrites its start
     month and drops what the owner stated it already had, which on a running
     meta would throw away the history every figure is derived from.
@@ -544,14 +673,22 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     Raises:
         NotFound: no such meta.
         ValidationError: the meta is not archived, it was closed rather than
-            cancelled, or a live meta has taken its name since (AC-22).
+            cancelled, the month asked for is behind the cancellation, or a
+            live meta has taken its name since (AC-22).
     """
     meta = _require_meta(session, meta_id)
     if not meta.archived:
         raise ValidationError(f"the meta {meta.name!r} is still running, so there is nothing to bring back")
     if meta.closed:
         raise ValidationError(f"the meta {meta.name!r} was bought and closed, so there is nothing to bring back")
+    if meta.cancelled_month is not None and today < meta.cancelled_month:
+        raise ValidationError(
+            f"the meta {meta.name!r} was cancelled in {meta.cancelled_month}, so it cannot come back in {today}"
+        )
     _refuse_name_already_held(session, meta.name, excluding=meta.id)
+    for row in _given_back_by(session, meta):
+        row.returned_month = meta.cancelled_month
+        session.add(row)
     meta.archived = False
     meta.closed = False
     meta.cancelled_month = None
@@ -583,7 +720,7 @@ def create_meta(
             target month, a target month already behind, or a name a live meta
             already holds.
     """
-    _validate_spec(name, amount, target_month, today)
+    _validate_spec(name, amount, target_month, today, stated_opening)
     _refuse_name_already_held(session, name)
     meta = Meta(
         name=name.strip(),
@@ -675,10 +812,11 @@ def preview_meta(
     weighing one against the other unconverted is what ADR-0049 names.
 
     Raises:
-        ValidationError: every refusal `create_meta` raises about the amount
-            and the month.
+        ValidationError: every refusal `create_meta` raises about the amount,
+            the month and what the owner says he already has — the form cannot
+            answer for a meta that will not be allowed to exist (AC-45).
     """
-    _validate_spec("preview", amount, target_month, today)
+    _validate_spec("preview", amount, target_month, today, stated_opening)
     months_left = months_to_meta(today, target_month)
     asks = meta_ask_calc(amount, stated_opening or 0, months_left)
     costs_the_month = to_cop_cents(asks, currency, trm)

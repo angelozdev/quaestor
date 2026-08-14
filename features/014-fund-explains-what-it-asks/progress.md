@@ -1,4 +1,4 @@
-> ▶ CP5 Implement — 0/6 criteria met | NEXT: CP6 refine, con agent_id distinto | BLOCKED: none
+> ▶ CP8 Harden — 4/4 criteria met | NEXT: mergear a main | BLOCKED: none
 
 # Progress — 014 fund-explains-what-it-asks
 
@@ -14,7 +14,10 @@ y ninguna cifra que la app ya reporta puede moverse.
 | 2 | ACs | done — aprobados por el dueño 2026-08-12 | 2026-08-12T1210-discover-acs.md |
 | 3 | Spec | done — aprobado por el dueño 2026-08-12; **rojo**, 26 de 28 fallan | 2026-08-12T1245-atdd.md |
 | 4 | Plan | done — ADR-0054 aceptada, cuatro rebanadas, sin runbook | 2026-08-12T1320-plan.md |
-| 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | — |
+| 8 | Harden | done — mutación exhaustiva, 85,2% en `funds.py`; **ninguna cifra sobrevive** y los 7 huecos cerrados | 2026-08-12T2100-mutation.md |
+| 7 | Verify | done — verificador independiente; **cuatro cifras equivocadas** y tres criterios que no podían fallar | 2026-08-12T2000-crap-analyzer.md |
+| 6 | Refine | done — refinador independiente; 9 hallazgos, 7 aplicados, y un **defecto real** que el AC-13 prohibía | 2026-08-12T1900-refine.md |
+| 5 | Implement | done — las cuatro rebanadas; 28/28 de servicio, 1.190 unitarias, 630 de aceptación, 545 de pantalla | 2026-08-12T1745-implement.md |
 
 ## Las dos reglas de las que sale todo
 
@@ -39,6 +42,75 @@ decidida por el dueño y escrita** en ADR-0054 → Costos y en el tercer grupo d
 La corrección del aviso sí le llega gratis, porque lo imprime tal cual.
 
 ## Verification reports
+
+### CP8 — mutación
+
+161 mutantes, exhaustivo, sobre `services/funds.py` y `domain/dtos.py`.
+
+```
+funds.py   142 mutantes · 121 muertos · 21 vivos → 85,2%
+```
+
+**Ni un mutante que mueva una cifra sobrevivió.** Todo lo que reescribe la
+división, el reclamo del saldo, el pliegue, el techo y la aritmética de meses
+murió, casi todo en menos de diez segundos. Lo que un fondo pide, tiene y pasa
+está protegido de verdad.
+
+Los 21 vivos están fuera de la aritmética. Siete eran huecos reales, en los
+mismos tres sitios que CP7 llamó delgados, y el peor permitía que un fondo vivo
+dijera «bórralo» con las 1.824 pruebas verdes. Los siete cerrados, y cada
+escenario nuevo comprobado volviendo a correr su propio mutante.
+
+### CP7 — verificación independiente
+
+Un tercer agente, que ni escribió ni refinó esto, buscó **dónde la plata puede
+estar mal**. Encontró cuatro, todas reproducidas:
+
+```
+dos cobros sin meses    el fondo pediría 6.500.000, el aviso decía 6.000.000
+la fila y sus líneas    $ 666.667 sobre $ 333.333 + $ 333.333 = $ 666.666
+saldo inicial suficiente  el aviso citaba "0,00 COP"
+regla con fecha vencida   decía "omitidos o ya pagados" donde la categoría terminó
+```
+
+La primera es la ADR-0054 **al revés**: mató el aviso que exageraba citando el
+total, y éste subestimaba citando un cobro de dos.
+
+Y encontró que **los escenarios del AC-13 no podían fallar** — pasaban todos con
+`preview_fund` reventando. Eso lo causó mi propia corrección en CP6, que aflojó
+un accesor para no romper un escenario de la 003. La 003 perdió esa línea, que
+nunca probó nada, y el paso volvió a ser estricto: con `preview_fund` reventando
+ahora caen 13 escenarios.
+
+**Lo que no se movió, y es lo más fuerte del informe:** el `funds.py` de `main`
+cargado al lado del de esta rama, 19 fixtures × 21 meses × 16 campos — **cero
+diferencias**, contra 837 al perturbar el divisor de `main` en un centavo. El
+AC-5 se sostiene medido, no supuesto.
+
+### CP6 — refinado independiente
+
+Un agente que no escribió este código encontró **un defecto de comportamiento**
+que las tres suites verdes no vieron:
+
+```
+EPM 250.000 mensual, con fecha fin en su último turno
+→ can_be_spread=True → el aviso salta
+```
+
+`_can_be_spread` decía «sin turno siguiente → se puede repartir», defendiendo el
+cobro único. **No existe el cobro único**: un recurrente siempre repite y
+`end_date` es lo que lo detiene. Un cobro mensual en su último mes no tenía turno
+siguiente y por eso avisaba — el defecto que la ADR-0054 se escribió para matar,
+en forma más estrecha. Ahora se pregunta a la cadencia, no al calendario que la
+fecha fin recorta.
+
+Y encontró que **el paso `the user views the funds`, que yo reescribí en esta
+feature, modelaba lo que la pantalla no hace**: leía el estado de cada fondo (77
+consultas para cinco) donde `funds/page.tsx` carga `available` una vez (14, con
+cinco o con uno). El `Then` del AC-17 medía `available` y tiraba lo que el `When`
+había hecho.
+
+Siete de nueve hallazgos aplicados. Los dos que no, quedan escritos con su razón.
 
 ### CP5 — rebanada 4, el navegador (sandbox)
 
@@ -80,6 +152,14 @@ ejercitaba. Tres tests nuevos, y el primero se comprobó matando una mutación
 - 2026-08-12T1210 — discover-acs: 18 criterios, 9 altos.
 - 2026-08-12T1245 — atdd: 32 escenarios, 25 `@backend` y 7 de pantalla.
 - 2026-08-12T1320 — plan: ADR-0054, cuatro rebanadas, sin runbook.
+- 2026-08-12T1745 — implement: las cuatro rebanadas; dos defectos que solo el
+  navegador y el pipeline vieron.
+- 2026-08-12T1900 — refine (independiente): 9 hallazgos, 7 aplicados, un defecto
+  de comportamiento y un paso que medía lo que no era.
+- 2026-08-12T2000 — crap-analyzer (independiente): cuatro cifras equivocadas y
+  tres criterios incapaces de fallar; los cinco arreglados.
+- 2026-08-12T2100 — mutación (independiente): 85,2% en `funds.py`, ninguna cifra
+  sobrevive, siete huecos cerrados y cada uno probado contra su mutante.
 
 ## Defectos encontrados durante CP5, y no por las suites
 

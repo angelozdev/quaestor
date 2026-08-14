@@ -3,7 +3,7 @@
 import { useStore, useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { MoneyInput } from "@/components/money-input"
 import { listCategories } from "@/lib/api/categories"
@@ -19,6 +19,14 @@ import { type CreateFundValues, createFundSchema } from "./funds.schema"
 import { ruleConsequence, rulesFor } from "./rules"
 
 const DEFAULT_WINDOW = 3
+
+/**
+ * The rule to fall back on when the chosen one stops being offered.
+ *
+ * Always safe: `offerTheRule` only ever withdraws `from-recurring`, and every
+ * shape's rule list leads with this one.
+ */
+const FALLBACK_RULE: FundRule = "fixed"
 
 function defaults(month: string): CreateFundValues {
   return {
@@ -91,11 +99,14 @@ function offerTheRule(rule: FundRule, preview: FundPreview | undefined): boolean
  * owner's language and money format live — the service hands over the charge
  * and lets each surface say it its own way (ADR-0054).
  */
-function announcementFor(crowded: FundCharge, startMonth: string): string {
-  return (
-    `${crowded.name} cobra en ${monthAndYearOf(crowded.charge_month)} y no queda mes para repartirlo: ` +
-    `los ${formatCents(crowded.asks, "COP")} caen enteros en ${monthAndYearOf(startMonth)}.`
-  )
+function announcementFor(crowded: FundCharge[], startMonth: string): string {
+  const falls = crowded.reduce((total, charge) => total + charge.asks, 0)
+  const named = crowded.map((charge) => charge.name)
+  const who =
+    named.length === 1
+      ? `${named[0]} cobra en ${monthAndYearOf(crowded[0].charge_month)} y no queda mes para repartirlo`
+      : `${named.slice(0, -1).join(", ")} y ${named.at(-1)} no tienen meses para repartirse`
+  return `${who}: los ${formatCents(falls, "COP")} caen enteros en ${monthAndYearOf(startMonth)}.`
 }
 
 export function CreateFundForm({
@@ -149,9 +160,13 @@ export function CreateFundForm({
     .filter((offer, index) => offerTheRule(offer.rule, previews[index]?.data))
     .map((offer) => offer.rule)
 
-  if (offeredRules.length > 0 && !offeredRules.includes(values.rule)) {
-    form.setFieldValue("rule", offeredRules[0])
-  }
+  const subscriptionsOffered = offeredRules.includes("from-recurring")
+
+  useEffect(() => {
+    if (!subscriptionsOffered && values.rule === "from-recurring") {
+      form.setFieldValue("rule", FALLBACK_RULE)
+    }
+  }, [subscriptionsOffered, values.rule, form])
 
   const onErr = (e: unknown) => {
     applyApiErrorsToForm(form, e)
@@ -161,7 +176,7 @@ export function CreateFundForm({
   const ask = useMutation({
     mutationFn: (v: CreateFundValues) => previewFund(bodyOf(v, shape)),
     onSuccess: (preview, v) => {
-      if (preview.crowded == null) create.mutate(v)
+      if (preview.crowded.length === 0) create.mutate(v)
       else setWarning(announcementFor(preview.crowded, v.startMonth))
     },
     onError: onErr,

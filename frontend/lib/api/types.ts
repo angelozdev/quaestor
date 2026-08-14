@@ -177,7 +177,7 @@ export interface FundPreview {
   category_id: number
   would_ask: number
   warning: string | null
-  crowded: FundCharge | null
+  crowded: FundCharge[]
   has_something_to_spread: boolean
 }
 
@@ -510,6 +510,7 @@ export interface MetaContribution {
   meta_id: number
   year_month: string
   amount: number
+  returned_month: string | null
 }
 
 export interface MonthSplit {
