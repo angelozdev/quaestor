@@ -228,10 +228,11 @@ goes — delete the rows the restore orphans, or leave them and stop reading the
 ones in the restore month. The first loses history AC-42 promises; the second
 leaves the owner a list of contributions that did nothing.
 
-## Also filed here: a rounding drift
+## Moved out: a rounding drift
 
-The give-back cap compares meta-currency ints and converts once, while each
-month's ask converts on its own. Over a meta's life the two diverge by ±1 cent
-in COP for a foreign-currency meta at some rates — measured at TRM 3333,33 and
-4123,77. Sub-peso and not user-visible, but it is the only case where
-`released` can exceed what the months put in.
+This artifact also carried a ±1 cent give-back drift on foreign-currency metas.
+It has nothing to do with restoring, and keeping it here nearly closed it by
+accident — the close gate reads `followups`, and this was prose in the body.
+
+Moved to
+`.engineer/fixes/2026-08-13-a-dollar-metas-give-back-drifts-by-a-centavo.md`.

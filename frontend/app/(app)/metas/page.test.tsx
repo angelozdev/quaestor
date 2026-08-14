@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
-import type { MetaCreate, MetaStatus } from "@/lib/api/types"
+import { ApiError, type MetaCreate, type MetaStatus } from "@/lib/api/types"
 import { openHelpPanel } from "@/tests/factories"
 
 const {
@@ -51,6 +51,7 @@ vi.mock("sonner", () => ({ toast }))
 
 import { GROUPS } from "@/components/app-shell"
 
+import { worthAskingAgain } from "../../providers"
 import MetasPage from "./page"
 
 const THIS_MONTH = new Date().toISOString().slice(0, 7)
@@ -77,7 +78,7 @@ function meta(over: Partial<MetaStatus> = {}): MetaStatus {
 }
 
 function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: worthAskingAgain } } })
   return render(
     <QueryClientProvider client={client}>
       <MetasPage />
@@ -202,7 +203,9 @@ describe("AC-45 — the form says what the meta will ask before it is created", 
   })
 
   it("The form says so instead of quoting a figure", async () => {
-    previewMeta.mockRejectedValue(new Error("a meta cannot already hold more than it costs"))
+    previewMeta.mockRejectedValue(
+      new ApiError(422, "ValidationError", "a meta cannot already hold more than it costs"),
+    )
     const user = userEvent.setup()
     renderPage()
     await screen.findByText("Celular")
