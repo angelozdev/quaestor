@@ -50,6 +50,10 @@ class MonthAggregate:
     The `_window_*` lists hold full rows only for [previous month, report
     month]; all earlier history lives in `_spent_by_cat_month` as
     per-(category, month) COP sums.
+
+    `contributions` holds only the money still set aside. A contribution a
+    restore left behind was already handed back when the meta was cancelled
+    (ADR-0055), so it stays in the owner's list and out of every figure.
     """
 
     year_month: str
@@ -271,7 +275,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
             MetaContribution.year_month,
             func.sum(MetaContribution.amount),
         )
-        .where(MetaContribution.year_month <= year_month)
+        .where(MetaContribution.year_month <= year_month, MetaContribution.returned_month.is_(None))
         .group_by(MetaContribution.meta_id, MetaContribution.year_month)
     ).all():
         contributions.setdefault(meta_id, {})[month] = int(total)

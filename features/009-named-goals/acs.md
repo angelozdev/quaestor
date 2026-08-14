@@ -757,6 +757,25 @@ Cancelling archives. An archived meta is out of the list, out of the money
 available and out of the create form's choices, and it can be restored. This is
 the project's uniform lifecycle for masters (ADR-0005).
 
+**Restoring opens a new life, and what the cancellation handed back is already
+spent.** Cancelling releases everything the months had put in (AC-15),
+contributions included, so a restored meta starts from nothing. Those
+contributions stay listed (AC-42), marked with the month the cancellation gave
+them back, and no month reads them again — a $1.000.000 put by hand into a meta
+cancelled and restored the same August would otherwise leave it holding
+$2.000.000 when August only ever put in $1.000.000, and one put in before the
+restore month would sit in the list read by nothing.
+
+**Only what that month actually released is spent.** A month hands back what it
+had already been given, so a contribution dated *after* the cancellation month
+was never in the figure it released: it is still the owner's, the restored meta
+goes on holding it, and calling it given back would lose $1.000.000 nobody
+returned.
+
+**A meta cannot come back in a month behind the one it left in.** Restoring
+clears the month that released the money, so doing it earlier would leave the
+months in between holding what nothing gives back.
+
 ## AC-30: The metas screen says what a meta is
 
 - **Priority:** medium
@@ -1039,6 +1058,10 @@ and the month it was made in gets its money back in the money available.
 Without this, a $2.000.000 contribution typed into the wrong meta has one
 remedy — cancelling that meta entirely (AC-15), which releases everything it
 held and loses its history.
+
+A contribution a restore left behind (AC-29) is listed too, struck through and
+said to have been given back when the meta was cancelled. It can still be
+removed, and removing it moves no figure, because no month reads it.
 
 ## AC-43: A planned expense may be pointed at a meta and counts nothing until it posts
 

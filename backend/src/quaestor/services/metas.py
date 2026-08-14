@@ -566,9 +566,31 @@ def remove_contribution(session: Session, contribution_id: int) -> None:
 
 
 def contributions_of(session: Session, meta_id: int) -> list[MetaContribution]:
-    """Every contribution made to one meta, oldest first (AC-42)."""
+    """Every contribution made to one meta, oldest first (AC-42).
+
+    The ones a restore gave back are here too, carrying the month it happened.
+    The list is the owner's history; what a month reads is a narrower question
+    the aggregate answers.
+    """
     rows = session.exec(select(MetaContribution).where(MetaContribution.meta_id == meta_id)).all()
     return sorted(rows, key=lambda r: (r.year_month, r.id))
+
+
+def _given_back_by(session: Session, meta: Meta) -> list[MetaContribution]:
+    """The contributions a cancellation actually handed back (ADR-0055).
+
+    Money is released by the month the meta was cancelled in, and that month
+    can only give back what it had already been given: the fold sums rows dated
+    at or before it. A contribution dated later was never in the released
+    figure, so marking it would take money out of a month that never got it.
+
+    A row already carrying a month belongs to an earlier life and keeps it.
+    """
+    return [
+        row
+        for row in contributions_of(session, meta.id)
+        if row.returned_month is None and row.year_month <= (meta.cancelled_month or "")
+    ]
 
 
 def cancel_meta(session: Session, meta_id: int, *, year_month: str) -> Meta:
@@ -628,6 +650,18 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     restored in and fills from zero. Resuming with the old holdings would give
     the owner the same money twice.
 
+    That is why the contributions the cancellation handed back are stamped with
+    the month it happened (ADR-0055). They stay listed (AC-42) and no month
+    reads them again. Restoring is the act that stamps them, not cancelling: a
+    cancellation nobody undoes leaves its own month reading what it read,
+    give-back included. Only what the cancellation month released is stamped —
+    `_given_back_by` says which, and a contribution dated after it was never in
+    that figure.
+
+    A month earlier than the cancellation is refused: the meta cannot come back
+    before it left, and letting it would clear the month that released its
+    money while the months before went on holding it.
+
     A meta that was never cancelled is refused: restoring rewrites its start
     month and drops what the owner stated it already had, which on a running
     meta would throw away the history every figure is derived from.
@@ -639,14 +673,22 @@ def restore_meta(session: Session, meta_id: int, *, today: str) -> Meta:
     Raises:
         NotFound: no such meta.
         ValidationError: the meta is not archived, it was closed rather than
-            cancelled, or a live meta has taken its name since (AC-22).
+            cancelled, the month asked for is behind the cancellation, or a
+            live meta has taken its name since (AC-22).
     """
     meta = _require_meta(session, meta_id)
     if not meta.archived:
         raise ValidationError(f"the meta {meta.name!r} is still running, so there is nothing to bring back")
     if meta.closed:
         raise ValidationError(f"the meta {meta.name!r} was bought and closed, so there is nothing to bring back")
+    if meta.cancelled_month is not None and today < meta.cancelled_month:
+        raise ValidationError(
+            f"the meta {meta.name!r} was cancelled in {meta.cancelled_month}, so it cannot come back in {today}"
+        )
     _refuse_name_already_held(session, meta.name, excluding=meta.id)
+    for row in _given_back_by(session, meta):
+        row.returned_month = meta.cancelled_month
+        session.add(row)
     meta.archived = False
     meta.closed = False
     meta.cancelled_month = None

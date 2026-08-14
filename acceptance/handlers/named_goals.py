@@ -572,6 +572,18 @@ def then_lists_contribution(world: World, name: str, amount: str, month: str) ->
     )
 
 
+@step(
+    rf'the meta "(?P<name>[^"]+)" lists a contribution of (?P<amount>{_DEC}) COP '
+    rf"made (?P<month>{_MONTH}) given back when it was cancelled"
+)
+def then_lists_returned_contribution(world: World, name: str, amount: str, month: str) -> None:
+    rows = service.contributions_of(world.session, _meta_id(world, name))
+    listed = [(r.year_month, r.amount, r.returned_month) for r in rows]
+    assert any(r.amount == _cents(amount) and r.year_month == month and r.returned_month for r in rows), (
+        f"the meta {name!r} lists {listed}"
+    )
+
+
 @step(r'the user cancels the meta "(?P<name>[^"]+)"')
 def when_cancel(world: World, name: str) -> None:
     try:

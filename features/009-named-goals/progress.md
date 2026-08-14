@@ -1,4 +1,4 @@
-> ▶ CP8 Harden — 5/6 criteria met | NEXT: merge `fix/metas-refuse-what-cannot-land` into `main` (CHARTER §7) | BLOCKED: none
+> ▶ CP8 Harden — 6/6 criteria met | NEXT: merge `fix/restore-gives-back-what-it-already-gave-back` into `main` (CHARTER §7) | BLOCKED: none
 
 # Progress — 009 named-goals
 
@@ -199,3 +199,15 @@ money it could not put anywhere and gave back money nobody had put in. Three
 rounds were needed, each on a green suite, each finding the previous round's
 fix incomplete. Mutation could not see any of them — the code and the tests
 agreed.
+
+## Fix applied — 2026-08-13-restoring-a-meta-revives-a-contribution-it-promised-to-forget
+- Severity: medium; user-blocking: no
+- Followups: 2 advisory, 0 blocker applied inline
+- See `.engineer/fixes/2026-08-13-restoring-a-meta-revives-a-contribution-it-promised-to-forget.md`
+- Restaurar una meta cancelada volvía a cobrar el aporte que la cancelación ya
+  había devuelto, y dejaba huérfano el de un mes anterior. `meta_contribution`
+  gana `returned_month` (ADR-0055, migración 0018), escrito por el restore y
+  acotado a lo que el mes de la cancelación realmente devolvió.
+- Un verificador independiente rompió el arreglo dos veces sobre una suite
+  verde, las dos evaporando plata; ambas reproducidas antes de aceptarlas.
+- Mutación `services/metas.py`: 197 / 189 / 8 = 95,9 %, los ocho equivalentes.

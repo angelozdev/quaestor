@@ -562,3 +562,44 @@ true when they were written.)*
   produces — the fund's asks, the month's income, the uncovered term, the
   report's spending lines — still has no case held in a currency other than
   COP. The amendment makes it required; nothing has audited it yet.
+
+- C25. **A truthiness assertion on a field whose value IS the decision proves
+  only that the field is populated.** Found 2026-08-13 by the CP7 verifier of
+  fix `2026-08-13-restoring-a-meta-revives-a-contribution-it-promised-to-forget`.
+
+  The handler read `assert any(… and r.returned_month for r in rows)`. The
+  column's whole point is *which month* the cancellation released the money —
+  and three wrong ways of writing it survived the full 1.185-test suite:
+  stamping today's month, stamping a constant `"1970-01"`, and overwriting an
+  earlier life's stamp. A service test asserting the exact pairs kills all
+  three.
+
+  **The sweep this asks for:** every `assert … and r.<field>` and
+  `assert x.<field> is not None` in `acceptance/handlers/` where the field's
+  value, not its presence, is the criterion. `returned_month` is the one that
+  was caught; nothing has audited the rest.
+
+- C26. **An exit criterion excused by an unverified claim about infrastructure
+  is an unmet criterion recorded as met.** Found 2026-08-13, the same day the
+  claim was written.
+
+  A closure handoff waived CHARTER §6's browser check because "the frontend
+  container does not bind-mount its source (docker-compose.dev.yml mounts
+  `./backend/src` only, ADR-0033)". True of the override; false of the stack —
+  the base `docker-compose.yml` already mounts `./frontend/app`,
+  `./frontend/components`, `./frontend/lib` and `./frontend/ui`. The claim came
+  from reading one file.
+
+  Running the check once the mistake was found took ten minutes and surfaced a
+  defect the waiver had hidden: the create form never shows its refusal and
+  never disables `Crear`, with the server answering 422 seven times. Filed as
+  `2026-08-13-the-create-form-never-shows-the-refusal-the-server-gave-it`.
+
+  **This is the morning's lesson from the other side.** That one was a closed
+  artifact whose stale figures were read as truth; this one is a fresh artifact
+  whose unverified claim was read as truth. Both cost the same thing: the check
+  that would have found the defect was skipped on the strength of prose.
+
+  **The rule it asks for:** a waived exit criterion must carry the command that
+  proves the waiver, not the reasoning behind it. `docker inspect` would have
+  ended this in one line.

@@ -202,6 +202,9 @@ function TextAsk({
  * Removing one is not destructive to the meta: the month it was made in gets
  * its money back and the instalments that follow rise again, which is the
  * remedy a contribution typed into the wrong meta had none of.
+ *
+ * One a cancellation gave back (ADR-0055) is struck through and says so: it is
+ * still the owner's history, and it is no longer part of what the meta holds.
  */
 function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => void }) {
   const queryClient = useQueryClient()
@@ -210,9 +213,9 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
     queryFn: () => listContributions(meta.meta_id),
   })
   const remove = useMutation({
-    mutationFn: (id: number) => removeContribution(id),
-    onSuccess: async () => {
-      toast.success(`El aporte volvió a su mes.`)
+    mutationFn: ({ id }: { id: number; givenBack: boolean }) => removeContribution(id),
+    onSuccess: async (_result, { givenBack }) => {
+      toast.success(givenBack ? "Quitamos el aporte de la lista." : "El aporte volvió a su mes.")
       await invalidate(queryClient, "metaWrite")
     },
     onError: (error: unknown) =>
@@ -228,24 +231,35 @@ function ContributionsList({ meta, onDone }: { meta: MetaStatus; onDone: () => v
       )}
       {list.data && list.data.length > 0 && (
         <ul className="space-y-1">
-          {list.data.map((contribution) => (
-            <li key={contribution.id} className="flex items-center gap-3 text-sm">
-              <span style={{ color: "var(--muted-foreground)" }}>
-                {monthNameOf(contribution.year_month)} {contribution.year_month.slice(0, 4)}
-              </span>
-              <span className="tabular-nums">
-                {formatCents(contribution.amount, meta.currency)}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(contribution.id)}
-              >
-                Quitar
-              </Button>
-            </li>
-          ))}
+          {list.data.map((contribution) => {
+            const givenBack = contribution.returned_month !== null
+            return (
+              <li key={contribution.id} className="flex flex-wrap items-center gap-3 text-sm">
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  {monthNameOf(contribution.year_month)} {contribution.year_month.slice(0, 4)}
+                </span>
+                <span
+                  className={givenBack ? "tabular-nums line-through" : "tabular-nums"}
+                  style={givenBack ? { color: "var(--muted-foreground)" } : undefined}
+                >
+                  {formatCents(contribution.amount, meta.currency)}
+                </span>
+                {givenBack && (
+                  <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+                    Te lo devolvimos al cancelar la meta.
+                  </span>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate({ id: contribution.id, givenBack })}
+                >
+                  Quitar
+                </Button>
+              </li>
+            )
+          })}
         </ul>
       )}
       <Button variant="ghost" size="sm" onClick={onDone}>

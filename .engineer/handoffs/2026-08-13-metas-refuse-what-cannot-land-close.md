@@ -78,6 +78,17 @@ exit_criteria:
       including the new one bound to the untagged scenario. The refusal itself
       reaches the screen as a toast, in English, which is the project-wide
       language hole already filed.
+
+      **CORRECTION, 2026-08-13 later the same day — the paragraph above is
+      wrong, and the criterion it excused is NOT met.** The frontend container
+      does bind-mount its source: `docker-compose.dev.yml` adds only the
+      backend mount, but the BASE `docker-compose.yml` already mounts
+      `./frontend/app`, `./frontend/components`, `./frontend/lib` and
+      `./frontend/ui` (confirmed by `docker inspect quaestor-frontend-1`). The
+      claim was drawn from reading the override file alone. Driven in Chrome
+      once the mistake was found, the create form NEVER shows the refusal and
+      NEVER disables `Crear`, with the server returning 422 seven times. Filed
+      as `.engineer/fixes/2026-08-13-the-create-form-never-shows-the-refusal-the-server-gave-it.md`.
 status: complete
 ---
 
@@ -104,6 +115,28 @@ las pruebas estaban de acuerdo. Lo que encontró cada uno fue un agente al que s
 le pidió *romper* el arreglo, no confirmarlo — y dos veces la evidencia
 decisiva fue un mutante aplicado a mano sobre la línea que el arreglo acababa de
 escribir.
+
+## Corrección del 2026-08-13, más tarde el mismo día
+
+El criterio del navegador se dio por cumplido con una excusa falsa: **el
+contenedor del frontend sí monta su código**. El override de dev agrega el
+backend, pero el `docker-compose.yml` base ya monta `frontend/app`,
+`components`, `lib` y `ui`.
+
+Manejado en Chrome cuando se descubrió, el formulario de crear **nunca**
+muestra la negativa que agregó este arreglo, y **nunca** deshabilita `Crear`,
+con el servidor devolviendo 422 siete veces. La prueba de vitest que hacía de
+sustituta no podía verlo: simula el rechazo con `mockRejectedValue`, así que
+prueba que el componente pinta el mensaje cuando la consulta falla, no que la
+consulta falle alguna vez.
+
+Archivado como
+`.engineer/fixes/2026-08-13-the-create-form-never-shows-the-refusal-the-server-gave-it.md`.
+
+**La lección es la de esta mañana otra vez, del otro lado:** una afirmación
+sobre infraestructura, escrita de memoria a partir de un solo archivo, se leyó
+como verdad y compró la exención de la única comprobación que habría visto el
+hueco.
 
 ## Lo que queda
 
