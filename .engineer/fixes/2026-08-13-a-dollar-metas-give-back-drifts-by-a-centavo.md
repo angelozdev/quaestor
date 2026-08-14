@@ -20,14 +20,26 @@ expected: |
   what the months put in, and never more" — releasing more than was ever taken
   would mint money, which is what product ADR-014 exists to prevent.
 actual: |
-  They differ by ±1 cent in COP over the meta's life. `_gave_back` compares
-  meta-currency ints and converts the total ONCE, while each month's ask was
-  converted on its own by the fold. Summing N rounded conversions is not the
-  same as rounding one sum.
+  Reproduced 2026-08-13. A USD meta opened 2026-01 for 2026-12 and cancelled in
+  2026-07, comparing the sum of what each month charged (converted per month,
+  the way the fold does it) against what the cancellation released:
 
-  Sub-peso, so it never reaches a figure the owner reads. But it is the only
-  known case where the give-back cap — the thing five money fixes were written
-  to install — can be crossed at all.
+      TRM  3333.33   US$ 2,000.00   charged 3,888,962.77   gave back 3,888,962.78   +0.01
+      TRM  4123.77   US$ 2,000.00   charged 4,811,161.25   gave back 4,811,161.22   −0.03
+      TRM  3899.11   US$ 2,000.00   charged 4,549,052.62   gave back 4,549,052.65   +0.03
+      TRM  4123.77   US$   700.00   charged 1,683,941.46   gave back 1,683,941.48   +0.02
+
+  So the range is **±3 centavos, not ±1** — the original note understated it.
+  It grows with the number of months, since it is an accumulation of rounding.
+
+  `_gave_back` compares meta-currency ints and converts the total ONCE, while
+  each month's ask was converted on its own by the fold. `Σ round(xᵢ)` is not
+  `round(Σ xᵢ)`.
+
+  IT NEVER REACHES A FIGURE THE OWNER READS. Peso amounts are rendered without
+  cents (`$ 5.000.000`), and no screen shows a meta's lifetime charge next to
+  its release — only per-month figures, each of which is exact. It is the
+  invariant that drifts, not an answer.
 
 feature_refs:
   - "features/009-named-goals"
@@ -36,11 +48,22 @@ investigation:
   match_mode: auto
   candidates_considered: 1
   note: |
-    Not yet investigated. The question to settle first is whether the fix
-    belongs in `_gave_back` (convert per month, like the fold does) or in the
-    fold (carry the COP figure alongside the meta-currency one). ADR-0031's
-    single scalar TRM means both are available; which is right depends on
-    whether the cap is a statement about the meta's currency or about pesos.
+    Investigated 2026-08-13 and DELIBERATELY NOT FIXED. Reproduced, quantified,
+    and the shape of the fix established; the trade was judged bad today.
+
+    It is not a one-liner. `_gave_back` computes
+    `freed = released + min(holds, funded)` — a comparison in the META's
+    currency whose result must then be expressed in COP. Carrying a `funded_cop`
+    alongside `funded` is not enough, because when the `min` binds, the COP
+    figure has to be apportioned rather than substituted. Making `funded` itself
+    COP breaks the comparison against `holds`.
+
+    So the fix threads a second accumulator through `_saved_in`, `_month_of` and
+    `_walk` — the core of the module that took FIVE money fixes and three
+    verification rounds on 2026-08-13, and where every defect found that day was
+    invisible to a green suite. Opening it again, at the end of that day, to
+    move three centavos nobody can see, is the wrong trade. Recorded as the
+    owner's call rather than made silently.
 
 fix_commits: []
 

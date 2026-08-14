@@ -88,7 +88,7 @@ investigation:
   candidates_considered: 1
 
 fix_commits:
-  - 9e8b5d1
+  - cf2b51b
 
 harden_results:
   mutation_score: "n/a — frontend only; the bug-line gate stands in its place"
