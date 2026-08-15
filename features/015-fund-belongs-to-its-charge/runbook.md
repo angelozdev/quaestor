@@ -2,7 +2,7 @@
 slug: 015-fund-belongs-to-its-charge
 checkpoint: 4
 created: 2026-08-15
-status: partial
+status: complete
 steps:
   - id: fresh-backup
     description: "Take a fresh pg_dump of the production container before anything touches it"
@@ -35,8 +35,8 @@ steps:
     description: "Run the migration against the real data with the owner watching"
     owner: human
     command: null
-    evidence: null
-    completed: false
+    evidence: "Run by the owner on 2026-08-15 against the local production Postgres. Output: Running upgrade 0018 -> 0019, Running upgrade 0019 -> 0020, and [0020] charges that got a fund of their own: ['SOAT carro', 'Seguro del Carro']. alembic_version is now 0020."
+    completed: true
     blocking_acs:
       - AC-6
 
@@ -44,8 +44,8 @@ steps:
     description: "Confirm the two new funds ask exactly what the old one asked, and that no other figure moved"
     owner: agent
     command: null
-    evidence: null
-    completed: false
+    evidence: "Read from production after the migration. 🛡️ Auto Insurance 686.063,64 became SOAT carro 49.700,00 + Seguro del Carro 636.363,64, which add to 686.063,64. Fondos went from 5 rows to 6. Every other figure identical to the before: income 18.098.101,00 · funds 5.098.513,44 · metas 2.750.000,00 · uncovered 4.620.964,24 · free 5.628.623,32; rates earning 21.063.726,00 · cost 8.816.343,13 · margin 12.247.382,87. Nine figures, none moved. The four average funds report exactly what they reported before."
+    completed: true
     blocking_acs:
       - AC-6
 
