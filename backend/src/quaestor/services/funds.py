@@ -846,6 +846,7 @@ def charge_marks(session: Session, year_month: str) -> list[ChargeMark]:
         found.append(
             ChargeMark(
                 recurring_id=item.id,
+                category_id=item.category_id,
                 name=item.name,
                 currency=item.currency,
                 can_be_marked=fund_id is None and why_not is None,

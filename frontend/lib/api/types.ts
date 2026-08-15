@@ -21,6 +21,7 @@ export interface Transaction {
   account_id: number
   category_id: number | null
   meta_id: number | null
+  recurring_id: number | null
   transfer_group_id: string | null
   transfer_direction: TransferDirection | null
   source: string
@@ -128,14 +129,41 @@ export interface FundLine {
   rule: FundRule
   start_month: string
   accumulates: boolean
+  recurring_id: number | null
+  currency: string
+}
+
+/**
+ * One repeating charge, as the list that offers to save for it sees it.
+ *
+ * `why_not` is filled exactly when `can_be_marked` is false — a box the owner
+ * cannot tick and nothing saying why is the thing this field exists to
+ * prevent. `fund_id` is what marking produced, so the same row can offer to
+ * unmark.
+ */
+export interface ChargeMark {
+  recurring_id: number
+  category_id: number
+  name: string
+  currency: string
+  can_be_marked: boolean
+  why_not: string | null
+  fund_id: number | null
 }
 
 /**
  * What one fund asks, holds and reports for one month.
  *
- * `spent` is what the category cost that month; `carries` is what survives
+ * `spent` is what the fund cost that month; `carries` is what survives
  * into the next one, which is 0 for a fund that resets; `next_month_has` is
  * that carry plus what the rule asks then.
+ *
+ * `recurring_id` is the charge the fund hangs off, or null when it covers a
+ * whole category. `currency` is the money `asks`, `holds`, `spent` and
+ * `carries` are in — the charge's own for a fund filling for one charge, pesos
+ * otherwise. `asks_cop` and `holds_cop` are the same two figures in pesos, for
+ * the totals that add funds together; a screen showing one fund never needs
+ * them.
  */
 export interface FundStatus {
   fund_id: number
@@ -156,6 +184,10 @@ export interface FundStatus {
   averaged_over: number | null
   spreads_over: number | null
   whole_by: string | null
+  recurring_id: number | null
+  currency: string
+  asks_cop: number
+  holds_cop: number
 }
 
 /**
@@ -327,6 +359,7 @@ export interface TransactionUpdate {
   date?: string
   tags?: string[]
   meta_id?: number | null
+  recurring_id?: number | null
 }
 export interface PlanPaymentCreate {
   payee: string

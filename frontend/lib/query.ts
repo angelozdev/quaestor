@@ -57,6 +57,7 @@ export const qk = {
   moneyAvailable: (month: string) => [ROOTS.funds, "available", month] as const,
   moneyRates: (month: string) => [ROOTS.funds, "rates", month] as const,
   funds: () => [ROOTS.funds, "list"] as const,
+  chargeMarks: (month: string) => [ROOTS.funds, "charges", month] as const,
   metas: (month: string) => [ROOTS.metas, "list", month] as const,
   metaSplit: (month: string) => [ROOTS.metas, "split", month] as const,
   metasArchived: () => [ROOTS.metas, "archived"] as const,

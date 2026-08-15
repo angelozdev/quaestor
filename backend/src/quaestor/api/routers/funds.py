@@ -14,6 +14,8 @@ from ...services import funds
 from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
+    ChargeEditCost,
+    ChargeEditCostOut,
     ChargeMarkOut,
     FundCreate,
     FundLineOut,
@@ -51,6 +53,15 @@ def charge_marks(month: str, session: Session = Depends(get_session)):
 @router.post("/charges/{recurring_id}", response_model=FundOut, status_code=201)
 def mark_charge(recurring_id: int, month: str, session: Session = Depends(get_session)):
     return funds.mark_charge(session, recurring_id, month)
+
+
+@router.post("/charges/{recurring_id}/edit-cost", response_model=ChargeEditCostOut)
+def charge_edit_cost(recurring_id: int, body: ChargeEditCost, session: Session = Depends(get_session)):
+    """What an edit would cost the charge's fund, asked before it is saved."""
+    changes = body.model_dump(exclude_unset=True, exclude={"month"})
+    return ChargeEditCostOut(
+        would_lose_its_fund=funds.would_lose_its_fund(session, recurring_id, body.month, **changes)
+    )
 
 
 @router.delete("/charges/{recurring_id}", status_code=204)

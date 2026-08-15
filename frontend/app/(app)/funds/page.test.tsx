@@ -58,6 +58,10 @@ function fund(over: Partial<FundStatus> = {}): FundStatus {
     averaged_over: null,
     spreads_over: null,
     whole_by: null,
+    recurring_id: null,
+    currency: "COP",
+    asks_cop: over.asks ?? 10_000_000,
+    holds_cop: over.holds ?? 0,
     ...over,
   }
 }
@@ -127,6 +131,8 @@ function fundLinesOf(funds: FundStatus[]) {
     rule: f.rule,
     start_month: startMonths[f.fund_id] ?? "2026-01",
     accumulates: f.accumulates,
+    recurring_id: f.recurring_id,
+    currency: f.currency,
   }))
 }
 
@@ -1267,5 +1273,103 @@ describe("014 AC-4 — the lines add up to the figure above them", () => {
     const lines = table.getAllByRole("listitem").map((line) => shareIn(line.textContent ?? ""))
     expect(row).toBe(666_667)
     expect(lines.reduce((total, share) => total + share, 0)).toBe(row)
+  })
+})
+
+describe("015 — a fund may hang off the charge it fills", () => {
+  const seguro = (over: Partial<FundStatus> = {}) =>
+    fund({
+      fund_id: 11,
+      category_id: RESTAURANTES.id,
+      recurring_id: 42,
+      name: "Seguro",
+      rule: "from-recurring",
+      asks: 10_000_000,
+      asks_cop: 10_000_000,
+      holds: 0,
+      holds_cop: 0,
+      has_repeating_charges: true,
+      charges: [
+        charge({
+          name: "Seguro",
+          costs: 110_000_000,
+          charge_month: "2027-07",
+          asks: 10_000_000,
+          can_be_spread: true,
+        }),
+      ],
+      ...over,
+    })
+
+  const opal = () =>
+    seguro({
+      fund_id: 12,
+      recurring_id: 43,
+      name: "Opal",
+      currency: "USD",
+      asks: 5_000,
+      asks_cop: 20_000_000,
+      holds: 15_000,
+      holds_cop: 60_000_000,
+      charges: [
+        charge({
+          name: "Opal",
+          costs: 60_000,
+          charge_month: "2027-08",
+          asks: 5_000,
+          can_be_spread: true,
+        }),
+      ],
+    })
+
+  it("A marked charge is its own row among the funds, under its own name", async () => {
+    showing([seguro()])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    const row = rowFor(table, "Seguro")
+
+    expect(row).toBeInTheDocument()
+    expect(asked(row)).toBe("$ 100.000")
+    expect(table.queryByText(RESTAURANTES.name)).toBeNull()
+  })
+
+  it("The row carries all three terms, not just the figure", async () => {
+    showing([seguro()])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    const said = `${rowFor(table, "Seguro").textContent} ${table.getByText(/Seguro —/).textContent}`
+
+    expect(said).toContain("$ 100.000")
+    expect(said).toContain("$ 1.100.000")
+    expect(said).toContain("julio de 2027")
+  })
+
+  it("The unmarked charge leaves the funds", async () => {
+    showing([seguro()])
+    const user = setup()
+    deleteFund.mockResolvedValue(undefined)
+    renderPage()
+
+    await user.click(await screen.findByRole("button", { name: "Dejar de juntar para Seguro" }))
+    await user.click(await screen.findByRole("button", { name: "Dejar de juntar" }))
+
+    await waitFor(() => expect(deleteFund).toHaveBeenCalledWith(11))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Dejaste de juntar para Seguro"))
+  })
+
+  it("The row of a dollar charge reads entirely in dollars", async () => {
+    showing([opal()])
+    renderPage()
+
+    const table = await under(/Fondos/)
+    const row = rowFor(table, "Opal")
+    const said = `${row.textContent} ${table.getByText(/Opal —/).textContent}`
+
+    expect(asked(row)).toBe("US$ 50.00")
+    expect(said).toContain("US$ 150.00")
+    expect(said).toContain("US$ 600.00")
+    expect(said).not.toMatch(/\$\s*20\.000\.000|\$\s*200\.000/)
   })
 })

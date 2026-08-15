@@ -39,6 +39,7 @@ class ChargeMark:
     """
 
     recurring_id: int
+    category_id: int
     name: str
     currency: str
     can_be_marked: bool

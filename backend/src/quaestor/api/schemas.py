@@ -176,6 +176,7 @@ class TransactionOut(BaseModel):
     account_id: int
     category_id: int | None
     meta_id: int | None
+    recurring_id: int | None = None
     transfer_group_id: str | None
     transfer_direction: TransferDirection | None = None
     source: Source
@@ -247,7 +248,8 @@ class TransferOut(BaseModel):
 
 class TransactionUpdate(BaseModel):
     """Edit of a movement. Omitting `meta_id` leaves the link alone; sending
-    null removes it, and the category's fund takes the purchase back (AC-28)."""
+    null removes it, and the category's fund takes the purchase back (AC-28).
+    `recurring_id` works the same way for the charge this payment settled."""
 
     payee: str | None = None
     notes: str | None = None
@@ -255,6 +257,7 @@ class TransactionUpdate(BaseModel):
     date: Date | None = None
     tags: list[str] | None = None
     meta_id: int | None = None
+    recurring_id: int | None = None
 
 
 class CorrectionIn(BaseModel):
@@ -415,10 +418,23 @@ class FundLineOut(BaseModel):
     currency: str = "COP"
 
 
+class ChargeEditCost(BaseModel):
+    """What saving an edit to a charge's rhythm would cost the fund it carries."""
+
+    month: str
+    interval_unit: str | None = None
+    interval_count: int | None = None
+
+
+class ChargeEditCostOut(BaseModel):
+    would_lose_its_fund: bool
+
+
 class ChargeMarkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     recurring_id: int
+    category_id: int
     name: str
     currency: str
     can_be_marked: bool

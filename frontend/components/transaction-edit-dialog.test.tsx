@@ -9,9 +9,10 @@ const updateTransaction = vi.fn()
 const listTransactions = vi.fn()
 const correctTransaction = vi.fn()
 
-const { listAccounts, toast } = vi.hoisted(() => ({
+const { listAccounts, toast, chargeMarks } = vi.hoisted(() => ({
   listAccounts: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
+  chargeMarks: vi.fn(),
 }))
 
 vi.mock("@/lib/api/transactions", () => ({
@@ -26,6 +27,12 @@ vi.mock("@/lib/api/tags", () => ({
   listTags: vi.fn().mockResolvedValue([{ id: 1, name: "viaje" }]),
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
+vi.mock("@/lib/api/funds", () => ({
+  chargeMarks,
+  markCharge: vi.fn(),
+  unmarkCharge: vi.fn(),
+  chargeEditCost: vi.fn(),
+}))
 
 const ACCOUNTS = [
   { id: 1, name: "Bancolombia", type: "debit", currency: "COP", balance: 0, archived: false },
@@ -63,6 +70,7 @@ beforeEach(() => {
   listAccounts.mockImplementation((includeArchived = false) =>
     Promise.resolve(includeArchived ? [...ACCOUNTS, KOREA] : ACCOUNTS),
   )
+  chargeMarks.mockResolvedValue([])
 })
 
 function renderDialog(tx: Transaction) {
@@ -679,5 +687,52 @@ describe("013 — a charge carries the price of the rule it came from", () => {
     renderDialog(makeTransaction({ amount: 10_200, currency: "USD", account_id: 3 }))
 
     expect(screen.queryByText(/Precio de la regla/)).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * The link is what settles, never the amount: a payment of exactly what the
+ * insurance costs is not the insurance unless the owner says so.
+ */
+describe("015 — a payment may name the charge it settled", () => {
+  const CARRO = 3
+  const marked = (over: Record<string, unknown> = {}) => ({
+    recurring_id: 42,
+    category_id: CARRO,
+    name: "Seguro",
+    currency: "COP",
+    can_be_marked: false,
+    why_not: null,
+    fund_id: 7,
+    ...over,
+  })
+
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+  })
+
+  it("Saving an expense offers the marked charges of its category", async () => {
+    chargeMarks.mockResolvedValue([
+      marked(),
+      marked({ recurring_id: 43, name: "SOAT", fund_id: 8 }),
+    ])
+    const user = userEvent.setup()
+    renderDialog(makeTransaction({ category_id: CARRO }))
+
+    await user.click(await screen.findByRole("combobox", { name: "¿Este pago salda un cobro?" }))
+
+    expect(await screen.findByRole("option", { name: "Seguro" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "SOAT" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Ninguno, es un gasto aparte" })).toBeInTheDocument()
+  })
+
+  it("A category with no marked charge offers nothing to settle", async () => {
+    chargeMarks.mockResolvedValue([marked({ category_id: 99 })])
+    renderDialog(makeTransaction({ category_id: CARRO }))
+
+    await screen.findByLabelText("Etiquetas")
+
+    expect(screen.queryByText("¿Este pago salda un cobro?")).toBeNull()
   })
 })

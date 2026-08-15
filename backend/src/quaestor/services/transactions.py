@@ -492,6 +492,7 @@ def update_transaction(
     category_id=_UNSET,
     date=None,
     meta_id=_UNSET,
+    recurring_id=_UNSET,
 ) -> Transaction:
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
@@ -510,7 +511,9 @@ def update_transaction(
             money coming in, money moving between the owner's own accounts, or
             a meta that was cancelled. Passing None here DOES clear it: unlinking
             is a real act, and the category's fund takes the purchase back the
-            moment it happens (AC-28).
+            moment it happens (AC-28). Every refusal about the charge this
+            payment settled applies the same way, and clearing it hands the
+            cycle back to the charge's fund (ADR-0057, AC-5).
     """
     tx = get_transaction(session, tx_id)
     if payee is not None:
@@ -524,6 +527,9 @@ def update_transaction(
     if meta_id is not _UNSET:
         refuse_bad_meta(session, tx.type, meta_id)
         tx.meta_id = meta_id
+    if recurring_id is not _UNSET:
+        refuse_bad_charge_link(session, tx.type, tx.category_id, recurring_id)
+        tx.recurring_id = recurring_id
     session.add(tx)
     session.commit()
     session.refresh(tx)

@@ -8,6 +8,7 @@ import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
 import { MetaField } from "@/components/meta-field"
 import { MoneyInput } from "@/components/money-input"
+import { SettlesChargeField } from "@/components/settles-charge-field"
 import { TagChipsInput } from "@/components/tag-chips-input"
 import {
   type TransactionEditValues,
@@ -45,6 +46,7 @@ function valuesFromTx(tx: Transaction): TransactionEditValues {
     notes: tx.notes ?? "",
     tags: tx.tags,
     metaId: tx.meta_id,
+    settlesCharge: tx.recurring_id,
   }
 }
 
@@ -252,6 +254,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         notes: values.notes && values.notes.length > 0 ? values.notes : null,
         tags: values.tags,
         meta_id: values.metaId,
+        recurring_id: values.settlesCharge,
       })
       if (refusal !== null) throw new CorrectionRefused(refusal)
       if (body === null) return edited
@@ -375,6 +378,17 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
           )}
         </form.Field>
       )}
+      <form.Field name="settlesCharge">
+        {(field) => (
+          <SettlesChargeField
+            id="tx-edit-settles"
+            month={tx.date.slice(0, 7)}
+            categoryId={form.state.values.categoryId as number | null}
+            value={field.state.value as number | null}
+            onChange={(chosen) => field.handleChange(chosen as never)}
+          />
+        )}
+      </form.Field>
       {monthOfPurchase !== null && (
         <form.Field name="metaId">
           {(field) => (
