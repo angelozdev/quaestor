@@ -792,24 +792,41 @@ _NO_MONTH_TO_SAVE_IN = (
 )
 
 
-def _why_not_markable(agg: MonthAggregate, item: RecurringItem, year_month: str) -> str | None:
-    """Why this charge cannot be saved for on its own, or nothing when it can.
+def _why_it_could_never_be_saved_for(agg: MonthAggregate, item: RecurringItem, year_month: str) -> str | None:
+    """What disqualifies this charge for good, rather than only for now.
 
-    The order is the order the owner would ask them in, and every one of them is
-    about the charge rather than about the fund — nothing here reads
-    `IntervalUnit`, so «every 45 days» and «every 6 weeks» answer by what they
-    actually do (ADR-0056).
+    Direction, having a turn at all, and the rhythm — none of which the calendar
+    moving forward can change. Nothing here reads `IntervalUnit`, so «every 45
+    days» and «every 6 weeks» answer by what they actually do (ADR-0056).
+
+    Kept apart from the reason a charge cannot be marked *this* month because
+    the two are asked at different moments: one decides whether the box may be
+    ticked, and this one decides whether an already-ticked box may stay. Mixing
+    them would drop a fund the month its charge finally arrives, which is the
+    month it exists for.
     """
     if item.type != TxType.expense:
         return _MONEY_COMING_IN
     charge_month = _charge_month_for(agg, item, year_month, agg.turns_in(item, year_month), settled=False)
     if charge_month is None:
         return _NO_TURN_LEFT
-    if charge_month == year_month:
-        return _LANDS_THIS_MONTH
     if not _can_be_spread(item, charge_month):
         return _NO_MONTH_TO_SAVE_IN
     return None
+
+
+def _why_not_markable(agg: MonthAggregate, item: RecurringItem, year_month: str) -> str | None:
+    """Why this charge cannot be saved for right now, or nothing when it can.
+
+    The lasting reasons first, then the one that is only about timing: a charge
+    landing this very month has no months left to spread over, so saving for it
+    would ask the whole amount at once — which is what paying it does.
+    """
+    lasting = _why_it_could_never_be_saved_for(agg, item, year_month)
+    if lasting is not None:
+        return lasting
+    charge_month = _charge_month_for(agg, item, year_month, agg.turns_in(item, year_month), settled=False)
+    return _LANDS_THIS_MONTH if charge_month == year_month else None
 
 
 def charge_marks(session: Session, year_month: str) -> list[ChargeMark]:
@@ -899,6 +916,67 @@ def unmark_charge(session: Session, recurring_id: int) -> None:
         return
     session.delete(fund)
     session.commit()
+
+
+def marked_charges_in(session: Session, category_id: int) -> list[str]:
+    """The names of the charges under one category that are being saved for."""
+    marked = session.exec(
+        select(RecurringItem.name)
+        .join(Fund, Fund.recurring_id == RecurringItem.id)
+        .where(Fund.category_id == category_id)
+        .order_by(RecurringItem.id)
+    ).all()
+    return list(marked)
+
+
+def _can_still_keep_a_fund(agg: MonthAggregate, item: RecurringItem, year_month: str) -> bool:
+    """Whether the charge, as it is now, still justifies the fund it carries."""
+    return _why_it_could_never_be_saved_for(agg, item, year_month) is None
+
+
+def would_lose_its_fund(session: Session, recurring_id: int, year_month: str, **changes) -> bool:
+    """Whether saving these changes would leave the charge unable to keep its fund.
+
+    Asked *before* the edit is saved, so the screen can say what is about to
+    happen in one step instead of reporting it afterwards (AC-8). The rule is
+    not restated here: the proposed charge is measured by the same
+    `_why_not_markable` the marking itself uses, so the two can never drift.
+
+    Raises:
+        MissingRate: no TRM is set.
+    """
+    if fund_for_charge(session, recurring_id) is None:
+        return False
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        return False
+    agg = load_month(session, require_year_month(year_month))
+    proposed = item.model_copy(update={name: value for name, value in changes.items() if value is not None})
+    return not _can_still_keep_a_fund(agg, proposed, year_month)
+
+
+def unmark_if_it_can_no_longer_be_saved_for(session: Session, recurring_id: int, year_month: str | None = None) -> bool:
+    """Remove the fund of a charge whose new rhythm leaves no month to save in.
+
+    The fifth door of AC-8, and the only one that fails quietly: edit the
+    insurance from yearly to monthly and its fund stops having a reason to
+    exist, but nothing about the edit says so. The screen warns first
+    (`would_lose_its_fund`); this is what actually happens when the owner goes
+    ahead.
+
+    Returns whether a fund was removed.
+    """
+    if fund_for_charge(session, recurring_id) is None:
+        return False
+    item = session.get(RecurringItem, recurring_id)
+    if item is None or not item.active:
+        unmark_charge(session, recurring_id)
+        return True
+    month = require_year_month(year_month or year_month_of(Date.today()))
+    if _can_still_keep_a_fund(load_month(session, month), item, month):
+        return False
+    unmark_charge(session, recurring_id)
+    return True
 
 
 def delete_fund(session: Session, fund_id: int) -> None:

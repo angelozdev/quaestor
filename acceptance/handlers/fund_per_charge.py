@@ -17,8 +17,9 @@ from __future__ import annotations
 
 from datetime import date as Date
 
-from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from quaestor.domain.models import Category, IntervalUnit, RecurringMode, Transaction, TxType
 from quaestor.services import categories, recurring
+from sqlmodel import select
 
 from . import step
 from .fx_read_time import _DEC, _default_account_id
@@ -80,6 +81,22 @@ def _mark_of(world: World, charge: str):
         named = sorted(mark.name for mark in _marks(world))
         raise AssertionError(f"the list of repeating charges says nothing about {charge!r}; it names {named}")
     return found
+
+
+def _category_id(world: World, name: str) -> int:
+    known = world.categories.get(name)
+    if known is None:
+        raise AssertionError(f"no category {name!r} in this scenario{_context(world)}")
+    return known
+
+
+def _movements(world: World) -> list[tuple]:
+    """Every movement, as the facts a claim about «nothing moved» is about."""
+    rows = world.session.exec(select(Transaction).order_by(Transaction.id)).all()
+    return [
+        (tx.id, tx.account_id, tx.amount, tx.currency, tx.date, tx.status, tx.category_id, tx.recurring_id, tx.meta_id)
+        for tx in rows
+    ]
 
 
 def _told(world: World, expected: str) -> None:
@@ -157,11 +174,13 @@ def given_repeating_income_charge(
 
 @step(r'the user (?:marks|tries to mark) "(?P<charge>[^"]+)" to save for it')
 def when_mark(world: World, charge: str) -> None:
+    world.movements_before = _movements(world)
     world.attempt(_call, "mark_charge", world.session, _charge_id(world, charge), _month_of(world.today))
 
 
 @step(r'the user unmarks "(?P<charge>[^"]+)"')
 def when_unmark(world: World, charge: str) -> None:
+    world.movements_before = _movements(world)
     world.attempt(_call, "unmark_charge", world.session, _charge_id(world, charge))
 
 
@@ -176,7 +195,7 @@ def then_there_is_a_fund(world: World, charge: str) -> None:
 @step(r'there is no fund for "(?P<charge>[^"]+)"')
 def then_there_is_no_fund(world: World, charge: str) -> None:
     fund = _call("fund_for_charge", world.session, _charge_id(world, charge))
-    assert fund is None, f"{charge!r} still carries a fund (id {fund.id})"
+    assert fund is None, f"{charge!r} still carries a fund (id {fund.id}){_context(world)}"
 
 
 @step(r'the fund for "(?P<charge>[^"]+)" asks (?P<amount>' + _DEC + r") " + _CURRENCY + r" this month")
@@ -233,3 +252,65 @@ def then_told_no_turn_left(world: World) -> None:
 @step(r"the user is told the charge leaves no month to save in")
 def then_told_no_month_to_save_in(world: World) -> None:
     _told(world, "before a whole month has passed")
+
+
+@step(r'the user deletes "(?P<charge>[^"]+)"')
+def when_delete_charge(world: World, charge: str) -> None:
+    """Deleting a repeating charge *is* switching it off (ADR-0005).
+
+    The app has no hard delete for a master record — `deactivate_recurring` is
+    the delete, and the turns it already charged stay. So the two doors AC-8
+    lists separately, «apagás el cobro» and «borrás el cobro definitivamente»,
+    reach the same call, and the fund has to go through both.
+    """
+    world.attempt(recurring.deactivate_recurring, world.session, _charge_id(world, charge))
+
+
+@step(r'the user changes "(?P<charge>[^"]+)" to charge every month')
+def when_change_to_monthly(world: World, charge: str) -> None:
+    world.attempt(
+        recurring.update_recurring,
+        world.session,
+        _charge_id(world, charge),
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        today=world.today,
+    )
+
+
+@step(r"the archiving is rejected")
+def then_archiving_rejected(world: World) -> None:
+    world.consume_rejection((Exception,), "archiving the category")
+
+
+@step(r'the category "(?P<name>[^"]+)" is archived')
+def then_category_is_archived(world: World, name: str) -> None:
+    world.require_clean(f"archiving {name!r}")
+    cat = world.session.get(Category, _category_id(world, name))
+    assert cat is not None and cat.archived, f"{name!r} is not archived"
+
+
+@step(r'the user is told to unmark "(?P<charge>[^"]+)" first')
+def then_told_to_unmark_first(world: World, charge: str) -> None:
+    _told(world, f"unmark {charge.lower()!r}")
+
+
+@step(r'the funds name only "(?P<charge>[^"]+)"')
+def then_funds_name_only(world: World, charge: str) -> None:
+    """The invariant of AC-8, asserted over the whole list rather than one row.
+
+    «Una caja existe si y solo si su cobro está marcado y vivo» is a claim about
+    what is *not* there, so checking the survivor alone would pass while an
+    orphan sat beside it.
+    """
+    named = sorted(line.name for line in _call("list_funds", world.session))
+    assert named == [charge], f"the funds name {named}, expected only [{charge!r}]"
+
+
+@step(r"no movement was created, deleted or changed")
+def then_no_movement_moved(world: World) -> None:
+    before = getattr(world, "movements_before", None)
+    assert before is not None, "nothing recorded what the movements were before the action"
+    assert _movements(world) == before, (
+        "the movements are not what they were — a fund never held money, so removing one moves none"
+    )

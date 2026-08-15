@@ -64,6 +64,11 @@ def _spend(session, category_id, amount, on):
     )
 
 
+def _category_named(session, name):
+    """The id of a category this file already created, by name."""
+    return next(cat.id for cat in categories.list_categories(session) if cat.name == name)
+
+
 def _default_account(session):
     from quaestor.services import accounts
 
@@ -1157,3 +1162,93 @@ def test_everything_no_fund_covers_lands_in_one_term(session):
 
     available = month_service.available(session, "2026-11")
     assert available.uncovered == 100_000_00 + 200_000_00 + 400_000_00 + 800_000_00
+
+
+# -------------------------------------- a fund lives exactly as long as its charge
+
+
+def _marked(session, name="Seguro", amount=1_100_000_00, start=date(2027, 7, 5), unit="year", count=1):
+    """A charge that leaves months free, and the fund marking it produced."""
+    category = _category(session, "Carro")
+    _obligation(session, category, amount, start, unit=unit, count=count, name=name)
+    charge_id = _recurring_id(session, name)
+    return charge_id, funds.mark_charge(session, charge_id, "2026-08")
+
+
+def test_a_fund_is_not_dropped_in_the_month_its_charge_finally_arrives(session):
+    """The month a charge lands is the month the fund existed for.
+
+    `mark_charge` refuses a charge landing this very month — there is nothing
+    left to spread. Reusing that same answer to decide whether an existing fund
+    may *stay* would delete it the moment it succeeds, in the month it hands
+    over what it spent a year collecting. The two questions are asked at
+    different moments and only one of them is about timing.
+    """
+    charge_id, _ = _marked(session, start=date(2027, 7, 5))
+    _obligation(session, _category_named(session, "Carro"), 900_000_00, date(2027, 7, 5), unit="year", name="SOAT")
+    fresh = _recurring_id(session, "SOAT")
+
+    with pytest.raises(ValidationError, match="mark it once it has been paid"):
+        funds.mark_charge(session, fresh, "2027-07")
+
+    dropped = funds.unmark_if_it_can_no_longer_be_saved_for(session, charge_id, "2027-07")
+
+    assert dropped is False
+    assert funds.fund_for_charge(session, charge_id) is not None
+
+
+def test_a_charge_edited_into_a_monthly_rhythm_loses_its_fund(session):
+    charge_id, _ = _marked(session)
+
+    recurring.update_recurring(session, charge_id, interval_unit="month", interval_count=1, today=date(2026, 8, 15))
+
+    assert funds.fund_for_charge(session, charge_id) is None
+
+
+def test_the_screen_can_ask_what_an_edit_would_cost_before_saving_it(session):
+    """The warning AC-8 wants is asked of the same rule the removal uses."""
+    charge_id, _ = _marked(session)
+
+    assert funds.would_lose_its_fund(session, charge_id, "2026-08", interval_unit="month", interval_count=1)
+    assert not funds.would_lose_its_fund(session, charge_id, "2026-08", interval_unit="month", interval_count=6)
+    assert funds.fund_for_charge(session, charge_id) is not None
+
+
+def test_asking_what_an_edit_would_cost_says_no_when_nothing_is_marked(session):
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2027, 7, 5), unit="year", name="Seguro")
+
+    assert not funds.would_lose_its_fund(
+        session, _recurring_id(session, "Seguro"), "2026-08", interval_unit="month", interval_count=1
+    )
+
+
+def test_switching_a_charge_off_takes_its_fund_and_switching_it_back_on_does_not_return_it(session):
+    charge_id, _ = _marked(session)
+
+    recurring.deactivate_recurring(session, charge_id)
+    assert funds.fund_for_charge(session, charge_id) is None
+
+    recurring.restore_recurring(session, charge_id, today=date(2026, 8, 15))
+    assert funds.fund_for_charge(session, charge_id) is None
+
+
+def test_a_category_saving_for_a_charge_names_it_when_it_refuses_to_be_archived(session):
+    charge_id, _ = _marked(session)
+    category = _category_named(session, "Carro")
+
+    with pytest.raises(ValidationError) as refusal:
+        categories.archive_category(session, category)
+
+    assert "Seguro" in str(refusal.value)
+    assert funds.fund_for_charge(session, charge_id) is not None
+
+
+def test_once_the_charge_is_unmarked_the_category_archives(session):
+    charge_id, _ = _marked(session)
+    category = _category_named(session, "Carro")
+
+    funds.unmark_charge(session, charge_id)
+    categories.archive_category(session, category)
+
+    assert categories.get_category(session, category).archived
