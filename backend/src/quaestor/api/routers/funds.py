@@ -14,6 +14,7 @@ from ...services import funds
 from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
+    ChargeMarkOut,
     FundCreate,
     FundLineOut,
     FundOut,
@@ -40,6 +41,22 @@ def money_rates(month: str, session: Session = Depends(get_session)):
 @router.get("", response_model=list[FundLineOut])
 def list_funds(session: Session = Depends(get_session)):
     return funds.list_funds(session)
+
+
+@router.get("/charges", response_model=list[ChargeMarkOut])
+def charge_marks(month: str, session: Session = Depends(get_session)):
+    return funds.charge_marks(session, month)
+
+
+@router.post("/charges/{recurring_id}", response_model=FundOut, status_code=201)
+def mark_charge(recurring_id: int, month: str, session: Session = Depends(get_session)):
+    return funds.mark_charge(session, recurring_id, month)
+
+
+@router.delete("/charges/{recurring_id}", status_code=204)
+def unmark_charge(recurring_id: int, session: Session = Depends(get_session)):
+    funds.unmark_charge(session, recurring_id)
+    return
 
 
 @router.get("/{fund_id}/status", response_model=FundStatusOut)

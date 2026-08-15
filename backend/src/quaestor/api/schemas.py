@@ -411,6 +411,19 @@ class FundLineOut(BaseModel):
     rule: str
     start_month: str
     accumulates: bool
+    recurring_id: int | None = None
+    currency: str = "COP"
+
+
+class ChargeMarkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recurring_id: int
+    name: str
+    currency: str
+    can_be_marked: bool
+    why_not: str | None = None
+    fund_id: int | None = None
 
 
 class FundChargeOut(BaseModel):
@@ -507,6 +520,10 @@ class FundStatusOut(BaseModel):
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None
+    recurring_id: int | None = None
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 class MetaCreate(BaseModel):

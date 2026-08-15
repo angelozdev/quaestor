@@ -23,10 +23,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date as Date
 from datetime import timedelta
+from functools import partial
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import FundCharge, FundLine, FundPreview, FundStatus
+from ..domain.dtos import ChargeMark, FundCharge, FundLine, FundPreview, FundStatus
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, Fund, FundRule, RecurringItem, Transaction, TxStatus, TxType
 from ..domain.money import cents_to_major, to_cop_cents
@@ -182,12 +183,23 @@ def _still_charges_in(agg: MonthAggregate, category_id: int, year_month: str) ->
     return any(_still_charges(agg, item, year_month) for item in agg.obligations_in(category_id))
 
 
+def _still_waiting_for(agg: MonthAggregate, fund: Fund, year_month: str) -> bool:
+    """Whether this fund still has a charge coming — its own, or its category's."""
+    if fund.recurring_id is None:
+        return _still_charges_in(agg, fund.category_id, year_month)
+    item = agg.obligation(fund.recurring_id)
+    return item is not None and _still_charges(agg, item, year_month)
+
+
 def _obligations(agg: MonthAggregate, category_id: int, year_month: str) -> list[_Obligation]:
     """What each obligation in the category still needs, soonest charge first.
 
     Each obligation's turns for the month are worked out once here and handed to
     both readers: which turns the spending settled, and which charge the fund is
     filling for.
+
+    This is the category-wide reading, which still has to guess which charge the
+    spending paid. A fund that hangs off one charge does not guess (ADR-0057).
     """
     turns = [(item, agg.turns_in(item, year_month)) for item in agg.obligations_in(category_id)]
     settled = _settled_by_spending(agg, category_id, year_month, turns)
@@ -207,8 +219,45 @@ def _obligations(agg: MonthAggregate, category_id: int, year_month: str) -> list
     return sorted(found, key=lambda o: o.charge_month)
 
 
+def _charge_obligation(agg: MonthAggregate, item: RecurringItem, year_month: str) -> list[_Obligation]:
+    """What the one charge a fund hangs off still needs, in its own money.
+
+    Nothing is converted: a fund filling for a 600 dollar charge reports fifty
+    dollars a month, and only the month's total ever becomes pesos (AC-11).
+
+    Settlement is read rather than guessed. A payment carrying this charge's
+    name in a month the charge is not due is an early payment — the owner paid
+    the insurance in June for a July charge — so it closes the turn coming and
+    the fund starts the next cycle (AC-5). In the month the turn does fall,
+    `_charge_month_for` already answers it.
+    """
+    dues = agg.turns_in(item, year_month)
+    paid = agg.settled_in(item, year_month)
+    charge = _charge_month_for(agg, item, year_month, dues, paid >= item.amount)
+    if charge is not None and not dues and paid >= item.amount:
+        charge = _turn_after(item, charge, item.end_date)
+    if charge is None:
+        return []
+    return [
+        _Obligation(
+            name=item.name,
+            required=item.amount,
+            charge_month=charge,
+            can_be_spread=_can_be_spread(item, charge),
+        )
+    ]
+
+
+def _obligations_of(agg: MonthAggregate, fund: Fund, year_month: str) -> list[_Obligation]:
+    """What this fund is filling for — one charge, or its whole category."""
+    if fund.recurring_id is None:
+        return _obligations(agg, fund.category_id, year_month)
+    item = agg.obligation(fund.recurring_id)
+    return _charge_obligation(agg, item, year_month) if item is not None else []
+
+
 def _ask_from_obligations(agg: MonthAggregate, fund: Fund, year_month: str, holds: int) -> _Ask:
-    obligations = _obligations(agg, fund.category_id, year_month)
+    obligations = _obligations_of(agg, fund, year_month)
     claimed = claim_holdings(holds, [o.required for o in obligations])
     charges = tuple(
         FundCharge(
@@ -280,6 +329,20 @@ def _fold_start(fund: Fund, year_month: str) -> tuple[str, int]:
     return max(stated_for, fund.start_month), fund.anchor_amount
 
 
+def _drained(agg: MonthAggregate, fund: Fund, year_month: str) -> int:
+    """What left this fund in one month, in the money the fund reports in.
+
+    A fund that covers a category is drained by everything that category spent.
+    A fund that fills for one charge is drained by what paid *that charge* and
+    by nothing else — which is the whole difference between a guess and a fact,
+    and the reason the same peso can no longer empty two funds (ADR-0057).
+    """
+    if fund.recurring_id is None:
+        return agg.spent_in(fund.category_id, year_month)
+    item = agg.obligation(fund.recurring_id)
+    return agg.settled_in(item, year_month) if item is not None else 0
+
+
 def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
     """Fold the fund forward to the month this aggregate holds (ADR-0043)."""
     year_month = agg.year_month
@@ -288,13 +351,13 @@ def _walk(agg: MonthAggregate, fund: Fund) -> _Month:
         return _Month(
             opening=0,
             holds=0,
-            spent=agg.spent_in(fund.category_id, year_month),
+            spent=_drained(agg, fund, year_month),
             ask=_Ask(0),
             ask_before_spending=_Ask(0),
             carries=_opening_next(fund, year_month),
         )
     while True:
-        spent = agg.spent_in(fund.category_id, month)
+        spent = _drained(agg, fund, month)
         holds = fund_holds_calc(opening, spent)
         ask = _ask(agg, fund, month, holds)
         next_opening = fund_next_opening_calc(opening, spent, ask.amount, fund.accumulates)
@@ -367,19 +430,43 @@ def _look_ahead(agg: MonthAggregate, fund: Fund, walked: _Month) -> int:
     return walked.carries + _ask(agg, fund, ahead, walked.carries).amount
 
 
+def _fills_for(agg: MonthAggregate, fund: Fund) -> RecurringItem | None:
+    """The charge this fund hangs off, if it hangs off one."""
+    return None if fund.recurring_id is None else agg.obligation(fund.recurring_id)
+
+
+def _name_and_currency(agg: MonthAggregate, fund: Fund) -> tuple[str, str]:
+    """What the fund is called, and the money every figure of its own is in.
+
+    A fund that fills for one charge takes the charge's name and the charge's
+    currency: the owner marked 🛡️ Seguro del Carro, not 🛡️ Auto Insurance, and a
+    600 dollar charge is saved for fifty dollars at a time (AC-1, AC-11).
+    """
+    item = _fills_for(agg, fund)
+    if item is not None:
+        return item.name, item.currency
+    category = agg.category(fund.category_id)
+    return (category.name if category is not None else ""), "COP"
+
+
 def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
     year_month = agg.year_month
     charge = walked.ask.charge_month
-    category = agg.category(fund.category_id)
+    name, currency = _name_and_currency(agg, fund)
     next_month_has = _look_ahead(agg, fund, walked)
+    in_pesos = partial(to_cop_cents, currency=currency, trm=agg.trm)
     return FundStatus(
         fund_id=fund.id,
         category_id=fund.category_id,
-        name=category.name if category is not None else "",
+        recurring_id=fund.recurring_id,
+        name=name,
+        currency=currency,
         year_month=year_month,
         rule=fund.rule.value,
         asks=walked.ask.amount,
+        asks_cop=in_pesos(walked.ask.amount),
         holds=walked.holds,
+        holds_cop=in_pesos(walked.holds),
         spent=walked.spent,
         carries=walked.carries,
         next_month_has=next_month_has,
@@ -387,7 +474,7 @@ def _status(agg: MonthAggregate, fund: Fund, walked: _Month) -> FundStatus:
         accumulation_is_implied=_accumulation_is_implied(fund),
         on_track=_on_track(walked),
         charges=list(walked.ask.charges),
-        has_repeating_charges=_still_charges_in(agg, fund.category_id, year_month),
+        has_repeating_charges=_still_waiting_for(agg, fund, year_month),
         averaged_over=walked.ask.averaged_over,
         spreads_over=months_to_fund(year_month, charge) if charge else None,
         whole_by=prev_year_month(charge) if charge else None,
@@ -440,19 +527,30 @@ def fold(agg: MonthAggregate) -> FundFold:
 
 
 def list_funds(session: Session) -> list[FundLine]:
-    """Every fund, for the screen and the assistant. Empty until the owner makes one (AC-20)."""
+    """Every fund, for the screen and the assistant. Empty until the owner makes one (AC-20).
+
+    A fund that fills for one charge is listed under the charge's own name: the
+    owner marked 🛡️ Seguro del Carro, and a row reading 🛡️ Auto Insurance would
+    name the category two of his funds share (AC-1).
+    """
     names = {category.id: category.name for category in session.exec(select(Category)).all()}
-    return [
-        FundLine(
-            fund_id=fund.id,
-            category_id=fund.category_id,
-            name=names.get(fund.category_id, ""),
-            rule=fund.rule.value,
-            start_month=fund.start_month,
-            accumulates=fund.accumulates,
+    charges = {item.id: item for item in session.exec(select(RecurringItem)).all()}
+    listed = []
+    for fund in session.exec(select(Fund).order_by(Fund.id)).all():
+        charge = charges.get(fund.recurring_id)
+        listed.append(
+            FundLine(
+                fund_id=fund.id,
+                category_id=fund.category_id,
+                recurring_id=fund.recurring_id,
+                name=charge.name if charge is not None else names.get(fund.category_id, ""),
+                currency=charge.currency if charge is not None else "COP",
+                rule=fund.rule.value,
+                start_month=fund.start_month,
+                accumulates=fund.accumulates,
+            )
         )
-        for fund in session.exec(select(Fund).order_by(Fund.id)).all()
-    ]
+    return listed
 
 
 def _require_fund(session: Session, fund_id: int) -> Fund:
@@ -679,6 +777,128 @@ def set_fund(session: Session, fund_id: int, **changes) -> Fund:
     session.commit()
     session.refresh(fund)
     return fund
+
+
+def fund_for_charge(session: Session, recurring_id: int) -> Fund | None:
+    """The fund that fills for one charge, or nothing when it was never marked."""
+    return session.exec(select(Fund).where(Fund.recurring_id == recurring_id)).first()
+
+
+_LANDS_THIS_MONTH = "it charges this month, so there are no months left to save in — mark it once it has been paid"
+_MONEY_COMING_IN = "a fund only covers money going out"
+_NO_TURN_LEFT = "it has no turn left to save for"
+_NO_MONTH_TO_SAVE_IN = (
+    "it comes back before a whole month has passed, so saving for it would ask the whole amount every month"
+)
+
+
+def _why_not_markable(agg: MonthAggregate, item: RecurringItem, year_month: str) -> str | None:
+    """Why this charge cannot be saved for on its own, or nothing when it can.
+
+    The order is the order the owner would ask them in, and every one of them is
+    about the charge rather than about the fund — nothing here reads
+    `IntervalUnit`, so «every 45 days» and «every 6 weeks» answer by what they
+    actually do (ADR-0056).
+    """
+    if item.type != TxType.expense:
+        return _MONEY_COMING_IN
+    charge_month = _charge_month_for(agg, item, year_month, agg.turns_in(item, year_month), settled=False)
+    if charge_month is None:
+        return _NO_TURN_LEFT
+    if charge_month == year_month:
+        return _LANDS_THIS_MONTH
+    if not _can_be_spread(item, charge_month):
+        return _NO_MONTH_TO_SAVE_IN
+    return None
+
+
+def charge_marks(session: Session, year_month: str) -> list[ChargeMark]:
+    """Every live repeating charge, and whether the owner may save for it.
+
+    One aggregate for the whole list rather than one reading per charge: the
+    screen shows every row at once, and ADR-0028 does not stop being true
+    because the loop is in a service (AC-2).
+    """
+    require_year_month(year_month)
+    agg = load_month(session, year_month)
+    marked = {fund.recurring_id: fund.id for fund in agg.funds if fund.recurring_id is not None}
+    found = []
+    for item in agg.active_recurring:
+        fund_id = marked.get(item.id)
+        why_not = None if fund_id is not None else _why_not_markable(agg, item, year_month)
+        found.append(
+            ChargeMark(
+                recurring_id=item.id,
+                name=item.name,
+                currency=item.currency,
+                can_be_marked=fund_id is None and why_not is None,
+                why_not=why_not,
+                fund_id=fund_id,
+            )
+        )
+    return found
+
+
+def mark_charge(session: Session, recurring_id: int, year_month: str | None = None) -> Fund:
+    """Save for this charge from this month on. Marking it *is* what creates the fund.
+
+    No form and nothing to confirm afterwards: the owner ticks the box in the
+    list of repeating charges and the fund exists (AC-1).
+
+    Args:
+        session: Database session.
+        recurring_id: The charge to save for.
+        year_month: The month saving starts in. Defaults to the month in course.
+
+    Raises:
+        NotFound: the charge does not exist or is switched off.
+        ValidationError: it is money coming in, it charges this very month, it
+            has no turn left, it comes back before a whole month has passed, or
+            it is already marked (AC-10).
+        MissingRate: no TRM is set.
+    """
+    start_month = require_year_month(year_month or year_month_of(Date.today()))
+    item = session.get(RecurringItem, recurring_id)
+    if item is None or not item.active:
+        raise NotFound(f"repeating charge {recurring_id} not found")
+    if fund_for_charge(session, recurring_id) is not None:
+        raise ValidationError(f"{item.name!r} already has a fund — unmark it first if you want to start over")
+    agg = load_month(session, start_month)
+    why_not = _why_not_markable(agg, item, start_month)
+    if why_not is not None:
+        raise ValidationError(f"{item.name!r} cannot be saved for: {why_not}")
+    fund = Fund(
+        category_id=item.category_id,
+        recurring_id=recurring_id,
+        rule=FundRule.from_recurring,
+        start_month=start_month,
+        accumulates=True,
+    )
+    session.add(fund)
+    session.commit()
+    session.refresh(fund)
+    return fund
+
+
+def unmark_charge(session: Session, recurring_id: int) -> None:
+    """Stop saving for this charge, and remove the fund entirely.
+
+    The whole fund goes, not the months ahead of it: a fund never held money,
+    only a figure the app suggested, so every month it ever answered goes back
+    to answering without it and **no movement is touched** (AC-4). That is why
+    it costs nothing to undo and why it needs none of the handing-back that
+    cancelling a meta needed (ADR-0055).
+
+    The saving so far is lost with it, deliberately: marking again starts a new
+    fund at zero, and the figure says so. Idempotent — unmarking what was never
+    marked is not an error, which is what lets the four doors of AC-8 all close
+    the same way.
+    """
+    fund = fund_for_charge(session, recurring_id)
+    if fund is None:
+        return
+    session.delete(fund)
+    session.commit()
 
 
 def delete_fund(session: Session, fund_id: int) -> None:

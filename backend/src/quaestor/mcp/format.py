@@ -352,13 +352,21 @@ def funds_list(lines: list) -> str:
 
 
 def fund_card(status) -> str:
+    """The fund's month, in the fund's own money.
+
+    Every figure is read in `status.currency` rather than in a hard-coded
+    "COP": a fund filling for a 600 dollar charge asks fifty dollars, and
+    printing that as fifty pesos is the defect of 2026-08-13 in a new place
+    (CHARTER §6, ADR-0057).
+    """
+    held_in = status.currency
     parts = [
         f"Fund on **{status.name}** ({status.rule}) — {status.year_month}",
-        f"- Asks: {money(status.asks, 'COP')}",
-        f"- Holds: {money(status.holds, 'COP')}",
-        f"- Spent this month: {money(status.spent, 'COP')}",
-        f"- Carries into next month: {money(status.carries, 'COP')}",
-        f"- Next month has: {money(status.next_month_has, 'COP')}",
+        f"- Asks: {money(status.asks, held_in)}",
+        f"- Holds: {money(status.holds, held_in)}",
+        f"- Spent this month: {money(status.spent, held_in)}",
+        f"- Carries into next month: {money(status.carries, held_in)}",
+        f"- Next month has: {money(status.next_month_has, held_in)}",
         f"- {'On track' if status.on_track else 'Behind'}",
     ]
     if status.whole_by is not None:

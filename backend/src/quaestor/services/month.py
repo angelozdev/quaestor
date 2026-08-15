@@ -112,7 +112,7 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
     saved = metas.fold(agg)
     income = _income(agg)
     uncovered = _uncovered(agg, funded.overspill, saved.uncovered)
-    claimed = sum(line.asks for line in funded.lines) + saved.asks + saved.contributed - saved.released
+    claimed = sum(line.asks_cop for line in funded.lines) + saved.asks + saved.contributed - saved.released
     return MonthAvailable(
         year_month=year_month,
         income=income,
@@ -141,8 +141,8 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
     money aside and cancelled a meta can say so twice instead of once.
     """
     view = month_available(agg)
-    presupuesto = sum(line.asks for line in view.funds if not line.accumulates)
-    fondo = sum(line.asks for line in view.funds if line.accumulates)
+    presupuesto = sum(line.asks_cop for line in view.funds if not line.accumulates)
+    fondo = sum(line.asks_cop for line in view.funds if line.accumulates)
     saved_by_spending = _spent_where_spending_is_saving(agg)
     consumo = presupuesto + view.uncovered - saved_by_spending
     set_aside = fondo + sum(line.asks_cop for line in view.metas) + view.contributed + saved_by_spending
@@ -229,7 +229,7 @@ def rates(session: Session, year_month: str) -> MonthRates:
     agg = load_month(session, year_month)
     funded = agg.funded_categories()
     earning = 0
-    cost = sum(line.asks for line in funds.fold(agg).lines)
+    cost = sum(line.asks_cop for line in funds.fold(agg).lines)
     for item in agg.active_recurring:
         share = monthly_rate_calc(
             to_cop_cents(item.amount, item.currency, agg.trm), item.interval_unit, item.interval_count

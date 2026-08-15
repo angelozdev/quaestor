@@ -301,18 +301,36 @@ class FundRule(StrEnum):
 
 
 class Fund(SQLModel, table=True):
-    """One fund per expense category: the rule is stored, the balance derived.
+    """A funding rule: the rule is stored, the balance derived.
 
     No balance column and no account reference — what a fund holds is folded
-    forward from its start month over the category's posted spending
-    (ADR-0043). `anchor_amount` is the owner's own statement of what it already
-    holds; `anchor_month` is the month that statement was made for, and `None`
-    means it was made for whatever month is being looked at.
+    forward from its start month over the spending that drains it (ADR-0043).
+    `anchor_amount` is the owner's own statement of what it already holds;
+    `anchor_month` is the month that statement was made for, and `None` means
+    it was made for whatever month is being looked at.
+
+    `recurring_id` is what the fund fills for, when it fills for one charge
+    rather than a whole category (ADR-0057). The category-wide rules keep the
+    one-per-category guarantee ADR-0043 argued for — two of them would be two
+    ways to lower the same headline — which is why `uq_fund_category` survives
+    as a partial index rather than being dropped. Two funds tied to *different
+    charges* do not overlap: each covers different money, and the movement
+    says which.
     """
 
-    __table_args__ = (UniqueConstraint("category_id", name="uq_fund_category"),)
+    __table_args__ = (
+        Index(
+            "uq_fund_category",
+            "category_id",
+            unique=True,
+            sqlite_where=text("recurring_id IS NULL"),
+            postgresql_where=text("recurring_id IS NULL"),
+        ),
+        UniqueConstraint("recurring_id", name="uq_fund_recurring"),
+    )
     id: Annotated[int | None, Field(default=None, primary_key=True)] = None
     category_id: Annotated[int, Field(foreign_key="category.id")]
+    recurring_id: Annotated[int | None, Field(default=None, foreign_key="recurring_item.id")] = None
     rule: FundRule
     start_month: str
     accumulates: bool = True

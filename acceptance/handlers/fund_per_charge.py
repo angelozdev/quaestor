@@ -1,0 +1,235 @@
+"""Step handlers — feature 015 fund-belongs-to-its-charge.
+
+Feature 003 left 71 steps about a fund that hangs off a category and feature 014
+added 14 more about what its figure is made of. This feature adds a second thing
+a fund can hang off, so the vocabulary needs to keep the two apart without
+inventing a word for either. It does it with a preposition:
+
+``a fund on "Carro"``      the category fund — `fixed` and `average`, unchanged
+``the fund for "Seguro"``  the charge fund — what marking a charge creates
+
+Nothing here looks a fund up in ``world.funds``. A charge fund is found through
+the charge that owns it, which is the invariant AC-8 is about: asking the
+service for it is what makes an orphan impossible to assert into existence.
+"""
+
+from __future__ import annotations
+
+from datetime import date as Date
+
+from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
+from quaestor.services import categories, recurring
+
+from . import step
+from .fx_read_time import _DEC, _default_account_id
+from .sinking_funds import _MONTH, _call, _cents, _context, _month_of
+from .world import World
+
+_CURRENCY = r"(?P<currency>COP|USD)"
+
+_CADENCE = r"every (?:(?P<count>\d+) )?(?P<unit>day|week|month|year)s?"
+
+
+# ------------------------------------------------------------------ helpers
+
+
+def _income_category_id(world: World, name: str) -> int:
+    known = world.categories.get(name)
+    if known is not None:
+        return known
+    cat = categories.create_category(world.session, name, is_income=True)
+    world.categories[name] = cat.id
+    return cat.id
+
+
+def _charge_id(world: World, name: str) -> int:
+    known = world.recurring_ids.get(name)
+    if known is None:
+        raise AssertionError(f"no repeating charge {name!r} in this scenario{_context(world)}")
+    return known
+
+
+def _fund_for(world: World, charge: str):
+    fund = _call("fund_for_charge", world.session, _charge_id(world, charge))
+    if fund is None:
+        raise AssertionError(f"nothing is being saved for {charge!r}{_context(world)}")
+    return fund
+
+
+def _status_for(world: World, charge: str):
+    return _call("fund_status", world.session, _fund_for(world, charge).id, _month_of(world.today))
+
+
+def _the_only_charge(world: World, charge: str):
+    """The one term the fund's figure is made of, since it fills for one charge."""
+    status = _status_for(world, charge)
+    terms = list(status.charges)
+    if len(terms) != 1:
+        named = [term.name for term in terms]
+        raise AssertionError(f"the fund for {charge!r} is filling for {named}, not for one charge")
+    return terms[0]
+
+
+def _marks(world: World):
+    return _call("charge_marks", world.session, _month_of(world.today))
+
+
+def _mark_of(world: World, charge: str):
+    found = next((mark for mark in _marks(world) if mark.name == charge), None)
+    if found is None:
+        named = sorted(mark.name for mark in _marks(world))
+        raise AssertionError(f"the list of repeating charges says nothing about {charge!r}; it names {named}")
+    return found
+
+
+def _told(world: World, expected: str) -> None:
+    said = getattr(world, "last_rejection", None)
+    if said is None:
+        raise AssertionError("nothing was refused, so nothing was said about why")
+    assert expected in said.lower(), f"the refusal does not say {expected!r}: {said!r}"
+
+
+# -------------------------------------------------------------------- Given
+
+
+@step(r'"(?P<charge>[^"]+)" is marked to be saved for')
+def given_marked(world: World, charge: str) -> None:
+    world.attempt(_call, "mark_charge", world.session, _charge_id(world, charge), _month_of(world.today))
+    world.require_clean(f"marking {charge!r} to be saved for")
+
+
+@step(r'the fund for "(?P<charge>[^"]+)" already holds (?P<amount>' + _DEC + r") (?:COP|USD)")
+def given_fund_holds(world: World, charge: str, amount: str) -> None:
+    """What the owner states the fund already has, in the charge's own money.
+
+    Stated rather than computed, the same way a category fund's opening balance
+    is (003, AC-19): nothing in the app writes it, and it is the only way a
+    scenario can put a fund partway through its cycle without inventing a
+    payment history for it.
+    """
+    world.attempt(_call, "set_fund", world.session, _fund_for(world, charge).id, balance=_cents(amount))
+    world.require_clean(f"stating what the fund for {charge!r} holds")
+
+
+@step(
+    r'a repeating income "(?P<payee>[^"]+)" on "(?P<category>[^"]+)"'
+    r" of (?P<amount>" + _DEC + r") " + _CURRENCY + r" " + _CADENCE + r", next due (?P<due>" + _MONTH + r")"
+)
+def given_repeating_income_charge(
+    world: World,
+    payee: str,
+    category: str,
+    amount: str,
+    currency: str,
+    unit: str,
+    due: str,
+    count: str | None = None,
+) -> None:
+    """Money coming in, shaped like the charge given so the only difference is direction.
+
+    AC-10 refuses to save for an income, and a monthly one would be refused for
+    its rhythm instead — so this one repeats yearly and leaves the direction as
+    the only thing left to refuse it for.
+    """
+    first = Date.fromisoformat(f"{due}-05")
+    item = world.attempt(
+        recurring.create_recurring,
+        world.session,
+        name=payee,
+        payee=payee,
+        type=TxType.income,
+        mode=RecurringMode.auto,
+        amount=_cents(amount),
+        currency=currency,
+        category_id=_income_category_id(world, category),
+        account_id=_default_account_id(world, currency),
+        interval_unit=IntervalUnit(unit),
+        interval_count=int(count or 1),
+        start_date=first,
+        declared_on=first,
+    )
+    world.require_clean(f"declaring the repeating income {payee!r}")
+    world.recurring_ids[payee] = item.id
+
+
+# --------------------------------------------------------------------- When
+
+
+@step(r'the user (?:marks|tries to mark) "(?P<charge>[^"]+)" to save for it')
+def when_mark(world: World, charge: str) -> None:
+    world.attempt(_call, "mark_charge", world.session, _charge_id(world, charge), _month_of(world.today))
+
+
+@step(r'the user unmarks "(?P<charge>[^"]+)"')
+def when_unmark(world: World, charge: str) -> None:
+    world.attempt(_call, "unmark_charge", world.session, _charge_id(world, charge))
+
+
+# --------------------------------------------------------------------- Then
+
+
+@step(r'there is a fund for "(?P<charge>[^"]+)"')
+def then_there_is_a_fund(world: World, charge: str) -> None:
+    _fund_for(world, charge)
+
+
+@step(r'there is no fund for "(?P<charge>[^"]+)"')
+def then_there_is_no_fund(world: World, charge: str) -> None:
+    fund = _call("fund_for_charge", world.session, _charge_id(world, charge))
+    assert fund is None, f"{charge!r} still carries a fund (id {fund.id})"
+
+
+@step(r'the fund for "(?P<charge>[^"]+)" asks (?P<amount>' + _DEC + r") " + _CURRENCY + r" this month")
+def then_fund_asks(world: World, charge: str, amount: str, currency: str) -> None:
+    status = _status_for(world, charge)
+    assert status.currency == currency, (
+        f"the fund for {charge!r} reports in {status.currency}, not in {currency} — "
+        f"a charge is saved for in the money it is charged in"
+    )
+    assert status.asks == _cents(amount), f"the fund for {charge!r} asks {status.asks}, expected {_cents(amount)}"
+
+
+@step(r'the fund for "(?P<charge>[^"]+)" says the charge costs (?P<amount>' + _DEC + r") " + _CURRENCY)
+def then_charge_costs(world: World, charge: str, amount: str, currency: str) -> None:
+    status = _status_for(world, charge)
+    assert status.currency == currency, f"the fund for {charge!r} reports in {status.currency}, not in {currency}"
+    costs = _the_only_charge(world, charge).costs
+    assert costs == _cents(amount), f"the fund for {charge!r} says it costs {costs}, expected {_cents(amount)}"
+
+
+@step(r'the fund for "(?P<charge>[^"]+)" says the charge lands in (?P<month>' + _MONTH + r")")
+def then_charge_lands_in(world: World, charge: str, month: str) -> None:
+    lands = _the_only_charge(world, charge).charge_month
+    assert lands == month, f"the fund for {charge!r} is filling for {lands}, expected {month}"
+
+
+@step(r'"(?P<charge>[^"]+)" (?P<verdict>can|cannot) be marked')
+def then_can_be_marked(world: World, charge: str, verdict: str) -> None:
+    mark = _mark_of(world, charge)
+    wanted = verdict == "can"
+    assert mark.can_be_marked is wanted, (
+        f"the list says {charge!r} can_be_marked={mark.can_be_marked}, expected {wanted}"
+        f"{' — it says: ' + repr(mark.why_not) if mark.why_not else ''}"
+    )
+    if not wanted:
+        assert mark.why_not, f"the list refuses {charge!r} the mark and says nothing about why"
+
+
+@step(r"the marking is rejected")
+def then_marking_rejected(world: World) -> None:
+    world.consume_rejection((Exception,), "marking the charge to be saved for")
+
+
+@step(r"the user is told to mark it once it has been paid")
+def then_told_mark_after_paying(world: World) -> None:
+    _told(world, "once it has been paid")
+
+
+@step(r"the user is told the charge has no turn left")
+def then_told_no_turn_left(world: World) -> None:
+    _told(world, "no turn left")
+
+
+@step(r"the user is told the charge leaves no month to save in")
+def then_told_no_month_to_save_in(world: World) -> None:
+    _told(world, "before a whole month has passed")
