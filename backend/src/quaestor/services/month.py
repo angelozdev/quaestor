@@ -240,6 +240,7 @@ def rates(session: Session, year_month: str) -> MonthRates:
     require_year_month(year_month)
     agg = load_month(session, year_month)
     funded = agg.funded_categories()
+    settled = agg.funded_charges()
     earning = 0
     cost = sum(line.asks_cop for line in funds.fold(agg).lines)
     for item in agg.active_recurring:
@@ -248,6 +249,6 @@ def rates(session: Session, year_month: str) -> MonthRates:
         )
         if item.type == TxType.income:
             earning += share
-        elif item.category_id not in funded:
+        elif item.category_id not in funded and item.id not in settled:
             cost += share
     return MonthRates(year_month=year_month, earning=earning, cost=cost, margin=margin_calc(earning, cost))

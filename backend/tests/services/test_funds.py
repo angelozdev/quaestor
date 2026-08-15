@@ -1252,3 +1252,27 @@ def test_once_the_charge_is_unmarked_the_category_archives(session):
     categories.archive_category(session, category)
 
     assert categories.get_category(session, category).archived
+
+
+def test_a_marked_charge_is_not_counted_twice_by_the_monthly_rate(session):
+    """The defect the migration rehearsal caught, before it reached real data.
+
+    `month_rates` adds every obligation's monthly share to the cost, skipping
+    the ones a fund already covers. It skipped them by *category*, which stopped
+    being enough the moment a fund could hang off one charge: the charge's own
+    fund asked for it, and the loop asked for it again. Against a restored copy
+    of production the two yearly car charges moved the cost by exactly their two
+    monthly shares — 58.333.334 + 3.727.500.
+    """
+    charge_id, _ = _marked(session)
+    before = month_service.rates(session, "2026-08").cost
+
+    funds.unmark_charge(session, charge_id)
+    unfunded = month_service.rates(session, "2026-08").cost
+    funds.mark_charge(session, charge_id, "2026-08")
+    after = month_service.rates(session, "2026-08").cost
+
+    assert before == after
+    monthly_share_of_a_yearly_charge = 1_100_000_00 // 12 + 1
+    spread_over_the_months_left = 1_100_000_00 // 11
+    assert unfunded - after == monthly_share_of_a_yearly_charge - spread_over_the_months_left

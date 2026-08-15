@@ -379,3 +379,15 @@ def then_funds_ask_altogether(world: World, amount: str) -> None:
         for line in _call("list_funds", world.session)
     )
     assert asking == _cents(amount), f"the funds ask {asking} altogether, expected {_cents(amount)}"
+
+
+@step(r'there is no fund on "(?P<category>[^"]+)"')
+def then_no_category_fund(world: World, category: str) -> None:
+    fund = _call("fund_on_category", world.session, _category_id(world, category))
+    assert fund is None, f"{category!r} still carries a fund of its own (id {fund.id})"
+
+
+@step(r'there is still a fund on "(?P<category>[^"]+)"')
+def then_still_a_category_fund(world: World, category: str) -> None:
+    fund = _call("fund_on_category", world.session, _category_id(world, category))
+    assert fund is not None, f"{category!r} lost the fund that covers the whole category{_context(world)}"

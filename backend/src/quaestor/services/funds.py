@@ -499,8 +499,15 @@ def fund_status(session: Session, fund_id: int, year_month: str) -> FundStatus:
 
 
 def fund_on_category(session: Session, category_id: int) -> Fund | None:
-    """The one fund a category carries, or nothing at all (AC-25)."""
-    return session.exec(select(Fund).where(Fund.category_id == category_id)).first()
+    """The one fund a category carries *of its own*, or nothing at all (AC-25).
+
+    A charge fund copies its category id, so a plain match by category would
+    return one of those and report the category as taken — which would refuse a
+    perfectly legal `fixed` fund on a category that merely holds a marked
+    charge. `recurring_id IS NULL` is the same boundary the partial unique index
+    draws in the schema (ADR-0057).
+    """
+    return session.exec(select(Fund).where(Fund.category_id == category_id, Fund.recurring_id.is_(None))).first()
 
 
 @dataclass(frozen=True)

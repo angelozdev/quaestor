@@ -2,14 +2,14 @@
 slug: 015-fund-belongs-to-its-charge
 checkpoint: 4
 created: 2026-08-15
-status: open
+status: partial
 steps:
   - id: fresh-backup
     description: "Take a fresh pg_dump of the production container before anything touches it"
     owner: human
     command: "just backup"
-    evidence: null
-    completed: false
+    evidence: "quaestor-local-2026-08-15.dump written to iCloud QuaestorBackups, 60K, by the owner on 2026-08-15."
+    completed: true
     blocking_acs:
       - AC-6
 
@@ -17,8 +17,8 @@ steps:
     description: "Record what the single existing fund asks today, read-only, so the after can be compared to it"
     owner: agent
     command: null
-    evidence: null
-    completed: false
+    evidence: "Read from production with the PRE-015 code (git worktree at 2722fd9), read-only: 🛡️ Auto Insurance asks 686.063,64 = SOAT carro 49.700,00 + Seguro del Carro 636.363,64. Whole month: income 18.098.101,00 · funds 5.098.513,44 · metas 2.750.000,00 · uncovered 4.620.964,24 · free 5.628.623,32; rates earning 21.063.726,00 · cost 8.816.343,13 · margin 12.247.382,87."
+    completed: true
     blocking_acs:
       - AC-6
 
@@ -26,8 +26,8 @@ steps:
     description: "Run the migration against a copy restored from the backup, never against the live database"
     owner: agent
     command: null
-    evidence: null
-    completed: false
+    evidence: "pg_restore of the 2026-08-15 dump into a scratch database `rehearsal`, then `alembic upgrade head` (0018 → 0019 → 0020). 0020 reported: charges that got a fund of their own: [SOAT carro, Seguro del Carro]. EVERY figure identical before and after, including rates. The downgrade round-trip to 0018 was run too and the pre-015 code read the same totals afterwards. THE REHEARSAL CAUGHT A DEFECT: month_rates skipped funded obligations BY CATEGORY, so both car charges were counted twice — once by their own fund and once as a loose obligation — moving cost by exactly 58.333.334 + 3.727.500 = 62.060.834. Fixed and pinned by a unit test before the second rehearsal, which came out clean. The scratch database was dropped afterwards."
+    completed: true
     blocking_acs:
       - AC-6
 
@@ -53,8 +53,8 @@ steps:
     description: "Drive the feature in a browser against the sandbox, reading balances in cents"
     owner: human
     command: null
-    evidence: null
-    completed: false
+    evidence: "Driven 2026-08-15 against the SQLite sandbox on http://localhost:3999 (ports 3000 and 3001 were held by unrelated node processes), the owner logging in himself. Eight things touched, not read: the Juntar column with all four refusals in Spanish; marking creates the fund with no form; the fund gets its own row reading 100.000 / 1.100.000 / julio de 2027; a dollar charge reads US$ 50,00 of US$ 600,00 with no pesos in the row; editing the cadence warns BEFORE saving and cancelling changes nothing; the movement offers only the marked charge of its category; accepting the warning removes the fund and leaves every movement untouched; unmarking leaves the charge alive. Read in cents rather than off the screen: asks=5.000 USD-cents with asks_cop=15.710.000 = 5.000 × 3.142, so the conversion happens exactly once; and after linking a 25.000 payment, settled_in(charge)=2.500.000 while spent_in(category)=0 — the AC-9 mirror, proven on real rows. orphan funds: [] and all 34 movements intact."
+    completed: true
     blocking_acs:
       - AC-1
       - AC-3

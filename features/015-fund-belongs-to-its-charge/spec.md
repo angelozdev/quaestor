@@ -318,6 +318,7 @@ Scenario: The migration moves no figure
 @backend
 Scenario: A fund that averages its category is left exactly as it is
   Given the app has recorded movements since 4 months ago
+  And a recorded expense of 100000.00 COP in category "Restaurantes" 2 months ago
   And a fund on "Restaurantes" that asks what the category averaged over the last 3 months, starting 2026-08
   When the upgrade completes
   Then there is still a fund on "Restaurantes"
