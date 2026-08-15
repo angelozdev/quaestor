@@ -10,10 +10,10 @@ owner: angelo
 assignee: local
 tracker_ref: local
 acceptance_stream: mixed
-relevant_adrs: [0028, 0031, 0043, 0046, 0054]
+relevant_adrs: [0028, 0031, 0043, 0046, 0054, 0056]
 created: 2026-08-12
 intake: discuss
-validation_method: "Los tres flujos (pytest, aceptación generada, vitest), más un ensayo de la migración contra una copia restaurada de producción con el dueño delante: los cuatro fondos de suscripciones se convierten en uno por cobro, y la suma de lo que piden los nuevos tiene que ser exactamente la que pedían los viejos — 686.063,64 + 17.465,23 + 277.488,57 + 127.572,22. Ninguna otra cifra del mes puede moverse."
+validation_method: "Los tres flujos (pytest, aceptación generada, vitest), más un ensayo de la migración contra una copia restaurada de producción con el dueño delante. Medido el 2026-08-15: existe UN solo fondo de cobros, sobre 🛡️ Auto Insurance, y ningún fondo tiene anchor_amount. La migración es 1 → 2 y no hay nada guardado que repartir. Lo que pide ese fondo hoy — 686.063,64 = 636.363,64 (Seguro del Carro) + 49.700,00 (SOAT carro) — tiene que ser exactamente lo que pidan los dos nuevos sumados. Ninguna otra cifra del mes puede moverse. Más el paso por navegador que exige el CHARTER §6."
 ---
 
 # Un fondo cuelga del cobro que llena, no de la categoría
@@ -84,9 +84,11 @@ distinta, y ahora el pago dice cuál.
 
 - **Las reglas `fixed` y `average`.** Siguen colgando de la categoría y siguen
   siendo una por categoría. Esta feature parte el noun; no lo unifica.
-- **El gasto tecleado a mano.** Un movimiento escrito por el dueño no trae
-  `recurring_id`. Ya está archivado como `link-a-payment-to-the-charge-it-settled`
-  y esta feature debe funcionar sin él, no esperarlo.
+
+- **El gasto tecleado a mano entra**, contra lo que este documento decía. La
+  AC-5 lo trae adentro y absorbe el item `link-a-payment-to-the-charge-it-settled`
+  del roadmap: sin él la caja de un cobro pagado por fuera de «Por pagar» seguiría
+  diciendo que tiene una plata ya gastada. Decidido por el dueño el 2026-08-15.
 - **Metas.** Se midió la cercanía en el discuss: una meta es algo con nombre,
   fuera de toda categoría, que termina; un fondo por cobro se renueva y baja el
   titular de su categoría. La 009 separó las dos cosas a propósito (ADR-0046).
@@ -102,7 +104,7 @@ Budget con sus `#template schedule {NAME}`: la plantilla nombra un cobro y no
 recoge los que llegan después. Se le dijo al dueño el 2026-08-12 antes de que
 decidiera, y decidió igual.
 
-De 5 filas en Fondos pasa a ~8.
+De 5 filas en Fondos pasa a 6.
 
 ## Decisiones tomadas en el discuss
 
@@ -126,20 +128,22 @@ De 5 filas en Fondos pasa a ~8.
 
 ## Riesgos
 
-**La migración toca datos reales.** Cuatro fondos de suscripciones se parten en
-uno por cobro, y hay que repartir lo que cada uno ya tiene guardado
-(`anchor_amount`). `claim_holdings` ya reparte lo que un fondo tiene entre sus
-obligaciones, cobro más próximo primero — esa misma regla es el candidato, y hay
-que proponérsela al dueño antes de escribirla. CHARTER §7 y el tope de autonomía
-`low` sobre `migrations/**` aplican, más un backup fresco por la ADR-0030.
+**La migración toca datos reales, y toca menos de lo que este documento decía.**
+Medido el 2026-08-15 contra el Postgres de producción, en solo lectura: hay **un
+solo** fondo `from_recurring`, sobre 🛡️ Auto Insurance, y los cinco fondos que
+existen tienen `anchor_amount` en nulo. La migración es **1 → 2** y **no hay
+nada guardado que repartir** — con lo que cae también el riesgo de congelar con
+`claim_holdings` una distribución que hoy se recalcula en cada lectura. CHARTER
+§7 y el tope de autonomía `low` sobre `migrations/**` siguen aplicando, más un
+backup fresco por la ADR-0030.
 
 **La suma no puede moverse.** Los nuevos fondos tienen que pedir exactamente lo
 que pedían los viejos. Si la suma cambia, la migración está mal.
 
-**Un cobro sin categoría, o cuya categoría se archiva.** Hoy el fondo muere con la
-categoría. Atado al cobro, hay que decidir qué pasa cuando el cobro se desactiva
-o se borra.
+**Un cobro sin categoría, o cuya categoría se archiva.** Resuelto en la AC-8 y
+decidido por el dueño el 2026-08-15: apagar o borrar el cobro borra su caja, y
+archivar la categoría se **rechaza** mientras alguno de sus cobros esté marcado
+— la misma regla que la 003 fijó para el fondo de categoría (AC-21).
 
-**La 014 tiene que estar mergeada primero.** Esta feature muestra el desglose que
-la 014 construye, y toca el mismo servicio. La 014 quedó en CP5 con las cuatro
-rebanadas verdes y le faltan CP6, CP7 y CP8.
+**La 014 tenía que estar mergeada primero.** Cerrada en `afb05f3`; `main` está
+mergeado en esta rama, así que los punteros de código leen lo actual.
