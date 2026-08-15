@@ -203,7 +203,15 @@ def _spending_category_id(world: World, name: str) -> int:
 
 
 def _make_fund(world: World, name: str, **spec) -> None:
-    fund = world.attempt(_call, "create_fund", world.session, category_id=_category_id(world, name), **spec)
+    """The fund a Given declares, on the category it names, created if unnamed.
+
+    `_spending_category_id` rather than `_category_id`: a scenario whose first
+    line is *a fund on "Restaurantes"* is saying the category exists, not asking
+    whether it does. One that declared it earlier — including an income one,
+    which 003 has a refusal about — still finds the one it declared, because the
+    lookup comes first and only a name nobody mentioned is created.
+    """
+    fund = world.attempt(_call, "create_fund", world.session, category_id=_spending_category_id(world, name), **spec)
     if fund is not None:
         world.funds = getattr(world, "funds", {})
         world.funds[name] = fund.id

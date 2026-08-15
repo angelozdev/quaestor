@@ -17,13 +17,13 @@ from __future__ import annotations
 
 from datetime import date as Date
 
-from quaestor.domain.models import Category, IntervalUnit, RecurringMode, Transaction, TxType
-from quaestor.services import categories, recurring
+from quaestor.domain.models import Category, IntervalUnit, RecurringItem, RecurringMode, Transaction, TxType
+from quaestor.services import categories, recurring, transactions
 from sqlmodel import select
 
 from . import step
 from .fx_read_time import _DEC, _default_account_id
-from .sinking_funds import _MONTH, _call, _cents, _context, _month_of
+from .sinking_funds import _MONTH, _call, _cents, _context, _month_of, _shift_months, _spending_category_id
 from .world import World
 
 _CURRENCY = r"(?P<currency>COP|USD)"
@@ -314,3 +314,68 @@ def then_no_movement_moved(world: World) -> None:
     assert _movements(world) == before, (
         "the movements are not what they were — a fund never held money, so removing one moves none"
     )
+
+
+@step(
+    r"the user records an expense of (?P<amount>" + _DEC + r") " + _CURRENCY + r' in category "(?P<category>[^"]+)"'
+    r' settling "(?P<charge>[^"]+)"'
+)
+def when_record_expense_settling(world: World, amount: str, currency: str, category: str, charge: str) -> None:
+    """A payment the owner typed in himself, naming the charge it closed.
+
+    The link is what settles, never the amount (AC-5): the same 1.100.000 spent
+    on a fire extinguisher names nothing and settles nothing.
+    """
+    world.last_linked_id = world.attempt(
+        transactions.record_expense,
+        world.session,
+        account_id=_default_account_id(world, currency),
+        amount=_cents(amount),
+        currency=currency,
+        date=world.today,
+        payee="Pago",
+        category_id=_spending_category_id(world, category),
+        recurring_id=_charge_id(world, charge),
+    )
+    world.require_clean(f"recording the payment that settled {charge!r}")
+
+
+@step(r'"(?P<charge>[^"]+)" was charged (?P<back>\d+) months? ago')
+def given_charge_was_paid_months_ago(world: World, charge: str, back: str) -> None:
+    """A turn the engine already charged, carrying the charge's own name.
+
+    Every payment the engine makes has said which charge it was since feature
+    013; this is that, planted in a past month so the average has something to
+    stop counting (AC-9).
+    """
+    item = world.session.get(RecurringItem, _charge_id(world, charge))
+    world.attempt(
+        transactions.record_expense,
+        world.session,
+        account_id=_default_account_id(world, item.currency),
+        amount=item.amount,
+        currency=item.currency,
+        date=_shift_months(world.today, int(back)),
+        payee=charge,
+        category_id=item.category_id,
+        source="agent",
+        recurring_id=item.id,
+    )
+    world.require_clean(f"charging {charge!r} {back} months ago")
+
+
+@step(r"the funds ask (?P<amount>" + _DEC + r") COP altogether this month")
+def then_funds_ask_altogether(world: World, amount: str) -> None:
+    """Every fund's figure added up, each converted once at the month's rate.
+
+    Read across the whole list rather than off one row, because the claim AC-6
+    and AC-9 both make is about the total: the migration may move a figure from
+    one row to two, and a marked charge may move one from an average to a fund
+    of its own, but neither may change what the month asks.
+    """
+    year_month = _month_of(world.today)
+    asking = sum(
+        _call("fund_status", world.session, line.fund_id, year_month).asks_cop
+        for line in _call("list_funds", world.session)
+    )
+    assert asking == _cents(amount), f"the funds ask {asking} altogether, expected {_cents(amount)}"

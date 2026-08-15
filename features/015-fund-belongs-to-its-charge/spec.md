@@ -271,7 +271,7 @@ Scenario: A dollar payment settles its dollar charge without passing through pes
   And "Opal" is marked to be saved for
   When the user records an expense of 600.00 USD in category "Tecnología" settling "Opal"
   Then the fund for "Opal" says the charge lands in 2028-08
-  And the fund for "Opal" asks 50.00 USD this month
+  And the fund for "Opal" asks 25.00 USD this month
 ```
 
 ```gherkin

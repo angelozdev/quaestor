@@ -654,3 +654,112 @@ def test_list_transactions_default_includes_planned_at_due_date(session):
     )
     txs = transactions.list_transactions(session)
     assert [t.payee for t in txs] == ["new", "Rent", "old"]
+
+
+# ------------------------------ a payment may name the charge it settled (ADR-0057)
+
+
+def _a_charge(session, name="Seguro", category_id=None, active=True, type=TxType.expense):
+    from quaestor.services import recurring
+
+    acc = accounts.create_account(session, f"Cuenta {name}", AccountType.debit, "COP", balance=0)
+    item = recurring.create_recurring(
+        session,
+        name=name,
+        payee=name,
+        type=type.value,
+        mode="manual",
+        amount=1_100_000_00,
+        currency="COP",
+        category_id=category_id if category_id is not None else a_category(session, type),
+        account_id=acc.id,
+        interval_unit="year",
+        interval_count=1,
+        start_date=date(2027, 7, 5),
+        declared_on=date(2027, 7, 5),
+    )
+    if not active:
+        recurring.deactivate_recurring(session, item.id)
+    return item
+
+
+def test_a_payment_records_the_charge_it_settled(session):
+    acc = _make_account(session, balance=2_000_000_00)
+    charge = _a_charge(session)
+
+    tx = transactions.record_expense(
+        session,
+        acc.id,
+        1_100_000_00,
+        "COP",
+        date(2026, 8, 15),
+        "Seguros Bolívar",
+        category_id=charge.category_id,
+        recurring_id=charge.id,
+    )
+
+    assert tx.recurring_id == charge.id
+
+
+def test_a_payment_naming_no_charge_settles_none(session):
+    """The link settles, never the amount — the guess ADR-0057 replaces."""
+    acc = _make_account(session, balance=2_000_000_00)
+    charge = _a_charge(session)
+
+    tx = transactions.record_expense(
+        session, acc.id, 1_100_000_00, "COP", date(2026, 8, 15), "Extintor", category_id=charge.category_id
+    )
+
+    assert tx.recurring_id is None
+    assert charge.id is not None
+
+
+def test_a_payment_cannot_settle_a_charge_from_another_category(session):
+    acc = _make_account(session, balance=2_000_000_00)
+    charge = _a_charge(session)
+    elsewhere = categories.create_category(session, "Mercado", is_income=False).id
+
+    with pytest.raises(ValidationError, match="not filed under this movement's category"):
+        transactions.record_expense(
+            session,
+            acc.id,
+            1_100_000_00,
+            "COP",
+            date(2026, 8, 15),
+            "Mercado",
+            category_id=elsewhere,
+            recurring_id=charge.id,
+        )
+
+
+def test_a_payment_cannot_settle_a_switched_off_charge(session):
+    acc = _make_account(session, balance=2_000_000_00)
+    charge = _a_charge(session, active=False)
+
+    with pytest.raises(ValidationError, match="switched off"):
+        transactions.record_expense(
+            session,
+            acc.id,
+            1_100_000_00,
+            "COP",
+            date(2026, 8, 15),
+            "Seguros Bolívar",
+            category_id=charge.category_id,
+            recurring_id=charge.id,
+        )
+
+
+def test_a_payment_cannot_settle_a_charge_that_does_not_exist(session):
+    acc = _make_account(session, balance=2_000_000_00)
+
+    with pytest.raises(NotFound):
+        transactions.record_expense(
+            session,
+            acc.id,
+            1_100_000_00,
+            "COP",
+            date(2026, 8, 15),
+            "Seguros Bolívar",
+            category_id=a_category(session, TxType.expense),
+            recurring_id=999_999,
+        )

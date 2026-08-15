@@ -19,6 +19,7 @@ from ..domain.errors import CorrectionNotApplied, NotFound, TransferImbalance, V
 from ..domain.models import (
     Account,
     Meta,
+    RecurringItem,
     Source,
     Tag,
     Transaction,
@@ -81,6 +82,41 @@ def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> N
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no new link")
 
 
+def refuse_bad_charge_link(
+    session: Session, tx_type: TxType, category_id: int | None, recurring_id: int | None
+) -> None:
+    """A movement may name the charge it settled, and only one it could have settled.
+
+    The owner pays the insurance from the bank and types it in by hand; naming
+    the charge is what closes that cycle, because the amount alone cannot —
+    guessing by amount is the very thing ADR-0057 replaces, and it would empty
+    the insurance fund the day a fire extinguisher costs the same (AC-5).
+
+    Money coming in settles nothing. A charge that is switched off has no cycle
+    left to close. And a charge filed under a different category is refused
+    rather than accepted quietly: the screen only ever offers the charges of the
+    movement's own category, so a link across categories can only arrive by
+    mistake, and it would take the payment out of one category's spending while
+    draining a fund in another.
+    """
+    if recurring_id is None:
+        return
+    if tx_type is not TxType.expense:
+        raise ValidationError("only money going out can settle a repeating charge")
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"repeating charge {recurring_id} not found")
+    if not item.active:
+        raise ValidationError(f"the charge {item.name!r} is switched off and has no turn left to settle")
+    if item.type is not TxType.expense:
+        raise ValidationError(f"{item.name!r} is money coming in, so no payment settles it")
+    if category_id is not None and item.category_id != category_id:
+        raise ValidationError(
+            f"{item.name!r} is not filed under this movement's category, "
+            f"so this payment cannot be the one that settled it"
+        )
+
+
 def _record(
     session: Session,
     tx_type: TxType,
@@ -94,6 +130,7 @@ def _record(
     source: str,
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     require_positive(amount)
@@ -104,6 +141,7 @@ def _record(
         raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
     category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
     refuse_bad_meta(session, tx_type, meta_id)
+    refuse_bad_charge_link(session, tx_type, category_id, recurring_id)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -115,6 +153,7 @@ def _record(
         account_id=account_id,
         category_id=category_id,
         meta_id=meta_id,
+        recurring_id=recurring_id,
         source=Source(source),
     )
     acc.balance += delta_balance(tx_type, amount)
@@ -137,6 +176,7 @@ def record_expense(
     source: str = "manual",
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
 
@@ -157,6 +197,10 @@ def record_expense(
             expense under, in the same action.
         meta_id: The meta this purchase was for, named once on the day it
             happens (ADR-0046). Optional, and the ordinary case is None.
+        recurring_id: The repeating charge this payment settled, named by the
+            owner when he pays outside «Por pagar» (ADR-0057). Optional; without
+            it the payment settles nothing, because the amount alone never
+            decides.
 
     Returns:
         The persisted Transaction.
@@ -181,6 +225,7 @@ def record_expense(
         source,
         new_category,
         meta_id,
+        recurring_id,
     )
 
 
