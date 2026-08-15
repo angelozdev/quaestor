@@ -712,7 +712,7 @@ describe("015 — a payment may name the charge it settled", () => {
     listTransactions.mockReset().mockResolvedValue([])
   })
 
-  it("Saving an expense offers the marked charges of its category", async () => {
+  it("a payment already saved can still be pointed at the charge it settled", async () => {
     chargeMarks.mockResolvedValue([
       marked(),
       marked({ recurring_id: 43, name: "SOAT", fund_id: 8 }),
@@ -727,7 +727,7 @@ describe("015 — a payment may name the charge it settled", () => {
     expect(screen.getByRole("option", { name: "Ninguno, es un gasto aparte" })).toBeInTheDocument()
   })
 
-  it("A category with no marked charge offers nothing to settle", async () => {
+  it("editing in a category with no marked charge offers nothing to settle", async () => {
     chargeMarks.mockResolvedValue([marked({ category_id: 99 })])
     renderDialog(makeTransaction({ category_id: CARRO }))
 

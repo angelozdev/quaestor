@@ -262,12 +262,23 @@ export interface FundsSummary {
   n_behind: number
   set_aside: number
 }
+/**
+ * One fund inside the month's report.
+ *
+ * `asks`, `holds` and `spent` are in the fund's own `currency` — the charge's
+ * for a fund that fills one charge, pesos otherwise — the way a meta's are.
+ * `asks_cop` and `holds_cop` are the same figures in pesos, for the totals
+ * that add funds together.
+ */
 export interface FundReportLine {
   category_name: string
   asks: number
   holds: number
   spent: number
   on_track: boolean
+  currency: string
+  asks_cop: number
+  holds_cop: number
 }
 /** One meta inside the month's report — by meta, never folded into a category (AC-36). */
 export interface MetaReportLine {
@@ -342,6 +353,7 @@ export interface TransactionCreate {
   notes?: string | null
   tags?: string[]
   meta_id?: number | null
+  recurring_id?: number | null
 }
 export interface TransferCreate {
   from_account_id: number

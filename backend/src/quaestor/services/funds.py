@@ -948,7 +948,10 @@ def would_lose_its_fund(session: Session, recurring_id: int, year_month: str, **
     Asked *before* the edit is saved, so the screen can say what is about to
     happen in one step instead of reporting it afterwards (AC-8). The rule is
     not restated here: the proposed charge is measured by the same
-    `_why_not_markable` the marking itself uses, so the two can never drift.
+    `_can_still_keep_a_fund` the edit itself is judged by, so the two can never
+    drift. It is deliberately **not** `_why_not_markable` — that one also
+    refuses a charge landing this very month, which is the month a fund exists
+    for, so asking it here would drop the fund on the way to its own payment.
 
     Raises:
         MissingRate: no TRM is set.

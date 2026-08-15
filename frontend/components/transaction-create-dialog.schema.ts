@@ -14,6 +14,7 @@ export const txNormalSchema = z
     notes: optionalString,
     tags: z.array(z.string()),
     metaId: z.number().nullable(),
+    settlesCharge: z.number().nullable(),
   })
   .refine((d) => d.accountId !== null, {
     message: messages.required,

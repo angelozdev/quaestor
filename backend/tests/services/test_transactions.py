@@ -749,6 +749,23 @@ def test_a_payment_cannot_settle_a_switched_off_charge(session):
         )
 
 
+def test_money_coming_in_cannot_settle_a_charge(session):
+    acc = _make_account(session, balance=2_000_000_00)
+    charge = _a_charge(session)
+
+    with pytest.raises(ValidationError, match="only money going out"):
+        transactions.record_income(
+            session,
+            acc.id,
+            1_100_000_00,
+            "COP",
+            date(2026, 8, 15),
+            "Seguros Bolívar",
+            category_id=a_category(session, TxType.income),
+            recurring_id=charge.id,
+        )
+
+
 def test_a_payment_cannot_settle_a_charge_that_does_not_exist(session):
     acc = _make_account(session, balance=2_000_000_00)
 

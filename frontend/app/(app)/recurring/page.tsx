@@ -2,6 +2,7 @@
 
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { format } from "date-fns"
 import { useState } from "react"
 import { toast } from "sonner"
 import { CategoryField } from "@/components/category-field"
@@ -503,9 +504,15 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
   )
 }
 
-/** The month the screen is saving in, which is the one it is looking at. */
+/**
+ * The month the screen is saving in, which is the one it is looking at.
+ *
+ * Local, never UTC: from seven at night on the last day of the month a UTC
+ * reading already says the next one, and this screen would be marking charges
+ * into a month every other screen is not looking at.
+ */
 function thisMonth(): string {
-  return new Date().toISOString().slice(0, 7)
+  return format(new Date(), "yyyy-MM")
 }
 
 /**
@@ -579,7 +586,6 @@ export default function RecurringPage() {
     onSuccess: () => {
       toast.success("Vas a juntar mes a mes para este cobro")
       invalidate(qc, "recurringWrite")
-      void marks.refetch()
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })
@@ -589,7 +595,6 @@ export default function RecurringPage() {
     onSuccess: () => {
       toast.success("Dejaste de juntar para este cobro")
       invalidate(qc, "recurringWrite")
-      void marks.refetch()
     },
     onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })

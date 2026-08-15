@@ -8,6 +8,7 @@ import { EntitySelect } from "@/components/entity-select"
 import { FormField } from "@/components/form-field"
 import { MetaField } from "@/components/meta-field"
 import { MoneyInput } from "@/components/money-input"
+import { SettlesChargeField } from "@/components/settles-charge-field"
 import { TagChipsInput } from "@/components/tag-chips-input"
 import {
   type TxNormalValues,
@@ -53,6 +54,7 @@ const NORMAL_DEFAULTS: TxNormalValues = {
   notes: "",
   tags: [],
   metaId: null,
+  settlesCharge: null,
 }
 
 const TRANSFER_DEFAULTS: TxTransferValues = {
@@ -143,6 +145,7 @@ export function TransactionCreateDialog({
         notes: values.notes && values.notes.length > 0 ? values.notes : undefined,
         tags: values.tags.length > 0 ? values.tags : undefined,
         meta_id: values.type === "expense" ? values.metaId : null,
+        recurring_id: values.type === "expense" ? values.settlesCharge : null,
       })
     },
     onSuccess: () => done("Transacción creada"),
@@ -211,6 +214,7 @@ export function TransactionCreateDialog({
                         normalForm.setFieldValue("categoryId", null)
                         normalForm.setFieldValue("newCategory", "")
                         normalForm.setFieldValue("metaId", null)
+                        normalForm.setFieldValue("settlesCharge", null)
                       }}
                       items={TYPE_ITEMS}
                     />
@@ -264,6 +268,7 @@ export function TransactionCreateDialog({
                     onChange={(choice) => {
                       field.handleChange(choice.categoryId as never)
                       normalForm.setFieldValue("newCategory", choice.newCategory)
+                      normalForm.setFieldValue("settlesCharge", null)
                     }}
                     error={fieldError(field)}
                   />
@@ -274,16 +279,27 @@ export function TransactionCreateDialog({
                   type: state.values.type,
                   month: yearMonthOf(state.values.date),
                   metaId: state.values.metaId,
+                  categoryId: state.values.categoryId,
+                  settlesCharge: state.values.settlesCharge,
                 })}
               >
-                {({ type, month, metaId }) =>
+                {({ type, month, metaId, categoryId, settlesCharge }) =>
                   type === "expense" && month !== null ? (
-                    <MetaField
-                      id="tx-create-meta"
-                      month={month}
-                      value={metaId}
-                      onChange={(chosen) => normalForm.setFieldValue("metaId", chosen)}
-                    />
+                    <>
+                      <MetaField
+                        id="tx-create-meta"
+                        month={month}
+                        value={metaId}
+                        onChange={(chosen) => normalForm.setFieldValue("metaId", chosen)}
+                      />
+                      <SettlesChargeField
+                        id="tx-create-settles"
+                        month={month}
+                        categoryId={categoryId}
+                        value={settlesCharge}
+                        onChange={(chosen) => normalForm.setFieldValue("settlesCharge", chosen)}
+                      />
+                    </>
                   ) : null
                 }
               </normalForm.Subscribe>

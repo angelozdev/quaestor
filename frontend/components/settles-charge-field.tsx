@@ -12,10 +12,19 @@ import { Label } from "@/ui"
  * Only the marked ones are offered, and that is the whole point: a fund that
  * fills for a charge is the only thing a link can settle, so offering an
  * unmarked charge would promise something nothing acts on.
+ *
+ * The category is in the key because it is in the answer — the narrowing
+ * happens here rather than at the caller, so the entry cached under this key
+ * is the list it says it is. One query serves both the decision to show the
+ * field and the picker inside it; the second `useQuery` shares this entry
+ * instead of minting a parallel one that goes stale on its own.
  */
 const settleOptions = (month: string, categoryId: number | null) => ({
   queryKey: [...qk.chargeMarks(month), "settle", categoryId ?? "none"] as const,
-  queryFn: async () => (await chargeMarks(month)).filter((mark) => mark.fund_id !== null),
+  queryFn: async () =>
+    (await chargeMarks(month))
+      .filter((mark) => mark.fund_id !== null && mark.category_id === categoryId)
+      .map((mark) => ({ id: mark.recurring_id, name: mark.name })),
 })
 
 /**
@@ -42,8 +51,7 @@ export function SettlesChargeField({
   onChange: (recurringId: number | null) => void
 }) {
   const options = useQuery(settleOptions(month, categoryId))
-  const offered = (options.data ?? []).filter((mark) => mark.category_id === categoryId)
-  if (offered.length === 0) return null
+  if ((options.data ?? []).length === 0) return null
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>¿Este pago salda un cobro?</Label>
@@ -53,8 +61,7 @@ export function SettlesChargeField({
         onChange={onChange}
         allowNullLabel="Ninguno, es un gasto aparte"
         placeholder="Ninguno, es un gasto aparte"
-        queryKey={[...settleOptions(month, categoryId).queryKey, "select"] as const}
-        queryFn={async () => offered.map((mark) => ({ id: mark.recurring_id, name: mark.name }))}
+        {...settleOptions(month, categoryId)}
       />
       <p className="text-xs" style={{ color: "var(--muted-foreground)" }}>
         Si eliges uno, su caja se vacía y empieza a juntar para el cobro siguiente.

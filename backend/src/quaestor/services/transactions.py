@@ -241,6 +241,7 @@ def record_income(
     source: str = "manual",
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -259,12 +260,18 @@ def record_income(
         source: Origin of the transaction ("manual", "agent", or "import").
         new_category: Name of an income category to create and file this
             income under, in the same action.
+        meta_id: Refused for income, the way `refuse_bad_meta` has always
+            refused it.
+        recurring_id: Refused for income. It is accepted as an argument so the
+            refusal happens rather than the link being dropped in silence —
+            money coming in settles nothing (AC-5).
 
     Returns:
         The persisted Transaction.
 
     Raises:
-        ValidationError: Invalid amount, currency mismatch, or any refusal from
+        ValidationError: Invalid amount, currency mismatch, a meta or a charge
+            named by money coming in, or any refusal from
             `categories.resolve_for_movement` — no category, both categories,
             a name already taken, or a category missing, archived or of the
             wrong direction.
@@ -283,6 +290,7 @@ def record_income(
         source,
         new_category,
         meta_id,
+        recurring_id,
     )
 
 

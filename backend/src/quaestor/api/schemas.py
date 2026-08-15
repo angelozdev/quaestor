@@ -147,6 +147,7 @@ class TransactionCreate(BaseModel):
     source: str = "manual"
     tags: list[str] | None = None
     meta_id: int | None = None
+    recurring_id: int | None = None
 
 
 class TransferIn(BaseModel):
@@ -487,6 +488,9 @@ class FundReportLineOut(BaseModel):
     holds: int
     spent: int
     on_track: bool
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 class MetaReportLineOut(BaseModel):

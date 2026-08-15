@@ -148,13 +148,13 @@ export default function ReportsPage() {
                     key: "asks",
                     header: "Pidió",
                     align: "right",
-                    render: (f) => formatCents(f.asks, "COP"),
+                    render: (f) => formatCents(f.asks, f.currency),
                   },
                   {
                     key: "spent",
                     header: "Gastado",
                     align: "right",
-                    render: (f) => formatCents(f.spent, "COP"),
+                    render: (f) => formatCents(f.spent, f.currency),
                   },
                   {
                     key: "holds",
@@ -165,7 +165,7 @@ export default function ReportsPage() {
                         className="font-medium"
                         style={{ color: f.on_track ? undefined : "var(--expense)" }}
                       >
-                        {formatCents(f.holds, "COP")}
+                        {formatCents(f.holds, f.currency)}
                       </span>
                     ),
                   },

@@ -5,19 +5,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fieldUnder } from "@/tests/factories"
 import { TransactionCreateDialog } from "./transaction-create-dialog"
 
-const { createTransaction, createTransfer, listAccounts, listCategories, listMetas } = vi.hoisted(
-  () => ({
+const { createTransaction, createTransfer, listAccounts, listCategories, listMetas, chargeMarks } =
+  vi.hoisted(() => ({
     createTransaction: vi.fn(),
     createTransfer: vi.fn(),
     listAccounts: vi.fn().mockResolvedValue([]),
     listCategories: vi.fn().mockResolvedValue([]),
     listMetas: vi.fn().mockResolvedValue([]),
-  }),
-)
+    chargeMarks: vi.fn().mockResolvedValue([]),
+  }))
 vi.mock("@/lib/api/transactions", () => ({ createTransaction, createTransfer }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/metas", () => ({ listMetas }))
+vi.mock("@/lib/api/funds", () => ({ chargeMarks }))
 
 const ACCOUNT = {
   id: 1,
@@ -214,6 +215,95 @@ describe("TransactionCreateDialog meta link", () => {
     await user.click(screen.getByRole("option", { name: "Ingreso" }))
 
     expect(screen.queryByRole("combobox", { name: /Es la compra de una meta/ })).toBeNull()
+  })
+})
+
+/**
+ * AC-5 — the offer to name the charge a payment settled belongs to the screen
+ * that saves the payment, which is where the owner is when they know.
+ */
+describe("AC-5 — a hand-typed payment may name the charge it settled", () => {
+  const CARRO = { id: 7, name: "Carro", is_income: false }
+  const marked = (over: Record<string, unknown> = {}) => ({
+    recurring_id: 42,
+    category_id: CARRO.id,
+    name: "Seguro",
+    currency: "COP",
+    can_be_marked: false,
+    why_not: null,
+    fund_id: 7,
+    ...over,
+  })
+
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME_CATEGORY] : [CARRO]),
+      )
+    listAccounts.mockReset().mockResolvedValue([ACCOUNT])
+    listMetas.mockReset().mockResolvedValue([])
+    createTransaction.mockReset().mockResolvedValue(undefined)
+    chargeMarks.mockReset().mockResolvedValue([])
+  })
+
+  async function chooseCarro(user: ReturnType<typeof userEvent.setup>) {
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+    await user.click(await screen.findByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: "Carro" }))
+  }
+
+  it("Saving an expense offers the marked charges of its category", async () => {
+    chargeMarks.mockResolvedValue([
+      marked(),
+      marked({ recurring_id: 43, name: "SOAT", fund_id: 8 }),
+    ])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+
+    await user.click(await screen.findByRole("combobox", { name: /salda un cobro/ }))
+
+    expect(await screen.findByRole("option", { name: "Seguro" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "SOAT" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "Ninguno, es un gasto aparte" })).toBeInTheDocument()
+  })
+
+  it("A category with no marked charge offers nothing to settle", async () => {
+    chargeMarks.mockResolvedValue([marked({ category_id: 99 })])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+
+    await waitFor(() => expect(chargeMarks).toHaveBeenCalled())
+
+    expect(screen.queryByRole("combobox", { name: /salda un cobro/ })).toBeNull()
+  })
+
+  it("sends the chosen charge with the payment", async () => {
+    chargeMarks.mockResolvedValue([marked()])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+
+    await user.click(screen.getByRole("combobox", { name: "Cuenta *" }))
+    await user.click(screen.getByRole("option", { name: "Bancolombia" }))
+    await user.type(screen.getByLabelText("Monto * (COP)"), "110000")
+    await user.click(await screen.findByRole("combobox", { name: /salda un cobro/ }))
+    await user.click(await screen.findByRole("option", { name: "Seguro" }))
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({ recurring_id: 42 }))
+  })
+
+  it("never asks money coming in which charge it settled", async () => {
+    chargeMarks.mockResolvedValue([marked()])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+    expect(await screen.findByRole("combobox", { name: /salda un cobro/ })).toBeVisible()
+
+    await user.click(screen.getByRole("combobox", { name: "Tipo *" }))
+    await user.click(screen.getByRole("option", { name: "Ingreso" }))
+
+    expect(screen.queryByRole("combobox", { name: /salda un cobro/ })).toBeNull()
   })
 })
 

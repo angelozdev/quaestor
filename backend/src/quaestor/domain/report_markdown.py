@@ -42,7 +42,10 @@ def render_markdown(report: MonthlyReport) -> str:
         lines.append("|---|---|---|---|---|")
         for f in report.funds:
             status = "on track" if f.on_track else "behind"
-            lines.append(f"| {f.category_name} | {money(f.asks)} | {money(f.holds)} | {money(f.spent)} | {status} |")
+            lines.append(
+                f"| {f.category_name} | {money(f.asks, f.currency)} | {money(f.holds, f.currency)} "
+                f"| {money(f.spent, f.currency)} | {status} |"
+            )
     else:
         lines.append("_No funds this month._")
     lines.append("")
