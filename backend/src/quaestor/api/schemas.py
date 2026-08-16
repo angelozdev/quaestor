@@ -423,11 +423,23 @@ class FundLineOut(BaseModel):
 
 
 class ChargeEditCost(BaseModel):
-    """What saving an edit to a charge's rhythm would cost the fund it carries."""
+    """What saving an edit to a charge would cost the fund it carries.
+
+    Every field here can leave the charge with no turn to save for, or with no
+    month to save in — the two lasting refusals. They travel together because a
+    question that carries only some of them answers about a charge the owner is
+    not saving: asking about the cadence alone let an end date delete a fund
+    with no warning at all, which is the one thing AC-8 promises cannot happen.
+
+    Direction is absent on purpose: the edit form cannot turn an expense into
+    money coming in, so there is no way for the third refusal to arrive here.
+    """
 
     month: str
     interval_unit: str | None = None
     interval_count: int | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
 
 
 class ChargeEditCostOut(BaseModel):

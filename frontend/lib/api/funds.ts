@@ -25,7 +25,20 @@ export const openTurns = (recurringId: number) =>
 export const markCharge = (recurringId: number, month: string) =>
   post<Fund>(`/funds/charges/${recurringId}${qs({ month })}`, {})
 export const unmarkCharge = (recurringId: number) => del<void>(`/funds/charges/${recurringId}`)
+/**
+ * What saving an edit would cost the charge's fund, asked before it is saved.
+ *
+ * Every field that can leave the charge with no turn to save for, or no month
+ * to save in, has to travel — asking about the cadence alone let an end date
+ * delete a fund in silence.
+ */
 export const chargeEditCost = (
   recurringId: number,
-  body: { month: string; interval_unit?: string; interval_count?: number },
+  body: {
+    month: string
+    interval_unit?: string
+    interval_count?: number
+    start_date?: string
+    end_date?: string | null
+  },
 ) => post<{ would_lose_its_fund: boolean }>(`/funds/charges/${recurringId}/edit-cost`, body)

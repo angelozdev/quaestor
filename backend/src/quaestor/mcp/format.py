@@ -419,7 +419,7 @@ def money_available_card(view) -> str:
         f"- Income: {money(view.income, 'COP')}",
     ]
     for fund in view.funds:
-        lines.append(f"- Fund {fund.name}: −{money(fund.asks, 'COP')}")
+        lines.append(f"- Fund {fund.name}: −{money(fund.asks_cop, 'COP')}")
     for meta in view.metas:
         if meta.asks_cop:
             lines.append(f"- Meta {_meta_label(meta)}: −{money(meta.asks_cop, 'COP')}")

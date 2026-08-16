@@ -165,11 +165,20 @@ function chargeLine(
   return `${charge.name} — ${when} · ${figure}`
 }
 
-/** Why a fund that fills for charges is asking nothing at all this month. */
+/**
+ * Why a fund that fills for charges is asking nothing at all this month.
+ *
+ * A fund that hangs off one charge gets its own sentence. Its category may hold
+ * plenty of other charges, so saying the category ran out would be false; what
+ * ran out is this charge's turns. And the way out is the box on Recurrentes,
+ * not a delete button that no longer carries that name.
+ */
 function nothingToSetAside(fund: FundStatus): string {
-  return fund.has_repeating_charges
-    ? "Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados."
-    : "La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre. Bórralo, o registra un cobro."
+  if (fund.has_repeating_charges)
+    return "Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados."
+  if (fund.recurring_id !== null)
+    return `${fund.name} ya no vuelve a cobrar, así que pedirá 0 siempre. Destíldalo en Recurrentes.`
+  return "La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre. Bórralo, o registra un cobro."
 }
 
 /**

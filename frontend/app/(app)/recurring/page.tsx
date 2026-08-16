@@ -277,6 +277,8 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
         month: thisMonth(),
         interval_unit: value.intervalUnit,
         interval_count: value.intervalCount,
+        start_date: value.startDate,
+        end_date: value.endDate ? value.endDate : null,
       })
       if (cost.would_lose_its_fund) {
         setWarnedAbout(value)

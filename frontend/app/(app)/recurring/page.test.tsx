@@ -530,6 +530,28 @@ describe("015 — a fund may hang off the charge it fills", () => {
     expect(updateRecurring).not.toHaveBeenCalled()
   })
 
+  it("The question carries every field that could cost the fund, not only the cadence", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf({ fund_id: 7 })])
+    chargeEditCost.mockResolvedValue({ would_lose_its_fund: false })
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Editar" }))
+    await user.click(await screen.findByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(chargeEditCost).toHaveBeenCalled())
+    expect(chargeEditCost).toHaveBeenCalledWith(
+      SEGURO.id,
+      expect.objectContaining({
+        interval_unit: SEGURO.interval_unit,
+        interval_count: SEGURO.interval_count,
+        start_date: SEGURO.start_date,
+        end_date: SEGURO.end_date ?? null,
+      }),
+    )
+  })
+
   it("Cancelling that warning leaves the charge and its fund alone", async () => {
     listRecurring.mockResolvedValue([SEGURO])
     chargeMarks.mockResolvedValue([markOf({ fund_id: 7 })])

@@ -1366,6 +1366,43 @@ def test_the_screen_can_ask_what_an_edit_would_cost_before_saving_it(session):
     assert funds.fund_for_charge(session, charge_id) is not None
 
 
+def test_an_end_date_that_leaves_no_turn_is_warned_about_before_it_is_saved(session):
+    """The door AC-8 promises an announcement for, which was closing in silence.
+
+    Saving an end date behind the next turn removes the fund the same way a
+    monthly rhythm does — CP7 measured the fund gone after the save. The rule
+    always knew; the question the screen asked did not carry the field, so it
+    answered about a charge whose end date the owner had not touched.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2025, 7, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+    funds.mark_charge(session, charge_id, "2026-08")
+    ends_before_the_next_turn = date(2025, 12, 31)
+
+    assert funds.would_lose_its_fund(session, charge_id, "2026-08", end_date=ends_before_the_next_turn)
+    assert funds.fund_for_charge(session, charge_id) is not None
+
+    recurring.update_recurring(session, charge_id, end_date=ends_before_the_next_turn, today=date(2026, 8, 15))
+
+    assert funds.fund_for_charge(session, charge_id) is None
+
+
+def test_a_start_date_moved_past_the_charge_is_warned_about_too(session):
+    """The same door, reached by the other date the form can edit.
+
+    A start moved beyond the turn being saved for changes which turn that is,
+    and can leave the charge with none inside the fund's reach. It travels with
+    the end date rather than being argued about one field at a time.
+    """
+    charge_id, _ = _marked(session)
+
+    assert not funds.would_lose_its_fund(session, charge_id, "2026-08", start_date=date(2027, 7, 5))
+    assert funds.would_lose_its_fund(
+        session, charge_id, "2026-08", start_date=date(2026, 9, 5), interval_unit="month", interval_count=1
+    )
+
+
 def test_asking_what_an_edit_would_cost_says_no_when_nothing_is_marked(session):
     category = _category(session, "Carro")
     _obligation(session, category, 1_100_000_00, date(2027, 7, 5), unit="year", name="Seguro")
