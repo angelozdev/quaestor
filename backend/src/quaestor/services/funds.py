@@ -514,10 +514,16 @@ def fund_on_category(session: Session, category_id: int) -> Fund | None:
 class FundFold:
     """What every fund does to one month, folded once.
 
-    `lines` is what each fund reports; `overspill` is what they spent past what
-    they had, which is the only part of a fund's month that leaves the money
-    available (AC-13). Both come out of one walk, because walking the funds is
-    the dominant cost of the whole read path.
+    `lines` is what each fund reports, each in its own currency; `overspill` is
+    what they spent past what they had, which is the only part of a fund's month
+    that leaves the money available (AC-13). Both come out of one walk, because
+    walking the funds is the dominant cost of the whole read path.
+
+    **`overspill` is pesos and the lines are not.** It is a sum across funds
+    that a peso term subtracts, so a dollar fund's excess is converted before it
+    joins — the same seam `asks_cop` crosses, for the same reason: a total that
+    adds funds together can never depend on what currency each one speaks
+    (AC-11, ADR-0031).
     """
 
     lines: list[FundStatus]
@@ -529,7 +535,9 @@ def fold(agg: MonthAggregate) -> FundFold:
     walked = {fund.id: _walk(agg, fund) for fund in agg.funds}
     return FundFold(
         lines=[_status(agg, fund, walked[fund.id]) for fund in agg.funds],
-        overspill=sum(_overspill(walked[fund.id]) for fund in agg.funds),
+        overspill=sum(
+            to_cop_cents(_overspill(walked[fund.id]), _name_and_currency(agg, fund)[1], agg.trm) for fund in agg.funds
+        ),
     )
 
 

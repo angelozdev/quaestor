@@ -1175,6 +1175,55 @@ def _marked(session, name="Seguro", amount=1_100_000_00, start=date(2027, 7, 5),
     return charge_id, funds.mark_charge(session, charge_id, "2026-08")
 
 
+def test_a_payment_that_settles_a_marked_charge_leaves_the_month_once(session):
+    """AC-9 stated as the month's own arithmetic, which nothing was asserting.
+
+    Eight tests hold the aggregate's half — the payment does not drain its
+    category's fund. What the *month* does with the same payment was held by
+    none: `_uncovered_posted` skips it because its charge carries a fund, and
+    deleting that skip left 1213 tests green. So the peso would leave twice,
+    once as the fund's ask and once as spending nothing covers.
+
+    The assertion is the promise itself rather than a figure: whatever the fund
+    still asks plus whatever the month could not cover adds to the payment, and
+    to nothing more.
+    """
+    charge_id, _ = _marked(session)
+    transactions.record_expense(
+        session,
+        _default_account(session),
+        1_100_000_00,
+        "COP",
+        date(2026, 8, 20),
+        "Seguros Bolívar",
+        category_id=_category_named(session, "Carro"),
+        recurring_id=charge_id,
+    )
+
+    month = month_service.available(session, "2026-08")
+
+    assert month.uncovered + sum(line.asks_cop for line in month.funds) == 1_100_000_00
+
+
+def test_a_marked_charge_is_not_owed_again_in_the_month_it_lands(session):
+    """The obligation half of the same exclusion, also asserted by nothing.
+
+    A charge that carries a fund is already being asked for by that fund, month
+    after month. `_uncovered` skips it so the month does not *also* count the
+    whole amount as a bill falling due — and until this feature it skipped by
+    category, which is why the skip now has to name the charge.
+    """
+    charge_id, _ = _marked(session)
+    lands_in = "2027-07"
+
+    with_a_fund = month_service.available(session, lands_in).uncovered
+    funds.unmark_charge(session, charge_id)
+    without_one = month_service.available(session, lands_in).uncovered
+
+    assert with_a_fund == 0
+    assert without_one == 1_100_000_00
+
+
 def test_a_fund_is_not_dropped_in_the_month_its_charge_finally_arrives(session):
     """The month a charge lands is the month the fund existed for.
 
