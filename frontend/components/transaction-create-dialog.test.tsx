@@ -5,20 +5,28 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { fieldUnder } from "@/tests/factories"
 import { TransactionCreateDialog } from "./transaction-create-dialog"
 
-const { createTransaction, createTransfer, listAccounts, listCategories, listMetas, chargeMarks } =
-  vi.hoisted(() => ({
-    createTransaction: vi.fn(),
-    createTransfer: vi.fn(),
-    listAccounts: vi.fn().mockResolvedValue([]),
-    listCategories: vi.fn().mockResolvedValue([]),
-    listMetas: vi.fn().mockResolvedValue([]),
-    chargeMarks: vi.fn().mockResolvedValue([]),
-  }))
+const {
+  createTransaction,
+  createTransfer,
+  listAccounts,
+  listCategories,
+  listMetas,
+  chargeMarks,
+  openTurns,
+} = vi.hoisted(() => ({
+  createTransaction: vi.fn(),
+  createTransfer: vi.fn(),
+  listAccounts: vi.fn().mockResolvedValue([]),
+  listCategories: vi.fn().mockResolvedValue([]),
+  listMetas: vi.fn().mockResolvedValue([]),
+  chargeMarks: vi.fn().mockResolvedValue([]),
+  openTurns: vi.fn().mockResolvedValue([]),
+}))
 vi.mock("@/lib/api/transactions", () => ({ createTransaction, createTransfer }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/metas", () => ({ listMetas }))
-vi.mock("@/lib/api/funds", () => ({ chargeMarks }))
+vi.mock("@/lib/api/funds", () => ({ chargeMarks, openTurns }))
 
 const ACCOUNT = {
   id: 1,
@@ -245,6 +253,7 @@ describe("AC-5 — a hand-typed payment may name the charge it settled", () => {
     listMetas.mockReset().mockResolvedValue([])
     createTransaction.mockReset().mockResolvedValue(undefined)
     chargeMarks.mockReset().mockResolvedValue([])
+    openTurns.mockReset().mockResolvedValue(["2026-11-05"])
   })
 
   async function chooseCarro(user: ReturnType<typeof userEvent.setup>) {
@@ -292,6 +301,49 @@ describe("AC-5 — a hand-typed payment may name the charge it settled", () => {
 
     await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
     expect(createTransaction).toHaveBeenCalledWith(expect.objectContaining({ recurring_id: 42 }))
+  })
+
+  it("With one turn open it asks nothing and sends that turn", async () => {
+    chargeMarks.mockResolvedValue([marked()])
+    openTurns.mockResolvedValue(["2026-11-05"])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+
+    await user.click(screen.getByRole("combobox", { name: "Cuenta *" }))
+    await user.click(screen.getByRole("option", { name: "Bancolombia" }))
+    await user.type(screen.getByLabelText("Monto * (COP)"), "110000")
+    await user.click(await screen.findByRole("combobox", { name: /salda un cobro/ }))
+    await user.click(await screen.findByRole("option", { name: "Seguro" }))
+
+    expect(screen.queryByRole("combobox", { name: /Cuál vencimiento/ })).toBeNull()
+
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ recurring_id: 42, settles_due: "2026-11-05" }),
+    )
+  })
+
+  it("With more than one turn open it asks which, and sends the one chosen", async () => {
+    chargeMarks.mockResolvedValue([marked()])
+    openTurns.mockResolvedValue(["2026-11-05", "2027-05-05"])
+    const user = userEvent.setup()
+    await chooseCarro(user)
+
+    await user.click(screen.getByRole("combobox", { name: "Cuenta *" }))
+    await user.click(screen.getByRole("option", { name: "Bancolombia" }))
+    await user.type(screen.getByLabelText("Monto * (COP)"), "110000")
+    await user.click(await screen.findByRole("combobox", { name: /salda un cobro/ }))
+    await user.click(await screen.findByRole("option", { name: "Seguro" }))
+
+    await user.click(await screen.findByRole("combobox", { name: /Cuál vencimiento/ }))
+    await user.click(await screen.findByRole("option", { name: "5 de mayo de 2027" }))
+    await user.click(screen.getByRole("button", { name: "Crear" }))
+
+    await waitFor(() => expect(createTransaction).toHaveBeenCalledTimes(1))
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ settles_due: "2027-05-05" }),
+    )
   })
 
   it("never asks money coming in which charge it settled", async () => {

@@ -10,6 +10,18 @@ export function formatDate(value: string): string {
 }
 
 /**
+ * Today, as the owner's calendar has it, in the wire format ("yyyy-MM-dd").
+ *
+ * Local and never UTC. `new Date().toISOString()` is the UTC day, so from seven
+ * at night in Bogotá it is already tomorrow — and a form that opens proposing
+ * tomorrow's date writes the wrong day onto every movement typed in the
+ * evening, silently, for anyone who does not notice the box.
+ */
+export function todayHere(): string {
+  return format(new Date(), "yyyy-MM-dd")
+}
+
+/**
  * True when the given ISO date is strictly before today (local time).
  * Used to flag planned payments that are past due.
  */

@@ -115,6 +115,35 @@ Guardando gasto · 🚗 Carro · -$1.100
 Si nombra un cobro, su caja se vacía y arranca el ciclo siguiente. Si dice
 «ninguno», ninguna caja de cobro se toca.
 
+**El pago dice también cuál vencimiento saldó**, y la app solo pregunta cuando
+hay más de uno abierto:
+
+```
+   ¿Este pago salda un cobro?
+     (•) Club de vinos
+
+   ¿Cuál vencimiento?
+     (•) 5 de noviembre de 2026
+     ( ) 5 de mayo de 2027
+```
+
+Con un solo vencimiento abierto —el caso corriente, la cuenta que acaba de
+llegar— se elige solo y no se pregunta nada.
+
+**Sin esto la caja se olvida al mes siguiente.** Pagás el Club de vinos en
+agosto por el cobro de noviembre; en agosto la caja lo entiende y arranca el
+ciclo siguiente, pero en septiembre vuelve a pedirte los $600.000 del cobro que
+ya pagaste, y en octubre otra vez — porque para saber si estaba pagado miraba
+solo el mes que te estaba mostrando. El vencimiento saldado queda saldado en
+todos los meses que lo lean.
+
+Y resuelve el atrasado por el mismo camino: si el seguro vencía en julio y lo
+pagás en agosto, nombrás el vencimiento de julio y la caja junta para el del año
+siguiente, no para el subsiguiente.
+
+Si borrás el movimiento, el vencimiento vuelve a estar sin pagar y la caja
+retoma. Decidido por el dueño el 2026-08-15, tras el CP7 (ADR-0058).
+
 **Sin esto la caja miente.** Pagás el seguro desde el banco, lo anotás a mano, y
 la caja sigue creyendo que tiene los $1.100 con la plata ya gastada — el año
 siguiente no te pide nada y llegás sin nada. La alternativa —adivinar que

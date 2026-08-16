@@ -1175,6 +1175,109 @@ def _marked(session, name="Seguro", amount=1_100_000_00, start=date(2027, 7, 5),
     return charge_id, funds.mark_charge(session, charge_id, "2026-08")
 
 
+def _line_for(session, charge_id, year_month):
+    """What the fund of one charge reports in one month."""
+    return funds.fund_status(session, funds.fund_for_charge(session, charge_id).id, year_month)
+
+
+def _paid_by_hand(session, charge_id, category_id, amount, on, settles_due):
+    return transactions.record_expense(
+        session,
+        _default_account(session),
+        amount,
+        "COP",
+        on,
+        "Pago",
+        category_id=category_id,
+        recurring_id=charge_id,
+        settles_due=settles_due,
+    )
+
+
+def test_an_early_payment_is_still_settled_the_month_after_it_was_made(session):
+    """The defect CP7 found, and the reason settlement stopped being monthly.
+
+    Settlement used to be counted inside the month being read. A charge paid in
+    August was seen in August and forgotten in September, which walked straight
+    back to the turn already paid and asked the owner for it again — twice, for
+    two months, out of money he had already spent. Naming the turn makes the
+    answer the same in every month that reads it (ADR-0058).
+    """
+    category = _category(session, "Suscripciones")
+    _obligation(session, category, 600_000_00, date(2026, 11, 5), unit="month", count=6, name="Club")
+    charge_id = _recurring_id(session, "Club")
+    funds.mark_charge(session, charge_id, "2026-08")
+
+    _paid_by_hand(session, charge_id, category, 600_000_00, date(2026, 8, 20), date(2026, 11, 5))
+
+    for month in ("2026-08", "2026-09", "2026-10", "2026-11"):
+        line = _line_for(session, charge_id, month)
+        assert line.charges[0].charge_month == "2027-05", f"{month} went back to a turn already paid"
+
+
+def test_a_late_payment_moves_the_fund_on_by_one_cycle_and_not_two(session):
+    """The mirror of the same defect, which AC-5 names in the same breath.
+
+    A charge due in July and paid by hand in August could not be told apart
+    from one paid early, so the fund skipped the cycle it was owed and saved for
+    the year after next — a date a year wrong, at less than half the figure the
+    month needed.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2027, 7, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+    funds.mark_charge(session, charge_id, "2026-08")
+
+    _paid_by_hand(session, charge_id, category, 1_100_000_00, date(2027, 8, 10), date(2027, 7, 5))
+
+    assert _line_for(session, charge_id, "2027-08").charges[0].charge_month == "2028-07"
+
+
+def test_deleting_the_payment_leaves_the_turn_waiting_to_be_saved_for_again(session):
+    """Withdrawing the answer is not calling off the charge.
+
+    A turn the owner applied a payment to goes back to unpaid when that movement
+    is deleted — the row goes with it. Closing it as skipped instead, which is
+    what a deleted engine charge does, would tell the fund to stop saving for a
+    bill still coming.
+    """
+    category = _category(session, "Suscripciones")
+    _obligation(session, category, 600_000_00, date(2026, 11, 5), unit="month", count=6, name="Club")
+    charge_id = _recurring_id(session, "Club")
+    funds.mark_charge(session, charge_id, "2026-08")
+    paid = _paid_by_hand(session, charge_id, category, 600_000_00, date(2026, 8, 20), date(2026, 11, 5))
+    assert _line_for(session, charge_id, "2026-09").charges[0].charge_month == "2027-05"
+
+    transactions.delete_transaction(session, paid.id)
+
+    assert _line_for(session, charge_id, "2026-09").charges[0].charge_month == "2026-11"
+
+
+def test_a_turn_the_charge_never_falls_due_on_cannot_be_settled(session):
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2027, 7, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+
+    with pytest.raises(ValidationError, match="never falls due"):
+        _paid_by_hand(session, charge_id, category, 1_100_000_00, date(2026, 8, 20), date(2027, 7, 6))
+
+
+def test_a_payment_cannot_name_a_turn_without_naming_the_charge(session):
+    category = _category(session, "Carro")
+
+    with pytest.raises(ValidationError, match="without naming the charge"):
+        transactions.record_expense(
+            session,
+            _default_account(session),
+            1_100_000_00,
+            "COP",
+            date(2026, 8, 20),
+            "Pago",
+            category_id=category,
+            settles_due=date(2027, 7, 5),
+        )
+
+
 def test_a_payment_that_settles_a_marked_charge_leaves_the_month_once(session):
     """AC-9 stated as the month's own arithmetic, which nothing was asserting.
 

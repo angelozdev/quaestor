@@ -354,6 +354,7 @@ export interface TransactionCreate {
   tags?: string[]
   meta_id?: number | null
   recurring_id?: number | null
+  settles_due?: string | null
 }
 export interface TransferCreate {
   from_account_id: number
@@ -372,6 +373,7 @@ export interface TransactionUpdate {
   tags?: string[]
   meta_id?: number | null
   recurring_id?: number | null
+  settles_due?: string | null
 }
 export interface PlanPaymentCreate {
   payee: string

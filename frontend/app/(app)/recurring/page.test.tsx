@@ -42,7 +42,13 @@ vi.mock("@/lib/api/recurring", () => ({
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/fx", () => ({ getFx }))
-vi.mock("@/lib/api/funds", () => ({ chargeMarks, markCharge, unmarkCharge, chargeEditCost }))
+vi.mock("@/lib/api/funds", () => ({
+  chargeMarks,
+  markCharge,
+  unmarkCharge,
+  chargeEditCost,
+  openTurns: vi.fn().mockResolvedValue([]),
+}))
 vi.mock("sonner", () => ({ toast }))
 
 import RecurringPage from "./page"

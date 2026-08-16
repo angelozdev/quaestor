@@ -148,6 +148,7 @@ class TransactionCreate(BaseModel):
     tags: list[str] | None = None
     meta_id: int | None = None
     recurring_id: int | None = None
+    settles_due: Date | None = None
 
 
 class TransferIn(BaseModel):
@@ -250,7 +251,8 @@ class TransferOut(BaseModel):
 class TransactionUpdate(BaseModel):
     """Edit of a movement. Omitting `meta_id` leaves the link alone; sending
     null removes it, and the category's fund takes the purchase back (AC-28).
-    `recurring_id` works the same way for the charge this payment settled."""
+    `recurring_id` works the same way for the charge this payment settled, and
+    `settles_due` for which of that charge's turns it paid (ADR-0058)."""
 
     payee: str | None = None
     notes: str | None = None
@@ -259,6 +261,7 @@ class TransactionUpdate(BaseModel):
     tags: list[str] | None = None
     meta_id: int | None = None
     recurring_id: int | None = None
+    settles_due: Date | None = None
 
 
 class CorrectionIn(BaseModel):

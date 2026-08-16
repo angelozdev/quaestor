@@ -272,6 +272,30 @@ Scenario: A dollar payment settles its dollar charge without passing through pes
   When the user records an expense of 600.00 USD in category "Tecnología" settling "Opal"
   Then the fund for "Opal" says the charge lands in 2028-08
   And the fund for "Opal" asks 25.00 USD this month
+
+@backend
+Scenario: The charge stays settled the month after it was paid
+  Given a recurring charge "Club de vinos" on "Restaurantes" of 600000.00 COP every 6 months, next due 2026-11
+  And "Club de vinos" is marked to be saved for
+  When the user records an expense of 600000.00 COP in category "Restaurantes" settling "Club de vinos"
+  Then the fund for "Club de vinos" says the charge lands in 2027-05
+  And in 2026-09 the fund for "Club de vinos" says the charge lands in 2027-05
+  And in 2026-10 the fund for "Club de vinos" says the charge lands in 2027-05
+
+@backend
+Scenario: A payment made after the charge fell due moves the fund on by one cycle
+  Given a recurring charge "Seguro" on "Carro" of 1100000.00 COP every year, next due 2027-07
+  And "Seguro" is marked to be saved for
+  When the user records an expense of 1100000.00 COP in 2027-08 in category "Carro" settling the 2027-07 turn of "Seguro"
+  Then in 2027-08 the fund for "Seguro" says the charge lands in 2028-07
+
+@backend
+Scenario: Deleting the payment leaves the charge waiting to be saved for again
+  Given a recurring charge "Club de vinos" on "Restaurantes" of 600000.00 COP every 6 months, next due 2026-11
+  And "Club de vinos" is marked to be saved for
+  And the user records an expense of 600000.00 COP in category "Restaurantes" settling "Club de vinos"
+  When the user deletes that payment
+  Then in 2026-09 the fund for "Club de vinos" says the charge lands in 2026-11
 ```
 
 ```gherkin
@@ -288,6 +312,20 @@ Scenario: A category with no marked charge offers nothing to settle
   And a category "Mercado" holding no marked charge
   When the owner records an expense in "Mercado"
   Then the owner is offered nothing to settle
+
+Scenario: With one turn open it asks nothing and sends that turn
+  Given the app is open
+  And a category "Carro" holding the marked charge "Seguro" with one turn open
+  When the owner records an expense in "Carro" settling "Seguro"
+  Then the owner is not asked which turn it settled
+  And the payment is written down against the one open turn
+
+Scenario: With more than one turn open it asks which, and sends the one chosen
+  Given the app is open
+  And a category "Carro" holding the marked charge "Seguro" with two turns open
+  When the owner records an expense in "Carro" settling "Seguro"
+  Then the owner is asked which turn it settled
+  And the payment is written down against the turn the owner chose
 ```
 
 ## AC-6 — The migration marks both charges, and the month's figure does not move

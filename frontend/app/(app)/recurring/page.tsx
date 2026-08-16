@@ -34,7 +34,7 @@ import {
   type IntervalUnit,
   type Recurring,
 } from "@/lib/api/types"
-import { hasEnded } from "@/lib/date"
+import { hasEnded, todayHere } from "@/lib/date"
 import {
   amountForAccount,
   convertCents,
@@ -136,7 +136,7 @@ const BLANK_CHARGE: RecurringCreateValues = {
  * how the edit dialog opened blank over the charge it was asked about.
  */
 function chargeStartingToday(): RecurringCreateValues {
-  return { ...BLANK_CHARGE, startDate: new Date().toISOString().slice(0, 10) }
+  return { ...BLANK_CHARGE, startDate: todayHere() }
 }
 
 /** A charge already registered, as the boxes that edit it. */

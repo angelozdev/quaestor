@@ -15,10 +15,12 @@ service for it is what makes an orphan impossible to assert into existence.
 
 from __future__ import annotations
 
+from datetime import date
 from datetime import date as Date
 
 from quaestor.domain.models import Category, IntervalUnit, RecurringItem, RecurringMode, Transaction, TxType
-from quaestor.services import categories, recurring, transactions
+from quaestor.domain.rules import year_month_of
+from quaestor.services import categories, funds, recurring, transactions
 from sqlmodel import select
 
 from . import step
@@ -325,6 +327,9 @@ def when_record_expense_settling(world: World, amount: str, currency: str, categ
 
     The link is what settles, never the amount (AC-5): the same 1.100.000 spent
     on a fire extinguisher names nothing and settles nothing.
+
+    The turn is the soonest one still open, which is what the screen fills in
+    for the owner when a charge has only one (ADR-0058).
     """
     world.last_linked_id = world.attempt(
         transactions.record_expense,
@@ -336,8 +341,75 @@ def when_record_expense_settling(world: World, amount: str, currency: str, categ
         payee="Pago",
         category_id=_spending_category_id(world, category),
         recurring_id=_charge_id(world, charge),
+        settles_due=_soonest_open_turn(world, charge),
     )
     world.require_clean(f"recording the payment that settled {charge!r}")
+
+
+def _soonest_open_turn(world: World, charge: str) -> date:
+    """The next turn of this charge nobody has settled, as the screen offers it."""
+    open_turns = funds.open_turns_of(world.session, _charge_id(world, charge))
+    assert open_turns, f"{charge!r} has no turn left open to settle"
+    return open_turns[0]
+
+
+@step(
+    r"the user records an expense of (?P<amount>"
+    + _DEC
+    + r") "
+    + _CURRENCY
+    + r" in (?P<paid_in>\d{4}-\d{2}) in category \"(?P<category>[^\"]+)\""
+    r" settling the (?P<turn>\d{4}-\d{2}) turn of \"(?P<charge>[^\"]+)\""
+)
+def when_record_expense_settling_a_named_turn(
+    world: World, amount: str, currency: str, paid_in: str, category: str, turn: str, charge: str
+) -> None:
+    """A bill paid after it fell due, with the owner saying which turn it was.
+
+    The month of the payment and the month of the turn are different on purpose:
+    that gap is the whole case. Told which turn it answers for, the fund moves
+    on by one cycle rather than reading a late payment as an early one and
+    skipping a year (AC-5, ADR-0058).
+    """
+    item = world.session.get(RecurringItem, _charge_id(world, charge))
+    due = next(d for d in funds.open_turns_of(world.session, item.id) if year_month_of(d) == turn)
+    world.last_linked_id = world.attempt(
+        transactions.record_expense,
+        world.session,
+        account_id=_default_account_id(world, currency),
+        amount=_cents(amount),
+        currency=currency,
+        date=date(int(paid_in[:4]), int(paid_in[5:]), 10),
+        payee="Pago",
+        category_id=_spending_category_id(world, category),
+        recurring_id=item.id,
+        settles_due=due,
+    )
+    world.require_clean(f"recording the late payment that settled the {turn} turn of {charge!r}")
+
+
+@step(r"the user deletes that payment")
+def when_delete_that_payment(world: World) -> None:
+    """Undoing the answer, which is not the same as calling off the charge."""
+    world.attempt(transactions.delete_transaction, world.session, world.last_linked_id.id)
+    world.require_clean("deleting the payment that settled a turn")
+
+
+@step(
+    r'in (?P<year_month>\d{4}-\d{2}) the fund for "(?P<charge>[^"]+)" says the charge lands in (?P<lands>\d{4}-\d{2})'
+)
+def then_fund_lands_in_month(world: World, year_month: str, charge: str, lands: str) -> None:
+    """What the fund is filling for, read in a month the payment did not happen in.
+
+    The month is named because that is the defect this exists for: settlement
+    used to be counted inside the month being read, so a charge paid in August
+    was forgotten in September and asked for all over again.
+    """
+    status = _call("fund_status", world.session, _fund_for(world, charge).id, year_month)
+    assert status.charges, f"the fund for {charge!r} is filling for nothing in {year_month}"
+    assert status.charges[0].charge_month == lands, (
+        f"in {year_month} the fund for {charge!r} is filling for {status.charges[0].charge_month}, not {lands}"
+    )
 
 
 @step(r'"(?P<charge>[^"]+)" was charged (?P<back>\d+) months? ago')

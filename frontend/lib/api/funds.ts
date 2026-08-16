@@ -18,6 +18,10 @@ export const moneyAvailable = (month: string) =>
 export const moneyRates = (month: string) => get<MonthRates>(`/funds/rates${qs({ month })}`)
 
 export const chargeMarks = (month: string) => get<ChargeMark[]>(`/funds/charges${qs({ month })}`)
+
+/** The turns of one charge nobody has settled yet, soonest first (ISO dates). */
+export const openTurns = (recurringId: number) =>
+  get<string[]>(`/funds/charges/${recurringId}/turns`)
 export const markCharge = (recurringId: number, month: string) =>
   post<Fund>(`/funds/charges/${recurringId}${qs({ month })}`, {})
 export const unmarkCharge = (recurringId: number) => del<void>(`/funds/charges/${recurringId}`)

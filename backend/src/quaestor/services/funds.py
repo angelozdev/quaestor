@@ -29,7 +29,16 @@ from sqlmodel import Session, select
 
 from ..domain.dtos import ChargeMark, FundCharge, FundLine, FundPreview, FundStatus
 from ..domain.errors import NotFound, ValidationError
-from ..domain.models import Category, Fund, FundRule, RecurringItem, Transaction, TxStatus, TxType
+from ..domain.models import (
+    Category,
+    Fund,
+    FundRule,
+    IntervalUnit,
+    RecurringItem,
+    Transaction,
+    TxStatus,
+    TxType,
+)
 from ..domain.money import cents_to_major, to_cop_cents
 from ..domain.recurrence import next_due_on_or_after
 from ..domain.rules import (
@@ -46,6 +55,7 @@ from ..domain.rules import (
     uncovered_excess_calc,
     year_month_of,
 )
+from . import occurrences
 from .month_aggregate import MonthAggregate, load_month, require_year_month
 
 _DATED_RULES = (FundRule.from_recurring,)
@@ -225,19 +235,21 @@ def _charge_obligation(agg: MonthAggregate, item: RecurringItem, year_month: str
     Nothing is converted: a fund filling for a 600 dollar charge reports fifty
     dollars a month, and only the month's total ever becomes pesos (AC-11).
 
-    Settlement is read rather than guessed. A payment carrying this charge's
-    name in a month the charge is not due is an early payment — the owner paid
-    the insurance in June for a July charge — so it closes the turn coming and
-    the fund starts the next cycle (AC-5). In the month the turn does fall,
-    `_charge_month_for` already answers it.
+    The fund fills for the first turn nobody has settled or skipped, found by
+    walking the turns themselves (ADR-0058). Asked that way the answer does not
+    depend on which month is doing the asking, which is the whole point: read a
+    month at a time, an early payment was forgotten the month after it was made
+    and the owner was asked again for money that had already left, and a late
+    one read as a cycle skipped.
+
+    A turn still standing in the month being read is the one it fills for, and
+    the floor of one month in `fund_ask_calc` makes it ask for all of it now.
     """
-    dues = agg.turns_in(item, year_month)
-    paid = agg.settled_in(item, year_month)
-    charge = _charge_month_for(agg, item, year_month, dues, paid >= item.amount)
-    if charge is not None and not dues and paid >= item.amount:
-        charge = _turn_after(item, charge, item.end_date)
-    if charge is None:
+    start, _ = month_bounds(year_month)
+    due = agg.open_turn_on_or_after(item, start)
+    if due is None:
         return []
+    charge = year_month_of(due)
     return [
         _Obligation(
             name=item.name,
@@ -797,6 +809,37 @@ def set_fund(session: Session, fund_id: int, **changes) -> Fund:
 def fund_for_charge(session: Session, recurring_id: int) -> Fund | None:
     """The fund that fills for one charge, or nothing when it was never marked."""
     return session.exec(select(Fund).where(Fund.recurring_id == recurring_id)).first()
+
+
+def open_turns_of(session: Session, recurring_id: int) -> list[Date]:
+    """The turns of one charge a payment written down today could be settling.
+
+    One cycle either side of today, and no wider. A bill paid after it fell due
+    is the ordinary case, so the offer has to reach back far enough to hold the
+    turn the owner is answering for; and a bill paid early reaches forward the
+    same distance. Beyond that is not a payment being written down, it is a
+    different conversation — and offering it would bury the one turn the owner
+    means under years of bills he is not paying (ADR-0058).
+
+    Raises:
+        NotFound: no such charge.
+    """
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"repeating charge {recurring_id} not found")
+    today = Date.today()
+    one_cycle = _one_cycle_of(item)
+    return occurrences.open_turns(session, item, today - one_cycle, today + one_cycle)
+
+
+def _one_cycle_of(item: RecurringItem) -> timedelta:
+    """How long this charge takes to come back, near enough to bound an offer."""
+    return {
+        IntervalUnit.day: timedelta(days=item.interval_count),
+        IntervalUnit.week: timedelta(weeks=item.interval_count),
+        IntervalUnit.month: timedelta(days=31 * item.interval_count),
+        IntervalUnit.year: timedelta(days=366 * item.interval_count),
+    }[item.interval_unit]
 
 
 _LANDS_THIS_MONTH = "it charges this month, so there are no months left to save in — mark it once it has been paid"

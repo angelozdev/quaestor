@@ -32,6 +32,7 @@ vi.mock("@/lib/api/funds", () => ({
   markCharge: vi.fn(),
   unmarkCharge: vi.fn(),
   chargeEditCost: vi.fn(),
+  openTurns: vi.fn().mockResolvedValue([]),
 }))
 
 const ACCOUNTS = [

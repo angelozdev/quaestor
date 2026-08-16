@@ -47,6 +47,7 @@ function valuesFromTx(tx: Transaction): TransactionEditValues {
     tags: tx.tags,
     metaId: tx.meta_id,
     settlesCharge: tx.recurring_id,
+    settlesDue: null,
   }
 }
 
@@ -255,6 +256,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         tags: values.tags,
         meta_id: values.metaId,
         recurring_id: values.settlesCharge,
+        settles_due: values.settlesDue ?? undefined,
       })
       if (refusal !== null) throw new CorrectionRefused(refusal)
       if (body === null) return edited
@@ -365,7 +367,11 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
               <EntitySelect
                 id="tx-edit-category"
                 value={field.state.value as number | null}
-                onChange={(v) => field.handleChange(v as never)}
+                onChange={(v) => {
+                  field.handleChange(v as never)
+                  form.setFieldValue("settlesCharge", null)
+                  form.setFieldValue("settlesDue", null)
+                }}
                 queryKey={qk.categories(false, isIncome)}
                 queryFn={() => listCategories(false, isIncome)}
               />
@@ -382,10 +388,15 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
         {(field) => (
           <SettlesChargeField
             id="tx-edit-settles"
-            month={tx.date.slice(0, 7)}
+            month={yearMonthOf(tx.date) ?? tx.date.slice(0, 7)}
             categoryId={form.state.values.categoryId as number | null}
             value={field.state.value as number | null}
-            onChange={(chosen) => field.handleChange(chosen as never)}
+            settlesDue={form.state.values.settlesDue as string | null}
+            onChange={(chosen) => {
+              field.handleChange(chosen as never)
+              form.setFieldValue("settlesDue", null)
+            }}
+            onTurnChange={(due) => form.setFieldValue("settlesDue", due)}
           />
         )}
       </form.Field>

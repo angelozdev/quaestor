@@ -7,6 +7,8 @@ into JSON (ADR-0043/0044).
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
@@ -53,6 +55,18 @@ def charge_marks(month: str, session: Session = Depends(get_session)):
 @router.post("/charges/{recurring_id}", response_model=FundOut, status_code=201)
 def mark_charge(recurring_id: int, month: str, session: Session = Depends(get_session)):
     return funds.mark_charge(session, recurring_id, month)
+
+
+@router.get("/charges/{recurring_id}/turns", response_model=list[date])
+def open_turns(recurring_id: int, session: Session = Depends(get_session)):
+    """The turns of this charge nobody has settled yet, soonest first (ADR-0058).
+
+    Asked when a payment is being pointed at a charge, so the owner can say
+    which of its turns he paid. One charge at a time and only once he has
+    chosen one, because asking it for every charge of a screen would cost a
+    query each.
+    """
+    return funds.open_turns_of(session, recurring_id)
 
 
 @router.post("/charges/{recurring_id}/edit-cost", response_model=ChargeEditCostOut)

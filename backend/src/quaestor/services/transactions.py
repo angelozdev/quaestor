@@ -31,7 +31,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortableColumns, SortField, SortSpec
-from . import categories
+from . import categories, occurrences
 
 PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
 
@@ -117,6 +117,20 @@ def refuse_bad_charge_link(
         )
 
 
+def _refuse_a_turn_without_a_charge(recurring_id: int | None, settles_due: Date | None) -> None:
+    """A turn only means something beside the charge it belongs to (ADR-0058)."""
+    if settles_due is not None and recurring_id is None:
+        raise ValidationError("a payment cannot name the turn it settled without naming the charge")
+
+
+def _apply_to_turn(session: Session, tx: Transaction, recurring_id: int | None, settles_due: Date) -> None:
+    """Point the named turn at this movement, through the module that owns turns."""
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    occurrences.settle_turn(session, item, settles_due, tx)
+
+
 def _record(
     session: Session,
     tx_type: TxType,
@@ -131,6 +145,7 @@ def _record(
     new_category: str | None = None,
     meta_id: int | None = None,
     recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     require_positive(amount)
@@ -142,6 +157,7 @@ def _record(
     category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
     refuse_bad_meta(session, tx_type, meta_id)
     refuse_bad_charge_link(session, tx_type, category_id, recurring_id)
+    _refuse_a_turn_without_a_charge(recurring_id, settles_due)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -159,6 +175,9 @@ def _record(
     acc.balance += delta_balance(tx_type, amount)
     session.add(tx)
     session.add(acc)
+    if settles_due is not None:
+        session.flush()
+        _apply_to_turn(session, tx, recurring_id, settles_due)
     session.commit()
     session.refresh(tx)
     return tx
@@ -177,6 +196,7 @@ def record_expense(
     new_category: str | None = None,
     meta_id: int | None = None,
     recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
 
@@ -226,6 +246,7 @@ def record_expense(
         new_category,
         meta_id,
         recurring_id,
+        settles_due,
     )
 
 
@@ -242,6 +263,7 @@ def record_income(
     new_category: str | None = None,
     meta_id: int | None = None,
     recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -291,6 +313,7 @@ def record_income(
         new_category,
         meta_id,
         recurring_id,
+        settles_due,
     )
 
 
@@ -501,6 +524,7 @@ def update_transaction(
     date=None,
     meta_id=_UNSET,
     recurring_id=_UNSET,
+    settles_due=_UNSET,
 ) -> Transaction:
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
@@ -537,7 +561,15 @@ def update_transaction(
         tx.meta_id = meta_id
     if recurring_id is not _UNSET:
         refuse_bad_charge_link(session, tx.type, tx.category_id, recurring_id)
+        _refuse_a_turn_without_a_charge(recurring_id, None if settles_due is _UNSET else settles_due)
+        if recurring_id != tx.recurring_id:
+            occurrences.release_turn(session, tx)
         tx.recurring_id = recurring_id
+    if settles_due is not _UNSET:
+        occurrences.release_turn(session, tx)
+        if settles_due is not None:
+            session.flush()
+            _apply_to_turn(session, tx, tx.recurring_id, settles_due)
     session.add(tx)
     session.commit()
     session.refresh(tx)

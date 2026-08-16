@@ -17,10 +17,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date as Date
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy import extract, func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..domain.errors import ValidationError
 from ..domain.models import (
@@ -38,7 +39,7 @@ from ..domain.models import (
     TxType,
 )
 from ..domain.money import to_cop_cents
-from ..domain.recurrence import due_dates
+from ..domain.recurrence import due_dates, next_due_on_or_after
 from ..domain.rules import is_year_month, month_bounds, prev_year_month, year_month_of
 from . import fx as _fx
 
@@ -72,6 +73,7 @@ class MonthAggregate:
     linked_by_meta: dict[int, list[Transaction]]
     first_movement_month: str | None
     skipped_turns: frozenset[tuple[int, Date]]
+    settled_turns: frozenset[tuple[int, Date]]
     _window_expense: list[Transaction]
     _window_income: list[Transaction]
     _spent_by_cat_month: dict[tuple[int | None, str], int]
@@ -157,6 +159,31 @@ class MonthAggregate:
     def was_skipped(self, recurring_id: int, due_date: Date) -> bool:
         """Whether the owner said this turn will not happen (AC-17)."""
         return (recurring_id, due_date) in self.skipped_turns
+
+    def was_settled(self, recurring_id: int, due_date: Date) -> bool:
+        """Whether a movement has been applied to this turn (ADR-0058).
+
+        Not a question about a month. A turn paid in August is paid when
+        September is read and when next July is read, which is the whole reason
+        settlement stopped being counted a month at a time: asked monthly, an
+        early payment was forgotten the month after it was made and the owner
+        was billed again for money that had already left.
+        """
+        return (recurring_id, due_date) in self.settled_turns
+
+    def open_turn_on_or_after(self, item: RecurringItem, day: Date) -> Date | None:
+        """This charge's first turn from `day` on that is neither settled nor skipped.
+
+        Walks turn by turn rather than asking about one month, so a paid turn is
+        stepped over wherever it sits and the answer is the same in every month
+        that reads it.
+        """
+        due = next_due_on_or_after(item.start_date, item.end_date, item.interval_unit, item.interval_count, day)
+        while due is not None and (self.was_settled(item.id, due) or self.was_skipped(item.id, due)):
+            due = next_due_on_or_after(
+                item.start_date, item.end_date, item.interval_unit, item.interval_count, due + timedelta(days=1)
+            )
+        return due
 
     def turns_in(self, item: RecurringItem, year_month: str) -> list[Date]:
         """Every turn this obligation falls due on inside one month.
@@ -346,13 +373,13 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     first_movement = session.exec(
         select(Transaction.date).where(Transaction.status == TxStatus.posted).order_by(Transaction.date).limit(1)
     ).first()
-    skipped_turns = frozenset(
-        session.exec(
-            select(RecurringOccurrence.recurring_id, RecurringOccurrence.due_date).where(
-                RecurringOccurrence.status == OccurrenceStatus.skipped
-            )
-        ).all()
-    )
+    decided_turns = session.exec(
+        select(RecurringOccurrence.recurring_id, RecurringOccurrence.due_date, RecurringOccurrence.status).where(
+            col(RecurringOccurrence.status).in_([OccurrenceStatus.skipped, OccurrenceStatus.posted])
+        )
+    ).all()
+    skipped_turns = frozenset((rid, due) for rid, due, status in decided_turns if status == OccurrenceStatus.skipped)
+    settled_turns = frozenset((rid, due) for rid, due, status in decided_turns if status == OccurrenceStatus.posted)
 
     return MonthAggregate(
         year_month=year_month,
@@ -371,6 +398,7 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         linked_by_meta=linked_by_meta,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
         skipped_turns=skipped_turns,
+        settled_turns=settled_turns,
         _window_expense=window_expense,
         _window_income=window_income,
         _spent_by_cat_month=spent_by_cat_month,
