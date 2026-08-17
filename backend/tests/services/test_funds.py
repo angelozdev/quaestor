@@ -1465,3 +1465,151 @@ def test_a_marked_charge_is_not_counted_twice_by_the_monthly_rate(session):
     monthly_share_of_a_yearly_charge = 1_100_000_00 // 12 + 1
     spread_over_the_months_left = 1_100_000_00 // 11
     assert unfunded - after == monthly_share_of_a_yearly_charge - spread_over_the_months_left
+
+
+def test_a_charge_fund_carries_forward_what_it_set_aside(session):
+    """AC-11's own sentence: «lleva US$150 de US$600».
+
+    A fund that does not carry is not a fund — it is a suggestion repeated every
+    month. Nothing asserted that a charge fund accumulates, so the flag that
+    makes it do so could be flipped with every suite green and the yearly
+    insurance would arrive with nothing saved for it.
+    """
+    charge_id, _ = _marked(session)
+
+    held = [_line_for(session, charge_id, month).holds for month in ("2026-08", "2026-09", "2026-10", "2026-11")]
+
+    assert held[0] == 0
+    assert held[1] > 0
+    assert held == sorted(held), f"a fund that carries never holds less than the month before: {held}"
+    assert held[3] > held[1], "three months of saving has to show more than one"
+
+
+def test_a_charge_keeps_its_fund_the_month_it_finally_arrives(session):
+    """AC-10 draws the line at the month in course, and AC-8 does not move it.
+
+    The fund exists *for* the month its charge lands. Judging an already-marked
+    charge by the rule that decides whether a box may be ticked would drop it on
+    the way to its own payment — which is what the `would_lose_its_fund`
+    docstring warns about and what nothing measured.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2026, 8, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+    recurring.update_recurring(session, charge_id, end_date=date(2026, 8, 31))
+    funds.mark_charge(session, charge_id, "2026-07")
+
+    dropped = funds.unmark_if_it_can_no_longer_be_saved_for(session, charge_id, "2026-08")
+
+    assert dropped is False
+    assert funds.fund_for_charge(session, charge_id) is not None, "the fund was dropped the month it exists for"
+
+
+def test_a_fund_filling_for_a_live_charge_says_its_charge_is_still_coming(session):
+    """AC-8's sentence on the screen, on the charge branch this feature added.
+
+    The category branch of this answer was pinned by feature 014; the branch a
+    charge fund reads was not. False here tells the owner his category has no
+    repeating charges left and offers to stop saving — on a fund that is working.
+    """
+    charge_id, _ = _marked(session)
+
+    assert _line_for(session, charge_id, "2026-08").has_repeating_charges is True
+
+
+def test_a_fund_whose_charge_ran_out_says_so(session):
+    """The other direction of the same answer, and the one F9 was about.
+
+    A charge with no turn left is not one the fund is waiting for. Saying it is
+    keeps the fund asking for money against a bill that will never come again.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2027, 7, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+    recurring.update_recurring(session, charge_id, end_date=date(2027, 8, 1))
+    funds.mark_charge(session, charge_id, "2026-08")
+
+    assert _line_for(session, charge_id, "2027-09").has_repeating_charges is False
+
+
+def test_a_switched_off_charge_cannot_be_marked(session):
+    """AC-7: a switched-off charge has no fund, so it cannot be given one.
+
+    AC-10's fourth refusal is about a charge already marked; this is the door
+    beside it, and the refusal names the charge as missing because a switched-off
+    charge is not in the list the owner is choosing from.
+    """
+    charge_id, _ = _marked(session)
+    recurring.deactivate_recurring(session, charge_id)
+
+    with pytest.raises(NotFound):
+        funds.mark_charge(session, charge_id, "2026-08")
+
+
+def test_the_fund_is_judged_by_the_month_it_was_asked_about(session):
+    """Not by the month the clock happens to say.
+
+    The question carries a month because the answer depends on one: a charge
+    whose last turn was December still has a fund in December and none in the
+    following March. Reading today's month instead makes the answer drift with
+    the calendar, and a fund survives its own last turn.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2026, 12, 5), unit="year", name="Seguro")
+    charge_id = _recurring_id(session, "Seguro")
+    recurring.update_recurring(session, charge_id, end_date=date(2026, 12, 31))
+    funds.mark_charge(session, charge_id, "2026-08")
+
+    dropped = funds.unmark_if_it_can_no_longer_be_saved_for(session, charge_id, "2027-03")
+
+    assert dropped is True
+    assert funds.fund_for_charge(session, charge_id) is None
+
+
+def test_a_charge_already_marked_is_shown_as_marked(session):
+    """AC-10's fourth refusal, before the owner can walk into it.
+
+    «Un cobro ya marcado. No se marca dos veces.» The row has to carry the fund
+    it already has, or the list offers a box that only produces a refusal.
+    """
+    charge_id, fund = _marked(session)
+
+    mark = next(m for m in funds.charge_marks(session, "2026-08") if m.recurring_id == charge_id)
+
+    assert mark.fund_id == fund.id
+    assert mark.can_be_marked is False
+
+
+def test_a_fund_reports_nothing_spent_once_its_charge_is_switched_off(session):
+    """A fund with no charge to read is drained by nothing at all.
+
+    Reachable while the fold still holds a fund row whose charge has gone quiet,
+    and unasserted: any figure other than zero would be money the fund claims to
+    have spent on a charge that is not there.
+    """
+    charge_id, fund = _marked(session)
+    from quaestor.domain.models import RecurringItem
+
+    charge = session.get(RecurringItem, charge_id)
+    charge.active = False
+    session.add(charge)
+    session.commit()
+
+    assert funds.fund_status(session, fund.id, "2026-09").spent == 0
+
+
+def test_the_settle_question_reaches_the_next_turn_of_a_charge_that_repeats_every_few_years(session):
+    """AC-5 offers the turns a payment written down today could be answering for.
+
+    The window is one cycle either side, so a charge that comes back every two
+    or three years needs a window measured in those years — computed the other
+    way round it shrinks as the cadence grows, and the charge with the longest
+    gap ends up offered the least.
+    """
+    category = _category(session, "Carro")
+    _obligation(session, category, 1_100_000_00, date(2020, 8, 5), unit="year", count=3, name="Revision")
+    charge_id = _recurring_id(session, "Revision")
+
+    offered = funds.open_turns_of(session, charge_id)
+
+    assert len(offered) >= 2, f"a charge every three years was offered {offered}"

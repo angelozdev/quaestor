@@ -780,3 +780,157 @@ def test_a_payment_cannot_settle_a_charge_that_does_not_exist(session):
             category_id=a_category(session, TxType.expense),
             recurring_id=999_999,
         )
+
+
+def _a_monthly_charge(session, name, category_id, account_id, start=date(2026, 1, 5)):
+    from quaestor.domain.models import IntervalUnit, RecurringMode
+    from quaestor.services import recurring
+
+    from tests.support.recurring import declare_existing
+
+    declare_existing(
+        session,
+        name=name,
+        payee=name,
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=600_000_00,
+        currency="COP",
+        category_id=category_id,
+        account_id=account_id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=start,
+    )
+    return next(item for item in recurring.list_recurring(session) if item.name == name)
+
+
+def _open_turns(session, item):
+    from quaestor.services import occurrences
+
+    return occurrences.open_turns(session, item, date(2026, 7, 1), date(2026, 10, 31))
+
+
+def test_moving_the_answer_to_another_turn_settles_that_turn(session):
+    """AC-5: the payment says which due date it settled, and an edit can restate it.
+
+    The owner opens the movement, picks another due date and saves. If the new
+    answer is dropped on the way, the fund goes back to asking for a turn that
+    was already paid — the very defect naming the turn exists to stop.
+    """
+    acc = _make_account(session, balance=100_000_000_00)
+    category = a_category(session, TxType.expense)
+    item = _a_monthly_charge(session, "Club", category, acc.id)
+    tx = transactions.record_expense(
+        session,
+        acc.id,
+        600_000_00,
+        "COP",
+        date(2026, 8, 20),
+        "Club",
+        category_id=category,
+        recurring_id=item.id,
+        settles_due=date(2026, 8, 5),
+    )
+
+    transactions.update_transaction(session, tx.id, settles_due=date(2026, 9, 5))
+
+    open_now = _open_turns(session, item)
+    assert date(2026, 9, 5) not in open_now, "the turn the owner moved the answer to is still open"
+    assert date(2026, 8, 5) in open_now, "the turn he moved the answer away from is still settled"
+
+
+def test_clearing_the_answer_puts_the_turn_back_to_unpaid(session):
+    """The owner decides the payment was not for that due date after all.
+
+    Withdrawing the answer has to free the turn, or it stays marked paid by a
+    movement that no longer settles it and the fund never saves for it again.
+    """
+    acc = _make_account(session, balance=100_000_000_00)
+    category = a_category(session, TxType.expense)
+    item = _a_monthly_charge(session, "Club", category, acc.id)
+    tx = transactions.record_expense(
+        session,
+        acc.id,
+        600_000_00,
+        "COP",
+        date(2026, 8, 20),
+        "Club",
+        category_id=category,
+        recurring_id=item.id,
+        settles_due=date(2026, 8, 5),
+    )
+
+    transactions.update_transaction(session, tx.id, settles_due=None)
+
+    assert date(2026, 8, 5) in _open_turns(session, item)
+
+
+def test_pointing_the_payment_at_another_charge_frees_the_first_charges_turn(session):
+    """One movement answers for one turn, so moving it has to let the old one go.
+
+    Left behind, the first charge's turn stays settled by a movement that now
+    belongs to a different charge, and its fund stops saving for a bill that is
+    still coming.
+    """
+    acc = _make_account(session, balance=100_000_000_00)
+    category = a_category(session, TxType.expense)
+    club = _a_monthly_charge(session, "Club", category, acc.id)
+    gym = _a_monthly_charge(session, "Gym", category, acc.id)
+    tx = transactions.record_expense(
+        session,
+        acc.id,
+        600_000_00,
+        "COP",
+        date(2026, 8, 20),
+        "Club",
+        category_id=category,
+        recurring_id=club.id,
+        settles_due=date(2026, 8, 5),
+    )
+
+    transactions.update_transaction(session, tx.id, recurring_id=gym.id, settles_due=date(2026, 8, 5))
+
+    assert date(2026, 8, 5) in _open_turns(session, club)
+    assert date(2026, 8, 5) not in _open_turns(session, gym)
+
+
+def test_an_edit_cannot_name_a_turn_while_unnaming_the_charge(session):
+    """A due date belongs to a charge, so there is no turn to name without one.
+
+    The refusal has to be the one the owner can read, not whatever the lookup
+    happens to raise once it is asked for the turns of nothing.
+    """
+    acc = _make_account(session, balance=100_000_000_00)
+    category = a_category(session, TxType.expense)
+    item = _a_monthly_charge(session, "Club", category, acc.id)
+    tx = transactions.record_expense(
+        session,
+        acc.id,
+        600_000_00,
+        "COP",
+        date(2026, 8, 20),
+        "Club",
+        category_id=category,
+        recurring_id=item.id,
+        settles_due=date(2026, 8, 5),
+    )
+
+    with pytest.raises(ValidationError, match="without naming the charge"):
+        transactions.update_transaction(session, tx.id, recurring_id=None, settles_due=date(2026, 8, 5))
+
+
+def test_a_transfer_leg_cannot_be_moved_onto_its_own_other_side(session):
+    """AC-22: a transfer's two halves on one account is not a transfer.
+
+    The refusal reads every member of the pair, because the leg being moved is
+    not the one that already sits there — asking whether *all* of them collide
+    lets the real collision through whenever the pair has two sides, which is
+    always.
+    """
+    origin = _make_account(session, balance=10_000_000_00)
+    destination = accounts.create_account(session, "Otra", AccountType.debit, "COP", balance=0)
+    out_leg, _ = transactions.transfer(session, origin.id, destination.id, 1_000_000_00, "COP", date(2026, 6, 1))
+
+    with pytest.raises(TransferImbalance, match="same account"):
+        transactions.move_to_account(session, out_leg.id, account_id=destination.id)

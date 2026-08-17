@@ -959,3 +959,147 @@ def test_accepting_dates_is_all_or_nothing(session, monkeypatch):
     assert accounts.get_account(session, acc.id).balance == 500_000
     assert _live_occurrences(session, item.id) == []
     assert len(occurrences.pending_dates(session, item.id)) == 4
+
+
+def _a_charge_with_a_fund(session, *, unit=IntervalUnit.month, count=1, start=date(2026, 1, 5)):
+    """A charge the owner pays by hand, and the category it is filed under."""
+    acc = _acc(session)
+    category = a_category(session)
+    declare_existing(
+        session,
+        name="Club",
+        payee="Club",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=600_000_00,
+        currency="COP",
+        category_id=category,
+        account_id=acc.id,
+        interval_unit=unit,
+        interval_count=count,
+        start_date=start,
+    )
+    item = recurring.list_recurring(session)[0]
+    return item, category, acc
+
+
+def _paid_by_hand(session, item, category, acc, on, settles_due):
+    return transactions.record_expense(
+        session,
+        acc.id,
+        600_000_00,
+        "COP",
+        on,
+        "Club",
+        category_id=category,
+        recurring_id=item.id,
+        settles_due=settles_due,
+    )
+
+
+def test_a_turn_already_settled_is_not_offered_again(session):
+    """AC-5 asks which due date a payment answered for, out of the open ones.
+
+    A turn the owner already answered for is not open. Offering it again puts
+    the paid bill back in front of him, and choosing it can only end in the
+    refusal below.
+    """
+    item, category, acc = _a_charge_with_a_fund(session)
+    _paid_by_hand(session, item, category, acc, date(2026, 8, 20), date(2026, 8, 5))
+
+    offered = occurrences.open_turns(session, item, date(2026, 7, 1), date(2026, 10, 31))
+
+    assert date(2026, 8, 5) not in offered
+    assert offered == [date(2026, 7, 5), date(2026, 9, 5), date(2026, 10, 5)]
+
+
+def test_the_offer_reaches_the_last_day_of_its_window(session):
+    """The window is inclusive at both ends, and the far edge is a real turn.
+
+    A bill due on the very day the offer stops being asked about is the one a
+    payment written down today is most likely answering for.
+    """
+    item, _, _ = _a_charge_with_a_fund(session)
+
+    assert occurrences.open_turns(session, item, date(2026, 7, 5), date(2026, 9, 5)) == [
+        date(2026, 7, 5),
+        date(2026, 8, 5),
+        date(2026, 9, 5),
+    ]
+
+
+def test_one_turn_cannot_be_answered_for_by_two_movements(session):
+    """AC-5: one payment settles one due date, and the due date is then settled.
+
+    Two movements standing for one turn is the thing the table's unique key
+    exists to prevent, and the refusal has to come from the service with a
+    sentence the owner can read — not from the database as a constraint error.
+    """
+    item, category, acc = _a_charge_with_a_fund(session)
+    _paid_by_hand(session, item, category, acc, date(2026, 8, 20), date(2026, 8, 5))
+
+    with pytest.raises(ValidationError, match="already settled by another movement"):
+        _paid_by_hand(session, item, category, acc, date(2026, 8, 25), date(2026, 8, 5))
+
+
+def test_a_payment_cannot_settle_a_day_the_charge_never_falls_due_on(session):
+    """The turn named has to be one the charge actually has.
+
+    Without this a payment could invent a due date, and the fund would step over
+    a turn that never existed.
+    """
+    item, category, acc = _a_charge_with_a_fund(session)
+
+    with pytest.raises(ValidationError, match="never falls due"):
+        _paid_by_hand(session, item, category, acc, date(2026, 8, 20), date(2026, 8, 17))
+
+
+def test_deleting_the_payment_puts_its_turn_back_to_unpaid(session):
+    """AC-5: «Si borrás el movimiento, el vencimiento vuelve a estar sin pagar».
+
+    The owner is withdrawing an answer, not calling off a charge, so the turn
+    goes back to open and the fund starts saving for it again.
+    """
+    item, category, acc = _a_charge_with_a_fund(session)
+    tx = _paid_by_hand(session, item, category, acc, date(2026, 8, 20), date(2026, 8, 5))
+
+    transactions.delete_transaction(session, tx.id)
+
+    assert date(2026, 8, 5) in occurrences.open_turns(session, item, date(2026, 8, 1), date(2026, 8, 31))
+
+
+def test_a_turn_the_engine_charged_is_never_freed_by_an_edit(session):
+    """ADR-0038 draws the line the other way for a movement the engine made.
+
+    Freeing the engine's own turn hands the date back to the daily run, which
+    charges it a second time — real money out twice for one bill. The owner
+    undoes a wrong charge by deleting it, and that closes the date as skipped
+    rather than reopening it.
+    """
+    acc = _acc(session)
+    category = a_category(session)
+    declare_existing(
+        session,
+        name="Rent",
+        payee="Landlord",
+        type=TxType.expense,
+        mode=RecurringMode.auto,
+        amount=2_000_000_00,
+        currency="COP",
+        category_id=category,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=1,
+        start_date=date(2026, 8, 1),
+    )
+    occurrences.materialize_due(session, date(2026, 8, 10))
+    charged = transactions.list_transactions(session, status="posted")
+    assert len(charged) == 1
+
+    occurrences.release_turn(session, charged[0])
+    session.commit()
+    occurrences.materialize_due(session, date(2026, 8, 10))
+
+    assert len(transactions.list_transactions(session, status="posted")) == 1, (
+        "the daily run charged the same turn a second time"
+    )
