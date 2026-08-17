@@ -163,3 +163,117 @@ def test_every_fund_door_requires_auth(client):
     assert client.get("/api/funds/rates", params={"month": "2026-11"}).status_code == 401
     assert client.post("/api/funds", json={}).status_code == 401
     assert client.delete("/api/funds/1").status_code == 401
+
+
+def _charge_every(client, auth, category_id, *, unit="year", count=1, start="2027-07-05", name="Seguro"):
+    account = client.post(
+        "/api/accounts",
+        json={"name": f"Banco {name}", "type": "debit", "currency": "COP"},
+        headers=auth,
+    ).json()["id"]
+    return client.post(
+        "/api/recurring",
+        json={
+            "name": name,
+            "payee": name,
+            "type": "expense",
+            "mode": "manual",
+            "amount": 110_000_000,
+            "currency": "COP",
+            "category_id": category_id,
+            "account_id": account,
+            "interval_unit": unit,
+            "interval_count": count,
+            "start_date": start,
+        },
+        headers=auth,
+    ).json()["id"]
+
+
+def test_the_charge_list_says_which_may_be_saved_for_and_why_not(client, auth):
+    """AC-2: where the box is not offered, the row explains it in one line."""
+    _set_trm(client, auth)
+    category = _category(client, auth, "Carro")
+    spreadable = _charge_every(client, auth, category)
+    monthly = _charge_every(client, auth, category, unit="month", start="2026-09-05", name="Netflix")
+
+    rows = client.get("/api/funds/charges", params={"month": "2026-08"}, headers=auth).json()
+
+    by_id = {row["recurring_id"]: row for row in rows}
+    assert by_id[spreadable]["can_be_marked"] is True
+    assert by_id[spreadable]["why_not"] is None
+    assert by_id[monthly]["can_be_marked"] is False
+    assert "whole month" in by_id[monthly]["why_not"]
+
+
+def test_marking_a_charge_creates_its_fund_and_marking_it_twice_is_refused(client, auth):
+    """AC-1 through the door, and AC-10's fourth refusal behind it."""
+    _set_trm(client, auth)
+    category = _category(client, auth, "Carro")
+    charge = _charge_every(client, auth, category)
+
+    created = client.post(f"/api/funds/charges/{charge}", params={"month": "2026-08"}, headers=auth)
+    assert created.status_code == 201
+    assert created.json()["rule"] == "from-recurring"
+    assert created.json()["start_month"] == "2026-08"
+
+    again = client.post(f"/api/funds/charges/{charge}", params={"month": "2026-08"}, headers=auth)
+    assert again.status_code == 422
+
+    listed = client.get("/api/funds", headers=auth).json()
+    assert [row["name"] for row in listed] == ["Seguro"]
+
+
+def test_the_turns_door_offers_the_open_ones_of_one_charge(client, auth):
+    """AC-5's second question, asked only once a charge has been chosen."""
+    _set_trm(client, auth)
+    category = _category(client, auth, "Carro")
+    charge = _charge_every(client, auth, category, unit="month", start="2026-01-05", name="Club")
+
+    offered = client.get(f"/api/funds/charges/{charge}/turns", headers=auth)
+
+    assert offered.status_code == 200
+    assert len(offered.json()) >= 2
+    assert offered.json() == sorted(offered.json())
+
+
+def test_asking_what_an_edit_would_cost_the_fund_before_saving_it(client, auth):
+    """AC-8's fifth door: the screen says what is about to happen, in one step."""
+    _set_trm(client, auth)
+    category = _category(client, auth, "Carro")
+    charge = _charge_every(client, auth, category)
+    client.post(f"/api/funds/charges/{charge}", params={"month": "2026-08"}, headers=auth)
+
+    kept = client.post(
+        f"/api/funds/charges/{charge}/edit-cost",
+        json={"month": "2026-08", "interval_unit": "year", "interval_count": 1},
+        headers=auth,
+    )
+    lost = client.post(
+        f"/api/funds/charges/{charge}/edit-cost",
+        json={"month": "2026-08", "interval_unit": "month", "interval_count": 1},
+        headers=auth,
+    )
+
+    assert kept.json()["would_lose_its_fund"] is False
+    assert lost.json()["would_lose_its_fund"] is True
+
+
+def test_unmarking_a_charge_removes_its_fund_and_says_nothing_the_second_time(client, auth):
+    """AC-4: unmarking is idempotent, which is what lets AC-8's doors all close alike."""
+    _set_trm(client, auth)
+    category = _category(client, auth, "Carro")
+    charge = _charge_every(client, auth, category)
+    client.post(f"/api/funds/charges/{charge}", params={"month": "2026-08"}, headers=auth)
+
+    assert client.delete(f"/api/funds/charges/{charge}", headers=auth).status_code == 204
+    assert client.get("/api/funds", headers=auth).json() == []
+    assert client.delete(f"/api/funds/charges/{charge}", headers=auth).status_code == 204
+
+
+def test_every_charge_door_requires_auth(client):
+    assert client.get("/api/funds/charges", params={"month": "2026-08"}).status_code == 401
+    assert client.post("/api/funds/charges/1", params={"month": "2026-08"}).status_code == 401
+    assert client.get("/api/funds/charges/1/turns").status_code == 401
+    assert client.post("/api/funds/charges/1/edit-cost", json={"month": "2026-08"}).status_code == 401
+    assert client.delete("/api/funds/charges/1").status_code == 401

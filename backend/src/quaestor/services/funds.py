@@ -1017,6 +1017,28 @@ def would_lose_its_fund(session: Session, recurring_id: int, year_month: str, **
     return not _can_still_keep_a_fund(agg, proposed, year_month)
 
 
+def follow_its_charge(session: Session, recurring_id: int) -> None:
+    """File the fund where its charge is now, after the charge was moved.
+
+    The fund belongs to the charge and not to the category (ADR-0057), so the
+    category it carries is a copy of the charge's — and a copy left behind
+    points the wrong way twice. The category the charge arrived at is the one
+    AC-8 refuses to archive, and it would archive without a word while the fund
+    goes on asking for money nobody can see any more; the category it left
+    refuses to archive naming a charge that is no longer filed there.
+
+    Nothing else moves: the fund keeps its rule, its start month and everything
+    it has saved, because the owner refiled a bill, he did not change it.
+    """
+    fund = fund_for_charge(session, recurring_id)
+    item = session.get(RecurringItem, recurring_id)
+    if fund is None or item is None or fund.category_id == item.category_id:
+        return
+    fund.category_id = item.category_id
+    session.add(fund)
+    session.commit()
+
+
 def unmark_if_it_can_no_longer_be_saved_for(session: Session, recurring_id: int, year_month: str | None = None) -> bool:
     """Remove the fund of a charge whose new rhythm leaves no month to save in.
 

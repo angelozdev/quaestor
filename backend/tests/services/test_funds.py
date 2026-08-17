@@ -1613,3 +1613,38 @@ def test_the_settle_question_reaches_the_next_turn_of_a_charge_that_repeats_ever
     offered = funds.open_turns_of(session, charge_id)
 
     assert len(offered) >= 2, f"a charge every three years was offered {offered}"
+
+
+def test_moving_a_marked_charge_to_another_category_takes_its_fund_along(session):
+    """AC-8's fourth door has to guard the category the charge is actually in.
+
+    The fund belongs to the charge (ADR-0057), so the category it carries is a
+    copy — and a copy left behind guards the wrong door at both ends: the
+    category the charge arrived at archives without a word while the fund goes
+    on asking, and the one it left refuses to archive naming a charge that is
+    not there.
+    """
+    charge_id, _ = _marked(session)
+    carro = _category_named(session, "Carro")
+    hogar = _category(session, "Hogar")
+
+    recurring.update_recurring(session, charge_id, category_id=hogar)
+
+    assert funds.fund_for_charge(session, charge_id).category_id == hogar
+    with pytest.raises(ValidationError, match="Seguro"):
+        categories.archive_category(session, hogar)
+    categories.archive_category(session, carro)
+    assert categories.get_category(session, carro).archived
+
+
+def test_a_moved_charge_keeps_everything_its_fund_had_saved(session):
+    """Refiling a bill is not changing it, so nothing about the saving moves."""
+    charge_id, _ = _marked(session)
+    hogar = _category(session, "Hogar")
+    before = _line_for(session, charge_id, "2026-11")
+
+    recurring.update_recurring(session, charge_id, category_id=hogar)
+    after = _line_for(session, charge_id, "2026-11")
+
+    assert (after.holds, after.asks, after.carries) == (before.holds, before.asks, before.carries)
+    assert [c.charge_month for c in after.charges] == [c.charge_month for c in before.charges]

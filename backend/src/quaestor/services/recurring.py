@@ -284,6 +284,7 @@ def update_recurring(
     except Exception:
         session.rollback()
         raise
+    funds.follow_its_charge(session, recurring_id)
     funds.unmark_if_it_can_no_longer_be_saved_for(session, recurring_id, year_month_of(today or Date.today()))
     session.refresh(edited)
     return edited
