@@ -10,7 +10,7 @@ owner: angelo
 assignee: local
 tracker_ref: local
 acceptance_stream: mixed
-relevant_adrs: [0028, 0031, 0043, 0046, 0054, 0056]
+relevant_adrs: [0028, 0031, 0043, 0046, 0054, 0056, 0057, 0058]
 created: 2026-08-12
 intake: discuss
 validation_method: "Los tres flujos (pytest, aceptación generada, vitest), más un ensayo de la migración contra una copia restaurada de producción con el dueño delante. Medido el 2026-08-15: existe UN solo fondo de cobros, sobre 🛡️ Auto Insurance, y ningún fondo tiene anchor_amount. La migración es 1 → 2 y no hay nada guardado que repartir. Lo que pide ese fondo hoy — 686.063,64 = 636.363,64 (Seguro del Carro) + 49.700,00 (SOAT carro) — tiene que ser exactamente lo que pidan los dos nuevos sumados. Ninguna otra cifra del mes puede moverse. Más el paso por navegador que exige el CHARTER §6."

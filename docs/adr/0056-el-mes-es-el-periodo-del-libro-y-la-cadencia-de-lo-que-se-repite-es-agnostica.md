@@ -1,7 +1,10 @@
 # 0056. El mes es el período del libro, y la cadencia de lo que se repite es agnóstica
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-15
+- **Accepted:** 2026-08-17 (feature 015, tras el CP8. La frontera se sostuvo en el
+  código: `_can_be_spread` no nombra ninguna cadencia y contesta por lo que el
+  cobro de verdad hace, medido en «cada 2 meses», «cada semana» y «cada día»)
 - **Deciders:** Angelo
 - **Supersedes:** — (nombra la frontera que 0028, 0043 y 0044 ya asumían sin escribirla)
 - **Superseded by:** —
@@ -138,6 +141,20 @@ regla de negocio está viendo esta ADR rota.
 
 `monthly_rate_calc` es la otra mitad y ya está probada: convierte cualquier ciclo
 a su ritmo mensual y redondea hacia arriba para que un ciclo nunca se subestime.
+
+**Al aceptarla, el 2026-08-17, se revisaron los dos únicos sitios que nombran
+`IntervalUnit`, y ninguno rompe la frontera** — los dos son tablas totales, sin
+un solo caso especial:
+
+| dónde | qué hace | por qué no la rompe |
+|---|---|---|
+| `rules.py` · `monthly_rate_calc` | ciclo → ritmo mensual | es la conversión que esta ADR nombra como su otra mitad |
+| `funds.py` · `_one_cycle_of` | cuánto tarda el cobro en volver | acota cuántos vencimientos se ofrecen en la pantalla del pago; no reparte plata y no reporta ninguna cifra |
+
+El segundo llegó con la feature 015 y es el sitio a vigilar: es el único que
+lee la unidad para decidir algo que el dueño ve. El barrido de mutación del CP8
+encontró que su aritmética estaba sin fijar —un cobro cada dos o tres años perdía
+un vencimiento de la oferta— y eso quedó cerrado con prueba.
 
 Una feature que quiera un período del libro configurable sustituye esta ADR; no
 la enmienda.

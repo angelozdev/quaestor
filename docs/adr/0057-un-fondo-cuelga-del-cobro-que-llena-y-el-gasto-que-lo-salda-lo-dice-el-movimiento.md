@@ -1,7 +1,9 @@
 # 0057. Un fondo cuelga del cobro que llena, y el gasto que lo salda lo dice el movimiento
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-08-15
+- **Accepted:** 2026-08-17 (feature 015, tras el CP8. La migración corrió contra
+  los datos reales con el dueño delante y ninguna cifra del mes se movió)
 - **Deciders:** Angelo
 - **Supersedes:** 0043 (cláusula «una categoría lleva un fondo», solo para la regla `from-recurring`)
 - **Superseded by:** —
