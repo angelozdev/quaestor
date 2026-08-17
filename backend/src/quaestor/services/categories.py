@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import Category, CategoryGroup, Fund, RecurringItem, Transaction, TxType
 from ..domain.rules import category_is_income_for
+from . import funds
 
 
 def create_group(session: Session, name: str, sort_order: int = 0) -> CategoryGroup:
@@ -287,14 +288,26 @@ def update_category(
 
 
 def _refuse_archiving_a_funded_category(session: Session, cat: Category) -> None:
-    """A category holding a fund cannot be archived (AC-21).
+    """A category holding a fund cannot be archived (AC-21, ADR-0057).
 
     Archiving takes the category out of every offering, so the money the fund
-    sets aside would stop being asked for with nothing said. The owner deletes
+    sets aside would stop being asked for with nothing said. The owner clears
     the fund first, which is a decision rather than a side effect.
+
+    This is the one door of AC-8 that closes by staying shut. The other four
+    remove the fund; here the archiving is refused instead, and the refusal
+    names what to clear — a charge if one is marked, since «delete the fund
+    first» tells the owner nothing about where to find it.
     """
     if session.exec(select(Fund).where(Fund.category_id == cat.id)).first() is None:
         return
+    marked = funds.marked_charges_in(session, cat.id)
+    if marked:
+        named = ", ".join(repr(name) for name in marked)
+        raise ValidationError(
+            f"category {cat.name!r} is saving for {named} — unmark {named} first, or archiving would "
+            f"silently release the money it sets aside"
+        )
     raise ValidationError(
         f"category {cat.name!r} holds a fund — delete the fund first, or archiving would "
         f"silently release the money it sets aside"

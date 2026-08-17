@@ -28,7 +28,9 @@ MONEY_FIGURES = ("asks", "holds", "spent", "carries", "next_month_has")
 DESCRIBES_THE_FUND = (
     "fund_id",
     "category_id",
+    "recurring_id",
     "name",
+    "currency",
     "year_month",
     "rule",
     "accumulates",
@@ -39,7 +41,11 @@ DESCRIBES_THE_FUND = (
     "whole_by",
 )
 
-NOT_ON_THE_CARD = ("charges", "has_repeating_charges")
+NOT_ON_THE_CARD = ("charges", "has_repeating_charges", "asks_cop", "holds_cop")
+"""`asks_cop` and `holds_cop` are `asks` and `holds` in pesos, and they are held
+back on purpose: the card states each figure once, in the fund's own currency,
+and printing both would say the same money twice. They exist for the totals that
+add funds together (ADR-0057)."""
 
 
 def _status(**overrides) -> FundStatus:
@@ -65,8 +71,20 @@ def test_the_card_states_every_money_figure_the_fund_reports():
     status = _status()
     card = format.fund_card(status)
     for figure in MONEY_FIGURES:
-        rendered = format.money(getattr(status, figure), "COP")
+        rendered = format.money(getattr(status, figure), status.currency)
         assert rendered in card, f"the card never states {figure} ({rendered})"
+
+
+def test_the_card_states_the_figures_in_the_fund_s_own_currency():
+    """A fund filling for a dollar charge does not print dollars as pesos.
+
+    The defect this pins is two days old and cost 1.325 green tests: hard-coding
+    "COP" where the noun's own currency belonged reported an 800 dollar
+    contribution as $800 instead of $3.200.000 (CHARTER §6).
+    """
+    card = format.fund_card(_status(currency="USD", asks=5_000, asks_cop=20_000_000))
+    assert format.money(5_000, "USD") in card
+    assert format.money(5_000, "COP") not in card
 
 
 def test_a_new_figure_on_the_fund_has_to_be_classified_before_it_ships():

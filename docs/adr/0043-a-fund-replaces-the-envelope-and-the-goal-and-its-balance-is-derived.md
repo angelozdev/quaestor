@@ -10,7 +10,9 @@
 - **Supersedes:** 0006 (both halves — its goals write API and its budget
   envelope write API), 0005 in part (the goal clause of the uniform
   soft-delete lifecycle)
-- **Superseded by:** —
+- **Superseded by:** 0057 in part (the «one category carries one fund» clause,
+  and only for the `from-recurring` rule — every other clause stands, and
+  `uq_fund_category` survives as a partial index saying exactly that)
 
 ## Context and problem statement
 

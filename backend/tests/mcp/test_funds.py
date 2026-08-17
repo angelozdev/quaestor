@@ -9,6 +9,7 @@ from datetime import date
 from quaestor.domain.models import IntervalUnit, RecurringMode, TxType
 from quaestor.mcp.tools import funds as fund_tools
 from quaestor.services import accounts, categories, fx, recurring
+from quaestor.services import funds as funds_service
 
 
 def _charge_due(session, category_name, amount, on):
@@ -102,6 +103,41 @@ def test_the_money_available_states_its_terms_and_the_figure(session):
     assert "Money available — 2026-11" in out
     assert "Fund Restaurantes: −200000.00 COP" in out
     assert "Available: -200000.00 COP" in out
+
+
+def test_a_dollar_fund_costs_the_month_its_pesos_and_the_column_adds_up(session):
+    """The month card is a peso column, so a dollar fund enters it as pesos.
+
+    The fund's own figure is dollars — that is AC-11 and it is right on the
+    fund's own card. Here it is one term of `income − claims = available`, and a
+    line reading 50.00 under a heading of pesos both lies about the size and
+    stops the subtraction below it from working. The meta line one row down was
+    already converting; the fund line was not.
+    """
+    cat = _seeded(session, "Tecnología")
+    account = accounts.create_account(session, name="DolarApp", type="debit", currency="USD")
+    charge = recurring.create_recurring(
+        session,
+        name="Opal",
+        payee="Opal",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=600_00,
+        currency="USD",
+        category_id=cat.id,
+        account_id=account.id,
+        interval_unit=IntervalUnit.year,
+        interval_count=1,
+        start_date=date(2027, 8, 5),
+    )
+    funds_service.mark_charge(session, charge.id, "2026-08")
+
+    out = fund_tools.money_available(session, fund_tools.MonthInput(month="2026-08"))
+
+    asked = funds_service.fund_status(session, funds_service.fund_for_charge(session, charge.id).id, "2026-08")
+    assert asked.currency == "USD"
+    assert f"Fund Opal: −{asked.asks_cop / 100:.2f} COP" in out
+    assert f"Fund Opal: −{asked.asks / 100:.2f} COP" not in out
 
 
 def test_the_rates_are_a_separate_answer_from_the_money_available(session):

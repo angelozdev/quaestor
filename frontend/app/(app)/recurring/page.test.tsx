@@ -2,18 +2,34 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { HELP_LABEL } from "@/components/screen-help"
-import type { Recurring } from "@/lib/api/types"
+import { ApiError, type Recurring } from "@/lib/api/types"
 import { fieldUnder, openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { listRecurring, createRecurring, updateRecurring, listAccounts, listCategories, getFx } =
-  vi.hoisted(() => ({
-    listRecurring: vi.fn(),
-    createRecurring: vi.fn(),
-    updateRecurring: vi.fn(),
-    listAccounts: vi.fn(),
-    listCategories: vi.fn(),
-    getFx: vi.fn(),
-  }))
+const {
+  listRecurring,
+  createRecurring,
+  updateRecurring,
+  listAccounts,
+  listCategories,
+  getFx,
+  toast,
+  chargeMarks,
+  markCharge,
+  unmarkCharge,
+  chargeEditCost,
+} = vi.hoisted(() => ({
+  listRecurring: vi.fn(),
+  createRecurring: vi.fn(),
+  updateRecurring: vi.fn(),
+  listAccounts: vi.fn(),
+  listCategories: vi.fn(),
+  getFx: vi.fn(),
+  toast: { success: vi.fn(), error: vi.fn() },
+  chargeMarks: vi.fn(),
+  markCharge: vi.fn(),
+  unmarkCharge: vi.fn(),
+  chargeEditCost: vi.fn(),
+}))
 
 vi.mock("@/lib/api/recurring", () => ({
   listRecurring,
@@ -26,6 +42,15 @@ vi.mock("@/lib/api/recurring", () => ({
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/fx", () => ({ getFx }))
+vi.mock("@/lib/api/funds", () => ({
+  paymentRefileCost: vi.fn().mockResolvedValue(null),
+  chargeMarks,
+  markCharge,
+  unmarkCharge,
+  chargeEditCost,
+  openTurns: vi.fn().mockResolvedValue([]),
+}))
+vi.mock("sonner", () => ({ toast }))
 
 import RecurringPage from "./page"
 
@@ -65,6 +90,8 @@ beforeEach(() => {
   listAccounts.mockResolvedValue([])
   listCategories.mockResolvedValue([])
   getFx.mockResolvedValue({ usd_cop: "4000" })
+  chargeMarks.mockResolvedValue([])
+  chargeEditCost.mockResolvedValue({ would_lose_its_fund: false })
 })
 
 describe("AC-7 — every screen carries the same control", () => {
@@ -403,5 +430,142 @@ describe("013 — naming the price's currency does not restate the price", () =>
       OPAL.id,
       expect.objectContaining({ currency: "COP", amount: 4_000 }),
     )
+  })
+})
+
+/**
+ * Marking a charge is what creates its fund — no form, nothing to confirm
+ * afterwards. Where the box cannot be ticked the row says why in the same
+ * breath, because an inert box and no reason is worse than no box at all.
+ */
+describe("015 — a fund may hang off the charge it fills", () => {
+  const SEGURO: Recurring = {
+    ...NETFLIX,
+    id: 42,
+    name: "Seguro",
+    interval_unit: "year",
+    interval_count: 1,
+    start_date: "2027-07-05",
+  }
+
+  const markOf = (over: Record<string, unknown> = {}) => ({
+    recurring_id: SEGURO.id,
+    category_id: SEGURO.category_id,
+    name: SEGURO.name,
+    currency: "COP",
+    can_be_marked: true,
+    why_not: null,
+    fund_id: null,
+    ...over,
+  })
+
+  beforeEach(() => {
+    listAccounts.mockResolvedValue([NU])
+    listCategories.mockResolvedValue([SUSCRIPCIONES])
+  })
+
+  it("The charge is marked from the list, with nothing left to confirm", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf()])
+    markCharge.mockResolvedValue({ id: 1 })
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText(SEGURO.name)
+
+    await user.click(await screen.findByRole("checkbox", { name: "Juntar mes a mes" }))
+
+    await waitFor(() => expect(markCharge).toHaveBeenCalledWith(SEGURO.id, expect.any(String)))
+    expect(screen.queryByRole("dialog")).toBeNull()
+    expect(await screen.findByText(SEGURO.name)).toBeInTheDocument()
+  })
+
+  it("The list says why a charge cannot be marked", async () => {
+    listRecurring.mockResolvedValue([NETFLIX])
+    chargeMarks.mockResolvedValue([
+      markOf({
+        recurring_id: NETFLIX.id,
+        name: NETFLIX.name,
+        can_be_marked: false,
+        why_not: "it comes back before a whole month has passed, so saving for it would ask …",
+      }),
+    ])
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    const row = (await screen.findByText(NETFLIX.name)).closest("tr") as HTMLElement
+
+    expect(within(row).queryByRole("checkbox", { name: "Juntar mes a mes" })).toBeNull()
+    expect(row.textContent).toContain("Vuelve cada mes")
+  })
+
+  it("A refused marking says why on the screen, and leaves the charge alone", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf()])
+    markCharge.mockRejectedValue(
+      new ApiError(400, "validation_error", "'Seguro' cannot be saved for: it charges this month"),
+    )
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+    await screen.findByText(SEGURO.name)
+
+    await user.click(await screen.findByRole("checkbox", { name: "Juntar mes a mes" }))
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining("cannot be saved for")),
+    )
+    expect(screen.getByRole("checkbox", { name: "Juntar mes a mes" })).not.toBeChecked()
+  })
+
+  it("Making a charge monthly says first that its fund goes with it", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf({ fund_id: 7 })])
+    chargeEditCost.mockResolvedValue({ would_lose_its_fund: true })
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Editar" }))
+    await user.click(await screen.findByRole("button", { name: "Guardar" }))
+
+    expect(await screen.findByText(/su fondo se va a borrar/i)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Guardar y borrar el fondo" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument()
+    expect(updateRecurring).not.toHaveBeenCalled()
+  })
+
+  it("The question carries every field that could cost the fund, not only the cadence", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf({ fund_id: 7 })])
+    chargeEditCost.mockResolvedValue({ would_lose_its_fund: false })
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Editar" }))
+    await user.click(await screen.findByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(chargeEditCost).toHaveBeenCalled())
+    expect(chargeEditCost).toHaveBeenCalledWith(
+      SEGURO.id,
+      expect.objectContaining({
+        interval_unit: SEGURO.interval_unit,
+        interval_count: SEGURO.interval_count,
+        start_date: SEGURO.start_date,
+        end_date: SEGURO.end_date ?? null,
+      }),
+    )
+  })
+
+  it("Cancelling that warning leaves the charge and its fund alone", async () => {
+    listRecurring.mockResolvedValue([SEGURO])
+    chargeMarks.mockResolvedValue([markOf({ fund_id: 7 })])
+    chargeEditCost.mockResolvedValue({ would_lose_its_fund: true })
+    const user = userEvent.setup()
+    render(<RecurringPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Editar" }))
+    await user.click(await screen.findByRole("button", { name: "Guardar" }))
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }))
+
+    expect(updateRecurring).not.toHaveBeenCalled()
+    expect(unmarkCharge).not.toHaveBeenCalled()
+    expect(await screen.findByLabelText(/Nombre/)).toHaveValue(SEGURO.name)
   })
 })

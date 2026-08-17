@@ -19,6 +19,7 @@ from ..domain.errors import CorrectionNotApplied, NotFound, TransferImbalance, V
 from ..domain.models import (
     Account,
     Meta,
+    RecurringItem,
     Source,
     Tag,
     Transaction,
@@ -30,7 +31,7 @@ from ..domain.models import (
 from ..domain.money import is_supported
 from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortableColumns, SortField, SortSpec
-from . import categories
+from . import categories, occurrences
 
 PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
 
@@ -81,6 +82,55 @@ def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> N
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no new link")
 
 
+def refuse_bad_charge_link(
+    session: Session, tx_type: TxType, category_id: int | None, recurring_id: int | None
+) -> None:
+    """A movement may name the charge it settled, and only one it could have settled.
+
+    The owner pays the insurance from the bank and types it in by hand; naming
+    the charge is what closes that cycle, because the amount alone cannot —
+    guessing by amount is the very thing ADR-0057 replaces, and it would empty
+    the insurance fund the day a fire extinguisher costs the same (AC-5).
+
+    Money coming in settles nothing. A charge that is switched off has no cycle
+    left to close. And a charge filed under a different category is refused
+    rather than accepted quietly: the screen only ever offers the charges of the
+    movement's own category, so a link across categories can only arrive by
+    mistake, and it would take the payment out of one category's spending while
+    draining a fund in another.
+    """
+    if recurring_id is None:
+        return
+    if tx_type is not TxType.expense:
+        raise ValidationError("only money going out can settle a repeating charge")
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"repeating charge {recurring_id} not found")
+    if not item.active:
+        raise ValidationError(f"the charge {item.name!r} is switched off and has no turn left to settle")
+    if item.type is not TxType.expense:
+        raise ValidationError(f"{item.name!r} is money coming in, so no payment settles it")
+    if category_id is not None and item.category_id != category_id:
+        raise ValidationError(
+            f"{item.name!r} is not filed under this movement's category, "
+            f"so this payment cannot be the one that settled it"
+        )
+
+
+def _refuse_a_turn_without_a_charge(recurring_id: int | None, settles_due: Date | None) -> None:
+    """A turn only means something beside the charge it belongs to (ADR-0058)."""
+    if settles_due is not None and recurring_id is None:
+        raise ValidationError("a payment cannot name the turn it settled without naming the charge")
+
+
+def _apply_to_turn(session: Session, tx: Transaction, recurring_id: int | None, settles_due: Date) -> None:
+    """Point the named turn at this movement, through the module that owns turns."""
+    item = session.get(RecurringItem, recurring_id)
+    if item is None:
+        raise NotFound(f"recurring item {recurring_id} not found")
+    occurrences.settle_turn(session, item, settles_due, tx)
+
+
 def _record(
     session: Session,
     tx_type: TxType,
@@ -94,6 +144,8 @@ def _record(
     source: str,
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Core registration logic shared by record_expense and record_income."""
     require_positive(amount)
@@ -104,6 +156,8 @@ def _record(
         raise ValidationError(f"currency {currency} does not match account currency ({acc.currency})")
     category_id = categories.resolve_for_movement(session, tx_type, category_id, new_category)
     refuse_bad_meta(session, tx_type, meta_id)
+    refuse_bad_charge_link(session, tx_type, category_id, recurring_id)
+    _refuse_a_turn_without_a_charge(recurring_id, settles_due)
     tx = Transaction(
         date=date,
         payee=payee or "",
@@ -115,11 +169,15 @@ def _record(
         account_id=account_id,
         category_id=category_id,
         meta_id=meta_id,
+        recurring_id=recurring_id,
         source=Source(source),
     )
     acc.balance += delta_balance(tx_type, amount)
     session.add(tx)
     session.add(acc)
+    if settles_due is not None:
+        session.flush()
+        _apply_to_turn(session, tx, recurring_id, settles_due)
     session.commit()
     session.refresh(tx)
     return tx
@@ -137,6 +195,8 @@ def record_expense(
     source: str = "manual",
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Register an expense transaction and decrement the account balance.
 
@@ -157,6 +217,10 @@ def record_expense(
             expense under, in the same action.
         meta_id: The meta this purchase was for, named once on the day it
             happens (ADR-0046). Optional, and the ordinary case is None.
+        recurring_id: The repeating charge this payment settled, named by the
+            owner when he pays outside «Por pagar» (ADR-0057). Optional; without
+            it the payment settles nothing, because the amount alone never
+            decides.
 
     Returns:
         The persisted Transaction.
@@ -181,6 +245,8 @@ def record_expense(
         source,
         new_category,
         meta_id,
+        recurring_id,
+        settles_due,
     )
 
 
@@ -196,6 +262,8 @@ def record_income(
     source: str = "manual",
     new_category: str | None = None,
     meta_id: int | None = None,
+    recurring_id: int | None = None,
+    settles_due: Date | None = None,
 ) -> Transaction:
     """Register an income transaction and increment the account balance.
 
@@ -214,12 +282,18 @@ def record_income(
         source: Origin of the transaction ("manual", "agent", or "import").
         new_category: Name of an income category to create and file this
             income under, in the same action.
+        meta_id: Refused for income, the way `refuse_bad_meta` has always
+            refused it.
+        recurring_id: Refused for income. It is accepted as an argument so the
+            refusal happens rather than the link being dropped in silence —
+            money coming in settles nothing (AC-5).
 
     Returns:
         The persisted Transaction.
 
     Raises:
-        ValidationError: Invalid amount, currency mismatch, or any refusal from
+        ValidationError: Invalid amount, currency mismatch, a meta or a charge
+            named by money coming in, or any refusal from
             `categories.resolve_for_movement` — no category, both categories,
             a name already taken, or a category missing, archived or of the
             wrong direction.
@@ -238,6 +312,8 @@ def record_income(
         source,
         new_category,
         meta_id,
+        recurring_id,
+        settles_due,
     )
 
 
@@ -447,6 +523,8 @@ def update_transaction(
     category_id=_UNSET,
     date=None,
     meta_id=_UNSET,
+    recurring_id=_UNSET,
+    settles_due=_UNSET,
 ) -> Transaction:
     """Edit balance-safe fields of a transaction (payee, notes, category_id, date).
 
@@ -465,7 +543,9 @@ def update_transaction(
             money coming in, money moving between the owner's own accounts, or
             a meta that was cancelled. Passing None here DOES clear it: unlinking
             is a real act, and the category's fund takes the purchase back the
-            moment it happens (AC-28).
+            moment it happens (AC-28). Every refusal about the charge this
+            payment settled applies the same way, and clearing it hands the
+            cycle back to the charge's fund (ADR-0057, AC-5).
     """
     tx = get_transaction(session, tx_id)
     if payee is not None:
@@ -479,6 +559,17 @@ def update_transaction(
     if meta_id is not _UNSET:
         refuse_bad_meta(session, tx.type, meta_id)
         tx.meta_id = meta_id
+    if recurring_id is not _UNSET:
+        refuse_bad_charge_link(session, tx.type, tx.category_id, recurring_id)
+        _refuse_a_turn_without_a_charge(recurring_id, None if settles_due is _UNSET else settles_due)
+        if recurring_id != tx.recurring_id:
+            occurrences.release_turn(session, tx)
+        tx.recurring_id = recurring_id
+    if settles_due is not _UNSET:
+        occurrences.release_turn(session, tx)
+        if settles_due is not None:
+            session.flush()
+            _apply_to_turn(session, tx, tx.recurring_id, settles_due)
     session.add(tx)
     session.commit()
     session.refresh(tx)

@@ -855,7 +855,7 @@ def given_viewed_metas(world: World, month: str) -> None:
 def then_breakdown_funds(world: World, amount: str) -> None:
     view = getattr(world, "available_view", None)
     assert view is not None, "nothing opened the money available into its breakdown"
-    asking = sum(line.asks for line in view.funds)
+    asking = sum(line.asks_cop for line in view.funds)
     assert asking == _cents(amount), f"the funds ask {asking}, expected {_cents(amount)}"
 
 

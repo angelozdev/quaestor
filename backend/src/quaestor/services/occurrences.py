@@ -9,8 +9,9 @@ module never imports it back, so the dependency stays one-way.
 from __future__ import annotations
 
 from datetime import date as Date
+from datetime import timedelta
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..domain.dtos import MaterializationReport, RunFailure
 from ..domain.errors import NotFound, ValidationError
@@ -24,7 +25,7 @@ from ..domain.models import (
     Transaction,
     TxStatus,
 )
-from ..domain.recurrence import due_dates, is_due_on
+from ..domain.recurrence import due_dates, is_due_on, next_due_on_or_after
 from ..domain.rules import delta_balance
 
 
@@ -39,6 +40,98 @@ def sync_occurrence_status(session: Session, tx: Transaction, status: Occurrence
     if occ is not None and occ.status != status:
         occ.status = status
         session.add(occ)
+
+
+def open_turns(session: Session, item: RecurringItem, from_day: Date, through: Date) -> list[Date]:
+    """The turns of this charge in a window that nobody has settled or skipped (ADR-0058).
+
+    What the screen offers when it asks which turn a hand-typed payment paid.
+    Bounded by dates rather than by a count, because a count means something
+    different for every cadence: six turns of a yearly charge is six years of
+    bills the owner is not paying today, while six of a weekly one is a month.
+    A charge repeating forever has no last turn, so something has to close the
+    list, and the honest close is the stretch a payment written down now could
+    actually be answering for.
+    """
+    decided = {
+        due
+        for due, status in session.exec(
+            select(RecurringOccurrence.due_date, RecurringOccurrence.status).where(
+                RecurringOccurrence.recurring_id == item.id,
+                col(RecurringOccurrence.status).in_([OccurrenceStatus.posted, OccurrenceStatus.skipped]),
+            )
+        ).all()
+    }
+    found: list[Date] = []
+    due = next_due_on_or_after(item.start_date, item.end_date, item.interval_unit, item.interval_count, from_day)
+    while due is not None and due <= through:
+        if due not in decided:
+            found.append(due)
+        due = next_due_on_or_after(
+            item.start_date, item.end_date, item.interval_unit, item.interval_count, due + timedelta(days=1)
+        )
+    return found
+
+
+def settle_turn(session: Session, item: RecurringItem, due_date: Date, tx: Transaction) -> RecurringOccurrence:
+    """Apply a hand-typed payment to the turn it paid. Does NOT commit.
+
+    The movement carries the charge (ADR-0057); this carries which of its turns,
+    so that a turn paid stays paid in every month that reads it afterwards
+    (ADR-0058). A turn the engine already charged is refused rather than taken
+    over — two movements answering for one turn is exactly what the table's
+    unique key exists to prevent.
+
+    Raises:
+        ValidationError: the charge never falls due on that day, or that turn
+            was already paid by another movement.
+    """
+    if not is_due_on(item.start_date, item.end_date, item.interval_unit, item.interval_count, due_date):
+        raise ValidationError(f"{item.name!r} never falls due on {due_date}, so no payment can settle that turn")
+    occ = session.exec(
+        select(RecurringOccurrence).where(
+            RecurringOccurrence.recurring_id == item.id,
+            RecurringOccurrence.due_date == due_date,
+        )
+    ).first()
+    if occ is not None and occ.transaction_id is not None and occ.transaction_id != tx.id:
+        raise ValidationError(f"the turn of {item.name!r} due on {due_date} was already settled by another movement")
+    if occ is None:
+        occ = RecurringOccurrence(recurring_id=item.id, due_date=due_date, status=OccurrenceStatus.posted)
+    occ.status = OccurrenceStatus.posted
+    occ.transaction_id = tx.id
+    session.add(occ)
+    return occ
+
+
+def _was_applied_by_hand(tx: Transaction, occ: RecurringOccurrence) -> bool:
+    """Whether this turn is standing for a payment the owner applied to it.
+
+    Two conditions, and both are load-bearing. The engine writes its own
+    movements with `Source.recurring`, so anything else was typed. And the
+    movement has to name the very charge the turn belongs to — without that, a
+    row that merely happens to be pointed at by an occurrence would be read as
+    an answer the owner gave, which is a shape no screen can produce and only a
+    test fabricates.
+    """
+    return tx.source is not Source.recurring and tx.recurring_id == occ.recurring_id
+
+
+def release_turn(session: Session, tx: Transaction) -> None:
+    """Let go of the turn this movement was applied to, if it was one. Does NOT commit.
+
+    The turn goes back to unpaid — the row disappears — because the owner is
+    withdrawing an answer, not calling off a charge. A turn the engine charged
+    is left alone here; that one is settled by the delete hook, which closes it
+    as skipped so the money coming back does not get charged twice (ADR-0038).
+
+    Without this a deleted or re-pointed payment would leave a turn marked paid
+    by a movement that no longer settles it, and the fund would never save for
+    that turn again.
+    """
+    occ = occurrence_of(session, tx)
+    if occ is not None and _was_applied_by_hand(tx, occ):
+        session.delete(occ)
 
 
 def existing_due_dates(session: Session, recurring_id: int) -> set[Date]:
@@ -324,9 +417,17 @@ def close_date_of_deleted_charge(tx: Transaction, session: Session) -> None:
     as skipped rather than stay marked charged and pointing at a row that no
     longer exists — otherwise it is consumed forever and no run brings it back
     (ADR-0038). Does NOT commit; `delete_transaction` owns the commit.
+
+    A payment the owner typed and applied to a turn closes the other way: the
+    turn goes back to unpaid, because the owner is undoing an answer and not
+    calling off a charge. Skipping it there would tell the fund to stop saving
+    for a bill that is still coming (ADR-0058).
     """
     occ = occurrence_of(session, tx)
     if occ is None:
+        return
+    if _was_applied_by_hand(tx, occ):
+        session.delete(occ)
         return
     occ.status = OccurrenceStatus.skipped
     occ.transaction_id = None

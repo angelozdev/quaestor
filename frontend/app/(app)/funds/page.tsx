@@ -81,7 +81,7 @@ function panelLine(fund: FundStatus): string {
   const next = monthNameOf(nextYearMonth(fund.year_month)).toLowerCase()
   const leftover =
     shape === "fondo" ? `Lo que sobre pasa a ${next}.` : `Lo que sobre no pasa a ${next}.`
-  return `${fund.name} es un ${shape} — pide ${formatCents(fund.asks, "COP")} este mes ${whyItAsks(fund, shape)}. ${leftover}`
+  return `${fund.name} es un ${shape} — pide ${formatCents(fund.asks, fund.currency)} este mes ${whyItAsks(fund, shape)}. ${leftover}`
 }
 
 /**
@@ -121,18 +121,18 @@ function FundsHelp({ funds, month }: { funds: FundStatus[] | undefined; month: s
 
 /** What the month did to the entry, and what it leaves behind. */
 function keptLine(fund: FundStatus): string {
-  const spent = formatCents(fund.spent, "COP")
+  const spent = formatCents(fund.spent, fund.currency)
   if (shapeOf(fund) === "fondo") {
-    return `Gastaste ${spent} · se guardan ${formatCents(fund.carries, "COP")}`
+    return `Gastaste ${spent} · se guardan ${formatCents(fund.carries, fund.currency)}`
   }
   const lost = Math.max(fund.asks - fund.spent, 0)
-  return `Gastaste ${spent} · los ${formatCents(lost, "COP")} que sobran no se guardan`
+  return `Gastaste ${spent} · los ${formatCents(lost, fund.currency)} que sobran no se guardan`
 }
 
 /** What the next month opens with, named by its own month. */
 function nextMonthLine(fund: FundStatus): string {
   const next = monthNameOf(nextYearMonth(fund.year_month))
-  const has = formatCents(fund.next_month_has, "COP")
+  const has = formatCents(fund.next_month_has, fund.currency)
   return shapeOf(fund) === "fondo"
     ? `${next} tendrá ${has} para gastar.`
     : `${next} vuelve a ${has}.`
@@ -149,22 +149,36 @@ function nextMonthLine(fund: FundStatus): string {
  * lines add up to the figure above them (AC-4). It is the charge's own share to
  * the peso, and differs from `asks` by centavos only.
  */
-function chargeLine(charge: FundCharge, month: string, shownAsks: number): string {
+function chargeLine(
+  charge: FundCharge,
+  month: string,
+  shownAsks: number,
+  currency: string,
+): string {
   const when =
     charge.charge_month === month
       ? "vence este mes"
       : `se guarda para ${monthAndYearOf(charge.charge_month)}`
-  const share = formatCents(shownAsks, "COP")
+  const share = formatCents(shownAsks, currency)
   const figure =
-    charge.asks === charge.costs ? share : `${share} de ${formatCents(charge.costs, "COP")}`
+    charge.asks === charge.costs ? share : `${share} de ${formatCents(charge.costs, currency)}`
   return `${charge.name} — ${when} · ${figure}`
 }
 
-/** Why a fund that fills for charges is asking nothing at all this month. */
+/**
+ * Why a fund that fills for charges is asking nothing at all this month.
+ *
+ * A fund that hangs off one charge gets its own sentence. Its category may hold
+ * plenty of other charges, so saying the category ran out would be false; what
+ * ran out is this charge's turns. And the way out is the box on Recurrentes,
+ * not a delete button that no longer carries that name.
+ */
 function nothingToSetAside(fund: FundStatus): string {
-  return fund.has_repeating_charges
-    ? "Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados."
-    : "La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre. Bórralo, o registra un cobro."
+  if (fund.has_repeating_charges)
+    return "Este mes no hay nada que apartar: sus cobros están omitidos o ya pagados."
+  if (fund.recurring_id !== null)
+    return `${fund.name} ya no vuelve a cobrar, así que pedirá 0 siempre. Destíldalo en Recurrentes.`
+  return "La categoría ya no tiene cobros recurrentes, así que pedirá $ 0 siempre. Bórralo, o registra un cobro."
 }
 
 /**
@@ -180,6 +194,7 @@ function FundCharges({ fund }: { fund: FundStatus }) {
     fund.charges.map((charge) => charge.asks),
     fund.asks,
   )
+  const held = fund.currency
   return (
     <tr>
       <td
@@ -193,7 +208,7 @@ function FundCharges({ fund }: { fund: FundStatus }) {
           <ul className="space-y-0.5">
             {fund.charges.map((charge, index) => (
               <li key={`${charge.name}-${charge.charge_month}`} className="text-xs">
-                {chargeLine(charge, fund.year_month, shown[index])}
+                {chargeLine(charge, fund.year_month, shown[index], held)}
               </li>
             ))}
           </ul>
@@ -201,6 +216,24 @@ function FundCharges({ fund }: { fund: FundStatus }) {
       </td>
     </tr>
   )
+}
+
+/** Whether this entry hangs off one repeating charge rather than a category. */
+function fillsForOneCharge(fund: FundStatus): boolean {
+  return fund.recurring_id !== null
+}
+
+/**
+ * What the button that removes an entry says it does.
+ *
+ * A category fund is deleted; a charge fund is *unmarked*, which is the word
+ * the owner used to create it. Naming it "eliminar" would suggest the charge
+ * goes with it, and nothing about the charge changes.
+ */
+function removalLabel(fund: FundStatus, shape: FundShape): string {
+  return fillsForOneCharge(fund)
+    ? `Dejar de juntar para ${fund.name}`
+    : `Eliminar el ${shape} de ${fund.name}`
 }
 
 function FundRow({
@@ -239,10 +272,10 @@ function FundRow({
           {ruleLabel(fund.rule, shape)}
         </td>
         <td className="px-3 py-2 text-right align-top tabular-nums">
-          {formatCents(fund.asks, "COP")}
+          {formatCents(fund.asks, fund.currency)}
         </td>
         <td className="px-3 py-2 text-right align-top tabular-nums">
-          {formatCents(fund.holds, "COP")}
+          {formatCents(fund.holds, fund.currency)}
         </td>
         <td className="px-3 py-2 align-top">
           <StatusBadge kind="onTrack" value={fund.on_track} />
@@ -251,10 +284,10 @@ function FundRow({
           <Button
             variant="ghost"
             size="sm"
-            aria-label={`Eliminar el ${shape} de ${fund.name}`}
+            aria-label={removalLabel(fund, shape)}
             onClick={onDelete}
           >
-            Eliminar
+            {fillsForOneCharge(fund) ? "Dejar de juntar" : "Eliminar"}
           </Button>
         </td>
       </tr>
@@ -340,7 +373,11 @@ export default function FundsPage() {
   const remove = useMutation({
     mutationFn: (fund: FundStatus) => deleteFund(fund.fund_id),
     onSuccess: (_result, fund) => {
-      toast.success(`${nounOf(shapeOf(fund))} eliminado`)
+      toast.success(
+        fillsForOneCharge(fund)
+          ? `Dejaste de juntar para ${fund.name}`
+          : `${nounOf(shapeOf(fund))} eliminado`,
+      )
       invalidate(qc, "fundWrite")
       setDeleting(null)
     },
@@ -348,6 +385,7 @@ export default function FundsPage() {
   })
 
   const deletingShape = deleting === null ? "fondo" : shapeOf(deleting)
+  const unmarking = deleting !== null && fillsForOneCharge(deleting)
 
   return (
     <div className="space-y-10">
@@ -429,9 +467,13 @@ export default function FundsPage() {
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title={`Eliminar ${deletingShape}`}
-        description={`Se elimina el ${deletingShape} de "${deleting?.name}". La categoría y sus movimientos no cambian.`}
-        confirmLabel="Eliminar"
+        title={unmarking ? "Dejar de juntar" : `Eliminar ${deletingShape}`}
+        description={
+          unmarking
+            ? `Dejas de juntar para "${deleting?.name}". El cobro sigue igual y ningún movimiento cambia, pero lo que llevas juntado se pierde.`
+            : `Se elimina el ${deletingShape} de "${deleting?.name}". La categoría y sus movimientos no cambian.`
+        }
+        confirmLabel={unmarking ? "Dejar de juntar" : "Eliminar"}
         pending={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting)}
       />

@@ -21,6 +21,7 @@ export interface Transaction {
   account_id: number
   category_id: number | null
   meta_id: number | null
+  recurring_id: number | null
   transfer_group_id: string | null
   transfer_direction: TransferDirection | null
   source: string
@@ -128,14 +129,51 @@ export interface FundLine {
   rule: FundRule
   start_month: string
   accumulates: boolean
+  recurring_id: number | null
+  currency: string
+}
+
+/**
+ * One repeating charge, as the list that offers to save for it sees it.
+ *
+ * `why_not` is filled exactly when `can_be_marked` is false — a box the owner
+ * cannot tick and nothing saying why is the thing this field exists to
+ * prevent. `fund_id` is what marking produced, so the same row can offer to
+ * unmark.
+ */
+/** What a payment stops settling if it is refiled under another category (AC-5). */
+export interface ChargeUnlink {
+  recurring_id: number
+  name: string
+  currency: string
+  due_date: string
+  asks_again: number
+  charge_month: string
+}
+
+export interface ChargeMark {
+  recurring_id: number
+  category_id: number
+  name: string
+  currency: string
+  can_be_marked: boolean
+  why_not: string | null
+  fund_id: number | null
 }
 
 /**
  * What one fund asks, holds and reports for one month.
  *
- * `spent` is what the category cost that month; `carries` is what survives
+ * `spent` is what the fund cost that month; `carries` is what survives
  * into the next one, which is 0 for a fund that resets; `next_month_has` is
  * that carry plus what the rule asks then.
+ *
+ * `recurring_id` is the charge the fund hangs off, or null when it covers a
+ * whole category. `currency` is the money `asks`, `holds`, `spent` and
+ * `carries` are in — the charge's own for a fund filling for one charge, pesos
+ * otherwise. `asks_cop` and `holds_cop` are the same two figures in pesos, for
+ * the totals that add funds together; a screen showing one fund never needs
+ * them.
  */
 export interface FundStatus {
   fund_id: number
@@ -156,6 +194,10 @@ export interface FundStatus {
   averaged_over: number | null
   spreads_over: number | null
   whole_by: string | null
+  recurring_id: number | null
+  currency: string
+  asks_cop: number
+  holds_cop: number
 }
 
 /**
@@ -230,12 +272,23 @@ export interface FundsSummary {
   n_behind: number
   set_aside: number
 }
+/**
+ * One fund inside the month's report.
+ *
+ * `asks`, `holds` and `spent` are in the fund's own `currency` — the charge's
+ * for a fund that fills one charge, pesos otherwise — the way a meta's are.
+ * `asks_cop` and `holds_cop` are the same figures in pesos, for the totals
+ * that add funds together.
+ */
 export interface FundReportLine {
   category_name: string
   asks: number
   holds: number
   spent: number
   on_track: boolean
+  currency: string
+  asks_cop: number
+  holds_cop: number
 }
 /** One meta inside the month's report — by meta, never folded into a category (AC-36). */
 export interface MetaReportLine {
@@ -310,6 +363,8 @@ export interface TransactionCreate {
   notes?: string | null
   tags?: string[]
   meta_id?: number | null
+  recurring_id?: number | null
+  settles_due?: string | null
 }
 export interface TransferCreate {
   from_account_id: number
@@ -327,6 +382,8 @@ export interface TransactionUpdate {
   date?: string
   tags?: string[]
   meta_id?: number | null
+  recurring_id?: number | null
+  settles_due?: string | null
 }
 export interface PlanPaymentCreate {
   payee: string

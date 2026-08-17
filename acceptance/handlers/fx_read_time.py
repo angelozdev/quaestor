@@ -396,14 +396,34 @@ def when_prepare_transfer(
         world.implied_rate_error = exc
 
 
+_DATA_REVISIONS = ("quaestor.migrations.versions.0020_a_fund_that_filled_charges_becomes_one_per_charge",)
+"""Revisions that move rows rather than columns, in the order Alembic runs them.
+
+A scenario that starts from an old *schema* prepares one and lets Alembic walk
+to head. One that starts from today's schema and an old *shape of the data* has
+nothing for Alembic to do — the columns are already there — so the data half is
+run on its own. Both are the same sentence to the owner: the upgrade completes.
+"""
+
+
 @step(r"the upgrade completes")
 def when_upgrade_completes(world: World) -> None:
-    from alembic import command as alembic_command
+    """Run the real revisions, never a reimplementation of what they do.
 
-    if world.alembic_cfg is None:
-        raise AssertionError("scenario setup error: no old-design database was prepared")
-    alembic_command.upgrade(world.alembic_cfg, "head")
-    world.reopen_session()
+    A migration checked by a copy of itself proves nothing (013 set this rule).
+    """
+    from importlib import import_module
+
+    if world.alembic_cfg is not None:
+        from alembic import command as alembic_command
+
+        alembic_command.upgrade(world.alembic_cfg, "head")
+        world.reopen_session()
+        return
+    for name in _DATA_REVISIONS:
+        import_module(name).split_category_funds_into_charge_funds(world.session.connection())
+    world.session.commit()
+    world.session.expire_all()
 
 
 # --------------------------------------------------- When (AC-13, parity)

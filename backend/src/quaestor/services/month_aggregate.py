@@ -15,12 +15,13 @@ for this app; see the bounded-read-path ADR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as Date
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy import extract, func, or_
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ..domain.errors import ValidationError
 from ..domain.models import (
@@ -38,7 +39,7 @@ from ..domain.models import (
     TxType,
 )
 from ..domain.money import to_cop_cents
-from ..domain.recurrence import due_dates
+from ..domain.recurrence import due_dates, next_due_on_or_after
 from ..domain.rules import is_year_month, month_bounds, prev_year_month, year_month_of
 from . import fx as _fx
 
@@ -72,9 +73,11 @@ class MonthAggregate:
     linked_by_meta: dict[int, list[Transaction]]
     first_movement_month: str | None
     skipped_turns: frozenset[tuple[int, Date]]
+    settled_turns: frozenset[tuple[int, Date]]
     _window_expense: list[Transaction]
     _window_income: list[Transaction]
     _spent_by_cat_month: dict[tuple[int | None, str], int]
+    _settled_by_charge_month: dict[tuple[int, str], dict[str, int]]
 
     def category(self, category_id: int | None) -> Category | None:
         return self.categories.get(category_id) if category_id is not None else None
@@ -93,30 +96,114 @@ class MonthAggregate:
         category spent, and money set aside that vanished from the figure would
         leave the fund reporting a balance it does not have.
 
-        A purchase pointed at a meta is the one exception, and it is not
-        hiding: the meta counted it, so counting it here too would count the
-        same money twice (ADR-0046). Only the *plan* reads this — the fund's
-        fold and the report's funds section. What was actually spent is read
-        from the movements themselves, and the spending report still shows the
-        purchase in full (AC-33).
+        Two kinds of movement are left out, and neither is hiding — both were
+        already counted by a noun that owns them, so counting them here too
+        would count the same money twice. A purchase pointed at a meta belongs
+        to the meta (ADR-0046). A payment that settled a charge with a fund of
+        its own belongs to that fund (ADR-0057): without this the category's
+        average would ask for the club subscription a second time, and the same
+        peso would drain two funds. A payment settling a charge nobody marked
+        stays here, because nothing else is answerable for it.
+
+        Only the *plan* reads this — the fund's fold and the report's funds
+        section. What was actually spent is read from the movements themselves,
+        and the spending report still shows every peso in full (AC-33).
         """
         return self._spent_by_cat_month.get((category_id, year_month), 0)
+
+    def settled_in(self, item: RecurringItem, year_month: str) -> int:
+        """What one charge was paid in a month, in the charge's own currency.
+
+        Native cents rather than COP, because a fund that fills for a dollar
+        charge reports in dollars and converting to pesos to fold and back to
+        dollars to report would round twice at a rate that moves (ADR-0057,
+        AC-11).
+
+        A row in a currency the charge does not hold is not this charge's
+        payment — feature 013 made an obligation that pays itself state its
+        price in the currency its account holds (ADR-0053), so there is no
+        legitimate way to produce one.
+        """
+        return self._settled_by_charge_month.get((item.id, year_month), {}).get(item.currency, 0)
 
     def obligations_in(self, category_id: int) -> list[RecurringItem]:
         """The live expense obligations filed under one category (AC-4)."""
         return [i for i in self.active_recurring if i.type == TxType.expense and i.category_id == category_id]
 
+    def obligation(self, recurring_id: int) -> RecurringItem | None:
+        """One live expense obligation by id, or nothing when it is switched off."""
+        return next((i for i in self.obligations if i.id == recurring_id), None)
+
+    @property
+    def obligations(self) -> list[RecurringItem]:
+        return [i for i in self.active_recurring if i.type == TxType.expense]
+
     def funded_categories(self) -> frozenset[int]:
-        """The categories a fund answers for, so the month need not ask twice.
+        """The categories a fund answers for *whole*, so the month need not ask twice.
+
+        Only the category-wide rules count. A category holding one marked charge
+        is not covered — the rest of its spending and its other obligations are
+        still nobody's, and folding it in here would let a single marked
+        subscription swallow the whole category from the uncovered term
+        (ADR-0057).
 
         What is left over is what nothing covers, and the month reads that set
         three times per request (AC-13).
         """
-        return frozenset(fund.category_id for fund in self.funds)
+        return frozenset(fund.category_id for fund in self.funds if fund.recurring_id is None)
+
+    def funded_charges(self) -> frozenset[int]:
+        """The charges that carry a fund of their own, whose ask already counts them."""
+        return frozenset(fund.recurring_id for fund in self.funds if fund.recurring_id is not None)
 
     def was_skipped(self, recurring_id: int, due_date: Date) -> bool:
         """Whether the owner said this turn will not happen (AC-17)."""
         return (recurring_id, due_date) in self.skipped_turns
+
+    def was_settled(self, recurring_id: int, due_date: Date) -> bool:
+        """Whether a movement has been applied to this turn (ADR-0058).
+
+        Not a question about a month. A turn paid in August is paid when
+        September is read and when next July is read, which is the whole reason
+        settlement stopped being counted a month at a time: asked monthly, an
+        early payment was forgotten the month after it was made and the owner
+        was billed again for money that had already left.
+        """
+        return (recurring_id, due_date) in self.settled_turns
+
+    def open_turn_on_or_after(self, item: RecurringItem, day: Date) -> Date | None:
+        """This charge's first turn from `day` on that is neither settled nor skipped.
+
+        Walks turn by turn rather than asking about one month, so a paid turn is
+        stepped over wherever it sits and the answer is the same in every month
+        that reads it.
+        """
+        due = next_due_on_or_after(item.start_date, item.end_date, item.interval_unit, item.interval_count, day)
+        while due is not None and (self.was_settled(item.id, due) or self.was_skipped(item.id, due)):
+            due = next_due_on_or_after(
+                item.start_date, item.end_date, item.interval_unit, item.interval_count, due + timedelta(days=1)
+            )
+        return due
+
+    def with_the_turn_reopened(self, recurring_id: int, due_date: Date) -> MonthAggregate:
+        """This month again, as if nothing had settled that turn of that charge.
+
+        Both halves have to go together: the turn stops counting as answered
+        for, and the money that answered for it stops draining the charge's
+        fund. Leaving either behind would price a hypothetical nobody can
+        reach — a turn open that the fund has already spent against, or a fund
+        holding money for a bill it still thinks is paid.
+
+        Nothing is written. The copy exists so a screen can be told what an edit
+        would cost before the owner commits to it (AC-5, AC-8).
+        """
+        return replace(
+            self,
+            settled_turns=frozenset(turn for turn in self.settled_turns if turn != (recurring_id, due_date)),
+            _settled_by_charge_month={
+                key: value for key, value in self._settled_by_charge_month.items() if key[0] != recurring_id
+            },
+        )
 
     def turns_in(self, item: RecurringItem, year_month: str) -> list[Date]:
         """Every turn this obligation falls due on inside one month.
@@ -209,12 +296,16 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     categories = {c.id: c for c in session.exec(select(Category)).all()}
     groups = {g.id: g for g in session.exec(select(CategoryGroup)).all()}
 
+    funds = list(session.exec(select(Fund)).all())
+    charges_with_a_fund = frozenset(f.recurring_id for f in funds if f.recurring_id is not None)
+
     spent_rows = session.exec(
         select(
             Transaction.category_id,
             extract("year", Transaction.date),
             extract("month", Transaction.date),
             Transaction.currency,
+            Transaction.recurring_id,
             func.sum(Transaction.amount),
         )
         .where(
@@ -227,11 +318,18 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
             extract("year", Transaction.date),
             extract("month", Transaction.date),
             Transaction.currency,
+            Transaction.recurring_id,
         )
     ).all()
     spent_by_cat_month: dict[tuple[int | None, str], int] = {}
-    for cat_id, y, m, currency, total in spent_rows:
-        key = (cat_id, f"{int(y):04d}-{int(m):02d}")
+    settled_by_charge_month: dict[tuple[int, str], dict[str, int]] = {}
+    for cat_id, y, m, currency, recurring_id, total in spent_rows:
+        year_month_of_row = f"{int(y):04d}-{int(m):02d}"
+        if recurring_id in charges_with_a_fund:
+            native = settled_by_charge_month.setdefault((recurring_id, year_month_of_row), {})
+            native[currency] = native.get(currency, 0) + int(total)
+            continue
+        key = (cat_id, year_month_of_row)
         spent_by_cat_month[key] = spent_by_cat_month.get(key, 0) + to_cop_cents(int(total), currency, trm)
 
     windowed = session.exec(
@@ -262,7 +360,6 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         ).all()
     )
 
-    funds = list(session.exec(select(Fund)).all())
     every_meta = list(
         session.exec(select(Meta).where(or_(Meta.cancelled_month.is_(None), Meta.cancelled_month >= year_month))).all()
     )
@@ -296,13 +393,13 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
     first_movement = session.exec(
         select(Transaction.date).where(Transaction.status == TxStatus.posted).order_by(Transaction.date).limit(1)
     ).first()
-    skipped_turns = frozenset(
-        session.exec(
-            select(RecurringOccurrence.recurring_id, RecurringOccurrence.due_date).where(
-                RecurringOccurrence.status == OccurrenceStatus.skipped
-            )
-        ).all()
-    )
+    decided_turns = session.exec(
+        select(RecurringOccurrence.recurring_id, RecurringOccurrence.due_date, RecurringOccurrence.status).where(
+            col(RecurringOccurrence.status).in_([OccurrenceStatus.skipped, OccurrenceStatus.posted])
+        )
+    ).all()
+    skipped_turns = frozenset((rid, due) for rid, due, status in decided_turns if status == OccurrenceStatus.skipped)
+    settled_turns = frozenset((rid, due) for rid, due, status in decided_turns if status == OccurrenceStatus.posted)
 
     return MonthAggregate(
         year_month=year_month,
@@ -321,7 +418,9 @@ def load_month_aggregate(session: Session, year_month: str, trm: Decimal) -> Mon
         linked_by_meta=linked_by_meta,
         first_movement_month=year_month_of(first_movement) if first_movement is not None else None,
         skipped_turns=skipped_turns,
+        settled_turns=settled_turns,
         _window_expense=window_expense,
         _window_income=window_income,
         _spent_by_cat_month=spent_by_cat_month,
+        _settled_by_charge_month=settled_by_charge_month,
     )

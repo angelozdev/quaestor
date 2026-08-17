@@ -116,8 +116,11 @@ def _fund_lines(agg: MonthAggregate, statuses: list) -> tuple[list[FundReportLin
                 category_name=status.name,
                 asks=status.asks,
                 holds=status.holds,
-                spent=agg.spent_in(status.category_id, agg.year_month),
+                spent=status.spent,
                 on_track=status.on_track,
+                currency=status.currency,
+                asks_cop=status.asks_cop,
+                holds_cop=status.holds_cop,
             )
             for status in statuses
         ),
@@ -127,7 +130,7 @@ def _fund_lines(agg: MonthAggregate, statuses: list) -> tuple[list[FundReportLin
     return lines, FundsSummary(
         n_on_track=n_on_track,
         n_behind=len(lines) - n_on_track,
-        set_aside=sum(f.holds for f in lines),
+        set_aside=sum(f.holds_cop for f in lines),
     )
 
 
@@ -220,7 +223,7 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         funds_summary=funds_summary,
         funds=funds,
         metas=_meta_lines(available.metas),
-        asked=sum(f.asks for f in funds) + sum(line.asks_cop for line in available.metas),
+        asked=sum(f.asks_cop for f in funds) + sum(line.asks_cop for line in available.metas),
         by_category=_category_sections(agg, expenses, expense),
         by_group=_group_sections(agg, expenses, expense),
         balances=_balance_lines(session),

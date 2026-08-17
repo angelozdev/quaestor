@@ -23,7 +23,8 @@ from ..domain.models import (
 )
 from ..domain.money import is_supported
 from ..domain.recurrence import due_dates, has_ended
-from . import categories, occurrences
+from ..domain.rules import year_month_of
+from . import categories, funds, occurrences
 
 _UNSET = object()
 
@@ -264,7 +265,7 @@ def update_recurring(
     if item is None:
         raise NotFound(f"recurring item {recurring_id} not found")
     try:
-        return _apply_edit(
+        edited = _apply_edit(
             session,
             item,
             name=name,
@@ -283,6 +284,10 @@ def update_recurring(
     except Exception:
         session.rollback()
         raise
+    funds.follow_its_charge(session, recurring_id)
+    funds.unmark_if_it_can_no_longer_be_saved_for(session, recurring_id, year_month_of(today or Date.today()))
+    session.refresh(edited)
+    return edited
 
 
 def _apply_edit(
@@ -389,10 +394,20 @@ def _set_active(session: Session, recurring_id: int, active: bool) -> RecurringI
 def deactivate_recurring(session: Session, recurring_id: int) -> RecurringItem:
     """Soft-delete: stop materializing future occurrences (existing ones stay).
 
+    Whatever was being saved for this charge stops with it. A fund is a rule
+    attached to something that still charges, so one left behind would go on
+    asking for money toward a bill that is never coming — and switching the
+    charge back on brings it back unmarked, because the owner decides again
+    (ADR-0057, AC-7/AC-8). No movement is touched either way: a fund never held
+    money, only a figure.
+
     Raises:
         NotFound: the item does not exist.
     """
-    return _set_active(session, recurring_id, False)
+    item = _set_active(session, recurring_id, False)
+    funds.unmark_charge(session, recurring_id)
+    session.refresh(item)
+    return item
 
 
 def restore_recurring(session: Session, recurring_id: int, today: Date | None = None) -> RecurringItem:

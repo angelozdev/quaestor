@@ -25,14 +25,17 @@ def test_the_upgrade_creates_the_fund_table():
 
 
 def test_the_fund_table_carries_the_columns_the_model_declares():
-    """Every column the model declares exists at 0011.
+    """Every column the model declared *at this revision* exists at 0011.
 
-    Equality, not a subset, until feature 009 withdrew `target-by-date`: the
-    schema still carries `target_amount` and `target_month` at this revision
-    and loses them at 0015, so between the two the model is the smaller side.
+    The model is no longer a usable stand-in for either side. It was the smaller
+    one until feature 009 withdrew `target-by-date` at 0015, and it became the
+    larger one at 0019, when feature 015 added `recurring_id`. Comparing against
+    it now asserts something about today's schema in a file about a revision from
+    July, so the two columns that have moved since are named here instead.
     """
     engine = engine_at_revision("0011")
-    assert set(Fund.model_fields) <= _columns(engine, "fund")
+    at_0011 = (set(Fund.model_fields) | {"target_amount", "target_month"}) - {"recurring_id"}
+    assert at_0011 == _columns(engine, "fund")
 
 
 def test_a_category_cannot_carry_two_funds():

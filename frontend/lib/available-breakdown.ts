@@ -34,7 +34,7 @@ export function availableRows(available: MonthAvailable): BreakdownRow[] {
     ...available.funds.map((fund) => ({
       key: `fund-${fund.fund_id}`,
       label: labelOf(fund),
-      cents: fund.asks,
+      cents: fund.asks_cop,
       kind: "claim" as const,
     })),
     ...available.metas

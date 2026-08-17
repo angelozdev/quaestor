@@ -147,6 +147,8 @@ class TransactionCreate(BaseModel):
     source: str = "manual"
     tags: list[str] | None = None
     meta_id: int | None = None
+    recurring_id: int | None = None
+    settles_due: Date | None = None
 
 
 class TransferIn(BaseModel):
@@ -176,6 +178,7 @@ class TransactionOut(BaseModel):
     account_id: int
     category_id: int | None
     meta_id: int | None
+    recurring_id: int | None = None
     transfer_group_id: str | None
     transfer_direction: TransferDirection | None = None
     source: Source
@@ -247,7 +250,9 @@ class TransferOut(BaseModel):
 
 class TransactionUpdate(BaseModel):
     """Edit of a movement. Omitting `meta_id` leaves the link alone; sending
-    null removes it, and the category's fund takes the purchase back (AC-28)."""
+    null removes it, and the category's fund takes the purchase back (AC-28).
+    `recurring_id` works the same way for the charge this payment settled, and
+    `settles_due` for which of that charge's turns it paid (ADR-0058)."""
 
     payee: str | None = None
     notes: str | None = None
@@ -255,6 +260,8 @@ class TransactionUpdate(BaseModel):
     date: Date | None = None
     tags: list[str] | None = None
     meta_id: int | None = None
+    recurring_id: int | None = None
+    settles_due: Date | None = None
 
 
 class CorrectionIn(BaseModel):
@@ -411,6 +418,61 @@ class FundLineOut(BaseModel):
     rule: str
     start_month: str
     accumulates: bool
+    recurring_id: int | None = None
+    currency: str = "COP"
+
+
+class ChargeEditCost(BaseModel):
+    """What saving an edit to a charge would cost the fund it carries.
+
+    Every field here can leave the charge with no turn to save for, or with no
+    month to save in — the two lasting refusals. They travel together because a
+    question that carries only some of them answers about a charge the owner is
+    not saving: asking about the cadence alone let an end date delete a fund
+    with no warning at all, which is the one thing AC-8 promises cannot happen.
+
+    Direction is absent on purpose: the edit form cannot turn an expense into
+    money coming in, so there is no way for the third refusal to arrive here.
+    """
+
+    month: str
+    interval_unit: str | None = None
+    interval_count: int | None = None
+    start_date: Date | None = None
+    end_date: Date | None = None
+
+
+class ChargeEditCostOut(BaseModel):
+    would_lose_its_fund: bool
+
+
+class PaymentRefileCost(BaseModel):
+    """The category a payment is about to be filed under instead."""
+
+    category_id: int | None = None
+
+
+class ChargeUnlinkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recurring_id: int
+    name: str
+    currency: str
+    due_date: Date
+    asks_again: int
+    charge_month: str
+
+
+class ChargeMarkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recurring_id: int
+    category_id: int
+    name: str
+    currency: str
+    can_be_marked: bool
+    why_not: str | None = None
+    fund_id: int | None = None
 
 
 class FundChargeOut(BaseModel):
@@ -458,6 +520,9 @@ class FundReportLineOut(BaseModel):
     holds: int
     spent: int
     on_track: bool
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 class MetaReportLineOut(BaseModel):
@@ -507,6 +572,10 @@ class FundStatusOut(BaseModel):
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None
+    recurring_id: int | None = None
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 class MetaCreate(BaseModel):

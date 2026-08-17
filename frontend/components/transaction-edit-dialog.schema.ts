@@ -11,6 +11,8 @@ const fields = {
   notes: optionalString,
   tags: z.array(z.string()),
   metaId: z.number().nullable(),
+  settlesCharge: z.number().nullable(),
+  settlesDue: z.string().nullable(),
 }
 
 /** A transfer carries no category and an expense or income must keep one, so

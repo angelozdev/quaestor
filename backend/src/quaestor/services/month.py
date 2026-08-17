@@ -66,9 +66,20 @@ def _uncovered_posted(agg: MonthAggregate) -> list[Transaction]:
     declared to be saving. A term added to one and not the other would leave
     `consumo + ahorro + libre` short of the income (AC-37) in exactly the months
     a saving category has anything in it, and silent in every other.
+
+    Three things cover a peso, and any of them takes it out of here: a fund on
+    its category, a meta it was pointed at, and — since a fund may hang off one
+    charge — a fund on the charge it settled (ADR-0057). The third is the same
+    exclusion `spent_in` makes, and it has to be made in both places or the same
+    payment is claimed twice.
     """
     funded = agg.funded_categories()
-    return [tx for tx in agg.month_expense() if tx.category_id not in funded and tx.meta_id is None]
+    settled = agg.funded_charges()
+    return [
+        tx
+        for tx in agg.month_expense()
+        if tx.category_id not in funded and tx.meta_id is None and tx.recurring_id not in settled
+    ]
 
 
 def _uncovered(agg: MonthAggregate, overspill: int, over_the_metas: int) -> int:
@@ -89,10 +100,11 @@ def _uncovered(agg: MonthAggregate, overspill: int, over_the_metas: int) -> int:
     posted = _uncovered_posted(agg)
     spent = sum(agg.to_cop_cents(tx) for tx in posted)
     posted_turns = Counter(tx.recurring_id for tx in posted if tx.recurring_id is not None)
+    settled = agg.funded_charges()
     obligations = sum(
         _unsettled_promise(agg, item, posted_turns[item.id])
         for item in agg.active_recurring
-        if item.type == TxType.expense and item.category_id not in funded
+        if item.type == TxType.expense and item.category_id not in funded and item.id not in settled
     )
     planned = sum(
         agg.to_cop_cents(tx) for tx in agg.month_planned_expense if tx.category_id not in funded and tx.meta_id is None
@@ -112,7 +124,7 @@ def month_available(agg: MonthAggregate) -> MonthAvailable:
     saved = metas.fold(agg)
     income = _income(agg)
     uncovered = _uncovered(agg, funded.overspill, saved.uncovered)
-    claimed = sum(line.asks for line in funded.lines) + saved.asks + saved.contributed - saved.released
+    claimed = sum(line.asks_cop for line in funded.lines) + saved.asks + saved.contributed - saved.released
     return MonthAvailable(
         year_month=year_month,
         income=income,
@@ -141,8 +153,8 @@ def month_split(agg: MonthAggregate) -> MonthSplit:
     money aside and cancelled a meta can say so twice instead of once.
     """
     view = month_available(agg)
-    presupuesto = sum(line.asks for line in view.funds if not line.accumulates)
-    fondo = sum(line.asks for line in view.funds if line.accumulates)
+    presupuesto = sum(line.asks_cop for line in view.funds if not line.accumulates)
+    fondo = sum(line.asks_cop for line in view.funds if line.accumulates)
     saved_by_spending = _spent_where_spending_is_saving(agg)
     consumo = presupuesto + view.uncovered - saved_by_spending
     set_aside = fondo + sum(line.asks_cop for line in view.metas) + view.contributed + saved_by_spending
@@ -228,14 +240,15 @@ def rates(session: Session, year_month: str) -> MonthRates:
     require_year_month(year_month)
     agg = load_month(session, year_month)
     funded = agg.funded_categories()
+    settled = agg.funded_charges()
     earning = 0
-    cost = sum(line.asks for line in funds.fold(agg).lines)
+    cost = sum(line.asks_cop for line in funds.fold(agg).lines)
     for item in agg.active_recurring:
         share = monthly_rate_calc(
             to_cop_cents(item.amount, item.currency, agg.trm), item.interval_unit, item.interval_count
         )
         if item.type == TxType.income:
             earning += share
-        elif item.category_id not in funded:
+        elif item.category_id not in funded and item.id not in settled:
             cost += share
     return MonthRates(year_month=year_month, earning=earning, cost=cost, margin=margin_calc(earning, cost))

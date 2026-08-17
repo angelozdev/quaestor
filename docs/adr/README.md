@@ -56,7 +56,7 @@ New ADRs are created with the `adr` skill:
 | 0040 | Strict ruff lint as a gate on the acceptance pipeline | accepted | 2026-08-02 |
 | 0041 | Category presence is a type-discriminated constraint, not a blanket NOT NULL | accepted | 2026-08-03 |
 | 0042 | A category belongs to one direction and one resolver answers which category a movement carries | accepted | 2026-08-03 |
-| 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted | 2026-08-04 |
+| 0043 | A fund replaces the envelope and the goal, and its balance is derived | accepted (superseded in part by 0057) | 2026-08-04 |
 | 0044 | The monthly number is a fold over the bounded month aggregate, and its income term reconciles per category | accepted | 2026-08-04 |
 | 0045 | Frontend acceptance criteria bind to vitest, and one Gherkin parser stays the single source | accepted | 2026-08-07 |
 | 0046 | A meta is a dated record outside every category, linked on the movement, and the fund's dated rule is withdrawn | accepted | 2026-08-08 |
@@ -69,3 +69,6 @@ New ADRs are created with the `adr` skill:
 | 0053 | El precio de un cobro recurrente es el del comercio, y su cuenta decide en qué moneda se paga | accepted | 2026-08-11 |
 | 0054 | El aviso de un fondo trata sobre una obligación que no se puede repartir, y el fondo reporta los términos de su cifra | accepted | 2026-08-12 |
 | 0055 | Restaurar una meta abre una vida nueva, y los aportes de la anterior quedan marcados como devueltos | accepted | 2026-08-13 |
+| 0056 | El mes es el período del libro, y la cadencia de lo que se repite es agnóstica | accepted | 2026-08-15 |
+| 0057 | Un fondo cuelga del cobro que llena, y el gasto que lo salda lo dice el movimiento | accepted | 2026-08-15 |
+| 0058 | El pago se aplica a un turno, no se deduce del mes | accepted | 2026-08-15 |

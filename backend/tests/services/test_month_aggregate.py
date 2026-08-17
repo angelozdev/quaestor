@@ -124,3 +124,81 @@ def test_a_category_excluded_from_totals_does_not_reach_the_month(session):
     session.commit()
     agg = load_month_aggregate(session, "2026-06", TRM)
     assert agg.month_expense() == []
+
+
+def _planned(acc_id, cat_id, d, amount):
+    return Transaction(
+        date=d,
+        type=TxType.expense,
+        status=TxStatus.planned,
+        amount=amount,
+        currency="COP",
+        account_id=acc_id,
+        category_id=cat_id,
+        payee="seed",
+    )
+
+
+def test_a_movement_on_the_first_or_last_day_belongs_to_that_month(session):
+    """The window is inclusive at both ends, and both ends are ordinary days.
+
+    Rent falls on the first and card statements on the last, so a month that
+    reads them out is a month missing its two biggest rows. Every figure the
+    app shows is folded from this window, and nothing pinned its edges.
+    """
+    acc, cat = _setup(session)
+    spent = ((date(2026, 6, 1), 222_000_00), (date(2026, 6, 15), 333_000_00), (date(2026, 6, 30), 444_000_00))
+    for day, amount in spent:
+        session.add(_expense(acc.id, cat.id, day, amount))
+    session.add(_expense(acc.id, cat.id, date(2026, 5, 1), 111_000_00))
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-06", TRM)
+
+    assert sum(agg.to_cop_cents(t) for t in agg.month_expense()) == 999_000_00
+    assert sum(agg.to_cop_cents(t) for t in agg.posted_in_month("2026-05", TxType.expense)) == 111_000_00
+
+
+def test_a_bill_planned_for_the_first_or_last_day_is_one_the_month_owes(session):
+    """Same two edges, on the money the month has promised rather than spent."""
+    acc, cat = _setup(session)
+    owed = ((date(2026, 6, 1), 999_000_00), (date(2026, 6, 20), 100_000_00), (date(2026, 6, 30), 777_000_00))
+    for day, amount in owed:
+        session.add(_planned(acc.id, cat.id, day, amount))
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-06", TRM)
+
+    assert sum(agg.to_cop_cents(t) for t in agg.month_planned_expense) == 1_876_000_00
+
+
+def test_a_purchase_on_the_last_day_still_counts_against_its_meta(session):
+    """The meta's own window has the same far edge, and it was unpinned too."""
+    from quaestor.domain.models import Meta
+
+    acc, cat = _setup(session)
+    meta = Meta(name="Portatil", amount=5_000_000_00, currency="COP", target_month="2027-08", start_month="2026-06")
+    session.add(meta)
+    session.commit()
+    session.refresh(meta)
+    for day, amount in ((date(2026, 6, 20), 100_000_00), (date(2026, 6, 30), 900_000_00)):
+        row = _expense(acc.id, cat.id, day, amount)
+        row.meta_id = meta.id
+        session.add(row)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-06", TRM)
+
+    assert sum(agg.to_cop_cents(t) for t in agg.linked_to(meta.id)) == 1_000_000_00
+
+
+def test_a_movement_with_no_category_has_no_group(session):
+    """Asked of every row the report groups, and an uncategorized one is a row.
+
+    Answering it must not depend on the category being there — the whole point
+    of the question is that it may not be.
+    """
+    _setup(session)
+    agg = load_month_aggregate(session, "2026-06", TRM)
+
+    assert agg.group_name(None) is None

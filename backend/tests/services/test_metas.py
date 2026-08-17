@@ -887,3 +887,20 @@ def test_a_meta_lowered_by_one_centavo_below_what_it_holds_has_finished(session)
     assert [m.name for m in metas.list_metas(session, "2026-11")] == ["Moto"]
     for after in ("2026-12", "2027-01"):
         assert [m.name for m in metas.list_metas(session, after)] == []
+
+
+def test_a_meta_that_gave_back_a_single_cent_is_listed_among_what_it_gave_back(session):
+    """The month names what it handed back, and one cent was handed back.
+
+    The list is drawn by asking whether anything was released at all, which is a
+    boundary at zero and not at some amount worth mentioning. Pinned only from
+    below, the line can be moved up and the smallest give-backs vanish from the
+    screen while the total they belong to still counts them.
+    """
+    meta = _meta(session, name="Celular", amount=1, today="2026-06", target="2026-12")
+    metas.cancel_meta(session, meta.id, year_month="2026-06")
+
+    split = month.month_split(load_month(session, "2026-06"))
+
+    assert split.released == 1
+    assert [line.name for line in split.gave_back] == ["Celular"]

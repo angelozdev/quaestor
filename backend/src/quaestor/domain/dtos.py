@@ -6,12 +6,19 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from datetime import date as Date
+
     from .models import RecurringOccurrence
 
 
 @dataclass(frozen=True)
 class FundLine:
-    """One fund, as the screen and the assistant list it."""
+    """One fund, as the screen and the assistant list it.
+
+    `name` is the charge's when the fund fills for one, and the category's
+    otherwise — two funds under one category would otherwise list the same
+    word twice (ADR-0057).
+    """
 
     fund_id: int
     category_id: int
@@ -19,6 +26,48 @@ class FundLine:
     rule: str
     start_month: str
     accumulates: bool
+    recurring_id: int | None = None
+    currency: str = "COP"
+
+
+@dataclass(frozen=True)
+class ChargeUnlink:
+    """What a payment stops settling if it is refiled under another category.
+
+    A payment can only settle a charge filed where it is, so moving it lets go
+    of the turn it answered for. The owner went in to reclassify a movement, not
+    to reopen a bill, so the screen says this before it saves — the same shape
+    AC-8's fifth door uses for an edit that costs the whole fund.
+
+    `asks_again` is what the fund goes back to asking once the turn is open, in
+    the charge's own currency (AC-11).
+    """
+
+    recurring_id: int
+    name: str
+    currency: str
+    due_date: Date
+    asks_again: int
+    charge_month: str
+
+
+@dataclass(frozen=True)
+class ChargeMark:
+    """One repeating charge, as the list that offers to save for it sees it.
+
+    `why_not` is filled exactly when `can_be_marked` is false, because a box the
+    owner cannot tick and nothing saying why is the defect AC-2 exists to
+    prevent. `fund_id` is what marking produced, so the same row can offer to
+    unmark.
+    """
+
+    recurring_id: int
+    category_id: int
+    name: str
+    currency: str
+    can_be_marked: bool
+    why_not: str | None = None
+    fund_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -46,6 +95,17 @@ class FundCharge:
 @dataclass(frozen=True)
 class FundStatus:
     """What one fund asks, holds and reports for one month (ADR-0043).
+
+    `recurring_id` is the charge the fund hangs off, or nothing when it covers a
+    whole category (ADR-0057). `currency` is the money `asks`, `holds`, `spent`
+    and `carries` are in — the charge's own for a fund that fills for one, pesos
+    for a fund that covers a category.
+
+    `asks_cop` and `holds_cop` are the same two figures in pesos, converted once
+    at the aggregate's rate. They exist so that a total which adds funds together
+    never has to know a fund's currency, and so that the conversion happens in
+    one place instead of at every caller — the shape a meta already reports
+    (AC-11, ADR-0031). For a peso fund they equal `asks` and `holds`.
 
     `spent` is what the category cost that month; `carries` is what survives
     into the next one, which is nothing at all for a fund that resets; and
@@ -83,6 +143,10 @@ class FundStatus:
     averaged_over: int | None = None
     spreads_over: int | None = None
     whole_by: str | None = None
+    recurring_id: int | None = None
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 @dataclass(frozen=True)

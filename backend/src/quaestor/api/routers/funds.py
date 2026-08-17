@@ -7,6 +7,8 @@ into JSON (ADR-0043/0044).
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
@@ -14,6 +16,10 @@ from ...services import funds
 from ...services import month as month_service
 from ..deps import get_session
 from ..schemas import (
+    ChargeEditCost,
+    ChargeEditCostOut,
+    ChargeMarkOut,
+    ChargeUnlinkOut,
     FundCreate,
     FundLineOut,
     FundOut,
@@ -22,6 +28,7 @@ from ..schemas import (
     FundUpdate,
     MonthAvailableOut,
     MonthRatesOut,
+    PaymentRefileCost,
 )
 
 router = APIRouter(prefix="/funds", tags=["funds"])
@@ -40,6 +47,53 @@ def money_rates(month: str, session: Session = Depends(get_session)):
 @router.get("", response_model=list[FundLineOut])
 def list_funds(session: Session = Depends(get_session)):
     return funds.list_funds(session)
+
+
+@router.get("/charges", response_model=list[ChargeMarkOut])
+def charge_marks(month: str, session: Session = Depends(get_session)):
+    return funds.charge_marks(session, month)
+
+
+@router.post("/charges/{recurring_id}", response_model=FundOut, status_code=201)
+def mark_charge(recurring_id: int, month: str, session: Session = Depends(get_session)):
+    return funds.mark_charge(session, recurring_id, month)
+
+
+@router.get("/charges/{recurring_id}/turns", response_model=list[date])
+def open_turns(recurring_id: int, session: Session = Depends(get_session)):
+    """The turns of this charge nobody has settled yet, soonest first (ADR-0058).
+
+    Asked when a payment is being pointed at a charge, so the owner can say
+    which of its turns he paid. One charge at a time and only once he has
+    chosen one, because asking it for every charge of a screen would cost a
+    query each.
+    """
+    return funds.open_turns_of(session, recurring_id)
+
+
+@router.post("/charges/{recurring_id}/edit-cost", response_model=ChargeEditCostOut)
+def charge_edit_cost(recurring_id: int, body: ChargeEditCost, session: Session = Depends(get_session)):
+    """What an edit would cost the charge's fund, asked before it is saved."""
+    changes = body.model_dump(exclude_unset=True, exclude={"month"})
+    return ChargeEditCostOut(
+        would_lose_its_fund=funds.would_lose_its_fund(session, recurring_id, body.month, **changes)
+    )
+
+
+@router.post("/payments/{tx_id}/refile-cost", response_model=ChargeUnlinkOut | None)
+def payment_refile_cost(tx_id: int, body: PaymentRefileCost, session: Session = Depends(get_session)):
+    """What a payment stops settling if it is filed under another category (AC-5).
+
+    Asked before the edit is saved, so the screen says it in one step instead of
+    clearing the link without a word.
+    """
+    return funds.what_refiling_would_unsettle(session, tx_id, body.category_id)
+
+
+@router.delete("/charges/{recurring_id}", status_code=204)
+def unmark_charge(recurring_id: int, session: Session = Depends(get_session)):
+    funds.unmark_charge(session, recurring_id)
+    return
 
 
 @router.get("/{fund_id}/status", response_model=FundStatusOut)

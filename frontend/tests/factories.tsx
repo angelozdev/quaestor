@@ -41,6 +41,7 @@ export function makeTransaction(overrides: Partial<Transaction> = {}): Transacti
     date: "2026-07-10",
     payee: "Exito",
     notes: null,
+    recurring_id: null,
     type: "expense",
     status: "posted",
     amount: 5_000_000,

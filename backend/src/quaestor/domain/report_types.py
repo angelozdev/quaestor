@@ -34,16 +34,25 @@ class FundsSummary:
 class FundReportLine:
     """One fund inside the month's report (ADR-0043).
 
-    `category_name` and `spent` carry the same names the envelope line used, so
-    a reader of the report keeps asking what a category spent in the month
-    regardless of what set money aside for it.
+    `category_name` carries the same name the envelope line used, and is the
+    charge's own when the fund fills for one charge rather than a category
+    (ADR-0057).
+
+    `asks`, `holds` and `spent` are in the fund's `currency`, the way a meta's
+    are (AC-36); `asks_cop` and `holds_cop` are the same figures in pesos, for
+    the totals that add funds together. `spent` is what drained *this fund* —
+    the category's whole spending is in the report's category section, where a
+    charge a fund saved for shows like any other (AC-12).
     """
 
     category_name: str
-    asks: int  # COP cents
-    holds: int  # COP cents
-    spent: int  # COP cents
+    asks: int
+    holds: int
+    spent: int
     on_track: bool
+    currency: str = "COP"
+    asks_cop: int = 0
+    holds_cop: int = 0
 
 
 @dataclass(frozen=True)

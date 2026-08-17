@@ -2,6 +2,7 @@
 
 import { useForm as useTanStackForm } from "@tanstack/react-form"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { format } from "date-fns"
 import { useState } from "react"
 import { toast } from "sonner"
 import { CategoryField } from "@/components/category-field"
@@ -16,6 +17,7 @@ import { PageHeader } from "@/components/page-header"
 import { HelpExample, HelpSection, ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
 import { listAccounts } from "@/lib/api/accounts"
+import { chargeEditCost, chargeMarks, markCharge, unmarkCharge } from "@/lib/api/funds"
 import { getFx } from "@/lib/api/fx"
 import {
   createRecurring,
@@ -25,8 +27,14 @@ import {
   skipRecurring,
   updateRecurring,
 } from "@/lib/api/recurring"
-import { ApiError, applyApiErrorsToForm, type IntervalUnit, type Recurring } from "@/lib/api/types"
-import { hasEnded } from "@/lib/date"
+import {
+  ApiError,
+  applyApiErrorsToForm,
+  type ChargeMark,
+  type IntervalUnit,
+  type Recurring,
+} from "@/lib/api/types"
+import { hasEnded, todayHere } from "@/lib/date"
 import {
   amountForAccount,
   convertCents,
@@ -128,7 +136,7 @@ const BLANK_CHARGE: RecurringCreateValues = {
  * how the edit dialog opened blank over the charge it was asked about.
  */
 function chargeStartingToday(): RecurringCreateValues {
-  return { ...BLANK_CHARGE, startDate: new Date().toISOString().slice(0, 10) }
+  return { ...BLANK_CHARGE, startDate: todayHere() }
 }
 
 /** A charge already registered, as the boxes that edit it. */
@@ -259,10 +267,23 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
   const fx = useQuery({ queryKey: qk.fx(), queryFn: getFx })
   const usdCop = fx.data ? Number(fx.data.usd_cop) : null
 
+  const [warnedAbout, setWarnedAbout] = useState<RecurringCreateValues | null>(null)
+
   const editForm = useTanStackForm({
     defaultValues: boxesFor(charge),
     validators: { onChange: recurringCreateSchema },
     onSubmit: async ({ value }) => {
+      const cost = await chargeEditCost(charge.id, {
+        month: thisMonth(),
+        interval_unit: value.intervalUnit,
+        interval_count: value.intervalCount,
+        start_date: value.startDate,
+        end_date: value.endDate ? value.endDate : null,
+      })
+      if (cost.would_lose_its_fund) {
+        setWarnedAbout(value)
+        return
+      }
       update.mutate(value)
     },
   })
@@ -298,6 +319,24 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
       toast.error(e instanceof ApiError ? e.message : "Error")
     },
   })
+
+  if (warnedAbout !== null) {
+    return (
+      <div className="space-y-4">
+        <p className="max-w-prose text-sm">
+          {`Con este cambio, "${charge.name}" ya no deja meses para juntar. Su fondo se va a borrar.`}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setWarnedAbout(null)}>
+            Cancelar
+          </Button>
+          <Button variant="destructive" onClick={() => update.mutate(warnedAbout)}>
+            Guardar y borrar el fondo
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form
@@ -467,6 +506,67 @@ function EditChargeForm({ charge, onDone }: { charge: Recurring; onDone: () => v
   )
 }
 
+/**
+ * The month the screen is saving in, which is the one it is looking at.
+ *
+ * Local, never UTC: from seven at night on the last day of the month a UTC
+ * reading already says the next one, and this screen would be marking charges
+ * into a month every other screen is not looking at.
+ */
+function thisMonth(): string {
+  return format(new Date(), "yyyy-MM")
+}
+
+/**
+ * The box that offers to save for a charge, month by month.
+ *
+ * Ticking it *is* what creates the fund — no form, nothing to confirm
+ * afterwards. Where it cannot be ticked the row says why in the same breath,
+ * because a box the owner cannot use and no reason given is worse than no box
+ * at all.
+ */
+function SaveForItBox({
+  mark,
+  onMark,
+  onUnmark,
+  busy,
+}: {
+  mark: ChargeMark | undefined
+  onMark: () => void
+  onUnmark: () => void
+  busy: boolean
+}) {
+  if (mark === undefined) return null
+  const marked = mark.fund_id !== null
+  if (!marked && !mark.can_be_marked) {
+    return (
+      <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+        {whyNotSaid(mark)}
+      </span>
+    )
+  }
+  return (
+    <CheckboxField
+      id={`save-for-${mark.recurring_id}`}
+      label="Juntar mes a mes"
+      checked={marked}
+      disabled={busy}
+      onCheckedChange={(next) => (next ? onMark() : onUnmark())}
+    />
+  )
+}
+
+/** Why the box is not offered, in the owner's words rather than the service's. */
+function whyNotSaid(mark: ChargeMark): string {
+  const why = mark.why_not ?? ""
+  if (why.includes("before a whole month"))
+    return "Vuelve cada mes, así que no hay meses para juntar."
+  if (why.includes("once it has been paid")) return "Cobra este mes. Márcalo cuando esté pagado."
+  if (why.includes("no turn left")) return "Ya no tiene cobros por venir."
+  if (why.includes("money going out")) return "Es plata que entra, no se junta para eso."
+  return "No se puede juntar para este cobro."
+}
+
 export default function RecurringPage() {
   const qc = useQueryClient()
 
@@ -474,6 +574,31 @@ export default function RecurringPage() {
   const list = useQuery({
     queryKey: qk.recurring(showInactive ? undefined : true),
     queryFn: () => listRecurring(showInactive ? undefined : true),
+  })
+
+  const month = thisMonth()
+  const marks = useQuery({
+    queryKey: qk.chargeMarks(month),
+    queryFn: () => chargeMarks(month),
+  })
+  const markOf = (id: number) => marks.data?.find((mark) => mark.recurring_id === id)
+
+  const saveForIt = useMutation({
+    mutationFn: (id: number) => markCharge(id, month),
+    onSuccess: () => {
+      toast.success("Vas a juntar mes a mes para este cobro")
+      invalidate(qc, "recurringWrite")
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
+  })
+
+  const stopSavingForIt = useMutation({
+    mutationFn: (id: number) => unmarkCharge(id),
+    onSuccess: () => {
+      toast.success("Dejaste de juntar para este cobro")
+      invalidate(qc, "recurringWrite")
+    },
+    onError: (e: unknown) => toast.error(e instanceof ApiError ? e.message : "Error"),
   })
 
   const [creating, setCreating] = useState(false)
@@ -639,6 +764,19 @@ export default function RecurringPage() {
               header: "Monto",
               align: "right",
               render: (r) => <RulePrice charge={r} accounts={accounts.data} usdCop={usdCop} />,
+            },
+            {
+              key: "saving",
+              header: "Juntar",
+              render: (r) =>
+                r.active ? (
+                  <SaveForItBox
+                    mark={markOf(r.id)}
+                    onMark={() => saveForIt.mutate(r.id)}
+                    onUnmark={() => stopSavingForIt.mutate(r.id)}
+                    busy={saveForIt.isPending || stopSavingForIt.isPending}
+                  />
+                ) : null,
             },
           ]}
           actionsAs="inline"
