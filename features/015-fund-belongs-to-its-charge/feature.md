@@ -2,7 +2,7 @@
 title: "Un fondo cuelga del cobro que llena, no de la categoría"
 slug: fund-belongs-to-its-charge
 number: 015
-status: ready
+status: done
 autonomy_level: medium
 branch: fund-belongs-to-its-charge
 area: funds
