@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from datetime import date as Date
+
     from .models import RecurringOccurrence
 
 
@@ -26,6 +28,27 @@ class FundLine:
     accumulates: bool
     recurring_id: int | None = None
     currency: str = "COP"
+
+
+@dataclass(frozen=True)
+class ChargeUnlink:
+    """What a payment stops settling if it is refiled under another category.
+
+    A payment can only settle a charge filed where it is, so moving it lets go
+    of the turn it answered for. The owner went in to reclassify a movement, not
+    to reopen a bill, so the screen says this before it saves — the same shape
+    AC-8's fifth door uses for an edit that costs the whole fund.
+
+    `asks_again` is what the fund goes back to asking once the turn is open, in
+    the charge's own currency (AC-11).
+    """
+
+    recurring_id: int
+    name: str
+    currency: str
+    due_date: Date
+    asks_again: int
+    charge_month: str
 
 
 @dataclass(frozen=True)

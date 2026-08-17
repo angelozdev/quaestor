@@ -16,15 +16,17 @@ import {
 } from "@/components/transaction-edit-dialog.schema"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
+import { paymentRefileCost } from "@/lib/api/funds"
 import { getFx } from "@/lib/api/fx"
 import { correctTransaction, listTransactions, updateTransaction } from "@/lib/api/transactions"
 import {
   ApiError,
   applyApiErrorsToForm,
+  type ChargeUnlink,
   type CorrectionBody,
   type Transaction,
 } from "@/lib/api/types"
-import { yearMonthOf } from "@/lib/date"
+import { monthAndYearOf, yearMonthOf } from "@/lib/date"
 import {
   amountForAccount,
   currencyHeldBy,
@@ -206,6 +208,23 @@ function RulePriceNote({ tx }: { tx: Transaction }) {
   return <p>Precio de la regla: {formatCents(tx.rule_amount, tx.rule_currency)}</p>
 }
 
+/**
+ * What this payment stops settling if it is filed under `categoryId` instead.
+ *
+ * Asked only when there is something to lose: a movement that names no charge,
+ * or one staying where its charge is, must not cost a round trip on every save.
+ * Nothing when the app cannot answer — a warning is worth showing, but not at
+ * the price of blocking an edit the owner is allowed to make.
+ */
+async function whatRefilingWouldCost(tx: Transaction, categoryId: number | null) {
+  if (tx.recurring_id === null || categoryId === tx.category_id) return null
+  try {
+    return await paymentRefileCost(tx.id, categoryId)
+  } catch {
+    return null
+  }
+}
+
 function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => void }) {
   const qc = useQueryClient()
   const tagSuggestions = useTagNames()
@@ -234,12 +253,22 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   })
   const sending = tx.transfer_direction === "out"
 
+  const [lettingGoOf, setLettingGoOf] = useState<{
+    cost: ChargeUnlink
+    values: TransactionEditValues
+  } | null>(null)
+
   const form = useTanStackForm({
     defaultValues: valuesFromTx(tx),
     validators: { onChange: txEditSchema(isTransfer) },
     onSubmit: async ({ value }) => {
       if (missing !== null) {
         toast.error(missing)
+        return
+      }
+      const cost = await whatRefilingWouldCost(tx, value.categoryId)
+      if (cost !== null) {
+        setLettingGoOf({ cost, values: value })
         return
       }
       update.mutate(value)
@@ -283,6 +312,28 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
     },
     onSettled: () => invalidate(qc, "transactionWrite"),
   })
+
+  if (lettingGoOf !== null) {
+    const { cost, values } = lettingGoOf
+    return (
+      <div className="space-y-4">
+        <p className="max-w-prose text-sm">
+          {`Este pago salda el vencimiento de ${monthAndYearOf(cost.charge_month)} de "${cost.name}". Al moverlo de categoría deja de saldarlo, y su fondo vuelve a apartar ${formatCents(cost.asks_again, cost.currency)} al mes.`}
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setLettingGoOf(null)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() => update.mutate({ ...values, settlesCharge: null, settlesDue: null })}
+          >
+            Guardar y desenlazar
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <form

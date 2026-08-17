@@ -446,6 +446,23 @@ class ChargeEditCostOut(BaseModel):
     would_lose_its_fund: bool
 
 
+class PaymentRefileCost(BaseModel):
+    """The category a payment is about to be filed under instead."""
+
+    category_id: int | None = None
+
+
+class ChargeUnlinkOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recurring_id: int
+    name: str
+    currency: str
+    due_date: Date
+    asks_again: int
+    charge_month: str
+
+
 class ChargeMarkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

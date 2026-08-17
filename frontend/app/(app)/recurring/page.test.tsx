@@ -43,6 +43,7 @@ vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/fx", () => ({ getFx }))
 vi.mock("@/lib/api/funds", () => ({
+  paymentRefileCost: vi.fn().mockResolvedValue(null),
   chargeMarks,
   markCharge,
   unmarkCharge,

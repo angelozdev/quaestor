@@ -15,7 +15,7 @@ for this app; see the bounded-read-path ADR.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as Date
 from datetime import timedelta
 from decimal import Decimal
@@ -184,6 +184,26 @@ class MonthAggregate:
                 item.start_date, item.end_date, item.interval_unit, item.interval_count, due + timedelta(days=1)
             )
         return due
+
+    def with_the_turn_reopened(self, recurring_id: int, due_date: Date) -> MonthAggregate:
+        """This month again, as if nothing had settled that turn of that charge.
+
+        Both halves have to go together: the turn stops counting as answered
+        for, and the money that answered for it stops draining the charge's
+        fund. Leaving either behind would price a hypothetical nobody can
+        reach — a turn open that the fund has already spent against, or a fund
+        holding money for a bill it still thinks is paid.
+
+        Nothing is written. The copy exists so a screen can be told what an edit
+        would cost before the owner commits to it (AC-5, AC-8).
+        """
+        return replace(
+            self,
+            settled_turns=frozenset(turn for turn in self.settled_turns if turn != (recurring_id, due_date)),
+            _settled_by_charge_month={
+                key: value for key, value in self._settled_by_charge_month.items() if key[0] != recurring_id
+            },
+        )
 
     def turns_in(self, item: RecurringItem, year_month: str) -> list[Date]:
         """Every turn this obligation falls due on inside one month.

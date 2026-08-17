@@ -144,6 +144,31 @@ siguiente, no para el subsiguiente.
 Si borrás el movimiento, el vencimiento vuelve a estar sin pagar y la caja
 retoma. Decidido por el dueño el 2026-08-15, tras el CP7 (ADR-0058).
 
+**Y si el pago deja de saldar sin que lo hayas pedido, la app te lo dice
+antes.** Un pago solo puede saldar un cobro de su propia categoría, así que
+cambiarle la categoría lo desenlaza. Eso no es lo que fuiste a hacer —vas a
+reclasificar un gasto— y en silencio el vencimiento vuelve a estar sin pagar y
+la caja se mueve sin que nadie avise:
+
+```
+   Editar movimiento
+   Categoría   [ 🏠 Hogar        ▾ ]
+
+   ⚠ Este pago salda el vencimiento de julio 2027
+     del 🛡️ Seguro del Carro, que está en 🚗 Carro.
+
+     Al moverlo a 🏠 Hogar deja de saldarlo, y la
+     caja vuelve a pedir $100.000 al mes.
+
+     [ Cancelar ]   [ Guardar y desenlazar ]
+```
+
+Las cifras son las medidas: enlazado la caja pide $47.826 y cobra en 2028-07;
+desenlazado pide $100.000 y cobra en 2027-07. Es la misma forma que la quinta
+puerta del AC-8 —la app guarda el cambio y avisa antes qué va a pasar, en un
+solo paso— y por la misma razón: la que falla callada es la que hay que contar.
+Decidido por el dueño el 2026-08-17, tras el CP8.
+
 **Sin esto la caja miente.** Pagás el seguro desde el banco, lo anotás a mano, y
 la caja sigue creyendo que tiene los $1.100 con la plata ya gastada — el año
 siguiente no te pide nada y llegás sin nada. La alternativa —adivinar que

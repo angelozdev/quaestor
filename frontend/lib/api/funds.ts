@@ -1,6 +1,7 @@
 import { del, get, post, qs } from "./client"
 import type {
   ChargeMark,
+  ChargeUnlink,
   Fund,
   FundCreate,
   FundLine,
@@ -42,3 +43,7 @@ export const chargeEditCost = (
     end_date?: string | null
   },
 ) => post<{ would_lose_its_fund: boolean }>(`/funds/charges/${recurringId}/edit-cost`, body)
+
+/** What a payment stops settling if it is filed under another category (AC-5). */
+export const paymentRefileCost = (txId: number, categoryId: number | null) =>
+  post<ChargeUnlink | null>(`/funds/payments/${txId}/refile-cost`, { category_id: categoryId })

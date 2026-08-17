@@ -463,3 +463,94 @@ def then_no_category_fund(world: World, category: str) -> None:
 def then_still_a_category_fund(world: World, category: str) -> None:
     fund = _call("fund_on_category", world.session, _category_id(world, category))
     assert fund is not None, f"{category!r} lost the fund that covers the whole category{_context(world)}"
+
+
+# ------------------------------------------------- refiling a settling payment
+
+
+def _payment_id(world: World) -> int:
+    """The id of the payment the scenario just wrote down.
+
+    Two step families write `last_linked_id`, and they disagree about what they
+    put there: one stores the row, the other its id. Reading it through here
+    keeps that disagreement out of every step that needs the payment.
+    """
+    written = world.last_linked_id
+    if written is None:
+        raise AssertionError(f"no payment was written down in this scenario{_context(world)}")
+    return getattr(written, "id", written)
+
+
+@step(r'the user asks what refiling that payment under "(?P<category>[^"]+)" would cost')
+def when_ask_refile_cost(world: World, category: str) -> None:
+    """The question the edit screen asks before it saves (AC-5).
+
+    It is asked of the payment the scenario just wrote down, because that is the
+    one the owner has open; nothing here looks a movement up by amount, which
+    would be the guessing this feature exists to remove.
+    """
+    world.refile_cost = _call(
+        "what_refiling_would_unsettle",
+        world.session,
+        _payment_id(world),
+        _spending_category_id(world, category),
+    )
+
+
+@step(r'the user refiles that payment under "(?P<category>[^"]+)"')
+def when_refile_payment(world: World, category: str) -> None:
+    """The owner said yes: the movement moves and lets go of the charge.
+
+    Letting go is not a separate decision — a payment can only settle a charge
+    of its own category, so the link cannot survive the move.
+    """
+    world.attempt(
+        transactions.update_transaction,
+        world.session,
+        _payment_id(world),
+        category_id=_spending_category_id(world, category),
+        recurring_id=None,
+        settles_due=None,
+    )
+
+
+@step(r'the answer names "(?P<charge>[^"]+)" and its (?P<turn>\d{4}-\d{2}) turn')
+def then_answer_names_the_turn(world: World, charge: str, turn: str) -> None:
+    cost = world.refile_cost
+    assert cost is not None, f"the app said refiling costs nothing{_context(world)}"
+    assert cost.name == charge, f"the answer names {cost.name!r}, expected {charge!r}"
+    assert year_month_of(cost.due_date) == turn, (
+        f"the answer names the {year_month_of(cost.due_date)} turn, expected {turn}"
+    )
+
+
+@step(r"the answer says the fund would go back to asking (?P<amount>" + _DEC + r") " + _CURRENCY)
+def then_answer_says_it_asks_again(world: World, amount: str, currency: str) -> None:
+    cost = world.refile_cost
+    assert cost is not None, f"the app said refiling costs nothing{_context(world)}"
+    assert cost.currency == currency, f"the answer is in {cost.currency}, not in {currency}"
+    assert cost.asks_again == _cents(amount), (
+        f"the answer says the fund goes back to asking {cost.asks_again}, expected {_cents(amount)}"
+    )
+
+
+@step(r"the answer is that nothing stops being settled")
+def then_answer_is_nothing(world: World) -> None:
+    assert world.refile_cost is None, (
+        f"the app warned about {world.refile_cost.name!r} when nothing was going to stop being settled"
+    )
+
+
+@step(r'in (?P<year_month>\d{4}-\d{2}) the fund for "(?P<charge>[^"]+)" asks (?P<amount>' + _DEC + r") " + _CURRENCY)
+def then_fund_asks_in_month(world: World, year_month: str, charge: str, amount: str, currency: str) -> None:
+    """What the fund asks, read in a named month rather than in the month in course.
+
+    The sibling of the step above, and named for the same reason: a figure that
+    is only ever checked in the month a scenario happens to be standing in
+    cannot show that the answer stays the same in every month that reads it.
+    """
+    status = _call("fund_status", world.session, _fund_for(world, charge).id, year_month)
+    assert status.currency == currency, f"the fund for {charge!r} reports in {status.currency}, not in {currency}"
+    assert status.asks == _cents(amount), (
+        f"in {year_month} the fund for {charge!r} asks {status.asks}, expected {_cents(amount)}"
+    )

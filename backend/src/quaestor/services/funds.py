@@ -27,7 +27,7 @@ from functools import partial
 
 from sqlmodel import Session, select
 
-from ..domain.dtos import ChargeMark, FundCharge, FundLine, FundPreview, FundStatus
+from ..domain.dtos import ChargeMark, ChargeUnlink, FundCharge, FundLine, FundPreview, FundStatus
 from ..domain.errors import NotFound, ValidationError
 from ..domain.models import (
     Category,
@@ -1015,6 +1015,42 @@ def would_lose_its_fund(session: Session, recurring_id: int, year_month: str, **
     agg = load_month(session, require_year_month(year_month))
     proposed = item.model_copy(update={name: value for name, value in changes.items() if value is not None})
     return not _can_still_keep_a_fund(agg, proposed, year_month)
+
+
+def what_refiling_would_unsettle(session: Session, tx_id: int, category_id: int | None) -> ChargeUnlink | None:
+    """What this payment stops settling if it is filed under `category_id` instead.
+
+    A payment can only settle a charge filed where the payment is, so refiling it
+    lets go of the turn it answered for. The owner went in to reclassify a
+    movement, not to reopen a bill, so the screen asks this before it saves — the
+    same one-step shape AC-8's fifth door uses for an edit that costs the whole
+    fund (AC-5).
+
+    Nothing when the payment settles no turn, or when the charge is filed where
+    the payment is going anyway.
+
+    Raises:
+        MissingRate: no TRM is set.
+    """
+    tx = session.get(Transaction, tx_id)
+    if tx is None or tx.recurring_id is None:
+        return None
+    item = session.get(RecurringItem, tx.recurring_id)
+    if item is None or item.category_id == category_id:
+        return None
+    occ = occurrences.occurrence_of(session, tx)
+    if occ is None:
+        return None
+    agg = load_month(session, year_month_of(tx.date))
+    without_it = _charge_obligation(agg.with_the_turn_reopened(item.id, occ.due_date), item, agg.year_month)
+    return ChargeUnlink(
+        recurring_id=item.id,
+        name=item.name,
+        currency=item.currency,
+        due_date=occ.due_date,
+        asks_again=sum(fund_ask_calc(o.required, months_to_fund(agg.year_month, o.charge_month)) for o in without_it),
+        charge_month=without_it[0].charge_month if without_it else agg.year_month,
+    )
 
 
 def follow_its_charge(session: Session, recurring_id: int) -> None:

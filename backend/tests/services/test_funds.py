@@ -1648,3 +1648,59 @@ def test_a_moved_charge_keeps_everything_its_fund_had_saved(session):
 
     assert (after.holds, after.asks, after.carries) == (before.holds, before.asks, before.carries)
     assert [c.charge_month for c in after.charges] == [c.charge_month for c in before.charges]
+
+
+def _settling_payment(session, charge_id, category_id, on=date(2026, 8, 20)):
+    return _paid_by_hand(session, charge_id, category_id, 1_100_000_00, on, date(2027, 7, 5))
+
+
+def test_refiling_a_settling_payment_says_what_it_stops_settling(session):
+    """AC-5: an edit that stops a payment settling its turn says so first.
+
+    The owner went in to reclassify a movement, not to reopen a bill, so the
+    answer has to carry the charge, the turn, and what the fund goes back to
+    asking — the screen shows all three in one step.
+    """
+    charge_id, _ = _marked(session)
+    carro = _category_named(session, "Carro")
+    hogar = _category(session, "Hogar")
+    payment = _settling_payment(session, charge_id, carro)
+
+    cost = funds.what_refiling_would_unsettle(session, payment.id, hogar)
+
+    assert cost is not None
+    assert (cost.name, cost.due_date, cost.charge_month) == ("Seguro", date(2027, 7, 5), "2027-07")
+    assert cost.asks_again == 100_000_00
+
+
+def test_a_payment_staying_where_its_charge_is_costs_nothing(session):
+    """Editing anything else about it is not the edit this warning is about."""
+    charge_id, _ = _marked(session)
+    carro = _category_named(session, "Carro")
+    payment = _settling_payment(session, charge_id, carro)
+
+    assert funds.what_refiling_would_unsettle(session, payment.id, carro) is None
+
+
+def test_a_payment_that_settles_nothing_costs_nothing_to_refile(session):
+    """Most movements settle nothing, and they must not be warned about."""
+    _marked(session)
+    carro = _category_named(session, "Carro")
+    hogar = _category(session, "Hogar")
+    plain = _spend(session, carro, 90_000_00, date(2026, 8, 21))
+
+    assert funds.what_refiling_would_unsettle(session, plain.id, hogar) is None
+
+
+def test_once_refiled_the_turn_is_open_again_and_the_fund_saves_for_it(session):
+    """What the warning warned about, carried out once the owner said yes."""
+    charge_id, _ = _marked(session)
+    carro = _category_named(session, "Carro")
+    hogar = _category(session, "Hogar")
+    payment = _settling_payment(session, charge_id, carro)
+
+    transactions.update_transaction(session, payment.id, category_id=hogar, recurring_id=None, settles_due=None)
+
+    line = _line_for(session, charge_id, "2026-08")
+    assert line.charges[0].charge_month == "2027-07"
+    assert line.asks == 100_000_00

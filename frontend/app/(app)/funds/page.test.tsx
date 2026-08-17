@@ -18,6 +18,7 @@ const { createFund, previewFund, moneyAvailable, deleteFund, listFunds, listCate
   }))
 
 vi.mock("@/lib/api/funds", () => ({
+  paymentRefileCost: vi.fn().mockResolvedValue(null),
   createFund,
   previewFund,
   moneyAvailable,

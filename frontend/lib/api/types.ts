@@ -141,6 +141,16 @@ export interface FundLine {
  * prevent. `fund_id` is what marking produced, so the same row can offer to
  * unmark.
  */
+/** What a payment stops settling if it is refiled under another category (AC-5). */
+export interface ChargeUnlink {
+  recurring_id: number
+  name: string
+  currency: string
+  due_date: string
+  asks_again: number
+  charge_month: string
+}
+
 export interface ChargeMark {
   recurring_id: number
   category_id: number

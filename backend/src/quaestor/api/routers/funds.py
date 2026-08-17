@@ -19,6 +19,7 @@ from ..schemas import (
     ChargeEditCost,
     ChargeEditCostOut,
     ChargeMarkOut,
+    ChargeUnlinkOut,
     FundCreate,
     FundLineOut,
     FundOut,
@@ -27,6 +28,7 @@ from ..schemas import (
     FundUpdate,
     MonthAvailableOut,
     MonthRatesOut,
+    PaymentRefileCost,
 )
 
 router = APIRouter(prefix="/funds", tags=["funds"])
@@ -76,6 +78,16 @@ def charge_edit_cost(recurring_id: int, body: ChargeEditCost, session: Session =
     return ChargeEditCostOut(
         would_lose_its_fund=funds.would_lose_its_fund(session, recurring_id, body.month, **changes)
     )
+
+
+@router.post("/payments/{tx_id}/refile-cost", response_model=ChargeUnlinkOut | None)
+def payment_refile_cost(tx_id: int, body: PaymentRefileCost, session: Session = Depends(get_session)):
+    """What a payment stops settling if it is filed under another category (AC-5).
+
+    Asked before the edit is saved, so the screen says it in one step instead of
+    clearing the link without a word.
+    """
+    return funds.what_refiling_would_unsettle(session, tx_id, body.category_id)
 
 
 @router.delete("/charges/{recurring_id}", status_code=204)

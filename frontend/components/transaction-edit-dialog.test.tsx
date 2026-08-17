@@ -9,10 +9,12 @@ const updateTransaction = vi.fn()
 const listTransactions = vi.fn()
 const correctTransaction = vi.fn()
 
-const { listAccounts, toast, chargeMarks } = vi.hoisted(() => ({
+const { listAccounts, toast, chargeMarks, listCategories, paymentRefileCost } = vi.hoisted(() => ({
   listAccounts: vi.fn(),
   toast: { success: vi.fn(), error: vi.fn() },
   chargeMarks: vi.fn(),
+  listCategories: vi.fn().mockResolvedValue([]),
+  paymentRefileCost: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock("@/lib/api/transactions", () => ({
@@ -22,12 +24,13 @@ vi.mock("@/lib/api/transactions", () => ({
 }))
 vi.mock("sonner", () => ({ toast }))
 vi.mock("@/lib/api/fx", () => ({ getFx: () => Promise.resolve({ usd_cop: "4000" }) }))
-vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
+vi.mock("@/lib/api/categories", () => ({ listCategories }))
 vi.mock("@/lib/api/tags", () => ({
   listTags: vi.fn().mockResolvedValue([{ id: 1, name: "viaje" }]),
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts }))
 vi.mock("@/lib/api/funds", () => ({
+  paymentRefileCost,
   chargeMarks,
   markCharge: vi.fn(),
   unmarkCharge: vi.fn(),
@@ -735,5 +738,74 @@ describe("015 — a payment may name the charge it settled", () => {
     await screen.findByLabelText("Etiquetas")
 
     expect(screen.queryByText("¿Este pago salda un cobro?")).toBeNull()
+  })
+})
+
+/**
+ * AC-5's last sentence: an edit that stops a payment settling its turn says so
+ * before it saves, instead of letting go of the link without a word.
+ */
+describe("015 — refiling a payment that settles a charge", () => {
+  const CARRO = 3
+  const HOGAR = 4
+  const COST = {
+    recurring_id: 42,
+    name: "Seguro",
+    currency: "COP",
+    due_date: "2027-07-05",
+    asks_again: 100_000_00,
+    charge_month: "2027-07",
+  }
+
+  beforeEach(() => {
+    updateTransaction.mockReset().mockResolvedValue(makeTransaction())
+    listTransactions.mockReset().mockResolvedValue([])
+    chargeMarks.mockReset().mockResolvedValue([])
+    paymentRefileCost.mockReset().mockResolvedValue(null)
+    listCategories.mockReset().mockResolvedValue([
+      { id: CARRO, name: "Carro", is_income: false, archived: false },
+      { id: HOGAR, name: "Hogar", is_income: false, archived: false },
+    ])
+  })
+
+  async function moveTheCategory(tx: Transaction) {
+    const user = userEvent.setup()
+    renderDialog(tx)
+    await user.click(await screen.findByRole("combobox", { name: "Categoría *" }))
+    await user.click(await screen.findByRole("option", { name: "Hogar" }))
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    return user
+  }
+
+  it("Refiling a settling payment says first what it stops settling", async () => {
+    paymentRefileCost.mockResolvedValue(COST)
+
+    await moveTheCategory(makeTransaction({ category_id: CARRO, recurring_id: 42 }))
+
+    const said = await screen.findByText(/deja de saldarlo/)
+    expect(said).toHaveTextContent("Seguro")
+    expect(said).toHaveTextContent("julio de 2027")
+    expect(said).toHaveTextContent("100.000")
+    expect(screen.getByRole("button", { name: "Guardar y desenlazar" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument()
+    expect(updateTransaction).not.toHaveBeenCalled()
+  })
+
+  it("Cancelling that warning leaves the payment settling what it settled", async () => {
+    paymentRefileCost.mockResolvedValue(COST)
+    const user = await moveTheCategory(makeTransaction({ category_id: CARRO, recurring_id: 42 }))
+
+    await user.click(await screen.findByRole("button", { name: "Cancelar" }))
+
+    await screen.findByLabelText("Etiquetas")
+    expect(updateTransaction).not.toHaveBeenCalled()
+  })
+
+  it("A payment that settles nothing changes category without a word", async () => {
+    await moveTheCategory(makeTransaction({ category_id: CARRO, recurring_id: null }))
+
+    await waitFor(() => expect(updateTransaction).toHaveBeenCalled())
+    expect(screen.queryByText(/deja de saldarlo/)).toBeNull()
+    expect(paymentRefileCost).not.toHaveBeenCalled()
   })
 })

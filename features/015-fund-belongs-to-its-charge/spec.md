@@ -296,6 +296,40 @@ Scenario: Deleting the payment leaves the charge waiting to be saved for again
   And the user records an expense of 600000.00 COP in category "Restaurantes" settling "Club de vinos"
   When the user deletes that payment
   Then in 2026-09 the fund for "Club de vinos" says the charge lands in 2026-11
+
+@backend
+Scenario: Refiling the payment elsewhere is answered before it is saved
+  Given a recurring charge "Seguro" on "Carro" of 1100000.00 COP every year, next due 2027-07
+  And "Seguro" is marked to be saved for
+  And the user records an expense of 1100000.00 COP in category "Carro" settling "Seguro"
+  When the user asks what refiling that payment under "Hogar" would cost
+  Then the answer names "Seguro" and its 2027-07 turn
+  And the answer says the fund would go back to asking 100000.00 COP
+
+@backend
+Scenario: A payment that asks about staying where it is costs nothing
+  Given a recurring charge "Seguro" on "Carro" of 1100000.00 COP every year, next due 2027-07
+  And "Seguro" is marked to be saved for
+  And the user records an expense of 1100000.00 COP in category "Carro" settling "Seguro"
+  When the user asks what refiling that payment under "Carro" would cost
+  Then the answer is that nothing stops being settled
+
+@backend
+Scenario: A payment that settles nothing costs nothing to refile
+  Given a recurring charge "Seguro" on "Carro" of 1100000.00 COP every year, next due 2027-07
+  And "Seguro" is marked to be saved for
+  And the user records an expense of 90000.00 COP in category "Carro"
+  When the user asks what refiling that payment under "Hogar" would cost
+  Then the answer is that nothing stops being settled
+
+@backend
+Scenario: Once refiled, the turn is open again and the fund saves for it
+  Given a recurring charge "Seguro" on "Carro" of 1100000.00 COP every year, next due 2027-07
+  And "Seguro" is marked to be saved for
+  And the user records an expense of 1100000.00 COP in category "Carro" settling "Seguro"
+  When the user refiles that payment under "Hogar"
+  Then in 2026-08 the fund for "Seguro" says the charge lands in 2027-07
+  And in 2026-08 the fund for "Seguro" asks 100000.00 COP
 ```
 
 ```gherkin
@@ -326,6 +360,29 @@ Scenario: With more than one turn open it asks which, and sends the one chosen
   When the owner records an expense in "Carro" settling "Seguro"
   Then the owner is asked which turn it settled
   And the payment is written down against the turn the owner chose
+
+Scenario: Refiling a settling payment says first what it stops settling
+  Given the app is open
+  And a payment in "Carro" that settles the marked charge "Seguro"
+  When the owner changes that payment's category to "Hogar"
+  Then the owner is warned the payment will stop settling "Seguro"
+  And the owner is told what the fund goes back to asking
+  And the owner is offered to save the change and let go of the charge
+  And the owner is offered to cancel
+
+Scenario: Cancelling that warning leaves the payment settling what it settled
+  Given the app is open
+  And a payment in "Carro" that settles the marked charge "Seguro"
+  And the owner changed that payment's category to "Hogar"
+  When the owner cancels the warning
+  Then the payment is still filed under "Carro"
+  And the payment still settles "Seguro"
+
+Scenario: A payment that settles nothing changes category without a word
+  Given the app is open
+  And a payment in "Carro" that settles no charge
+  When the owner changes that payment's category to "Hogar"
+  Then the owner is not warned about anything it stops settling
 ```
 
 ## AC-6 — The migration marks both charges, and the month's figure does not move
