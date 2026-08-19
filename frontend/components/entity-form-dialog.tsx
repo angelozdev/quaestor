@@ -1,7 +1,7 @@
 "use client"
 
 import { useForm as useTanStackForm } from "@tanstack/react-form"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { z } from "zod"
 import { CheckboxField } from "@/components/checkbox-field"
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/entity-form-dialog.schema"
 import { EntitySelect } from "@/components/entity-select"
 import { MoneyInput } from "@/components/money-input"
+import { applyApiErrorToField } from "@/lib/api/types"
 import { Button, Dialog, DialogPopup, DialogTitle, Input, Label, Select } from "@/ui"
 
 export type Field =
@@ -81,6 +82,14 @@ type Props<TValues extends EntityFormValues> = {
    * `validators.onChange` (`StandardSchemaV1<TValues, unknown>`) expects.
    */
   schema?: z.ZodType<TValues, TValues>
+  /**
+   * A server-side refusal to surface under one field, e.g. a translated
+   * `ApiError` attached to "name" after a duplicate-category rejection.
+   * Applied via `applyApiErrorToField`, and cleared automatically the moment
+   * that field's value changes — it never survives an edit that makes it
+   * stale.
+   */
+  fieldError?: { field: string; message: string } | null
   onSubmit: (values: TValues) => void
 }
 
@@ -99,6 +108,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
   submitLabel = "Guardar",
   pending = false,
   schema,
+  fieldError = null,
   onSubmit,
 }: Props<TValues>) {
   // Auto-derive a permissive schema from the Field[] spec when callers don't
@@ -127,6 +137,12 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
       form.reset(initialValues)
     }
   }
+
+  useEffect(() => {
+    if (fieldError) {
+      applyApiErrorToField(form, fieldError.field, fieldError.message)
+    }
+  }, [fieldError, form])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -161,6 +177,12 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                         : error
                           ? String(error)
                           : null
+                  const handleChange = (value: never) => {
+                    if (fieldError?.field === f.name) {
+                      applyApiErrorToField(form, f.name, null)
+                    }
+                    field.handleChange(value)
+                  }
                   return (
                     <div className="space-y-1.5">
                       {f.kind !== "checkbox" && (
@@ -177,7 +199,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                           placeholder={f.placeholder}
                           disabled={f.disabled}
                           aria-invalid={errorMessage ? true : undefined}
-                          onChange={(e) => field.handleChange(e.target.value as never)}
+                          onChange={(e) => handleChange(e.target.value as never)}
                           onBlur={field.handleBlur}
                         />
                       )}
@@ -197,7 +219,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                           aria-invalid={errorMessage ? true : undefined}
                           onChange={(e) => {
                             const raw = e.target.value
-                            field.handleChange((raw === "" ? Number.NaN : Number(raw)) as never)
+                            handleChange((raw === "" ? Number.NaN : Number(raw)) as never)
                           }}
                           onBlur={field.handleBlur}
                         />
@@ -207,7 +229,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                         <Select
                           id={f.name}
                           value={typeof field.state.value === "string" ? field.state.value : null}
-                          onValueChange={(v) => field.handleChange((v ?? "") as never)}
+                          onValueChange={(v) => handleChange((v ?? "") as never)}
                           items={f.options}
                           disabled={f.disabled}
                         />
@@ -217,7 +239,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                         <EntitySelect
                           id={f.name}
                           value={typeof field.state.value === "number" ? field.state.value : null}
-                          onChange={(v) => field.handleChange(v as never)}
+                          onChange={(v) => handleChange(v as never)}
                           queryKey={f.queryKey}
                           queryFn={f.queryFn}
                           allowNullLabel={f.allowNullLabel}
@@ -236,7 +258,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                               : null
                           }
                           disabled={f.disabled}
-                          onChange={(cents) => field.handleChange(cents as never)}
+                          onChange={(cents) => handleChange(cents as never)}
                         />
                       )}
 
@@ -245,7 +267,7 @@ export function EntityFormDialog<TValues extends EntityFormValues>({
                           id={f.name}
                           label={f.label}
                           checked={Boolean(field.state.value)}
-                          onCheckedChange={(c) => field.handleChange(c as never)}
+                          onCheckedChange={(c) => handleChange(c as never)}
                         />
                       )}
 

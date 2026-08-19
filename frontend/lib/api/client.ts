@@ -28,12 +28,14 @@ http.interceptors.response.use(
       error?: string
       detail?: string
       fields?: Record<string, string>
+      data?: Record<string, unknown>
     } | null
     throw new ApiError(
       status,
       data?.error ?? "Error",
       data?.detail ?? `Request failed (${status})`,
       data?.fields,
+      data?.data,
     )
   },
 )

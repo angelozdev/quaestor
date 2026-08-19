@@ -73,7 +73,9 @@ def test_creating_a_category_whose_name_is_taken_is_422(client, auth):
     resp = client.post("/api/categories", headers=auth, json={"name": "vuelos"})
 
     assert resp.status_code == 422
-    assert "already exists" in resp.json()["detail"]
+    body = resp.json()
+    assert body["error"] == "category_duplicate_active"
+    assert "Vuelos" in body["detail"]
     assert len(client.get("/api/categories", headers=auth).json()) == 1
 
 

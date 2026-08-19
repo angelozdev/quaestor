@@ -16,6 +16,7 @@ import {
 } from "@/components/transaction-edit-dialog.schema"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
+import { translateApiError } from "@/lib/api/error-catalog"
 import { paymentRefileCost } from "@/lib/api/funds"
 import { getFx } from "@/lib/api/fx"
 import { correctTransaction, listTransactions, updateTransaction } from "@/lib/api/transactions"
@@ -232,6 +233,7 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
   const isIncome = tx.type === "income"
   const monthOfPurchase = tx.type === "expense" ? yearMonthOf(tx.date) : null
   const [accountId, setAccountId] = useState<number | null>(tx.account_id)
+  const [amountError, setAmountError] = useState<string | null>(null)
   const money = useStatedAmount({ cents: tx.amount, currency: tx.currency })
   const [statedOther, setStatedOther] = useState<number | null | undefined>(undefined)
   const accountsQuery = useQuery({
@@ -301,13 +303,15 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
     },
     onError: (e: unknown) => {
       const cause = e instanceof CorrectionRefused ? e.cause : e
+      const causeMessage = cause instanceof ApiError ? translateApiError(cause) : "Error"
       applyApiErrorsToForm(form, cause)
+      setAmountError(
+        cause instanceof ApiError && cause.code === "amount_not_positive" ? causeMessage : null,
+      )
       toast.error(
         e instanceof CorrectionRefused
-          ? `Se guardaron los datos, pero el monto y la cuenta quedaron como estaban: ${e.message}`
-          : cause instanceof ApiError
-            ? cause.message
-            : "Error",
+          ? `Se guardaron los datos, pero el monto y la cuenta quedaron como estaban: ${causeMessage}`
+          : causeMessage,
       )
     },
     onSettled: () => invalidate(qc, "transactionWrite"),
@@ -385,8 +389,12 @@ function EditTransactionForm({ tx, onDone }: { tx: Transaction; onDone: () => vo
             id="tx-edit-amount"
             currency={currency}
             value={money.amount}
-            onChange={(cents) => money.write(cents, currency)}
+            onChange={(cents) => {
+              money.write(cents, currency)
+              setAmountError(null)
+            }}
           />
+          {amountError && <p className="text-xs text-destructive">{amountError}</p>}
         </div>
       )}
       {otherSide !== null && (

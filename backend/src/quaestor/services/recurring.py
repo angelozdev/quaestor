@@ -11,7 +11,7 @@ from datetime import date as Date
 
 from sqlmodel import Session, select
 
-from ..domain.errors import NotFound, ValidationError
+from ..domain.errors import NotFound, ValidationError, require_positive
 from ..domain.models import (
     Account,
     IntervalUnit,
@@ -143,8 +143,7 @@ def create_recurring(
     if type == TxType.transfer:
         raise ValidationError("recurring type must be expense or income, not transfer")
     _reject_manual_income(type, mode)
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
+    require_positive(amount)
     if not is_supported(currency):
         raise ValidationError(f"unsupported currency: {currency}")
     if interval_count < 1:
@@ -323,8 +322,7 @@ def _apply_edit(
         _reject_manual_income(item.type, RecurringMode(mode))
         item.mode = RecurringMode(mode)
     if amount is not None:
-        if amount <= 0:
-            raise ValidationError("amount must be > 0")
+        require_positive(amount)
         item.amount = amount
     if currency is not None:
         if not is_supported(currency):

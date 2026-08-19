@@ -94,3 +94,33 @@ describe("http client on an expired session", () => {
     expect(handler).not.toHaveBeenCalled()
   })
 })
+
+describe("http client carries a coded refusal's data through the real interceptor", () => {
+  const original = http.defaults.adapter
+
+  afterEach(() => {
+    http.defaults.adapter = original
+  })
+
+  it("puts the backend's data key onto ApiError.data, not just code and detail", async () => {
+    http.defaults.adapter = refusingWith(422, {
+      error: "category_duplicate_active",
+      detail: "an expense category named 'Transporte' already exists",
+      data: { name: "Transporte", direction: "expense" },
+    })
+
+    const refusal = await http.post("/categories", { name: "Transporte" }).catch((e: unknown) => e)
+
+    expect(refusal).toBeInstanceOf(ApiError)
+    expect((refusal as ApiError).code).toBe("category_duplicate_active")
+    expect((refusal as ApiError).data).toEqual({ name: "Transporte", direction: "expense" })
+  })
+
+  it("defaults data to an empty object when the backend sends none", async () => {
+    http.defaults.adapter = refusingWith(404, { error: "NotFound", detail: "account 9 not found" })
+
+    const refusal = await http.get("/accounts/9").catch((e: unknown) => e)
+
+    expect((refusal as ApiError).data).toEqual({})
+  })
+})

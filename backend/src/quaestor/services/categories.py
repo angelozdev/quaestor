@@ -85,12 +85,19 @@ def _refuse_name_already_held(session: Session, name: str, is_income: bool) -> N
     if held is None:
         return
     direction = "income" if is_income else "expense"
+    data = {"name": held.name, "direction": direction}
     if held.archived:
         raise ValidationError(
             f"an archived {direction} category is already named {held.name!r} — "
-            f"restore it instead of creating a second one"
+            f"restore it instead of creating a second one",
+            code="category_duplicate_archived",
+            data=data,
         )
-    raise ValidationError(f"an {direction} category named {held.name!r} already exists")
+    raise ValidationError(
+        f"an {direction} category named {held.name!r} already exists",
+        code="category_duplicate_active",
+        data=data,
+    )
 
 
 def create_category(

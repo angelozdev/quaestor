@@ -15,7 +15,13 @@ from typing import Protocol
 from sqlalchemy import delete
 from sqlmodel import Session, select
 
-from ..domain.errors import CorrectionNotApplied, NotFound, TransferImbalance, ValidationError
+from ..domain.errors import (
+    CorrectionNotApplied,
+    NotFound,
+    TransferImbalance,
+    ValidationError,
+    require_positive,
+)
 from ..domain.models import (
     Account,
     Meta,
@@ -54,12 +60,6 @@ def _require_account(session: Session, account_id: int) -> Account:
     if acc.archived:
         raise ValidationError(f"account {account_id} is archived")
     return acc
-
-
-def require_positive(amount: int) -> None:
-    """A movement is worth something or it is not a movement (AC-24)."""
-    if amount <= 0:
-        raise ValidationError("amount must be > 0")
 
 
 def refuse_bad_meta(session: Session, tx_type: TxType, meta_id: int | None) -> None:
@@ -384,8 +384,8 @@ def transfer(
     """
     categories.resolve_for_movement(session, TxType.transfer, category_id)
     require_positive(amount)
-    if amount_received is not None and amount_received <= 0:
-        raise ValidationError("amount_received must be > 0")
+    if amount_received is not None:
+        require_positive(amount_received)
     if from_account_id == to_account_id:
         raise TransferImbalance("source and destination cannot be the same account")
     src = _require_account(session, from_account_id)

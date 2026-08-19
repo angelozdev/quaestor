@@ -255,7 +255,7 @@ def test_transfer_non_positive_amounts_are_422(client, auth, two_accounts, usd_a
         headers=auth,
         json={"from_account_id": cash["id"], "to_account_id": bank["id"], "amount": 0, "date": "2026-06-17"},
     )
-    assert zero_sent.status_code == 422 and zero_sent.json()["error"] == "ValidationError"
+    assert zero_sent.status_code == 422 and zero_sent.json()["error"] == "amount_not_positive"
     zero_received = client.post(
         "/api/transactions/transfer",
         headers=auth,
@@ -267,7 +267,7 @@ def test_transfer_non_positive_amounts_are_422(client, auth, two_accounts, usd_a
             "date": "2026-06-17",
         },
     )
-    assert zero_received.status_code == 422 and zero_received.json()["error"] == "ValidationError"
+    assert zero_received.status_code == 422 and zero_received.json()["error"] == "amount_not_positive"
 
 
 def test_transfer_same_account_is_409(client, auth, two_accounts):

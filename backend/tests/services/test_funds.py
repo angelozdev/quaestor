@@ -911,8 +911,9 @@ def test_a_fixed_fund_with_no_amount_at_all_is_refused(session):
 
 def test_a_fixed_fund_asking_exactly_zero_is_refused(session):
     cat = _category(session, "Tecnologia")
-    with pytest.raises(ValidationError, match="above zero"):
+    with pytest.raises(ValidationError) as refusal:
         funds.create_fund(session, cat, rule="fixed", amount=0, start_month="2026-11")
+    assert refusal.value.code == "amount_not_positive"
 
 
 def test_a_fixed_fund_may_ask_a_single_centavo(session):
@@ -1074,11 +1075,17 @@ def test_the_average_rule_reads_only_months_completed_before_it_starts(session):
         funds.create_fund(session, cat, rule="average", window_months=12, start_month="2026-11")
 
 
-@pytest.mark.parametrize("amount", [None, 0])
-def test_a_fixed_fund_refuses_an_amount_that_is_not_above_zero(session, amount):
-    cat = _category(session, f"Tecnologia {amount}")
+def test_a_fixed_fund_refuses_a_missing_amount(session):
+    cat = _category(session, "Tecnologia None")
     with pytest.raises(ValidationError, match="above zero"):
-        funds.create_fund(session, cat, rule="fixed", amount=amount, start_month="2026-11")
+        funds.create_fund(session, cat, rule="fixed", amount=None, start_month="2026-11")
+
+
+def test_a_fixed_fund_refuses_an_amount_that_is_not_above_zero(session):
+    cat = _category(session, "Tecnologia 0")
+    with pytest.raises(ValidationError) as refusal:
+        funds.create_fund(session, cat, rule="fixed", amount=0, start_month="2026-11")
+    assert refusal.value.code == "amount_not_positive"
 
 
 @pytest.mark.parametrize("amount", [1, 2])
