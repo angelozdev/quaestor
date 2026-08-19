@@ -18,12 +18,18 @@ import {
   updateCategory,
 } from "@/lib/api/categories"
 import { listCategoryGroups } from "@/lib/api/category-groups"
+import { translateApiError } from "@/lib/api/error-catalog"
 import type { Category } from "@/lib/api/types"
 import { ApiError } from "@/lib/api/types"
 import { ARCHIVED_FILTER_SCHEMA } from "@/lib/filter-schemas"
 import { invalidate, qk } from "@/lib/query"
 import { useUrlFilters } from "@/lib/use-url-filters"
 import { Button } from "@/ui"
+
+const DUPLICATE_CATEGORY_CODES = new Set([
+  "category_duplicate_active",
+  "category_duplicate_archived",
+])
 
 const FIELDS: Field[] = [
   { kind: "text", name: "name", label: "Nombre", required: true },
@@ -63,6 +69,9 @@ export default function CategoriesPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
   const [archiving, setArchiving] = useState<Category | null>(null)
+  const [nameFieldError, setNameFieldError] = useState<{ field: string; message: string } | null>(
+    null,
+  )
 
   const list = useQuery({
     queryKey: qk.categories(values.archived),
@@ -94,8 +103,18 @@ export default function CategoriesPage() {
     onSuccess: () => {
       done("Categoría creada")
       setCreating(false)
+      setNameFieldError(null)
     },
-    onError: onErr,
+    onError: (e: unknown) => {
+      if (e instanceof ApiError && DUPLICATE_CATEGORY_CODES.has(e.code)) {
+        const message = translateApiError(e)
+        setNameFieldError({ field: "name", message })
+        toast.error(message)
+        return
+      }
+      setNameFieldError(null)
+      onErr(e)
+    },
   })
   const update = useMutation({
     mutationFn: (v: FormValues) => {
@@ -198,7 +217,10 @@ export default function CategoriesPage() {
 
       <EntityFormDialog
         open={creating}
-        onOpenChange={setCreating}
+        onOpenChange={(o) => {
+          setCreating(o)
+          if (!o) setNameFieldError(null)
+        }}
         title="Nueva categoría"
         fields={FIELDS}
         initialValues={{
@@ -209,6 +231,7 @@ export default function CategoriesPage() {
           counts_as_saving: false,
         }}
         pending={create.isPending}
+        fieldError={nameFieldError}
         onSubmit={(v) => create.mutate(v)}
       />
       <EntityFormDialog

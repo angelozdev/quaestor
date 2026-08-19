@@ -28,7 +28,7 @@ from functools import partial
 from sqlmodel import Session, select
 
 from ..domain.dtos import ChargeMark, ChargeUnlink, FundCharge, FundLine, FundPreview, FundStatus
-from ..domain.errors import NotFound, ValidationError
+from ..domain.errors import NotFound, ValidationError, require_positive
 from ..domain.models import (
     Category,
     Fund,
@@ -651,8 +651,9 @@ def _validated_spec(session: Session, category: Category, rule: FundRule, spec: 
     stored = {"rule": rule, "start_month": start_month, "accumulates": True if accumulates is None else accumulates}
     if rule == FundRule.fixed:
         amount = spec.get("amount")
-        if amount is None or amount <= 0:
+        if amount is None:
             raise ValidationError("a fund asking a fixed amount needs an amount above zero")
+        require_positive(amount)
         stored["amount"] = amount
     elif rule == FundRule.average:
         window = spec.get("window_months")

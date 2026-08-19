@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { ApiError } from "@/lib/api/types"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
 const { listCategories, listCategoryGroups, createCategory, updateCategory } = vi.hoisted(() => ({
@@ -97,6 +98,103 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
     await user.click(screen.getByRole("button", { name: "Crear la primera" }))
 
     expect(screen.getByText("Nueva categoría")).toBeInTheDocument()
+  })
+})
+
+describe("AC-1/AC-2 — a duplicate category name is refused in Spanish, under the Name field", () => {
+  it("The duplicate-category refusal appears under the Name field, in Spanish", async () => {
+    const user = userEvent.setup()
+    createCategory.mockRejectedValue(
+      new ApiError(
+        422,
+        "category_duplicate_active",
+        "Ya existe una categoría de gasto llamada «Transporte»",
+        undefined,
+        { name: "Transporte", direction: "expense" },
+      ),
+    )
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+    await user.type(await screen.findByLabelText(/^Nombre/), "Transporte")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    expect(
+      await screen.findByText("Ya existe una categoría de gasto llamada «Transporte»"),
+    ).toBeInTheDocument()
+  })
+
+  it("The archived-category refusal offers to restore it, in Spanish", async () => {
+    const user = userEvent.setup()
+    createCategory.mockRejectedValue(
+      new ApiError(
+        422,
+        "category_duplicate_archived",
+        "Ya existe una categoría de gasto archivada llamada «Transporte». Restaurarla en vez de crear otra.",
+        undefined,
+        { name: "Transporte", direction: "expense" },
+      ),
+    )
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+    await user.type(await screen.findByLabelText(/^Nombre/), "Transporte")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    expect(
+      await screen.findByText(
+        "Ya existe una categoría de gasto archivada llamada «Transporte». Restaurarla en vez de crear otra.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("Editing the name away from the rejected one clears the stale refusal", async () => {
+    const user = userEvent.setup()
+    createCategory.mockRejectedValue(
+      new ApiError(
+        422,
+        "category_duplicate_active",
+        "an expense category named 'Transporte' already exists",
+        undefined,
+        { name: "Transporte", direction: "expense" },
+      ),
+    )
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+    await user.type(await screen.findByLabelText(/^Nombre/), "Transporte")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    expect(
+      await screen.findByText("Ya existe una categoría de gasto llamada «Transporte»"),
+    ).toBeInTheDocument()
+
+    await user.type(await screen.findByLabelText(/^Nombre/), " nueva")
+
+    expect(
+      screen.queryByText("Ya existe una categoría de gasto llamada «Transporte»"),
+    ).not.toBeInTheDocument()
+  })
+
+  it("Closing the dialog after a rejection does not carry the refusal into the next visit", async () => {
+    const user = userEvent.setup()
+    createCategory.mockRejectedValue(
+      new ApiError(
+        422,
+        "category_duplicate_active",
+        "an expense category named 'Transporte' already exists",
+        undefined,
+        { name: "Transporte", direction: "expense" },
+      ),
+    )
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+    await user.type(await screen.findByLabelText(/^Nombre/), "Transporte")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+    await screen.findByText("Ya existe una categoría de gasto llamada «Transporte»")
+
+    await user.click(screen.getByRole("button", { name: "Cancelar" }))
+    await user.click(await screen.findByRole("button", { name: "Nueva" }))
+
+    expect(
+      screen.queryByText("Ya existe una categoría de gasto llamada «Transporte»"),
+    ).not.toBeInTheDocument()
   })
 })
 

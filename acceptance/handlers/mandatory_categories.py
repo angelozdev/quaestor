@@ -212,6 +212,11 @@ def _refusal(world: World, what: str) -> str:
     return str(err)
 
 
+def _refusal_code(world: World, what: str) -> str | None:
+    _refusal(world, what)
+    return getattr(world.last_error, "code", None)
+
+
 # ----------------------------------------------------------------- raw SQL
 
 
@@ -871,17 +876,22 @@ def then_told_which_category(world: World) -> None:
 
 @step(r"the user is told that category already exists")
 def then_told_category_exists(world: World) -> None:
-    message = _refusal(world, "creating a category whose name is taken").lower()
-    assert "exist" in message or "already" in message, (
-        f"the refusal does not say the category already exists: {message}"
+    code = _refusal_code(world, "creating a category whose name is taken")
+    assert code == "category_duplicate_active", (
+        f"the refusal does not carry the duplicate-active category code: got {code!r} (error: {world.last_error!r})"
     )
 
 
 @step(r'the user is offered to restore the archived category "(?P<name>[^"]+)"')
 def then_offered_to_restore(world: World, name: str) -> None:
-    message = _refusal(world, "creating a category that matches an archived one")
-    assert name in message and "restore" in message.lower(), (
-        f"the refusal does not offer to restore the archived {name!r}: {message}"
+    code = _refusal_code(world, "creating a category that matches an archived one")
+    assert code == "category_duplicate_archived", (
+        f"the refusal does not carry the duplicate-archived category code: got {code!r} (error: {world.last_error!r})"
+    )
+    data = getattr(world.last_error, "data", {})
+    assert data.get("name") == name, (
+        f"the refusal does not name the archived category being offered for restore: "
+        f"expected {name!r}, got {data.get('name')!r} (error: {world.last_error!r})"
     )
 
 

@@ -2,11 +2,29 @@
 
 
 class QuaestorError(Exception):
-    """Base class for all Quaestor domain errors."""
+    """Base class for all Quaestor domain errors.
+
+    Args:
+        message: the English detail this error has always carried.
+        code: stable snake_case identifier a client can key a translation
+            catalog on; `None` for a site not yet migrated (ADR-0059).
+        data: the values a translated message needs to interpolate.
+    """
+
+    def __init__(self, message: str, *, code: str | None = None, data: dict | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.data = data or {}
 
 
 class ValidationError(QuaestorError):
     """Invalid input: amount <= 0, unsupported currency, archived id, invalid type."""
+
+
+def require_positive(amount: int) -> None:
+    """A movement is worth something or it is not a movement (AC-24)."""
+    if amount <= 0:
+        raise ValidationError("amount must be > 0", code="amount_not_positive")
 
 
 class MissingRate(QuaestorError):

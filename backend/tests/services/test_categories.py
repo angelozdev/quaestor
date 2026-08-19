@@ -176,7 +176,8 @@ def test_a_name_an_active_category_holds_is_refused_anywhere(session):
     with pytest.raises(ValidationError) as refusal:
         categories.create_category(session, "vuelos")
 
-    assert "already exists" in str(refusal.value)
+    assert refusal.value.code == "category_duplicate_active"
+    assert "Vuelos" in str(refusal.value)
     assert [c.name for c in categories.list_categories(session)] == ["Vuelos"]
 
 
@@ -187,7 +188,7 @@ def test_a_name_an_archived_category_holds_offers_to_restore_it(session):
     with pytest.raises(ValidationError) as refusal:
         categories.create_category(session, "Vuelos")
 
-    assert "restore" in str(refusal.value).lower()
+    assert refusal.value.code == "category_duplicate_archived"
     assert "Vuelos" in str(refusal.value)
 
 
@@ -211,7 +212,8 @@ def test_the_same_name_in_the_same_direction_is_still_refused(session):
     with pytest.raises(ValidationError) as refusal:
         categories.create_category(session, "bonos", is_income=True)
 
-    assert "income category" in str(refusal.value)
+    assert refusal.value.code == "category_duplicate_active"
+    assert refusal.value.data["direction"] == "income"
 
 
 def test_an_archived_match_of_the_other_direction_does_not_block(session):
@@ -246,8 +248,7 @@ def test_an_active_match_is_named_even_when_an_archived_one_shares_the_name(sess
     with pytest.raises(ValidationError) as refusal:
         categories.create_category(session, "auto insurance")
 
-    assert "already exists" in str(refusal.value)
-    assert "restore" not in str(refusal.value).lower()
+    assert refusal.value.code == "category_duplicate_active"
 
 
 def test_restoring_into_a_name_an_active_category_holds_is_refused(session):

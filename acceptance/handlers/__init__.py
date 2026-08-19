@@ -83,6 +83,7 @@ def run_scenario(
 
 
 _FEATURE_MODULES = (
+    "error_contract",
     "fund_breakdown",
     "fund_per_charge",
     "fx_read_time",

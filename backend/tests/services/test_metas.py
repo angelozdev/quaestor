@@ -397,8 +397,9 @@ def test_a_contribution_of_nothing_is_refused_for_being_nothing(session):
     """The two refusals say different things and the owner must get the right one."""
     meta = _meta(session, amount=1_000_000)
 
-    with pytest.raises(ValidationError, match="above zero"):
+    with pytest.raises(ValidationError) as refusal:
         metas.contribute(session, meta.id, year_month="2026-06", amount=0)
+    assert refusal.value.code == "amount_not_positive"
 
 
 def test_a_meta_named_with_nothing_but_spaces_is_refused(session):

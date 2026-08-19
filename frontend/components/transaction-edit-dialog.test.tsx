@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { Transaction } from "@/lib/api/types"
+import { ApiError, type Transaction } from "@/lib/api/types"
 import { makeTransaction, queryWrapper } from "@/tests/factories"
 import { TransactionEditDialog } from "./transaction-edit-dialog"
 
@@ -273,6 +273,41 @@ describe("012 — a movement is corrected, not deleted", () => {
     await user.click(await screen.findByRole("button", { name: "Guardar" }))
     await waitFor(() => expect(updateTransaction).toHaveBeenCalledTimes(1))
     expect(correctTransaction).not.toHaveBeenCalled()
+  })
+
+  it("The correction dialog shows the Spanish refusal under the Amount field", async () => {
+    const user = userEvent.setup()
+    correctTransaction
+      .mockReset()
+      .mockRejectedValue(
+        new ApiError(422, "amount_not_positive", "El monto debe ser mayor que cero", undefined, {}),
+      )
+    renderDialog(makeTransaction())
+    const amount = await screen.findByLabelText("Monto (COP)")
+    await user.clear(amount)
+    await user.type(amount, "0")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    expect(await screen.findByText("El monto debe ser mayor que cero")).toBeInTheDocument()
+  })
+
+  it("The partial-save toast is entirely in Spanish, never the raw backend detail", async () => {
+    const user = userEvent.setup()
+    correctTransaction
+      .mockReset()
+      .mockRejectedValue(
+        new ApiError(422, "amount_not_positive", "amount must be > 0", undefined, {}),
+      )
+    renderDialog(makeTransaction())
+    const amount = await screen.findByLabelText("Monto (COP)")
+    await user.clear(amount)
+    await user.type(amount, "0")
+    await user.click(screen.getByRole("button", { name: "Guardar" }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+    expect(toast.error).toHaveBeenCalledWith(
+      "Se guardaron los datos, pero el monto y la cuenta quedaron como estaban: El monto debe ser mayor que cero",
+    )
   })
 })
 

@@ -318,7 +318,7 @@ def then_told_no_past(world: World) -> None:
 
 @step(r"the user is told a meta needs an amount above zero")
 def then_told_amount(world: World) -> None:
-    assert "above zero" in getattr(world, "meta_refusal", "")
+    assert "amount must be > 0" in getattr(world, "meta_refusal", "")
 
 
 @step(r"the user is told a meta cannot already hold more than it costs")

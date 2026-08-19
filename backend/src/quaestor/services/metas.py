@@ -29,7 +29,7 @@ from decimal import Decimal
 from sqlmodel import Session, select
 
 from ..domain.dtos import MetaStatus
-from ..domain.errors import NotFound, ValidationError
+from ..domain.errors import NotFound, ValidationError, require_positive
 from ..domain.models import Meta, MetaAmendment, MetaContribution
 from ..domain.money import to_cop_cents
 from ..domain.rules import (
@@ -82,8 +82,7 @@ def _validate_spec(
     """
     if not name or not name.strip():
         raise ValidationError("a meta needs a name")
-    if amount <= 0:
-        raise ValidationError("a meta needs an amount above zero")
+    require_positive(amount)
     require_year_month(target_month, "target_month")
     if target_month < today_month:
         raise ValidationError(f"there is no way to save into the past: {target_month} is behind {today_month}")
@@ -531,8 +530,7 @@ def contribute(session: Session, meta_id: int, *, year_month: str, amount: int) 
         raise ValidationError(f"the meta {meta.name!r} was cancelled and takes no contribution")
     if year_month < meta.start_month:
         raise ValidationError(f"the meta {meta.name!r} did not exist in {year_month}")
-    if amount <= 0:
-        raise ValidationError("a contribution needs an amount above zero")
+    require_positive(amount)
     room = _room_left(session, meta, year_month)
     put_in = min(amount, room)
     if put_in <= 0:

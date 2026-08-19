@@ -474,12 +474,20 @@ export class ApiError extends Error {
   status: number
   code: string
   fields: Record<string, string>
-  constructor(status: number, code: string, message: string, fields?: Record<string, string>) {
+  data: Record<string, unknown>
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    fields?: Record<string, string>,
+    data?: Record<string, unknown>,
+  ) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.code = code
     this.fields = fields ?? {}
+    this.data = data ?? {}
   }
 }
 
@@ -506,6 +514,23 @@ export function applyApiErrorsToForm(form: any, err: unknown): void {
   for (const [field, message] of Object.entries(err.fields)) {
     form.setFieldMeta(field, { error: message })
   }
+}
+
+/**
+ * Set (or clear, with `message: null`) a single field's server-side error via
+ * TanStack Form's `errorMap.onServer` slot — the slot every field renderer in
+ * this app actually reads (`field.state.meta.errors`), unlike
+ * `applyApiErrorsToForm`'s `{ error: message }` shape above. Used where a
+ * translated `ApiError` (via `translateApiError`) targets one named field
+ * outside the Pydantic `fields` map, e.g. a duplicate-category or
+ * invalid-amount refusal.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: TanStack Form generics are not worth threading.
+export function applyApiErrorToField(form: any, field: string, message: string | null): void {
+  form.setFieldMeta(field, (prev: { errorMap?: Record<string, unknown> }) => ({
+    ...prev,
+    errorMap: { ...prev?.errorMap, onServer: message ?? undefined },
+  }))
 }
 
 /**
