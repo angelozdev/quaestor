@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { type Column, DataTable, type RowAction } from "@/components/data-table"
 import { EntitySelect } from "@/components/entity-select"
 import { MoneyAmount } from "@/components/money-amount"
+import { MoneyInput } from "@/components/money-input"
 import { PageHeader } from "@/components/page-header"
 import { ScreenHelp } from "@/components/screen-help"
 import { StatusBadge } from "@/components/status-badge"
@@ -15,6 +16,7 @@ import { TransactionCreateDialog } from "@/components/transaction-create-dialog"
 import { TransactionEditDialog } from "@/components/transaction-edit-dialog"
 import { listAccounts } from "@/lib/api/accounts"
 import { listCategories } from "@/lib/api/categories"
+import { listCategoryGroups } from "@/lib/api/category-groups"
 import { restorePlanned } from "@/lib/api/planned"
 import { listTags } from "@/lib/api/tags"
 import { deleteTransaction, listTransactions } from "@/lib/api/transactions"
@@ -93,6 +95,20 @@ function Filter({
   )
 }
 
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <span
+        className="block text-xs font-medium uppercase tracking-wide"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        {label}
+      </span>
+      <div className="flex flex-wrap items-end gap-3">{children}</div>
+    </div>
+  )
+}
+
 export default function TransactionsPage() {
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
@@ -133,11 +149,20 @@ export default function TransactionsPage() {
     queryKey: qk.tags(),
     queryFn: () => listTags(),
   })
+  const groups = useQuery({
+    queryKey: qk.categoryGroups(true),
+    queryFn: () => listCategoryGroups(true),
+  })
 
   const accountName = (id: number | null) =>
     id === null ? "—" : (accounts.data?.find((a) => a.id === id)?.name ?? `#${id}`)
   const categoryName = (id: number | null) =>
     id === null ? "—" : (categories.data?.find((c) => c.id === id)?.name ?? `#${id}`)
+
+  const invertedAmountRange =
+    values.amount_min !== null &&
+    values.amount_max !== null &&
+    values.amount_min > values.amount_max
 
   const filters: TransactionFilters = useMemo(() => {
     const f: TransactionFilters = {}
@@ -145,14 +170,21 @@ export default function TransactionsPage() {
     if (values.date_to) f.date_to = values.date_to
     if (values.account_id !== null) f.account_id = values.account_id
     if (values.category_id !== null) f.category_id = values.category_id
+    if (values.group_id !== null) f.group_id = values.group_id
     if (values.tag !== null) {
       const tagged = tags.data?.find((t) => t.id === values.tag)?.name
       if (tagged) f.tag = tagged
     }
     if (values.type) f.type = values.type
     if (values.status) f.status = values.status
+    if (!invertedAmountRange) {
+      if (values.amount_min !== null) f.amount_min = values.amount_min
+      if (values.amount_max !== null) f.amount_max = values.amount_max
+    }
     return f
-  }, [values, tags.data])
+  }, [values, tags.data, invertedAmountRange])
+
+  const activeFilterCount = Object.values(values).filter((v) => v !== null).length
 
   const list = useQuery({
     queryKey: qk.transactions(filters),
@@ -255,75 +287,129 @@ export default function TransactionsPage() {
   ]
 
   const filterBar = (
-    <div className="flex flex-wrap items-end gap-3">
-      <Filter id="tx-from" label="Desde" width="w-36">
-        <Input
-          id="tx-from"
-          type="date"
-          value={values.date_from ?? ""}
-          onChange={(e) => patch({ date_from: e.target.value })}
-        />
-      </Filter>
-      <Filter id="tx-to" label="Hasta" width="w-36">
-        <Input
-          id="tx-to"
-          type="date"
-          value={values.date_to ?? ""}
-          onChange={(e) => patch({ date_to: e.target.value })}
-        />
-      </Filter>
-      <Filter id="tx-account" label="Cuenta" width="w-40">
-        <EntitySelect
-          id="tx-account"
-          value={values.account_id}
-          onChange={(v) => patch({ account_id: v })}
-          queryKey={qk.accounts(true)}
-          queryFn={() => listAccounts(true)}
-          allowNullLabel="Todas"
-        />
-      </Filter>
-      <Filter id="tx-category" label="Categoría" width="w-40">
-        <EntitySelect
-          id="tx-category"
-          value={values.category_id}
-          onChange={(v) => patch({ category_id: v })}
-          queryKey={qk.categories(true)}
-          queryFn={() => listCategories(true)}
-          allowNullLabel="Todas"
-        />
-      </Filter>
-      <Filter id="tx-tag" label="Etiqueta" width="w-36">
-        <EntitySelect
-          id="tx-tag"
-          value={values.tag}
-          onChange={(v) => patch({ tag: v })}
-          queryKey={qk.tags()}
-          queryFn={() => listTags()}
-          allowNullLabel="Todas"
-          disabled={tags.isLoading}
-        />
-      </Filter>
-      <Filter id="tx-type" label="Tipo" width="w-32">
-        <Select
-          id="tx-type"
-          value={values.type ?? ALL}
-          onValueChange={(v) => patch({ type: v === ALL ? null : (v as TxType) })}
-          items={TYPE_ITEMS}
-          placeholder="Todos"
-        />
-      </Filter>
-      <Filter id="tx-status" label="Estado" width="w-32">
-        <Select
-          id="tx-status"
-          value={values.status ?? ALL}
-          onValueChange={(v) => patch({ status: v === ALL ? null : (v as TxStatus) })}
-          items={STATUS_ITEMS}
-          placeholder="Todos"
-        />
-      </Filter>
-      <Button variant="ghost" size="sm" onClick={clear}>
-        Limpiar
-      </Button>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-x-8 gap-y-4">
+        <FilterGroup label="Cuándo">
+          <Filter id="tx-from" label="Desde" width="w-36">
+            <Input
+              id="tx-from"
+              type="date"
+              value={values.date_from ?? ""}
+              onChange={(e) => patch({ date_from: e.target.value })}
+            />
+          </Filter>
+          <Filter id="tx-to" label="Hasta" width="w-36">
+            <Input
+              id="tx-to"
+              type="date"
+              value={values.date_to ?? ""}
+              onChange={(e) => patch({ date_to: e.target.value })}
+            />
+          </Filter>
+        </FilterGroup>
+
+        <FilterGroup label="Qué">
+          <Filter id="tx-account" label="Cuenta" width="w-40">
+            <EntitySelect
+              id="tx-account"
+              value={values.account_id}
+              onChange={(v) => patch({ account_id: v })}
+              queryKey={qk.accounts(true)}
+              queryFn={() => listAccounts(true)}
+              allowNullLabel="Todas"
+            />
+          </Filter>
+          <Filter id="tx-category" label="Categoría" width="w-40">
+            <EntitySelect
+              id="tx-category"
+              value={values.category_id}
+              onChange={(v) => patch({ category_id: v })}
+              queryKey={qk.categories(true)}
+              queryFn={() => listCategories(true)}
+              allowNullLabel="Todas"
+            />
+          </Filter>
+          <Filter id="tx-group" label="Grupo" width="w-40">
+            <EntitySelect
+              id="tx-group"
+              value={values.group_id}
+              onChange={(v) => patch({ group_id: v })}
+              queryKey={qk.categoryGroups(true)}
+              queryFn={() => listCategoryGroups(true)}
+              allowNullLabel="Todos"
+              disabled={groups.isLoading}
+            />
+          </Filter>
+          <Filter id="tx-tag" label="Etiqueta" width="w-36">
+            <EntitySelect
+              id="tx-tag"
+              value={values.tag}
+              onChange={(v) => patch({ tag: v })}
+              queryKey={qk.tags()}
+              queryFn={() => listTags()}
+              allowNullLabel="Todas"
+              disabled={tags.isLoading}
+            />
+          </Filter>
+          <Filter id="tx-type" label="Tipo" width="w-32">
+            <Select
+              id="tx-type"
+              value={values.type ?? ALL}
+              onValueChange={(v) => patch({ type: v === ALL ? null : (v as TxType) })}
+              items={TYPE_ITEMS}
+              placeholder="Todos"
+            />
+          </Filter>
+        </FilterGroup>
+
+        <FilterGroup label="Cuánto">
+          <Filter id="tx-amount-min" label="Monto mínimo" width="w-36">
+            <MoneyInput
+              key={values.amount_min === null ? "amount-min-empty" : "amount-min-filled"}
+              id="tx-amount-min"
+              currency="COP"
+              value={values.amount_min}
+              onChange={(cents) => patch({ amount_min: cents })}
+            />
+          </Filter>
+          <Filter id="tx-amount-max" label="Monto máximo" width="w-36">
+            <MoneyInput
+              key={values.amount_max === null ? "amount-max-empty" : "amount-max-filled"}
+              id="tx-amount-max"
+              currency="COP"
+              value={values.amount_max}
+              onChange={(cents) => patch({ amount_max: cents })}
+            />
+          </Filter>
+        </FilterGroup>
+
+        <FilterGroup label="Estado">
+          <Filter id="tx-status" label="Estado" width="w-32">
+            <Select
+              id="tx-status"
+              value={values.status ?? ALL}
+              onValueChange={(v) => patch({ status: v === ALL ? null : (v as TxStatus) })}
+              items={STATUS_ITEMS}
+              placeholder="Todos"
+            />
+          </Filter>
+        </FilterGroup>
+      </div>
+
+      {invertedAmountRange && (
+        <p className="text-xs text-destructive">El monto mínimo no puede ser mayor que el máximo</p>
+      )}
+
+      <div className="flex items-center gap-3">
+        {activeFilterCount > 0 && (
+          <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>
+            {activeFilterCount} {activeFilterCount === 1 ? "filtro activo" : "filtros activos"}
+          </span>
+        )}
+        <Button variant="ghost" size="sm" onClick={clear}>
+          Limpiar
+        </Button>
+      </div>
     </div>
   )
 

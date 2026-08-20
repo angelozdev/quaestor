@@ -9,9 +9,12 @@ export const TX_FILTER_SCHEMA = {
   date_to: p.str(),
   account_id: p.int(),
   category_id: p.int(),
+  group_id: p.int(),
   tag: p.int(),
   type: p.enum(["expense", "income", "transfer"] as const),
   status: p.enum(["planned", "posted", "skipped"] as const),
+  amount_min: p.int(),
+  amount_max: p.int(),
 } satisfies Record<string, Codec<any>>
 
 /** Shared by the archive-toggle views (accounts, categories, category-groups). */

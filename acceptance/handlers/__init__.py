@@ -94,6 +94,7 @@ _FEATURE_MODULES = (
     "recurring_engine",
     "recurring_price",
     "sinking_funds",
+    "transaction_filters_and_drilldown",
     "transactions_crud",
 )
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { CheckboxField } from "@/components/checkbox-field"
@@ -65,6 +66,7 @@ const CATEGORIES_HELP = (
 
 export default function CategoriesPage() {
   const qc = useQueryClient()
+  const router = useRouter()
   const { values, patch } = useUrlFilters(ARCHIVED_FILTER_SCHEMA)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Category | null>(null)
@@ -208,6 +210,10 @@ export default function CategoriesPage() {
             },
             { label: "Editar", show: (c) => !c.archived, onClick: (c) => setEditing(c) },
             { label: "Archivar", show: (c) => !c.archived, onClick: (c) => setArchiving(c) },
+            {
+              label: "Ver movimientos",
+              onClick: (c) => router.push(`/transactions?category_id=${c.id}`),
+            },
           ]}
           emptyMessage="Todavía no tienes categorías."
           emptyDescription={WHAT_A_CATEGORY_IS}

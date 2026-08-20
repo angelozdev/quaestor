@@ -1,6 +1,7 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -34,6 +35,7 @@ const TAGS_HELP = (
 
 export default function TagsPage() {
   const qc = useQueryClient()
+  const router = useRouter()
   const [editing, setEditing] = useState<Tag | null>(null)
   const [creating, setCreating] = useState(false)
   const [deleting, setDeleting] = useState<Tag | null>(null)
@@ -93,6 +95,10 @@ export default function TagsPage() {
         actions={[
           { label: "Editar", onClick: (t) => setEditing(t) },
           { label: "Eliminar", variant: "destructive", onClick: (t) => setDeleting(t) },
+          {
+            label: "Ver movimientos",
+            onClick: (t) => router.push(`/transactions?tag=${t.id}`),
+          },
         ]}
         emptyMessage="Todavía no tienes etiquetas."
         emptyDescription={WHAT_A_TAG_IS}

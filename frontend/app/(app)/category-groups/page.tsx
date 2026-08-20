@@ -1,6 +1,7 @@
 "use client"
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { toast } from "sonner"
 import { CheckboxField } from "@/components/checkbox-field"
@@ -46,6 +47,7 @@ const GROUPS_HELP = (
 
 export default function CategoryGroupsPage() {
   const qc = useQueryClient()
+  const router = useRouter()
   const { values, patch } = useUrlFilters(ARCHIVED_FILTER_SCHEMA)
   const [editing, setEditing] = useState<CategoryGroup | null>(null)
   const [creating, setCreating] = useState(false)
@@ -145,6 +147,10 @@ export default function CategoryGroupsPage() {
             },
             { label: "Editar", show: (g) => !g.archived, onClick: (g) => setEditing(g) },
             { label: "Archivar", show: (g) => !g.archived, onClick: (g) => setArchiving(g) },
+            {
+              label: "Ver movimientos",
+              onClick: (g) => router.push(`/transactions?group_id=${g.id}`),
+            },
           ]}
           emptyMessage="Todavía no tienes grupos."
           emptyDescription={WHAT_A_GROUP_IS}

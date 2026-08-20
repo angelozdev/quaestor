@@ -66,6 +66,8 @@ class World:
         self.default_accounts: dict[str, int] = {}
         # category name -> id
         self.categories: dict[str, int] = {}
+        # category group name -> id
+        self.groups: dict[str, int] = {}
         # direction -> id (implicit categories for background movements)
         self.background_categories: dict[bool, int] = {}
 
