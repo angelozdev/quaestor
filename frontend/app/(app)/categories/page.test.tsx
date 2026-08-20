@@ -4,16 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { ApiError } from "@/lib/api/types"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { listCategories, listCategoryGroups, createCategory, updateCategory } = vi.hoisted(() => ({
-  listCategories: vi.fn(),
-  listCategoryGroups: vi.fn(),
-  createCategory: vi.fn(),
-  updateCategory: vi.fn(),
-}))
+const { listCategories, listCategoryGroups, createCategory, updateCategory, mockPush } = vi.hoisted(
+  () => ({
+    listCategories: vi.fn(),
+    listCategoryGroups: vi.fn(),
+    createCategory: vi.fn(),
+    updateCategory: vi.fn(),
+    mockPush: vi.fn(),
+  }),
+)
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: mockPush }),
   usePathname: () => "/categories",
 }))
 vi.mock("@/lib/api/categories", () => ({
@@ -241,5 +244,28 @@ describe("AC-41 — a category can say that spending in it is saving", () => {
 
     await screen.findByText("Restaurantes")
     expect(screen.queryByText("ahorro")).not.toBeInTheDocument()
+  })
+})
+
+describe("AC-4/AC-11 — Ver movimientos drills down into the filtered list", () => {
+  beforeEach(() => {
+    mockPush.mockReset()
+  })
+
+  it("Opening Ver movimientos from a category lands on its filtered list", async () => {
+    const user = userEvent.setup()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Ver movimientos" }))
+
+    expect(mockPush).toHaveBeenCalledWith("/transactions?category_id=7")
+  })
+
+  it("Ver movimientos still works from an archived category", async () => {
+    listCategories.mockResolvedValue([{ ...RESTAURANTES, archived: true }])
+    const user = userEvent.setup()
+    render(<CategoriesPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Ver movimientos" }))
+
+    expect(mockPush).toHaveBeenCalledWith("/transactions?category_id=7")
   })
 })

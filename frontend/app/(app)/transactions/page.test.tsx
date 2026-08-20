@@ -8,11 +8,12 @@ import TransactionsPage from "./page"
 const listTransactions = vi.fn()
 const deleteTransaction = vi.fn()
 const restorePlanned = vi.fn()
+const mockReplace = vi.fn()
 let currentParams = new URLSearchParams("")
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => currentParams,
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: mockReplace }),
   usePathname: () => "/transactions",
 }))
 vi.mock("@/lib/api/transactions", () => ({
@@ -24,6 +25,9 @@ vi.mock("@/lib/api/planned", () => ({
 }))
 vi.mock("@/lib/api/accounts", () => ({ listAccounts: vi.fn().mockResolvedValue([]) }))
 vi.mock("@/lib/api/categories", () => ({ listCategories: vi.fn().mockResolvedValue([]) }))
+vi.mock("@/lib/api/category-groups", () => ({
+  listCategoryGroups: vi.fn().mockResolvedValue([]),
+}))
 vi.mock("@/lib/api/tags", () => ({ listTags: vi.fn().mockResolvedValue([]) }))
 
 const makeTransferLeg = (): Transaction =>
@@ -222,5 +226,79 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
       await screen.findByText(/Un movimiento es plata que entra o que sale/),
     ).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Registrar el primero" })).toBeInTheDocument()
+  })
+})
+
+describe("AC-3 — the filter bar groups its controls and counts what is active", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([])
+    mockReplace.mockReset()
+    currentParams = new URLSearchParams("")
+  })
+
+  it("The filter bar groups its controls under Cuándo, Qué, Cuánto and Estado", async () => {
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("Cuándo")).toBeInTheDocument()
+    expect(screen.getByText("Qué")).toBeInTheDocument()
+    expect(screen.getByText("Cuánto")).toBeInTheDocument()
+    expect(screen.getAllByText("Estado").length).toBeGreaterThan(0)
+    expect(screen.getByLabelText("Desde")).toBeInTheDocument()
+    expect(screen.getByLabelText("Hasta")).toBeInTheDocument()
+    expect(screen.getByText("Grupo")).toBeInTheDocument()
+    expect(screen.getByText("Monto mínimo")).toBeInTheDocument()
+    expect(screen.getByText("Monto máximo")).toBeInTheDocument()
+  })
+
+  it("The filter bar counts how many filters are active", async () => {
+    currentParams = new URLSearchParams("category_id=3&amount_min=10000000")
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    expect(await screen.findByText("2 filtros activos")).toBeInTheDocument()
+  })
+
+  it("shows no counter when no filter is set", async () => {
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    await screen.findByRole("button", { name: "Limpiar" })
+    expect(screen.queryByText(/filtro/)).not.toBeInTheDocument()
+  })
+
+  it("Limpiar clears every filter at once", async () => {
+    const user = userEvent.setup()
+    currentParams = new URLSearchParams("category_id=3&amount_min=10000000")
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    await user.click(await screen.findByRole("button", { name: "Limpiar" }))
+
+    expect(mockReplace).toHaveBeenCalledWith("/transactions", { scroll: false })
+  })
+
+  it("Monto mínimo visually clears once the URL drops it, not just once the page remounts", async () => {
+    currentParams = new URLSearchParams("amount_min=20000000")
+    const { rerender } = render(<TransactionsPage />, { wrapper: queryWrapper })
+    expect(await screen.findByLabelText("Monto mínimo")).toHaveValue("200000")
+
+    currentParams = new URLSearchParams("")
+    rerender(<TransactionsPage />)
+
+    expect(await screen.findByLabelText("Monto mínimo")).toHaveValue("")
+  })
+})
+
+describe("AC-9 — an inverted amount range is rejected with a clear warning", () => {
+  beforeEach(() => {
+    listTransactions.mockReset().mockResolvedValue([])
+    currentParams = new URLSearchParams("")
+  })
+
+  it("An inverted amount range is rejected with a clear warning", async () => {
+    currentParams = new URLSearchParams("amount_min=50000000&amount_max=10000000")
+    render(<TransactionsPage />, { wrapper: queryWrapper })
+
+    expect(
+      await screen.findByText("El monto mínimo no puede ser mayor que el máximo"),
+    ).toBeInTheDocument()
+    await waitFor(() => expect(listTransactions).toHaveBeenCalledWith({}))
   })
 })

@@ -91,9 +91,12 @@ class ListTransactionsInput(BaseModel):
     date_to: Date | None = Field(default=None, description="Include up to this date")
     account: str | None = Field(default=None, description="Filter by account name")
     category: str | None = Field(default=None, description="Filter by category name")
+    group: str | None = Field(default=None, description="Filter by category group name")
     tag: str | None = Field(default=None, description="Filter by tag name")
     type: Literal["expense", "income", "transfer"] | None = Field(default=None, description="Transaction type")
     status: Literal["posted", "planned"] | None = Field(default=None, description="Transaction status")
+    amount_min: int | None = Field(default=None, description="Include amounts at least this many COP cents")
+    amount_max: int | None = Field(default=None, description="Include amounts at most this many COP cents")
     sort: Literal["date", "created_at"] = Field(
         default="date",
         description="Primary sort field (date = logical date; created_at = row creation).",
@@ -290,6 +293,7 @@ def set_fx_rate(session: Session, inp: SetFxRateInput) -> str:
 def list_transactions(session: Session, inp: ListTransactionsInput) -> str:
     account_id = _resolve_account(session, inp.account).id if inp.account else None
     category_id = _resolve_category(session, inp.category).id if inp.category else None
+    group_id = _resolve_category_group_by_name(session, inp.group).id if inp.group else None
     txs = transactions.list_transactions(
         session,
         account_id=account_id,
@@ -299,6 +303,9 @@ def list_transactions(session: Session, inp: ListTransactionsInput) -> str:
         status=inp.status,
         date_from=inp.date_from,
         date_to=inp.date_to,
+        group_id=group_id,
+        amount_min=inp.amount_min,
+        amount_max=inp.amount_max,
         sort=inp.sort,
         order=inp.order,
     )

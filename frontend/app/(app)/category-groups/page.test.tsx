@@ -3,11 +3,14 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { listCategoryGroups } = vi.hoisted(() => ({ listCategoryGroups: vi.fn() }))
+const { listCategoryGroups, mockPush } = vi.hoisted(() => ({
+  listCategoryGroups: vi.fn(),
+  mockPush: vi.fn(),
+}))
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(""),
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push: mockPush }),
   usePathname: () => "/category-groups",
 }))
 vi.mock("@/lib/api/category-groups", () => ({
@@ -44,5 +47,18 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
     await user.click(screen.getByRole("button", { name: "Crear el primero" }))
 
     expect(screen.getByText("Nuevo grupo")).toBeInTheDocument()
+  })
+})
+
+describe("AC-5 — Ver movimientos drills down into the filtered list", () => {
+  it("Opening Ver movimientos from a group lands on its filtered list", async () => {
+    listCategoryGroups.mockResolvedValue([
+      { id: 4, name: "Finanzas", sort_order: 0, archived: false },
+    ])
+    const user = userEvent.setup()
+    render(<CategoryGroupsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Ver movimientos" }))
+
+    expect(mockPush).toHaveBeenCalledWith("/transactions?group_id=4")
   })
 })

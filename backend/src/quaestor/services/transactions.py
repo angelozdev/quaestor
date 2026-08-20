@@ -24,6 +24,7 @@ from ..domain.errors import (
 )
 from ..domain.models import (
     Account,
+    Category,
     Meta,
     RecurringItem,
     Source,
@@ -34,10 +35,10 @@ from ..domain.models import (
     TxStatus,
     TxType,
 )
-from ..domain.money import is_supported
+from ..domain.money import is_supported, to_cop_cents
 from ..domain.rules import delta_balance, leg_delta_balance
 from ..domain.sort import Order, SortableColumns, SortField, SortSpec
-from . import categories, occurrences
+from . import categories, fx, occurrences
 
 PRE_DELETE_HOOKS: list[Callable[[Transaction, Session], None]] = []
 
@@ -456,6 +457,9 @@ def list_transactions(
     transfer_group_id: str | None = None,
     date_from: Date | None = None,
     date_to: Date | None = None,
+    group_id: int | None = None,
+    amount_min: int | None = None,
+    amount_max: int | None = None,
     *,
     sort: SortField = "date",
     order: Order = "desc",
@@ -479,6 +483,11 @@ def list_transactions(
         transfer_group_id: Filter to the legs of one transfer.
         date_from: Include transactions on or after this date.
         date_to: Include transactions on or before this date.
+        group_id: Filter to every category in this category group.
+        amount_min: Include transactions whose COP equivalent is at least
+            this many cents. Requires a TRM to be set (ADR-0031).
+        amount_max: Include transactions whose COP equivalent is at most
+            this many cents. Requires a TRM to be set (ADR-0031).
         sort: Primary sort field. One of `SortField`.
         order: Sort direction. One of `Order`.
 
@@ -501,6 +510,10 @@ def list_transactions(
         stmt = stmt.where(Transaction.date >= date_from)
     if date_to is not None:
         stmt = stmt.where(Transaction.date <= date_to)
+    if group_id is not None:
+        stmt = stmt.join(Category, Category.id == Transaction.category_id).where(  # type: ignore[arg-type]
+            Category.group_id == group_id
+        )
     if tag is not None:
         stmt = (
             stmt.join(TransactionTag, TransactionTag.transaction_id == Transaction.id)  # type: ignore[arg-type]
@@ -509,7 +522,17 @@ def list_transactions(
         )
     spec = SortSpec(field=sort, order=order)
     primary, secondary = spec.resolve(_TRANSACTION_SORTABLE, Transaction.id)
-    return list(session.exec(stmt.order_by(primary, secondary)).all())
+    rows = list(session.exec(stmt.order_by(primary, secondary)).all())
+    if amount_min is not None or amount_max is not None:
+        trm = fx.get_trm(session)
+        rows = [tx for tx in rows if _in_cop_range(to_cop_cents(tx.amount, tx.currency, trm), amount_min, amount_max)]
+    return rows
+
+
+def _in_cop_range(cop_cents: int, amount_min: int | None, amount_max: int | None) -> bool:
+    if amount_min is not None and cop_cents < amount_min:
+        return False
+    return amount_max is None or cop_cents <= amount_max
 
 
 _UNSET = object()

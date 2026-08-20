@@ -656,6 +656,26 @@ def test_list_transactions_default_includes_planned_at_due_date(session):
     assert [t.payee for t in txs] == ["new", "Rent", "old"]
 
 
+def test_list_transactions_amount_min_is_inclusive(session):
+    fx.set_trm(session, "4000")
+    acc = _make_account(session, balance=200_000)
+    transactions.record_expense(
+        session, acc.id, 100_000, "COP", date(2026, 6, 1), "Exact", category_id=a_category(session, TxType.expense)
+    )
+    txs = transactions.list_transactions(session, amount_min=100_000)
+    assert [t.payee for t in txs] == ["Exact"]
+
+
+def test_list_transactions_amount_max_is_inclusive(session):
+    fx.set_trm(session, "4000")
+    acc = _make_account(session, balance=200_000)
+    transactions.record_expense(
+        session, acc.id, 100_000, "COP", date(2026, 6, 1), "Exact", category_id=a_category(session, TxType.expense)
+    )
+    txs = transactions.list_transactions(session, amount_max=100_000)
+    assert [t.payee for t in txs] == ["Exact"]
+
+
 # ------------------------------ a payment may name the charge it settled (ADR-0057)
 
 

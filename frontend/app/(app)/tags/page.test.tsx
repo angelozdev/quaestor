@@ -3,8 +3,13 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { openHelpPanel, queryWrapper } from "@/tests/factories"
 
-const { listTags } = vi.hoisted(() => ({ listTags: vi.fn() }))
+const { listTags, mockPush } = vi.hoisted(() => ({ listTags: vi.fn(), mockPush: vi.fn() }))
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(""),
+  useRouter: () => ({ replace: vi.fn(), push: mockPush }),
+  usePathname: () => "/tags",
+}))
 vi.mock("@/lib/api/tags", () => ({
   listTags,
   createTag: vi.fn(),
@@ -40,5 +45,16 @@ describe("AC-10 — an empty screen teaches and offers the way in", () => {
     await user.click(screen.getByRole("button", { name: "Crear la primera" }))
 
     expect(screen.getByText("Nueva etiqueta")).toBeInTheDocument()
+  })
+})
+
+describe("AC-6 — Ver movimientos drills down into the filtered list", () => {
+  it("Opening Ver movimientos from a tag lands on its filtered list", async () => {
+    listTags.mockResolvedValue([{ id: 9, name: "viaje" }])
+    const user = userEvent.setup()
+    render(<TagsPage />, { wrapper: queryWrapper })
+    await user.click(await screen.findByRole("button", { name: "Ver movimientos" }))
+
+    expect(mockPush).toHaveBeenCalledWith("/transactions?tag=9")
   })
 })

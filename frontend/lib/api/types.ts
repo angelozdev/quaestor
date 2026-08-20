@@ -346,10 +346,13 @@ export interface TransactionFilters {
   date_to?: string
   account_id?: number
   category_id?: number
+  group_id?: number
   tag?: string
   type?: TxType
   status?: TxStatus
   transfer_group_id?: string
+  amount_min?: number
+  amount_max?: number
 }
 export interface TransactionCreate {
   type: "expense" | "income"
