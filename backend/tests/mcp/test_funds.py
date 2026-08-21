@@ -161,9 +161,9 @@ def test_reading_the_number_without_a_rate_says_to_set_one(session):
 
 def test_setting_what_a_fund_holds_goes_through_the_same_door(session):
     _seeded(session)
-    _create(session)
+    _create(session, start="2030-01")
     assert "✅" in fund_tools.set_fund(session, fund_tools.SetFundInput(category="Restaurantes", balance=5_000_000))
-    out = fund_tools.fund_status(session, fund_tools.FundStatusInput(category="Restaurantes", month="2026-11"))
+    out = fund_tools.fund_status(session, fund_tools.FundStatusInput(category="Restaurantes", month="2030-01"))
     assert "Holds: 50000.00 COP" in out
 
 

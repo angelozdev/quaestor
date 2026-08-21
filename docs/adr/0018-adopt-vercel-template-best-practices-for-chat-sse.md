@@ -1,6 +1,6 @@
 # 0018. Adopt Vercel template best practices for chat SSE
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-06-24
 - **Deciders:** Angelo
 - **Supersedes:** —

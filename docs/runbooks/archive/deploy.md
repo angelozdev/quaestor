@@ -1,5 +1,11 @@
 # Quaestor — Deploy Runbook (P7)
 
+> **Archived 2026-08-21.** Describes the pre-ADR-0026 VPS deploy (Caddy,
+> Litestream, a public domain). Superseded by the local-only posture
+> (ADR-0026) and the local Postgres production container (ADR-0030) — see
+> `CHARTER.md` §2 and `.engineer/manifest.yml`'s `validation.prod` for the
+> current model. Kept as historical record, not a live procedure.
+
 This runbook covers first boot, redeploys, and operations. It assumes a
 single VPS reachable at `$DOMAIN`, with DNS A/AAAA pointing at it, and ports
 `80` and `443` open.
