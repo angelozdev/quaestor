@@ -126,7 +126,9 @@ def given_fund_holds(world: World, charge: str, amount: str) -> None:
     scenario can put a fund partway through its cycle without inventing a
     payment history for it.
     """
-    world.attempt(_call, "set_fund", world.session, _fund_for(world, charge).id, balance=_cents(amount))
+    world.attempt(
+        _call, "set_fund", world.session, _fund_for(world, charge).id, balance=_cents(amount), today=world.today
+    )
     world.require_clean(f"stating what the fund for {charge!r} holds")
 
 

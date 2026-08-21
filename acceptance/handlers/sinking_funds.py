@@ -218,8 +218,10 @@ def _make_fund(world: World, name: str, **spec) -> None:
     world.pending_fund = (name, spec)
 
 
-def _fixed_spec(amount: str, start: str, roll: str | None) -> dict:
+def _fixed_spec(amount: str, start: str, opening: str | None, roll: str | None) -> dict:
     spec: dict = {"rule": "fixed", "amount": _cents(amount), "start_month": start}
+    if opening is not None:
+        spec["opening_balance"] = _cents(opening)
     if roll:
         spec["accumulates"] = roll.strip(", ") == "accumulating"
     return spec
@@ -241,7 +243,9 @@ def _target_spec(target: str, by: str, start: str, opening: str | None, roll: st
 
 _FIXED = (
     r" that asks a fixed (?P<amount>" + _DEC + r") COP each month,"
-    r" starting (?P<start>" + _MONTH + r")(?P<roll>, accumulating|, resetting)?"
+    r" starting (?P<start>" + _MONTH + r")"
+    r"(?:, opening with (?P<opening>" + _DEC + r") COP)?"
+    r"(?P<roll>, accumulating|, resetting)?"
 )
 _AVERAGE = r" averaging the last (?P<window>\d+) months, starting (?P<start>" + _MONTH + r")"
 _OBLIGATIONS = (
@@ -307,8 +311,8 @@ def given_recorded_expense_in_category(world: World, amount: str, category: str,
 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _FIXED)
-def given_fund_fixed(world: World, name: str, amount: str, start: str, roll: str | None) -> None:
-    _make_fund(world, name, **_fixed_spec(amount, start, roll))
+def given_fund_fixed(world: World, name: str, amount: str, start: str, opening: str | None, roll: str | None) -> None:
+    _make_fund(world, name, **_fixed_spec(amount, start, opening, roll))
     world.require_clean(f"creating the fund on {name!r}")
 
 
@@ -350,7 +354,7 @@ def given_fund_from_obligations_plainly(world: World, name: str, start: str) -> 
 
 @step(r'a fund on "(?P<name>[^"]+)"' + _FIXED_IN_PLAIN_WORDS)
 def given_fund_fixed_resetting(world: World, name: str, amount: str, start: str) -> None:
-    _make_fund(world, name, **_fixed_spec(amount, start, ", resetting"))
+    _make_fund(world, name, **_fixed_spec(amount, start, None, ", resetting"))
     world.require_clean(f"creating the fund on {name!r}")
 
 
@@ -430,7 +434,7 @@ def given_income_due(world: World, amount: str) -> None:
 
 @step(r'the fund on "(?P<name>[^"]+)" already holds (?P<amount>' + _DEC + r") COP")
 def given_fund_holds(world: World, name: str, amount: str) -> None:
-    world.attempt(_call, "set_fund", world.session, _fund_id(world, name), balance=_cents(amount))
+    world.attempt(_call, "set_fund", world.session, _fund_id(world, name), balance=_cents(amount), today=world.today)
     world.require_clean(f"setting what the fund on {name!r} already holds")
 
 
@@ -520,8 +524,8 @@ def given_viewed_available(world: World, month: str) -> None:
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _FIXED)
-def when_create_fund_fixed(world: World, mode: str, name: str, amount: str, start: str, roll) -> None:
-    _make_fund(world, name, **_fixed_spec(amount, start, roll))
+def when_create_fund_fixed(world: World, mode: str, name: str, amount: str, start: str, opening, roll) -> None:
+    _make_fund(world, name, **_fixed_spec(amount, start, opening, roll))
 
 
 @step(r'the user (?P<mode>creates|tries to create) a fund on "(?P<name>[^"]+)"' + _AVERAGE)
@@ -564,6 +568,11 @@ def when_set_fund_fixed(world: World, name: str, amount: str) -> None:
     world.attempt(_call, "set_fund", world.session, _fund_id(world, name), rule="fixed", amount=_cents(amount))
 
 
+@step(r'the user sets the fund on "(?P<name>[^"]+)" to hold (?P<amount>' + _DEC + r") COP")
+def when_set_fund_balance(world: World, name: str, amount: str) -> None:
+    world.attempt(_call, "set_fund", world.session, _fund_id(world, name), balance=_cents(amount), today=world.today)
+
+
 @step(r'the user sets the repeating income from "(?P<payee>[^"]+)" to (?P<amount>' + _DEC + r") COP")
 def when_set_repeating_income(world: World, payee: str, amount: str) -> None:
     world.attempt(
@@ -587,7 +596,7 @@ def when_assistant_deletes_fund(world: World, name: str) -> None:
 
 
 @step(r'the assistant creates a fund on "(?P<name>[^"]+)"' + _FIXED)
-def when_assistant_creates_fund(world: World, name: str, amount: str, start: str, roll) -> None:
+def when_assistant_creates_fund(world: World, name: str, amount: str, start: str, opening, roll) -> None:
     world.attempt(
         _assistant,
         world,
@@ -602,7 +611,7 @@ def when_assistant_creates_fund(world: World, name: str, amount: str, start: str
 
 
 @step(r'the assistant tries to create a fund on "(?P<name>[^"]+)"' + _FIXED)
-def when_assistant_tries_fund_fixed(world: World, name: str, amount: str, start: str, roll) -> None:
+def when_assistant_tries_fund_fixed(world: World, name: str, amount: str, start: str, opening, roll) -> None:
     world.attempt(
         _assistant,
         world,
@@ -753,10 +762,18 @@ def then_fund_asks(world: World, name: str, amount: str) -> None:
     assert asks == _cents(amount), f"the fund on {name!r} asks {asks}, expected {_cents(amount)}{_context(world)}"
 
 
-@step(r'the fund on "(?P<name>[^"]+)" holds (?P<amount>' + _DEC + r") COP")
+@step(r'the fund on "(?P<name>[^"]+)" holds (?P<amount>' + _DEC + r") COP(?: this month)?")
 def then_fund_holds(world: World, name: str, amount: str) -> None:
     holds = _attr(_status(world, name), "holds", f"the fund on {name!r}")
     assert holds == _cents(amount), f"the fund on {name!r} holds {holds}, expected {_cents(amount)}{_context(world)}"
+
+
+@step(r"in (?P<year_month>" + _MONTH + r') the fund on "(?P<name>[^"]+)" holds (?P<amount>' + _DEC + r") COP")
+def then_fund_holds_in_month(world: World, year_month: str, name: str, amount: str) -> None:
+    holds = _attr(_status(world, name, year_month), "holds", f"the fund on {name!r}")
+    assert holds == _cents(amount), (
+        f"in {year_month} the fund on {name!r} holds {holds}, expected {_cents(amount)}{_context(world)}"
+    )
 
 
 @step(r'the fund on "(?P<name>[^"]+)" spent (?P<amount>' + _DEC + r") COP this month")
