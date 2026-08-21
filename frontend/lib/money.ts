@@ -22,6 +22,36 @@ export function finiteOrNull(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
+const LOCALE_BY_CURRENCY: Record<string, string> = { USD: "en-US", COP: "es-CO" }
+
+function numberPartFor(locale: string, type: "group" | "decimal"): string {
+  const fallback = type === "group" ? "." : ","
+  const part = new Intl.NumberFormat(locale).formatToParts(1000.5).find((p) => p.type === type)
+  return part?.value ?? fallback
+}
+
+function separatorMapFor(type: "group" | "decimal"): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(LOCALE_BY_CURRENCY).map(([currency, locale]) => [
+      currency,
+      numberPartFor(locale, type),
+    ]),
+  )
+}
+
+const GROUP_SEPARATOR_BY_CURRENCY = separatorMapFor("group")
+const DECIMAL_SEPARATOR_BY_CURRENCY = separatorMapFor("decimal")
+
+/** The thousands-grouping character `formatCents` uses for `currency` (`es-CO`/`en-US`). */
+export function thousandsSeparatorFor(currency: string): string {
+  return GROUP_SEPARATOR_BY_CURRENCY[currency] ?? GROUP_SEPARATOR_BY_CURRENCY.COP
+}
+
+/** The decimal-point character for `currency` (`es-CO`/`en-US`), distinct from its grouping character. */
+export function decimalSeparatorFor(currency: string): string {
+  return DECIMAL_SEPARATOR_BY_CURRENCY[currency] ?? DECIMAL_SEPARATOR_BY_CURRENCY.COP
+}
+
 /**
  * Format an integer amount of cents for display (es-CO).
  * Amounts arrive as positive integer cents (100 cents per major unit for both COP and USD).

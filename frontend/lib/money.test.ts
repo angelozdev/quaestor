@@ -4,10 +4,12 @@ import {
   convertCents,
   currencyHeldBy,
   currencyOf,
+  decimalSeparatorFor,
   formatCents,
   formatRate,
   impliedRate,
   sharesAddingTo,
+  thousandsSeparatorFor,
 } from "./money"
 
 describe("impliedRate", () => {
@@ -45,6 +47,26 @@ describe("formatCents", () => {
 
   it("formats USD with two decimals", () => {
     expect(formatCents(1234, "USD")).toBe("US$ 12.34")
+  })
+})
+
+describe("thousandsSeparatorFor", () => {
+  it("is a dot for COP, matching formatCents", () => {
+    expect(thousandsSeparatorFor("COP")).toBe(".")
+  })
+
+  it("is a comma for USD, matching formatCents", () => {
+    expect(thousandsSeparatorFor("USD")).toBe(",")
+  })
+})
+
+describe("decimalSeparatorFor", () => {
+  it("is a comma for COP, distinct from its thousands separator", () => {
+    expect(decimalSeparatorFor("COP")).toBe(",")
+  })
+
+  it("is a dot for USD, matching formatCents", () => {
+    expect(decimalSeparatorFor("USD")).toBe(".")
   })
 })
 
