@@ -150,7 +150,7 @@ describe("the edit dialog opens on the charge it was asked about", () => {
 
     expect(screen.getByLabelText(/Nombre/)).toHaveValue("Netflix")
     expect(screen.getByLabelText(/Inicio/)).toHaveValue(NETFLIX.start_date)
-    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("35000")
+    expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("35.000")
   })
 })
 
@@ -341,7 +341,7 @@ describe("013 — the repeating obligations show the price and what it comes to"
 
     expect(screen.getByText("Monto * (COP)")).toBeInTheDocument()
     await waitFor(() =>
-      expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("160000"),
+      expect(within(fieldUnder(/^Monto \*/)).getByRole("textbox")).toHaveValue("160.000"),
     )
   })
 })

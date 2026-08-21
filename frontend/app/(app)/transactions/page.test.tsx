@@ -277,7 +277,7 @@ describe("AC-3 — the filter bar groups its controls and counts what is active"
   it("Monto mínimo visually clears once the URL drops it, not just once the page remounts", async () => {
     currentParams = new URLSearchParams("amount_min=20000000")
     const { rerender } = render(<TransactionsPage />, { wrapper: queryWrapper })
-    expect(await screen.findByLabelText("Monto mínimo")).toHaveValue("200000")
+    expect(await screen.findByLabelText("Monto mínimo")).toHaveValue("200.000")
 
     currentParams = new URLSearchParams("")
     rerender(<TransactionsPage />)

@@ -435,6 +435,26 @@ describe("a movement is stated in the currency the chosen account holds", () => 
   })
 })
 
+describe("AC-8 — every money screen gets the thousand separator through the shared field", () => {
+  beforeEach(() => {
+    listCategories
+      .mockReset()
+      .mockImplementation((_archived: boolean, isIncome?: boolean) =>
+        Promise.resolve(isIncome ? [INCOME_CATEGORY] : [EXPENSE_CATEGORY]),
+      )
+    listAccounts.mockReset().mockResolvedValue([ACCOUNT])
+  })
+
+  it("The transaction amount field separates thousands without any screen-specific change", async () => {
+    const user = userEvent.setup()
+    render(<TransactionCreateDialog open onOpenChange={() => undefined} />, { wrapper })
+
+    await user.type(screen.getByLabelText("Monto * (COP)"), "1000000")
+
+    expect(screen.getByLabelText("Monto * (COP)")).toHaveValue("1.000.000")
+  })
+})
+
 describe("TransactionCreateDialog category direction", () => {
   beforeEach(() => {
     listCategories

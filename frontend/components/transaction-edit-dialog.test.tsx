@@ -198,7 +198,7 @@ describe("012 — a movement is corrected, not deleted", () => {
 
   it("The amount is offered rather than described", async () => {
     renderDialog(makeTransaction({ amount: 10_000_000 }))
-    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("100000")
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("100.000")
   })
 
   it("A retired account is not on the list when correcting", async () => {
@@ -379,7 +379,7 @@ describe("012 — a transfer is restated on both of its sides", () => {
   it("A transfer in one currency shows the half being corrected what it is worth", async () => {
     const { sent } = aTransferPair()
     renderDialog(sent)
-    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("200000")
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("200.000")
   })
 
   it("Restating one half on the screen restates both halves", async () => {
@@ -404,7 +404,7 @@ describe("012 — a transfer is restated on both of its sides", () => {
     await user.click(await screen.findByRole("combobox", { name: "Cuenta" }))
     await user.click(screen.getByRole("option", { name: "Nequi" }))
 
-    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("410000")
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("410.000")
   })
 
   it("A leg landing in the other half's currency states the figure that keeps the transfer whole", async () => {
@@ -429,7 +429,7 @@ describe("012 — a transfer is restated on both of its sides", () => {
       received: { account_id: 3, amount: 5_000, currency: "USD" },
     })
     renderDialog(sent)
-    expect(await screen.findByLabelText("Monto enviado (COP)")).toHaveValue("200000")
+    expect(await screen.findByLabelText("Monto enviado (COP)")).toHaveValue("200.000")
     expect(screen.getByLabelText("Monto recibido (USD)")).toHaveValue("50")
 
     const received = screen.getByLabelText("Monto recibido (USD)")
@@ -457,7 +457,7 @@ describe("012 — the half being corrected is the half that changes", () => {
   it("The half that received asks what arrived and names what left", async () => {
     const { received } = aDollarTransferIntoPesos()
     renderDialog(received)
-    expect(await screen.findByLabelText("Monto recibido (COP)")).toHaveValue("400000")
+    expect(await screen.findByLabelText("Monto recibido (COP)")).toHaveValue("400.000")
     expect(screen.getByLabelText("Monto enviado (USD)")).toHaveValue("100")
   })
 
@@ -510,7 +510,7 @@ describe("012 — a currency passed through corrects nothing", () => {
     renderDialog(tigo())
     await goToDollarsAndBack(user)
 
-    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("93558")
+    expect(await screen.findByLabelText("Monto (COP)")).toHaveValue("93.558")
   })
 
   it("Saving after that trip corrects nothing", async () => {

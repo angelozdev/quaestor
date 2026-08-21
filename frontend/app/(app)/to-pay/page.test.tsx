@@ -413,7 +413,7 @@ describe("012 — a currency passed through charges nothing", () => {
     const user = await openConfirmationOfATigoBill()
     await goToDollarsAndBack(user)
 
-    expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("93558")
+    expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("93.558")
   })
 
   it("Confirming after that trip charges the figure the payment already held", async () => {
@@ -454,7 +454,7 @@ async function openConfirmationOfAHogaruBillInDollars() {
 async function emptyTheBoxOnPesosAndGoBackToDollars(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
   await user.click(await screen.findByRole("option", { name: ACCOUNT.name }))
-  expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("400000")
+  expect(await screen.findByLabelText("Monto real (COP)")).toHaveValue("400.000")
   await user.clear(screen.getByLabelText("Monto real (COP)"))
   await user.click(screen.getByRole("combobox", { name: "Cuenta" }))
   await user.click(await screen.findByRole("option", { name: DOLARAPP.name }))
