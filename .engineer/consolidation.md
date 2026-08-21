@@ -82,7 +82,7 @@ all-❌ for every feature (no DAE artifacts existed before onboarding).
 | 40 | security-owasp-review | **dropped** | Dropped 2026-07-28: one-off doc, kept in docs/security/ as historical record. |
 | 41 | adr-system | done | Meta-tooling (.claude/skills/adr). Low ATDD value. |
 | 42 | mcp-http-removal | done | Historic deletion; covered by absence tests if ever needed. |
-| 43 | vercel-chat-sse-best-practices | done | Code shipped; ADR-0018 still `proposed` → see cleanup C2. |
+| 43 | vercel-chat-sse-best-practices | done | Code shipped; ADR-0018 flipped to `accepted` 2026-08-21 (cleanup C2). |
 
 ## Consolidation tasks (triage-priority order)
 
@@ -232,10 +232,34 @@ true when they were written.)*
   **Done 2026-07-29** — covered by the C6 README rewrite: SQLite now described
   as dev sandbox, Postgres is production (not "future"), obsolete
   SQLite→Postgres migration section removed.
-- C2. Flip ADR-0018 status `proposed` → `accepted` (code shipped).
-- C3. Re-scope or archive stale runbooks `restore-from-backup.md` and `deploy.md` (Litestream/VPS era).
-- C4. Delete dead `frontend/components/phase2-banner.tsx`.
-- C5. Remove stale `.pyc` files in `backend/tests/mcp/__pycache__` (deleted test modules).
+- ~~C2. Flip ADR-0018 status `proposed` → `accepted` (code shipped).~~
+  **Done 2026-08-21** — `usage` on `LLMEvent`, `messageMetadata.usage` on the
+  wire and per-part `text-*.id` all confirmed shipped
+  (`backend/src/quaestor/chat/events.py`, `sse_schema.py`); `docs/adr/README.md`'s
+  index row already read `accepted` — only the ADR file itself was stale.
+- ~~C3. Re-scope or archive stale runbooks `restore-from-backup.md` and `deploy.md` (Litestream/VPS era).~~
+  **Done 2026-08-21** — archived, not re-scoped: confirmed both were orphaned
+  (nothing in `CHARTER.md`/`README.md`/`.engineer/manifest.yml` points to
+  either; only self-references and pre-DAE planning docs did). Moved to
+  `docs/runbooks/archive/` with a one-line note on each pointing at the
+  ADR that superseded it. Re-scoping was rejected for this pass — writing a
+  correct restore runbook for the current `just backup`/local-Postgres path
+  needs an actual verified restore, which is a real operational task, not
+  housekeeping; noted as an open gap in the archived file itself rather than
+  guessed at.
+- ~~C4. Delete dead `frontend/components/phase2-banner.tsx`.~~
+  **Verified done 2026-08-21** — the file no longer exists (`find` + `grep`
+  for `phase2-banner`/`Phase2Banner` across `frontend/` both empty). Deleted
+  in some earlier, uncredited pass; this entry just closes the paper trail.
+- ~~C5. Remove stale `.pyc` files in `backend/tests/mcp/__pycache__` (deleted test modules).~~
+  **Done 2026-08-21** — 6 genuinely orphaned (`test_auth`, `test_budgets_reads`,
+  `test_goals_reads`, `test_planning`, `test_reload_env`, `test_server` — no
+  matching `.py` left) deleted; the other 19 in that directory correspond to
+  real, current test modules and were left alone. Note for the paper trail:
+  `__pycache__/` is gitignored and untracked, so this is a local-only fix —
+  it has no effect on a fresh clone or CI, which never accumulate stale
+  bytecode in the first place. Recorded here only to close the item, not
+  because it changes anything durable about the repo.
 - ~~C6. Align CHARTER.md §2, README and `.engineer/manifest.yml` prose with
   ADR-0030 (production DB is now the local Postgres container; Render = frozen
   standby; `.dev-data` SQLite is sandbox only). Charter edit needs human sign-off.~~
@@ -603,3 +627,26 @@ true when they were written.)*
   **The rule it asks for:** a waived exit criterion must carry the command that
   proves the waiver, not the reasoning behind it. `docker inspect` would have
   ended this in one line.
+
+- C27. **A form's complexity keeps compounding on itself, and the newest
+  feature to touch it always pays the CRAP score of everything before it.**
+  Found 2026-08-21 by `crap-analyzer` during feature 019's Checkpoint 7.
+
+  `frontend/app/(app)/funds/create-form.tsx`'s `CreateFundForm` scored CRAP
+  34.01 — the only finding across 019's whole diff to cross the default
+  threshold (20). Feature 019 added one small, unconditional field (~14
+  lines, zero new branches) and, because that line sits inside the same
+  function, inherited the complexity of everything the form already did:
+  rule-conditional field rendering, a preview/warning system, mutations, an
+  effect. Measured, not assumed: coverage on the function is 98% (172/175
+  lines) — the CRAP formula's `(1-cov)³` term contributes about 0.01 of the
+  34.01, so this is almost pure complexity, not a testing gap. 019 did not
+  cause it and correctly did not try to fix it in scope.
+
+  **Proposed, not applied:** extract two pure sub-components —
+  `RuleFieldset` (the rule picker, its offers/preview/missing-charges logic)
+  and `RuleSpecificFields` (the `fixed`/`average` conditional blocks) —
+  leaving `CreateFundForm` as thin composition. Pure prop-threading, no
+  reordering of effects or async, a safe refactor by `crap-analyzer`'s own
+  bar. Whoever next touches this file should do this first, or expect to
+  inherit the same score their own small change didn't cause.

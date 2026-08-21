@@ -177,7 +177,7 @@ def test_the_month_the_charge_lands_does_not_contribute(session):
     cat = _category(session)
     _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
     fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=447_300_00)
+    funds.set_fund(session, fund.id, balance=447_300_00, today=date(2026, 11, 15))
     status = funds.fund_status(session, fund.id, "2027-04")
     assert status.asks == 0
     assert status.on_track is True
@@ -203,7 +203,7 @@ def test_a_drained_fund_raises_its_ask_and_says_it_is_behind(session):
     cat = _category(session)
     _obligation(session, cat, 7_200_000_00, date(2027, 5, 2), unit="year")
     fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=3_600_000_00)
+    funds.set_fund(session, fund.id, balance=3_600_000_00, today=date(2026, 11, 15))
     _spend(session, cat, 3_600_000_00, date(2026, 11, 20))
     status = funds.fund_status(session, fund.id, "2026-11")
     assert status.asks == 1_200_000_00
@@ -213,7 +213,7 @@ def test_a_drained_fund_raises_its_ask_and_says_it_is_behind(session):
 def test_a_fund_that_spent_past_everything_it_had_says_it_is_behind(session):
     cat = _category(session)
     fund = funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=350_000_00)
+    funds.set_fund(session, fund.id, balance=350_000_00, today=date(2026, 11, 15))
     _spend(session, cat, 900_000_00, date(2026, 11, 20))
     assert funds.fund_status(session, fund.id, "2026-11").on_track is False
 
@@ -221,7 +221,7 @@ def test_a_fund_that_spent_past_everything_it_had_says_it_is_behind(session):
 def test_a_fund_that_spent_every_peso_it_had_and_no_more_is_on_track(session):
     cat = _category(session)
     fund = funds.create_fund(session, cat, rule="fixed", amount=300_000_00, start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=350_000_00)
+    funds.set_fund(session, fund.id, balance=350_000_00, today=date(2026, 11, 15))
     _spend(session, cat, 650_000_00, date(2026, 11, 20))
     assert funds.fund_status(session, fund.id, "2026-11").on_track is True
 
@@ -267,7 +267,7 @@ def test_the_next_cycle_begins_once_the_fund_has_paid(session):
     cat = _category(session)
     _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
     fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=447_300_00)
+    funds.set_fund(session, fund.id, balance=447_300_00, today=date(2026, 11, 15))
     _spend(session, cat, 447_300_00, date(2027, 5, 10))
     status = funds.fund_status(session, fund.id, "2027-05")
     assert status.whole_by == "2028-04"
@@ -503,7 +503,7 @@ def test_the_month_before_a_fund_starts_already_reports_what_it_will_have(sessio
 def test_a_stated_balance_is_what_next_month_builds_on(session):
     cat = _category(session, "Tecnologia")
     fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=500_000_00)
+    funds.set_fund(session, fund.id, balance=500_000_00, today=date(2026, 11, 15))
     status = funds.fund_status(session, fund.id, "2026-11")
     assert status.carries == 600_000_00
     assert status.next_month_has == 700_000_00
@@ -523,7 +523,7 @@ def test_a_fund_that_starts_next_month_already_carries_the_balance_it_was_given(
 def test_a_balance_stated_on_a_fund_two_months_out_carries_nothing_yet(session):
     cat = _category(session, "Tecnologia")
     fund = funds.create_fund(session, cat, rule="fixed", amount=100_000_00, start_month="2027-01")
-    funds.set_fund(session, fund.id, balance=500_000_00)
+    funds.set_fund(session, fund.id, balance=500_000_00, today=date(2026, 11, 15))
     status = funds.fund_status(session, fund.id, "2026-11")
     assert status.carries == 0
     assert status.next_month_has == 0

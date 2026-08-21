@@ -1,5 +1,13 @@
 # Quaestor — Restore From Backup (ADR-0024)
 
+> **Archived 2026-08-21.** Describes the pre-ADR-0030 backup path (a
+> `scheduler` sidecar dumping into a Docker named volume). Today's backup is
+> `just backup` — a dated `pg_dump` of the local Postgres production
+> container straight to iCloud Drive (ADR-0030); there is no current,
+> verified restore runbook for that path. Kept as historical record, not a
+> live procedure — the `pg_restore` shape below is still the right family
+> of commands, just against the wrong source.
+
 The DB is dumped daily by the `scheduler` service into the
 `quaestor-backups` Docker volume (ADR-0013 + ADR-0024). A backup is not a
 backup until restore is tested.
