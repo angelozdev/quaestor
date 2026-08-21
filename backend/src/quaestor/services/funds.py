@@ -331,13 +331,16 @@ def _fold_start(fund: Fund, year_month: str) -> tuple[str, int]:
     The anchor is a statement by the owner, not a computed figure — which is
     why it does not contradict AC-16 and why nothing in the app writes it. One
     written without a month was stated for whatever month is being looked at,
-    that being the only clock the writing call has.
+    that being the only clock the writing call has. A statement for a month
+    still ahead of `year_month` answers with some later month and a zero
+    opening — `_walk` only compares that month against `year_month`, so any
+    later value would do; it is never treated as an opening balance itself.
     """
     if fund.anchor_amount is None:
         return fund.start_month, 0
     stated_for = fund.anchor_month or year_month
     if stated_for > year_month:
-        return fund.start_month, 0
+        return next_year_month(year_month), 0
     return max(stated_for, fund.start_month), fund.anchor_amount
 
 
@@ -779,12 +782,20 @@ def _warning(fund: Fund, crowded: tuple[FundCharge, ...]) -> str | None:
     return f"{named} leaves no month to save in: the whole {cents_to_major(falls)} COP falls on {fund.start_month}"
 
 
-def set_fund(session: Session, fund_id: int, **changes) -> Fund:
+def set_fund(session: Session, fund_id: int, today: Date | None = None, **changes) -> Fund:
     """Change a fund's rule, its parameters, or what the owner says it holds.
 
     `balance` is the owner's statement of what the fund already holds. It is
     recorded as stated and never re-read from an account, before or after
-    (AC-19).
+    (AC-19), dated to the month containing `today` — the anchor month itself
+    is never a separate, freely chosen input (product ADR-041).
+
+    Args:
+        session: Database session.
+        fund_id: The fund being changed.
+        today: Overrides the real clock used to date a new `balance`
+            statement; callers pass it for determinism.
+        **changes: `balance` and/or the rule's own parameters.
 
     Raises:
         NotFound: the fund does not exist.
@@ -793,7 +804,7 @@ def set_fund(session: Session, fund_id: int, **changes) -> Fund:
     fund = _require_fund(session, fund_id)
     balance = changes.pop("balance", None)
     if balance is not None:
-        fund.anchor_month = None
+        fund.anchor_month = year_month_of(today or Date.today())
         fund.anchor_amount = balance
     if changes:
         category = session.get(Category, fund.category_id)

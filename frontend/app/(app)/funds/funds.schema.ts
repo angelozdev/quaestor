@@ -16,6 +16,7 @@ export const createFundSchema = z
     startMonth: yearMonth,
     amount: positiveCents.nullable(),
     windowMonths: z.number().int().min(1, minNumberMessage(1)).nullable(),
+    openingBalance: positiveCents.nullable(),
   })
   .superRefine((value, ctx) => {
     if (value.categoryId === null) {

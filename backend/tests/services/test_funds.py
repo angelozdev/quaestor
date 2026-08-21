@@ -169,7 +169,7 @@ def test_the_ask_recomputes_as_months_pass_and_as_the_fund_fills(session):
     cat = _category(session)
     _obligation(session, cat, 447_300_00, date(2027, 5, 2), unit="year")
     fund = funds.create_fund(session, cat, rule="from-recurring", start_month="2026-11")
-    funds.set_fund(session, fund.id, balance=297_300_00)
+    funds.set_fund(session, fund.id, balance=297_300_00, today=date(2027, 1, 15))
     assert funds.fund_status(session, fund.id, "2027-01").asks == 37_500_00
 
 

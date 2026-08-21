@@ -35,6 +35,7 @@ function defaults(month: string): CreateFundValues {
     startMonth: month,
     amount: null,
     windowMonths: DEFAULT_WINDOW,
+    openingBalance: null,
   }
 }
 
@@ -47,6 +48,7 @@ function bodyOf(values: CreateFundValues, shape: FundShape): FundCreate {
   }
   if (values.rule === "fixed") body.amount = values.amount
   if (values.rule === "average") body.window_months = values.windowMonths
+  if (values.openingBalance !== null) body.opening_balance = values.openingBalance
   return body
 }
 
@@ -359,6 +361,20 @@ export function CreateFundForm({
               type="month"
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
+            />
+          </div>
+        )}
+      </form.Field>
+
+      <form.Field name="openingBalance">
+        {(field) => (
+          <div className="space-y-1.5">
+            <Label htmlFor="fund-opening-balance">Ya tiene ahorrado (opcional)</Label>
+            <MoneyInput
+              id="fund-opening-balance"
+              currency="COP"
+              value={field.state.value}
+              onChange={(cents) => field.handleChange(cents)}
             />
           </div>
         )}
