@@ -2,7 +2,7 @@
 title: "La evolución del gasto se lee en la misma pantalla del mes, por grupo y mes a mes"
 slug: monthly-expense-trend
 number: 020
-status: ready
+status: done
 autonomy_level: medium
 branch: monthly-expense-trend
 area: reports
