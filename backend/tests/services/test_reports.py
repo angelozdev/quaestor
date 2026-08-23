@@ -323,6 +323,53 @@ def test_monthly_report_end_to_end(session):
     assert "**Net:** $4,200.00 COP" in report.markdown
 
 
+def test_trend_window_is_the_last_12_months_ending_today(session):
+    """AC-1: the window always ends at `today`, not at the month being read."""
+    acc = _acc(session)
+    cat = _cat(session)
+    transactions.record_expense(session, acc.id, 10_000, "COP", date(2026, 8, 1), "x", category_id=cat.id)
+    agg = load_month_aggregate(session, "2026-01", TRM)
+
+    trend = reports._trend(agg, date(2026, 8, 22))
+
+    assert trend.window_start == "2025-09"
+    assert trend.window_end == "2026-08"
+    assert [m.month for m in trend.months] == [
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03",
+        "2026-04",
+        "2026-05",
+        "2026-06",
+        "2026-07",
+        "2026-08",
+    ]
+
+
+def test_trend_stacks_by_group_and_a_months_total_sums_its_groups(session):
+    """AC-2: two categories in the same group fold into one bucket per month."""
+    acc = _acc(session)
+    grp = categories.create_group(session, name="Comida")
+    rest = _cat(session, name="Restaurantes", group_id=grp.id)
+    mercado = _cat(session, name="Mercado", group_id=grp.id)
+    transactions.record_expense(session, acc.id, 60_000, "COP", date(2026, 6, 5), "r", category_id=rest.id)
+    transactions.record_expense(session, acc.id, 40_000, "COP", date(2026, 6, 6), "m", category_id=mercado.id)
+    agg = load_month_aggregate(session, "2026-06", TRM)
+
+    trend = reports._trend(agg, date(2026, 6, 15))
+
+    june = next(m for m in trend.months if m.month == "2026-06")
+    assert june.by_group == {"Comida": 100_000}
+    assert june.total == 100_000
+
+    by_category = {row.category: row.total for row in trend.categories}
+    assert by_category == {"Restaurantes": 60_000, "Mercado": 40_000}
+
+
 def test_monthly_report_rejects_malformed_month(session):
     with pytest.raises(ValidationError):
         reports.monthly_report(session, "2026-13")

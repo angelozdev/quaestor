@@ -15,9 +15,10 @@ import { report } from "@/lib/api/reports"
 import { availableRows } from "@/lib/available-breakdown"
 import { formatCents } from "@/lib/money"
 import { qk } from "@/lib/query"
-import { Input } from "@/ui"
+import { Input, Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui"
+import { EvolucionTab } from "./evolucion-tab"
 
-const WHERE_THE_MONTH_WENT = (
+export const WHERE_THE_MONTH_WENT = (
   <p>Este reporte muestra a dónde se fue el gasto del mes, repartido por categoría y por grupo.</p>
 )
 
@@ -81,181 +82,194 @@ export default function ReportsPage() {
         errorMessage="No se pudo cargar el reporte"
       >
         {(data) => (
-          <div className="animate-fade-up space-y-10">
-            <section className="space-y-4">
-              <div className="space-y-1">
-                <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
-                  Neto del mes
-                </p>
-                <p
-                  className="text-[2.5rem] font-semibold leading-[1.05] tabular-nums tracking-tight"
-                  style={{ color: data.net >= 0 ? "var(--income)" : "var(--expense)" }}
-                >
-                  {formatCents(data.net, "COP")}
-                </p>
-              </div>
-              <div className="max-w-lg">
-                <Term label="Ingresos">
-                  <MoneyAmount
-                    cents={data.income}
-                    currency="COP"
-                    type="income"
-                    className="text-sm font-medium"
-                  />
-                </Term>
-                <Term label="Gastos">
-                  <span className="flex items-baseline gap-1.5">
-                    <Minus />
-                    <MoneyAmount
-                      cents={data.expense}
-                      currency="COP"
-                      className="text-sm font-medium"
-                    />
-                  </span>
-                </Term>
-                <Total label="Neto" cents={data.net} />
-              </div>
-              {data.drift_mom && (
-                <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                  vs {data.drift_mom.prev_month} →{" "}
-                  <span
-                    className="tabular-nums"
-                    style={{
-                      color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)",
-                    }}
-                  >
-                    {data.drift_mom.net_abs >= 0 ? "+" : ""}
-                    {formatCents(data.drift_mom.net_abs, "COP")}
-                  </span>
-                </p>
-              )}
-            </section>
+          <Tabs defaultValue="mes" className="animate-fade-up">
+            <TabsList>
+              <TabsTrigger value="mes">Mes</TabsTrigger>
+              <TabsTrigger value="evolucion">Evolución</TabsTrigger>
+            </TabsList>
 
-            <Section label="Fondos y presupuestos">
-              <DataTable
-                rows={data.funds}
-                rowKey={(f) => f.category_name}
-                pageSize={100}
-                emptyMessage="Sin fondos este mes"
-                emptyAction={{ label: "Ir a fondos", href: "/funds" }}
-                columns={[
-                  {
-                    key: "category",
-                    header: "Categoría",
-                    render: (f) => f.category_name,
-                  },
-                  {
-                    key: "asks",
-                    header: "Pidió",
-                    align: "right",
-                    render: (f) => formatCents(f.asks, f.currency),
-                  },
-                  {
-                    key: "spent",
-                    header: "Gastado",
-                    align: "right",
-                    render: (f) => formatCents(f.spent, f.currency),
-                  },
-                  {
-                    key: "holds",
-                    header: "Tiene",
-                    align: "right",
-                    render: (f) => (
-                      <span
-                        className="font-medium"
-                        style={{ color: f.on_track ? undefined : "var(--expense)" }}
-                      >
-                        {formatCents(f.holds, f.currency)}
-                      </span>
-                    ),
-                  },
-                ]}
-              />
-            </Section>
-
-            <Section label="Metas">
-              <DataTable
-                rows={data.metas}
-                rowKey={(m) => m.meta_name}
-                pageSize={100}
-                emptyMessage="Sin metas este mes"
-                emptyAction={{ label: "Ir a metas", href: "/metas" }}
-                columns={[
-                  { key: "meta", header: "Meta", render: (m) => m.meta_name },
-                  {
-                    key: "asks",
-                    header: "Pidió",
-                    align: "right",
-                    render: (m) => formatCents(m.asks, m.currency),
-                  },
-                  {
-                    key: "holds",
-                    header: "Lleva",
-                    align: "right",
-                    render: (m) => (
-                      <span className="font-medium">{formatCents(m.holds, m.currency)}</span>
-                    ),
-                  },
-                ]}
-              />
-              <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
-                Entre fondos y metas, el mes pide {formatCents(data.asked, "COP")}.
-              </p>
-            </Section>
-
-            <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
-              <Section label="Por categoría">
-                {data.by_category.length > 0 ? (
-                  <div>
-                    {data.by_category.map((c) => (
-                      <Term key={c.category} label={c.category}>
-                        <Share cents={c.total} pct={c.pct} />
-                      </Term>
-                    ))}
+            <TabsContent value="mes">
+              <div className="space-y-10">
+                <section className="space-y-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium" style={{ color: "var(--muted-foreground)" }}>
+                      Neto del mes
+                    </p>
+                    <p
+                      className="text-[2.5rem] font-semibold leading-[1.05] tabular-nums tracking-tight"
+                      style={{ color: data.net >= 0 ? "var(--income)" : "var(--expense)" }}
+                    >
+                      {formatCents(data.net, "COP")}
+                    </p>
                   </div>
-                ) : (
-                  <EmptyState
-                    message="Sin gastos este mes"
-                    description={WHERE_THE_MONTH_WENT}
-                    action={{ label: "Registrar un movimiento", href: "/transactions" }}
-                  />
-                )}
-              </Section>
-
-              <Section label="Por grupo">
-                {data.by_group.length > 0 ? (
-                  <div>
-                    {data.by_group.map((g) => (
-                      <Term key={g.group} label={g.group}>
-                        <Share cents={g.total} pct={g.pct} />
-                      </Term>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState message="Sin gastos agrupados este mes" />
-                )}
-              </Section>
-            </div>
-
-            <Section label="Disponible · cierre">
-              <div className="max-w-lg">
-                {availableRows(data.available).map((row) => (
-                  <Term key={row.key} label={row.label}>
-                    <span className="flex items-baseline gap-1.5">
-                      {row.kind === "claim" && row.cents > 0 && <Minus />}
+                  <div className="max-w-lg">
+                    <Term label="Ingresos">
                       <MoneyAmount
-                        cents={row.cents}
+                        cents={data.income}
                         currency="COP"
-                        type={row.kind === "income" ? "income" : undefined}
+                        type="income"
                         className="text-sm font-medium"
                       />
-                    </span>
-                  </Term>
-                ))}
-                <Total label="Disponible" cents={data.available.free} />
+                    </Term>
+                    <Term label="Gastos">
+                      <span className="flex items-baseline gap-1.5">
+                        <Minus />
+                        <MoneyAmount
+                          cents={data.expense}
+                          currency="COP"
+                          className="text-sm font-medium"
+                        />
+                      </span>
+                    </Term>
+                    <Total label="Neto" cents={data.net} />
+                  </div>
+                  {data.drift_mom && (
+                    <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                      vs {data.drift_mom.prev_month} →{" "}
+                      <span
+                        className="tabular-nums"
+                        style={{
+                          color: data.drift_mom.net_abs >= 0 ? "var(--income)" : "var(--expense)",
+                        }}
+                      >
+                        {data.drift_mom.net_abs >= 0 ? "+" : ""}
+                        {formatCents(data.drift_mom.net_abs, "COP")}
+                      </span>
+                    </p>
+                  )}
+                </section>
+
+                <Section label="Fondos y presupuestos">
+                  <DataTable
+                    rows={data.funds}
+                    rowKey={(f) => f.category_name}
+                    pageSize={100}
+                    emptyMessage="Sin fondos este mes"
+                    emptyAction={{ label: "Ir a fondos", href: "/funds" }}
+                    columns={[
+                      {
+                        key: "category",
+                        header: "Categoría",
+                        render: (f) => f.category_name,
+                      },
+                      {
+                        key: "asks",
+                        header: "Pidió",
+                        align: "right",
+                        render: (f) => formatCents(f.asks, f.currency),
+                      },
+                      {
+                        key: "spent",
+                        header: "Gastado",
+                        align: "right",
+                        render: (f) => formatCents(f.spent, f.currency),
+                      },
+                      {
+                        key: "holds",
+                        header: "Tiene",
+                        align: "right",
+                        render: (f) => (
+                          <span
+                            className="font-medium"
+                            style={{ color: f.on_track ? undefined : "var(--expense)" }}
+                          >
+                            {formatCents(f.holds, f.currency)}
+                          </span>
+                        ),
+                      },
+                    ]}
+                  />
+                </Section>
+
+                <Section label="Metas">
+                  <DataTable
+                    rows={data.metas}
+                    rowKey={(m) => m.meta_name}
+                    pageSize={100}
+                    emptyMessage="Sin metas este mes"
+                    emptyAction={{ label: "Ir a metas", href: "/metas" }}
+                    columns={[
+                      { key: "meta", header: "Meta", render: (m) => m.meta_name },
+                      {
+                        key: "asks",
+                        header: "Pidió",
+                        align: "right",
+                        render: (m) => formatCents(m.asks, m.currency),
+                      },
+                      {
+                        key: "holds",
+                        header: "Lleva",
+                        align: "right",
+                        render: (m) => (
+                          <span className="font-medium">{formatCents(m.holds, m.currency)}</span>
+                        ),
+                      },
+                    ]}
+                  />
+                  <p className="text-sm" style={{ color: "var(--muted-foreground)" }}>
+                    Entre fondos y metas, el mes pide {formatCents(data.asked, "COP")}.
+                  </p>
+                </Section>
+
+                <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2">
+                  <Section label="Por categoría">
+                    {data.by_category.length > 0 ? (
+                      <div>
+                        {data.by_category.map((c) => (
+                          <Term key={c.category} label={c.category}>
+                            <Share cents={c.total} pct={c.pct} />
+                          </Term>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState
+                        message="Sin gastos este mes"
+                        description={WHERE_THE_MONTH_WENT}
+                        action={{ label: "Registrar un movimiento", href: "/transactions" }}
+                      />
+                    )}
+                  </Section>
+
+                  <Section label="Por grupo">
+                    {data.by_group.length > 0 ? (
+                      <div>
+                        {data.by_group.map((g) => (
+                          <Term key={g.group} label={g.group}>
+                            <Share cents={g.total} pct={g.pct} />
+                          </Term>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState message="Sin gastos agrupados este mes" />
+                    )}
+                  </Section>
+                </div>
+
+                <Section label="Disponible · cierre">
+                  <div className="max-w-lg">
+                    {availableRows(data.available).map((row) => (
+                      <Term key={row.key} label={row.label}>
+                        <span className="flex items-baseline gap-1.5">
+                          {row.kind === "claim" && row.cents > 0 && <Minus />}
+                          <MoneyAmount
+                            cents={row.cents}
+                            currency="COP"
+                            type={row.kind === "income" ? "income" : undefined}
+                            className="text-sm font-medium"
+                          />
+                        </span>
+                      </Term>
+                    ))}
+                    <Total label="Disponible" cents={data.available.free} />
+                  </div>
+                </Section>
               </div>
-            </Section>
-          </div>
+            </TabsContent>
+
+            <TabsContent value="evolucion">
+              <EvolucionTab report={data} emptyDescription={WHERE_THE_MONTH_WENT} />
+            </TabsContent>
+          </Tabs>
         )}
       </QueryBoundary>
     </div>

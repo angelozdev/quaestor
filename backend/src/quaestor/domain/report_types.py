@@ -20,6 +20,9 @@ __all__ = [
     "GroupSection",
     "MonthAvailable",
     "MonthlyReport",
+    "Trend",
+    "TrendCategoryRow",
+    "TrendMonth",
 ]
 
 
@@ -87,6 +90,35 @@ class GroupSection:
 
 
 @dataclass(frozen=True)
+class TrendMonth:
+    """One month of the 12-month expense window, COP cents throughout."""
+
+    month: str
+    total: int
+    by_group: dict[str, int]
+
+
+@dataclass(frozen=True)
+class TrendCategoryRow:
+    """One category's spend across the whole window, COP cents throughout."""
+
+    category: str
+    group: str | None
+    total: int
+    by_month: dict[str, int]
+
+
+@dataclass(frozen=True)
+class Trend:
+    """The last 12 months of expense, ending at `window_end` (AC-1)."""
+
+    window_start: str
+    window_end: str
+    months: list[TrendMonth]
+    categories: list[TrendCategoryRow]
+
+
+@dataclass(frozen=True)
 class AccountBalance:
     account: str
     currency: str
@@ -128,4 +160,5 @@ class MonthlyReport:  # not frozen: markdown is filled in after the data is buil
     usd_share: float  # fraction of expense originated in USD, [0, 1]
     pending: list[str]  # alert lines: unconfirmed manual entries
     available: MonthAvailable  # closing line, not headline (ADR-019)
+    trend: Trend
     markdown: str

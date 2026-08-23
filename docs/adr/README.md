@@ -74,3 +74,4 @@ New ADRs are created with the `adr` skill:
 | 0058 | El pago se aplica a un turno, no se deduce del mes | accepted | 2026-08-15 |
 | 0059 | Un error de dominio lleva un código estable y sus datos; la copia en español vive en el cliente | accepted | 2026-08-18 |
 | 0060 | MoneyInput usa react-number-format para el formateo y el cursor | accepted | 2026-08-20 |
+| 0061 | Recharts para el gráfico de barras apiladas de Evolución | accepted | 2026-08-22 |

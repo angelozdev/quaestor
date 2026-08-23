@@ -1,3 +1,6 @@
+import dataclasses
+
+import pytest
 from quaestor.domain.report_types import (
     AccountBalance,
     CategorySection,
@@ -7,6 +10,9 @@ from quaestor.domain.report_types import (
     GroupSection,
     MonthAvailable,  # re-exported from dtos
     MonthlyReport,
+    Trend,
+    TrendCategoryRow,
+    TrendMonth,
 )
 
 
@@ -50,6 +56,19 @@ def test_value_types_hold_their_fields():
     assert drift.prev_month == "2026-05" and drift.expense_pct is None
 
 
+def test_trend_shapes_are_frozen():
+    month = TrendMonth(month="2026-06", total=1000, by_group={"Comida": 1000})
+    row = TrendCategoryRow(category="Restaurantes", group="Comida", total=1000, by_month={"2026-06": 1000})
+    trend = Trend(window_start="2025-07", window_end="2026-06", months=[month], categories=[row])
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        month.total = 2000
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        row.total = 2000
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        trend.window_end = "2026-07"
+
+
 def test_monthly_report_markdown_is_mutable():
     available = MonthAvailable(year_month="2026-06", income=0, funds=[], uncovered=0, free=12345)
     report = MonthlyReport(
@@ -68,6 +87,7 @@ def test_monthly_report_markdown_is_mutable():
         usd_share=0.0,
         pending=[],
         available=available,
+        trend=Trend(window_start="2025-07", window_end="2026-06", months=[], categories=[]),
         markdown="",
     )
     report.markdown = "rendered"  # must be reassignable (renderer fills it last)

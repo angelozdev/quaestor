@@ -27,8 +27,11 @@ from ..domain.report_types import (
     MetaReportLine,
     MonthAvailable,
     MonthlyReport,
+    Trend,
+    TrendCategoryRow,
+    TrendMonth,
 )
-from ..domain.rules import prev_year_month
+from ..domain.rules import prev_year_month, shift_year_month, year_month_of
 from . import accounts as _accounts
 from . import month as month_service
 from . import planned as _planned
@@ -43,6 +46,15 @@ def _usd_share(agg: MonthAggregate, expenses: list[Transaction], expense_total: 
     return usd / expense_total
 
 
+def _category_name_and_group(agg: MonthAggregate, cat_id: int | None, no_group: str | None) -> tuple[str, str | None]:
+    """A category's display name and group label, `no_group` standing in for none."""
+    if cat_id is None:
+        return "Uncategorized", no_group
+    cat = agg.category(cat_id)
+    name = cat.name if cat is not None else f"category {cat_id}"
+    return name, agg.group_name(cat_id) or no_group
+
+
 def _category_sections(agg: MonthAggregate, expenses: list[Transaction], expense_total: int) -> list[CategorySection]:
     """Group expenses by category (None -> 'Uncategorized'); pct over total expense."""
     buckets: dict[int | None, int] = {}
@@ -50,12 +62,7 @@ def _category_sections(agg: MonthAggregate, expenses: list[Transaction], expense
         buckets[tx.category_id] = buckets.get(tx.category_id, 0) + agg.to_cop_cents(tx)
     sections: list[CategorySection] = []
     for cat_id, total in buckets.items():
-        if cat_id is None:
-            name, group = "Uncategorized", None
-        else:
-            cat = agg.category(cat_id)
-            name = cat.name if cat is not None else f"category {cat_id}"
-            group = agg.group_name(cat_id)
+        name, group = _category_name_and_group(agg, cat_id, None)
         pct = (total / expense_total * 100) if expense_total > 0 else 0.0
         sections.append(CategorySection(category=name, group=group, total=total, pct=pct))
     sections.sort(key=lambda s: (-s.total, s.category))
@@ -78,6 +85,44 @@ def _group_sections(agg: MonthAggregate, expenses: list[Transaction], expense_to
     ]
     sections.sort(key=lambda s: (-s.total, s.group))
     return sections
+
+
+def _trend(agg: MonthAggregate, today: Date) -> Trend:
+    """The last 12 months of expense, by category group and by category (AC-1/AC-2).
+
+    Anchored on `today`, not on the report's own `month` — the window always
+    ends at the current month regardless of which month the rest of the
+    report was asked for (AC-1).
+    """
+    months = [shift_year_month(year_month_of(today), -i) for i in range(11, -1, -1)]
+    totals = agg.category_month_totals(months)
+
+    by_month_group: dict[str, dict[str, int]] = {month: {} for month in months}
+    category_totals: dict[int | None, int] = {}
+    category_by_month: dict[int | None, dict[str, int]] = {}
+    for (cat_id, year_month), total in totals.items():
+        group = agg.group_name(cat_id) or "Sin grupo"
+        bucket = by_month_group[year_month]
+        bucket[group] = bucket.get(group, 0) + total
+        category_totals[cat_id] = category_totals.get(cat_id, 0) + total
+        category_by_month.setdefault(cat_id, {})[year_month] = total
+
+    month_rows = [
+        TrendMonth(month=month, total=sum(by_month_group[month].values()), by_group=by_month_group[month])
+        for month in months
+    ]
+
+    category_rows: list[TrendCategoryRow] = []
+    for cat_id, total in category_totals.items():
+        if total <= 0:
+            continue
+        name, group = _category_name_and_group(agg, cat_id, "Sin grupo")
+        category_rows.append(
+            TrendCategoryRow(category=name, group=group, total=total, by_month=category_by_month[cat_id])
+        )
+    category_rows.sort(key=lambda r: (-r.total, r.category))
+
+    return Trend(window_start=months[0], window_end=months[-1], months=month_rows, categories=category_rows)
 
 
 def _drift(agg: MonthAggregate, income: int, expense: int, net: int) -> DriftMoM | None:
@@ -198,15 +243,16 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
 
     Posted-only aggregates in COP cents, converted at read time from ONE
     TRM fetch; reuses P3 for pending and feature 003's fund read path for both
-    the fund lines and the closing line. `today` is accepted and unused on
-    purpose — the goal ETAs that needed a clock are gone, and every figure now
-    comes from the month asked about.
+    the fund lines and the closing line. `today` anchors the 12-month trend
+    window (feature 020, AC-1) and defaults to the real clock; every other
+    figure still comes from `month` alone.
 
     Raises:
         ValidationError: malformed month.
         MissingRate: no TRM set (005 AC-9 — even for all-COP data).
     """
     require_year_month(month, "month")
+    effective_today = today if today is not None else Date.today()
     agg = load_month(session, month)
     trm = agg.trm
     start, end = agg.start, agg.end
@@ -231,6 +277,7 @@ def monthly_report(session: Session, month: str, *, today: Date | None = None) -
         usd_share=_usd_share(agg, expenses, expense),
         pending=_pending_lines(session, start, end, trm),
         available=available,
+        trend=_trend(agg, effective_today),
         markdown="",
     )
     report.markdown = render_markdown(report)
