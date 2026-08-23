@@ -88,6 +88,7 @@ _FEATURE_MODULES = (
     "fund_per_charge",
     "fx_read_time",
     "mandatory_categories",
+    "monthly_expense_trend",
     "movement_corrections",
     "named_goals",
     "planned_payments",

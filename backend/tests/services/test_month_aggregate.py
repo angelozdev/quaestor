@@ -8,6 +8,11 @@ from quaestor.domain.models import (
     Account,
     AccountType,
     Category,
+    Fund,
+    FundRule,
+    IntervalUnit,
+    RecurringItem,
+    RecurringMode,
     Transaction,
     TxStatus,
     TxType,
@@ -202,3 +207,129 @@ def test_a_movement_with_no_category_has_no_group(session):
     agg = load_month_aggregate(session, "2026-06", TRM)
 
     assert agg.group_name(None) is None
+
+
+def _charge_with_its_own_fund(session, acc_id, cat_id):
+    item = RecurringItem(
+        name="Comida a domicilio",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=15_000_00,
+        currency="COP",
+        category_id=cat_id,
+        account_id=acc_id,
+        interval_unit=IntervalUnit.month,
+        interval_count=6,
+        start_date=date(2026, 1, 1),
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    session.add(Fund(category_id=cat_id, recurring_id=item.id, rule=FundRule.from_recurring, start_month="2026-01"))
+    session.commit()
+    return item
+
+
+def test_a_charge_settled_under_its_own_fund_is_missing_from_spent_in(session):
+    """Pins the exclusion `spent_in`'s own docstring names (ADR-0057), so the
+    fold below is proven against a real gap rather than an assumed one."""
+    acc, cat = _setup(session)
+    item = _charge_with_its_own_fund(session, acc.id, cat.id)
+    session.add(_expense(acc.id, cat.id, date(2026, 2, 5), 35_000_00))
+    settlement = _expense(acc.id, cat.id, date(2026, 2, 10), 15_000_00)
+    settlement.recurring_id = item.id
+    session.add(settlement)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-08", TRM)
+
+    assert agg.spent_in(cat.id, "2026-02") == 35_000_00
+
+
+def test_category_month_totals_folds_a_settled_charges_own_fund_back_in(session):
+    acc, cat = _setup(session)
+    item = _charge_with_its_own_fund(session, acc.id, cat.id)
+    session.add(_expense(acc.id, cat.id, date(2026, 2, 5), 35_000_00))
+    settlement = _expense(acc.id, cat.id, date(2026, 2, 10), 15_000_00)
+    settlement.recurring_id = item.id
+    session.add(settlement)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-08", TRM)
+
+    assert agg.category_month_totals(["2026-02"])[(cat.id, "2026-02")] == 50_000_00
+
+
+def test_category_month_totals_only_returns_the_requested_months(session):
+    acc, cat = _setup(session)
+    session.add(_expense(acc.id, cat.id, date(2026, 5, 10), 60_000))
+    session.add(_expense(acc.id, cat.id, date(2026, 6, 10), 30_000))
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-06", TRM)
+    totals = agg.category_month_totals(["2026-06"])
+
+    assert totals == {(cat.id, "2026-06"): 30_000}
+
+
+def test_category_month_totals_folds_in_a_settled_charge_with_nothing_else_that_month(session):
+    """A month whose only spend is a fund-per-charge settlement has no prior
+    entry in `_spent_by_cat_month`, so the fold's `.get(key, 0)` default is
+    what actually produces the figure rather than being masked by a plain
+    expense already occupying the key."""
+    acc, cat = _setup(session)
+    item = _charge_with_its_own_fund(session, acc.id, cat.id)
+    settlement = _expense(acc.id, cat.id, date(2026, 2, 10), 15_000_00)
+    settlement.recurring_id = item.id
+    session.add(settlement)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-08", TRM)
+
+    assert agg.category_month_totals(["2026-02"]) == {(cat.id, "2026-02"): 15_000_00}
+
+
+def test_category_month_totals_excludes_a_settled_charge_outside_the_requested_months(session):
+    """A settled charge's own category is not None, so the guard must still
+    catch it on the month leg alone — an `or` mutated to `and` would let a
+    charge outside the requested window leak in as long as it has a
+    category."""
+    acc, cat = _setup(session)
+    item = _charge_with_its_own_fund(session, acc.id, cat.id)
+    settlement = _expense(acc.id, cat.id, date(2026, 2, 10), 15_000_00)
+    settlement.recurring_id = item.id
+    session.add(settlement)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-08", TRM)
+
+    assert agg.category_month_totals(["2026-06"]) == {}
+
+
+def test_a_settled_charge_with_no_fund_of_its_own_counts_normally(session):
+    """No `Fund` row means `load_month_aggregate` never diverts it out of
+    `_spent_by_cat_month` in the first place — the fold has nothing to add."""
+    acc, cat = _setup(session)
+    item = RecurringItem(
+        name="Gimnasio",
+        type=TxType.expense,
+        mode=RecurringMode.manual,
+        amount=15_000_00,
+        currency="COP",
+        category_id=cat.id,
+        account_id=acc.id,
+        interval_unit=IntervalUnit.month,
+        interval_count=6,
+        start_date=date(2026, 1, 1),
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    settlement = _expense(acc.id, cat.id, date(2026, 2, 10), 15_000_00)
+    settlement.recurring_id = item.id
+    session.add(settlement)
+    session.commit()
+
+    agg = load_month_aggregate(session, "2026-08", TRM)
+
+    assert agg.category_month_totals(["2026-02"]).get((cat.id, "2026-02"), 0) == 15_000_00

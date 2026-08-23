@@ -701,6 +701,32 @@ class DriftMoMOut(BaseModel):
     net_pct: float | None
 
 
+class TrendMonthOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: str
+    total: int
+    by_group: dict[str, int]
+
+
+class TrendCategoryRowOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str
+    group: str | None
+    total: int
+    by_month: dict[str, int]
+
+
+class TrendOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    window_start: str
+    window_end: str
+    months: list[TrendMonthOut]
+    categories: list[TrendCategoryRowOut]
+
+
 class MonthlyReportOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -719,4 +745,5 @@ class MonthlyReportOut(BaseModel):
     usd_share: float
     pending: list[str]
     available: MonthAvailableOut
+    trend: TrendOut
     markdown: str

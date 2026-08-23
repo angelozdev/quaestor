@@ -9,7 +9,10 @@ from quaestor.domain.report_types import (
     GroupSection,
     MetaReportLine,
     MonthlyReport,
+    Trend,
 )
+
+_EMPTY_TREND = Trend(window_start="2025-07", window_end="2026-06", months=[], categories=[])
 
 
 def _full_report():
@@ -38,6 +41,7 @@ def _full_report():
         usd_share=0.25,
         pending=["Bank: $40,000.00 COP pending"],
         available=MonthAvailable("2026-06", 0, [], 0, 1_750_000),
+        trend=_EMPTY_TREND,
         markdown="",
     )
 
@@ -105,6 +109,7 @@ def test_render_empty_sections_do_not_crash():
         usd_share=0.0,
         pending=[],
         available=MonthAvailable("2026-06", 0, [], 0, 0),
+        trend=_EMPTY_TREND,
         markdown="",
     )
     out = render_markdown(report)

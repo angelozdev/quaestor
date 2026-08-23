@@ -69,6 +69,7 @@ const RESTAURANTES_IS_A_CEILING: MonthlyReport = {
     uncovered: 0,
     free: 290_000_000,
   },
+  trend: { window_start: "2025-09", window_end: "2026-08", months: [], categories: [] },
   markdown: "",
 }
 

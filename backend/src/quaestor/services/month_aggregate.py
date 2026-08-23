@@ -126,6 +126,28 @@ class MonthAggregate:
         """
         return self._settled_by_charge_month.get((item.id, year_month), {}).get(item.currency, 0)
 
+    def category_month_totals(self, months: list[str]) -> dict[tuple[int | None, str], int]:
+        """Each category's COP spend for the given months, fund-per-charge included.
+
+        Starts from `_spent_by_cat_month`, which deliberately excludes a
+        settled charge that carries its own fund (`spent_in`'s docstring,
+        ADR-0057) because that money is folded from `_settled_by_charge_month`
+        instead. A caller reading many months at once — rather than the one
+        `spent_in` was built for — needs both dicts folded together, or a
+        category with such a charge reads low for any month the fund's own
+        fold does not also walk. Both dicts are already in memory: no query.
+        """
+        totals = {key: total for key, total in self._spent_by_cat_month.items() if key[1] in months}
+        charge_category = {f.recurring_id: f.category_id for f in self.funds if f.recurring_id is not None}
+        for (recurring_id, year_month), native in self._settled_by_charge_month.items():
+            category_id = charge_category.get(recurring_id)
+            if category_id is None or year_month not in months:
+                continue
+            key = (category_id, year_month)
+            for currency, amount in native.items():
+                totals[key] = totals.get(key, 0) + to_cop_cents(amount, currency, self.trm)
+        return totals
+
     def obligations_in(self, category_id: int) -> list[RecurringItem]:
         """The live expense obligations filed under one category (AC-4)."""
         return [i for i in self.active_recurring if i.type == TxType.expense and i.category_id == category_id]

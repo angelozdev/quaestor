@@ -322,6 +322,23 @@ export interface DriftMoM {
   net_abs: number
   net_pct: number | null
 }
+export interface TrendMonth {
+  month: string
+  total: number
+  by_group: Record<string, number>
+}
+export interface TrendCategoryRow {
+  category: string
+  group: string | null
+  total: number
+  by_month: Record<string, number>
+}
+export interface Trend {
+  window_start: string
+  window_end: string
+  months: TrendMonth[]
+  categories: TrendCategoryRow[]
+}
 export interface MonthlyReport {
   month: string
   income: number
@@ -338,6 +355,7 @@ export interface MonthlyReport {
   usd_share: number
   pending: string[]
   available: MonthAvailable
+  trend: Trend
   markdown: string
 }
 

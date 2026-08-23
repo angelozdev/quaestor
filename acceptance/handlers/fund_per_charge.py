@@ -289,8 +289,19 @@ def then_archiving_rejected(world: World) -> None:
 
 @step(r'the category "(?P<name>[^"]+)" is archived')
 def then_category_is_archived(world: World, name: str) -> None:
+    """Archives the category if it is not already, then checks it.
+
+    Doubles as setup and as assertion: a scenario whose subject is something
+    else entirely (020's trend) states this fact as a `Given`, while feature
+    015's own scenarios state it as a `Then` after a preceding `When the user
+    archives the category "X"`. The branch below is a no-op in the latter
+    case, since the category is already archived by then.
+    """
     world.require_clean(f"archiving {name!r}")
     cat = world.session.get(Category, _category_id(world, name))
+    if cat is not None and not cat.archived:
+        categories.archive_category(world.session, cat.id)
+        world.session.refresh(cat)
     assert cat is not None and cat.archived, f"{name!r} is not archived"
 
 
