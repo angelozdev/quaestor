@@ -25,11 +25,12 @@ Both items are named exceptions (shared setup): item 1 has no code and no tests;
 3. `architecture.md`'s "Tests use `:memory:`" becomes temporary stores: the backup and migration tests must reopen or copy a file, and the opaque store gives a test no way into a `:memory:` one. Under vitest both entry points refuse named environments, as in Aletheia (Task 9).
 4. The `just-*` boundary lint rule lands now; the utilities module `src/core/utils/` and its first `just-*` package land with their first consumer (`stack.md`: a dependency enters with the delivery that needs it; knip fails an unused module).
 5. `backup` has no `--dry-run`: it changes no data. `--dry-run` arrives with the first write, in recording movements.
-6. `--help` and `--version` open no store and print no `env:` line.
+6. `--help` and `--version` open no store and print no `env:` line. A bare `quaestor` prints the same help on stdout and exits 0 (commander's default is help on stderr and exit 1).
 7. Backups keep the newest 5 copies per env, the copy taken before migrating included, as in Aletheia.
 8. Aletheia's final layout, directly: one folder per module holding `<name>.ts`, `<name>.test.ts` and, as needed, `.types.ts`, `.errors.ts`, `.constants.ts`, `.schema.ts`; every failure is an error class. Aletheia's iCloud stage and restructure are skipped.
 9. Not ported: the skill copy, spec-id traceability (recording movements decides how feature docs are traced), stdin, time zone and random index in the context, the `date-fns` and `ts-fsrs` lint groups, `no-nested-calls`. `drizzle-kit`, `date-fns` and `just-*` enter with recording movements.
-10. The legacy export is JSON Lines with every value as the text Postgres prints, or null, so `bigint` cents and `numeric(18,6)` keep every digit and Node needs no CSV parser.
+10. The legacy export is JSON Lines with every value as the text of its `row_to_json` rendering, or null, so `bigint` cents and `numeric(18,6)` keep every digit and Node needs no CSV parser.
+11. After its check passes, Angelo makes `~/.quaestor/legacy/` read-only (`chmod -R a-w`), so nothing rewrites the export by accident.
 
 ## Global Constraints
 
@@ -46,7 +47,7 @@ Both items are named exceptions (shared setup): item 1 has no code and no tests;
 ## Review Focus
 
 1. Legacy names with emoji, accents or line breaks must come out of the export byte for byte → Task 2's `check.sh` compares account and category names with the live database.
-2. A store file that is not SQLite → exit 2 `unexpected`, the file unchanged → Task 9.
+2. A store file that is not SQLite → exit 2 `unexpected`, the file unchanged, no copy left → Task 12, where opening the store first reads it (`node:sqlite` opens such a file without error and fails on first use with `file is not a database`).
 3. `QUAESTOR_DB` in a folder that does not exist → exit 2 `unexpected`, nothing created → Task 11.
 4. A data folder whose path holds a space → `backup` works and prints the path → Task 9.
 5. The release's first run, with no `~/.quaestor/` yet → the folder and the store are created, `env: prod` → Task 9.
@@ -76,8 +77,10 @@ Facts these tasks rely on (from `docs/handoff.md`, deleted with this plan's comm
 
 - [ ] **Step 1: Write `export.sh`** (bash, `set -euo pipefail`):
   - Exits 1 with `export: refused: tables/ already exists` when `~/.quaestor/legacy/tables/` exists, so nothing is exported twice.
+  - Waits up to 30 s for `docker exec quaestor-db-1 pg_isready` to succeed (`docker start` returns before Postgres accepts connections), else exits 1 with `export: refused: Postgres is not ready`.
+  - Writes everything into `~/.quaestor/legacy/staging/`, first removing a `staging/` left by a failed run, and only when every step succeeded moves `staging/tables` and `staging/manifest.json` into `~/.quaestor/legacy/` and removes the empty `staging/`. A failed run leaves no `tables/`, so it can be rerun.
   - Sends SQL on stdin to `docker exec -i quaestor-db-1 sh -c 'psql -X -q -v ON_ERROR_STOP=1 -A -t -U "${POSTGRES_USER:-quaestor}" -d "${POSTGRES_DB:-quaestor}"'`.
-  - Lists the tables with `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;` and writes each to `tables/<table>.jsonl`, one row per line, every value as the text Postgres prints or null:
+  - Lists the tables with `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name;` and writes each to `tables/<table>.jsonl`, one row per line, every value as the text of its `row_to_json` rendering or null (numbers keep every digit; timestamps and booleans come as `row_to_json` writes them):
 
     ```sql
     SELECT (SELECT json_object_agg(e.key, e.value) FROM json_each_text(row_to_json(r)) e)
@@ -91,7 +94,7 @@ Facts these tasks rely on (from `docs/handoff.md`, deleted with this plan's comm
     {
       "exportedAt": "<UTC instant>",
       "source": { "container": "quaestor-db-1", "volume": "quaestor_quaestor_pg_data", "lastWrite": "2026-11-08T21:08Z" },
-      "format": "tables/<table>.jsonl: one JSON object per row; every value is the text Postgres prints for it, or null",
+      "format": "tables/<table>.jsonl: one JSON object per row; every value is the text of its row_to_json rendering, or null",
       "dump": { "file": "quaestor-legacy-final-2026-11-23.dump", "bytes": 74597, "sha256": "<hex>" },
       "tables": [{ "name": "account", "file": "tables/account.jsonl", "rows": 11, "sha256": "<hex>" }],
       "accounts": [{ "id": "<id>", "name": "<name>", "currency": "COP", "balance": "<cents>" }]
@@ -129,7 +132,7 @@ Facts these tasks rely on (from `docs/handoff.md`, deleted with this plan's comm
   ```
 
 - [ ] **Step 3:** In `docs/architecture.md` § Legacy data, replace the bullet "Before anything is built, every table is exported once to `~/.quaestor/legacy/` …" with three bullets:
-  - On `<export date>` every table was exported once to `~/.quaestor/legacy/`, outside the repo because it is real financial data, and the folder was made read-only. `tables/<table>.jsonl` holds one JSON object per row, every value the text Postgres printed or null; `manifest.json` holds each file's row count and sha256 and each account's stored balance; the final dump and the `export.sh` and `check.sh` that made and checked the export sit next to them.
+  - On `<export date>` every table was exported once to `~/.quaestor/legacy/`, outside the repo because it is real financial data, and the folder was made read-only. `tables/<table>.jsonl` holds one JSON object per row, every value the text of its `row_to_json` rendering or null (numbers keep every digit); `manifest.json` holds each file's row count and sha256 and each account's stored balance; the final dump and the `export.sh` and `check.sh` that made and checked the export sit next to them.
   - Legacy values are as stored: amounts and balances are integer cents in the account's currency, `settings.usd_cop` has six decimals, and `transaction.transfer_direction` holds `in_` and `out`.
   - The container `quaestor-db-1` (volume `quaestor_quaestor_pg_data`) stays stopped as a frozen copy, with the dump as its fallback. Reading it: `docker start quaestor-db-1`, `docker exec -i quaestor-db-1 sh -c 'psql -U "${POSTGRES_USER:-quaestor}" -d "${POSTGRES_DB:-quaestor}"'`, `docker stop quaestor-db-1`. Nothing writes to it.
 - [ ] **Step 4:** In `docs/backlog.md`, delete "1. The fresh start" and renumber the rest.
@@ -259,7 +262,7 @@ Every "Port from" path below is under `~/me/aletheia`. Port means: read the Alet
 - [ ] **Step 5:** `pnpm check` is green.
 - [ ] **Step 6:** In `docs/architecture.md` § The CLI contract, replace "The exit-code numbering is fixed by the skeleton and documented here." with:
   - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was wrong or a rule said no, so Claude fixes the call and retries; 2 failed, the environment broke, so Claude stops and tells Angelo.
-  - The error is one object on stderr, TOON by default and one line of JSON with `--json`: `error` holds `code` first, then the data needed to act on it, then `message`. Example: `error:` / `  code: invalid_env` / `  source: --env` / `  value: Prod` / `  message: …`, in a code block.
+  - The error is one object on stderr, TOON by default and one line of JSON with `--json`: `error` holds `code` first, then the data needed to act on it, then `message`. The example is pasted, in a code block, from the real stderr of `pnpm quaestor --nope`, never written by hand (TOON quotes some values, `"--env"` for one).
   - Codes so far, each with its exit code: commander's parse errors as snake_case codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1.
 - [ ] **Step 7:** Commit `feat(cli): structured usage errors that exit 1`.
 
@@ -294,7 +297,7 @@ Every "Port from" path below is under `~/me/aletheia`. Port means: read the Alet
     - `backup --bogus exits 1 and opens no store`.
     - `with no data folder backup exits 1 as named_env_disabled and creates nothing`: `dataDir: null` → stderr exactly `encode({ error: { code: 'named_env_disabled', source: 'default', env: 'test', message: 'named environments are disabled here (default: test); set QUAESTOR_DB to a temporary file' } }) + '\n'`.
     - `a data folder whose path holds a space works` (Review Focus 4): `tempDir('quaestor cli-')`.
-    - `a store file that is not SQLite exits 2 as unexpected and is left unchanged` (Review Focus 2): `<dataDir>/test.sqlite` holds `not a store\n` → exit 2, stdout `''`, stderr starts with `env: test\n` and holds `code: unexpected`, the file's sha256 unchanged.
+    - `bare quaestor prints the help on stdout and exits 0` (`main([], ctx)` → `0`, stdout contains `Usage: quaestor` and `backup`, stderr `''`).
     - `an error no class names exits 2 as unexpected with its message`: `clock: () => { throw new Error('clock broke') }` → stderr ends with `encode({ error: { code: 'unexpected', message: 'clock broke' } }) + '\n'`, exit 2.
   - `context.test.ts`: `the source context defaults to test under <repoRoot>/data and the release context to prod under <home>/.quaestor`; `under vitest the contexts have no data folder` (`vars: { VITEST: 'true' }` → `dataDir: null`); `the release's first run creates ~/.quaestor and its store` (Review Focus 5: `releasedContext({ …, vars: {}, home: tempDir(…) })` and `backup` → stderr `env: prod\n`, `<home>/.quaestor/prod.sqlite` and a `<home>/.quaestor/backups/prod-….sqlite` exist).
   - `bin.test.ts`: `the source bin under vitest refuses its default env` (spawn `bin.ts backup` from a temp cwd with the inherited environment → status 1, stderr holds `code: named_env_disabled`).
@@ -307,6 +310,7 @@ Every "Port from" path below is under `~/me/aletheia`. Port means: read the Alet
   - `withStore`: resolve the env, write `env: <name>`, create the store's folder, open, run the action, close in `finally`, return the action's result. `main` writes a command's result with `writeResult(context.stdout, result, json)`.
   - Contexts: source `defaultEnv: 'test'`, `dataDir: <repoRoot>/data`; release `defaultEnv: 'prod'`, `dataDir: <home>/.quaestor`; both `dataDir: null` when `vars.VITEST` is set; `clock: () => new Date()`. `bin.ts` and `released.ts` pass `vars: process.env` (and `home: homedir()` for the release).
   - `backup`: description "copy the current env's store to its backups folder"; it backs up into `context.dataDir`.
+  - An empty argv is parsed as `['--help']`.
 - [ ] **Step 4:** `pnpm check` is green; `pnpm quaestor backup` prints `env: test` on stderr and a path under `data/backups/` on stdout.
 - [ ] **Step 5:** `docs/architecture.md`: in § Environments and data, "Tests use `:memory:` and can never reach a real store." becomes "Tests use temporary stores and folders that they remove, and under vitest both entry points refuse named environments, so a test can never reach a real store."; the contract's codes gain `named_env_disabled` (1) and `unexpected` (2).
 - [ ] **Step 6:** Commit `feat(backup): quaestor backup copies the default env's store`.
@@ -366,7 +370,7 @@ Every "Port from" path below is under `~/me/aletheia`. Port means: read the Alet
 - [ ] **Step 1:** `pnpm add -D drizzle-orm@1.0.0-rc.5`.
 - [ ] **Step 2: Write the failing tests**
   - `migrations.test.ts`: `a new store is created with every migration applied` (`fixture_a` and `fixture_b` exist; `__drizzle_migrations` holds both names); `the shipped migrations folder opens a store`.
-  - `backup.test.ts`: `backup on a new store applies the migrations first` (stderr `env: test`, `migrated: 20261123000000_first`, `migrated: 20261123000100_second`, in that order, exit 0); `in a non-prod env pending migrations apply without a backup` (only the command's own copy in `<dataDir>/backups/`, no `backup:` line); `a prod store with pending migrations is backed up before they apply` (`--env prod`, a clock that advances 1 ms per call → stderr exactly `env: prod`, `backup: <dataDir>/backups/prod-<first instant>.sqlite (before migrating)`, then the two `migrated:` lines; that copy has no fixture table; the command then writes its own copy); `a current store takes no backup and reports nothing about schema` (a second run → stderr only `env: prod`, one new copy).
+  - `backup.test.ts`: `backup on a new store applies the migrations first` (stderr `env: test`, `migrated: 20261123000000_first`, `migrated: 20261123000100_second`, in that order, exit 0); `in a non-prod env pending migrations apply without a backup` (only the command's own copy in `<dataDir>/backups/`, no `backup:` line); `a prod store with pending migrations is backed up before they apply` (`--env prod`, a clock that advances 1 ms per call → stderr exactly `env: prod`, `backup: <dataDir>/backups/prod-<first instant>.sqlite (before migrating)`, then the two `migrated:` lines; that copy has no fixture table; the command then writes its own copy); `a current store takes no backup and reports nothing about schema` (a second run → stderr only `env: prod`, one new copy); `a store file that is not SQLite exits 2 as unexpected and is left unchanged` (Review Focus 2: `<dataDir>/test.sqlite` holds `not a store\n` → exit 2, stdout `''`, stderr starts with `env: test\n` and ends with `encode({ error: { code: 'unexpected', message: 'file is not a database' } }) + '\n'`, the file's sha256 unchanged, nothing in `<dataDir>/backups/`).
 - [ ] **Step 3:** The tests fail.
 - [ ] **Step 4: Implement** as Aletheia's final `openStore`: `drizzle({ client: new DatabaseSync(path) })` from `drizzle-orm/node-sqlite`, `migrate()` from `drizzle-orm/node-sqlite/migrator`, `beforeMigrating` called with the pending names before they apply, `onMigrated` per applied name; `withStore` backs up first only when the env is `prod` and something is pending, and writes `backup: <path> (before migrating)` and `migrated: <name>`. The source context's `migrationsDir` is `<repoRoot>/migrations`, the release's `<entryDir>/../migrations`; the release `backup` test in `context.test.ts` sets `entryDir` to `<repo>/dist`. `runCli` defaults `migrationsDir` to `noMigrations()`.
 - [ ] **Step 5:** `pnpm check` is green.
