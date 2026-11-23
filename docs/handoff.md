@@ -29,8 +29,11 @@ this file, does what it says, and deletes it once the plan exists.
 - Amounts and balances are integer cents (`bigint`) in the account's currency.
   `settings.usd_cop` is `numeric(18,6)`.
 - Trap: `transaction.transfer_direction` holds `in_` and `out`, not `in`.
-- Earlier dumps live in iCloud Drive under `QuaestorBackups/`. The final legacy
-  dump goes there too, besides the copy in `~/.quaestor/legacy/`.
+- The final legacy dump was taken on 2026-11-23, after the last write
+  (2026-11-08 21:08 UTC): `QuaestorBackups/quaestor-legacy-final-2026-11-23.dump`
+  in iCloud Drive. Every earlier dump predates that write.
+- The start path above was checked on 2026-11-23: the container starts without
+  compose and holds every movement.
 
 ## Next step
 

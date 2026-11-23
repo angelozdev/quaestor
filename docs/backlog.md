@@ -9,8 +9,9 @@ is built; nothing here inherits a rule from the legacy app.
 Exception: shared setup, no user-visible behaviour.
 
 - `main` stays as the legacy app, untouched, and is tagged `legacy-final`.
-- A final `pg_dump` of the legacy database, kept with the existing backups and
-  copied into `~/.quaestor/legacy/`.
+- The final legacy dump, already taken on 2026-11-23 as
+  `QuaestorBackups/quaestor-legacy-final-2026-11-23.dump` in iCloud Drive (74,597
+  bytes, 14 tables with data), copied into `~/.quaestor/legacy/`.
 - Every legacy table exported to `~/.quaestor/legacy/`, with a manifest of row
   counts and each account's stored balance, checked against the live database.
   On 2026-11-23: every movement, account, category, category group,
