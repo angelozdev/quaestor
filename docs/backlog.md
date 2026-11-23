@@ -18,11 +18,6 @@ Exception: shared setup, no user-visible behaviour.
   1 meta amendment, 0 meta contributions, 1 settings row.
 - A `CLAUDE.md` for `rebuild` that sends every session to `docs/` first, plus
   `LICENSE`.
-- The legacy leftovers still in the working folder (`backend/`, `frontend/`,
-  `acceptance/`, `features/`, `.dev-data/`, `.engineer/`, `node_modules/`, caches,
-  an empty `quaestor.db`, the legacy lefthook hook in `.git/hooks/`) are handed to Angelo as commands to run, after the
-  export, not deleted by the agent. Then the second block of `.gitignore`, which
-  only hides them, is removed.
 - The Postgres container and its volume stay as a frozen copy. The dump is the
   fallback if they are ever lost.
 

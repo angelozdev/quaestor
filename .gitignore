@@ -8,15 +8,3 @@ node_modules/
 .superpowers/
 .claude/worktrees/
 .claude/scheduled_tasks.lock
-
-.build/
-.dev-data/
-.engineer/
-.impeccable/
-.pytest_cache/
-.ruff_cache/
-acceptance/
-backend/
-features/
-frontend/
-quaestor.db
