@@ -50,7 +50,8 @@ real data.
   `main`, until Angelo decides it replaces `main`.
 - Each delivery is built on its own branch and committed after each green step,
   with Conventional Commits in English.
-- Claude never commits on the trunk, never merges and never pushes. Angelo does.
+- Claude never commits a delivery's code on the trunk, never merges and never
+  pushes. Angelo does.
 - Destructive operations (deleting data, removing files git does not track,
   touching the legacy database) are handed to Angelo as commands to run.
 

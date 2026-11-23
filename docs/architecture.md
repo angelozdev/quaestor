@@ -75,8 +75,12 @@ Written for a reader that is a model, not a person.
 - Drizzle's migrator applies pending migrations at startup, all or nothing.
 - In `prod`, a backup is taken before any migration runs.
 - A store written by a newer release refuses an older one.
-- `quaestor backup` copies the data file on demand. Where backups live is open:
-  iCloud Drive, as the legacy app did, or `~/.quaestor/backups/`, as Aletheia does.
+- `quaestor backup` copies the data file on demand.
+- Backups live in a `backups/` folder next to the store, as in Aletheia: the
+  installed release writes to `~/.quaestor/backups/`, the sources to the repo's
+  `data/backups/`. Decided by Angelo on 2026-11-23. Nothing goes to iCloud Drive,
+  so a copy off the Mac is Time Machine's job; losing the Mac without one loses
+  the store and its backups together.
 
 ## Release
 
