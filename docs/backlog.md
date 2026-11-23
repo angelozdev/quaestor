@@ -20,7 +20,7 @@ Exception: shared setup, no user-visible behaviour.
   `LICENSE`.
 - The legacy leftovers still in the working folder (`backend/`, `frontend/`,
   `acceptance/`, `features/`, `.dev-data/`, `.engineer/`, `node_modules/`, caches,
-  an empty `quaestor.db`) are handed to Angelo as commands to run, after the
+  an empty `quaestor.db`, the legacy lefthook hook in `.git/hooks/`) are handed to Angelo as commands to run, after the
   export, not deleted by the agent. Then the second block of `.gitignore`, which
   only hides them, is removed.
 - The Postgres container and its volume stay as a frozen copy. The dump is the
