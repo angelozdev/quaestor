@@ -94,8 +94,21 @@ Written for a reader that is a model, not a person.
 - The legacy Postgres database is frozen: nothing writes to it again.
 - The legacy app stays on `main`, tagged `legacy-final`; the new project grows on
   the orphan branch `rebuild`, which shares no history with it.
-- Before anything is built, every table is exported once to
-  `~/.quaestor/legacy/`, outside the repo, because it is real financial data.
+- On 2026-11-23 (manifest `exportedAt` 2026-11-24T03:03:33Z) every table was
+  exported once to `~/.quaestor/legacy/`, outside the repo because it is real
+  financial data, and the folder was made read-only. `tables/<table>.jsonl`
+  holds one JSON object per row, every value the text of its `row_to_json`
+  rendering or null (numbers keep every digit); `manifest.json` holds each file's
+  row count and sha256 and each account's stored balance; the final dump and the
+  `export.sh` and `check.sh` that made and checked the export sit next to them.
+- Legacy values are as stored: amounts and balances are integer cents in the
+  account's currency, `settings.usd_cop` has six decimals, and
+  `transaction.transfer_direction` holds `in_` and `out`.
+- The container `quaestor-db-1` (volume `quaestor_quaestor_pg_data`) stays
+  stopped as a frozen copy, with the dump as its fallback. Reading it:
+  `docker start quaestor-db-1`,
+  `docker exec -i quaestor-db-1 sh -c 'psql -U "${POSTGRES_USER:-quaestor}" -d "${POSTGRES_DB:-quaestor}"'`,
+  `docker stop quaestor-db-1`. Nothing writes to it.
 - Each feature, when it is built, imports the legacy rows it needs into its own
   new tables. Nothing is imported before its table exists, and nothing is
   imported twice.
