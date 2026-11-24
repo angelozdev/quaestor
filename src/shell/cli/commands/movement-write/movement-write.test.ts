@@ -11,6 +11,15 @@ import type {
   BookedAccount,
   Fault,
 } from '../../../../../tests/support/arbitraries/arbitraries.types.ts'
+import {
+  addAccount,
+  addCategory,
+  openBooks,
+  spend,
+  write,
+} from '../../../../../tests/support/books/books.ts'
+import { OPENING_DATE } from '../../../../../tests/support/books/books.constants.ts'
+import type { Books, Json } from '../../../../../tests/support/books/books.types.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import {
@@ -22,10 +31,6 @@ import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
 
-const OPENING_DATE = '2026-01-05'
-
-const DAY = '2026-11-20'
-
 const NO_SUCH_CODE = 'zz99'
 
 const AMOUNT_MESSAGE =
@@ -35,55 +40,7 @@ const DATE_MESSAGE = 'must be a date like 2026-11-24'
 
 const NOTHING_TO_WRITE = 'nothing to write: give delete, movements or transfers'
 
-type Json = Record<string, unknown>
-
-type Books = Awaited<ReturnType<typeof openBooks>>
-
-type Spender = Pick<Books, 'wallet' | 'food'>
-
 type Problem = { code: string; item: string; message: string }
-
-async function added(cli: LedgerCli, argv: string[], kind: string): Promise<string> {
-  const { stdout } = await cli.run(argv)
-  return (decode(stdout) as Record<string, { id: string }>)[kind]!.id
-}
-
-function addAccount(cli: LedgerCli, name: string, currency: string, opening: string) {
-  const flags = { emoji: '🏦', type: 'debit', currency, opening, 'opening-date': OPENING_DATE }
-  const argv = Object.entries(flags).flatMap(([flag, value]) => [`--${flag}`, value])
-  return added(cli, ['account', 'add', name, ...argv], 'account')
-}
-
-function addCategory(cli: LedgerCli, name = 'Food') {
-  return added(cli, ['category', 'add', name, '--emoji', '🍽️'], 'category')
-}
-
-async function openBooks(cli = ledgerCli()) {
-  return {
-    cli,
-    wallet: await addAccount(cli, 'Wallet', 'USD', '120.50'),
-    savings: await addAccount(cli, 'Savings', 'USD', '0'),
-    bank: await addAccount(cli, 'Bank', 'COP', '1000000'),
-    food: await addCategory(cli),
-  }
-}
-
-function write(cli: LedgerCli, body: unknown, ...flags: string[]) {
-  const stdin = typeof body === 'string' ? body : JSON.stringify(body)
-  return cli.run(['movement', 'write', ...flags], stdin)
-}
-
-function spend(books: Spender, extra: Json = {}): Json {
-  return {
-    account: books.wallet,
-    date: DAY,
-    payee: 'Uber',
-    amount: '-12.50',
-    currency: 'USD',
-    category: books.food,
-    ...extra,
-  }
-}
 
 function recorded(movement: Json, extra: Json = {}): Json {
   return {
