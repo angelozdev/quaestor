@@ -153,25 +153,35 @@ hand, today's balance is exact and the balances before the reset are not.
 - Tags can go on any movement, transfer halves included (Claude's call). The legacy data
   has none on transfers.
 
-## What Claude can ask `quaestor`
+## Commands
+
+Claude names accounts, categories and movements by code, never by name, because two
+legacy categories share a name; tags go by name. Each write takes `--dry-run`, which does
+everything but commit. The output and error codes are in `docs/architecture.md` and each
+command's `--help`.
 
 Reads:
 
-1. The accounts, with each one's balance today.
-2. Movements, filtered by account, by a date range and by payee text. For one account,
-   each movement comes with the account's balance after it, so Claude can check against
-   a statement ("on 31 October Bank showed 1,500,000.00"). The payee filter is how Claude
-   finds how a payee was categorised before.
-3. The categories and the tags.
+- `quaestor account list`: every account, archived ones included, with its balance today.
+- `quaestor category list` and `quaestor tag list`.
+- `quaestor movement list`, filtered by `--account <code>`, `--from` and `--to` (both
+  days included) and `--payee <text>` (any part of it, ignoring case and accents). The
+  newest come first, at most `--limit` (50 by default), and `total` counts every match.
+  Each row carries its account's balance after it, counting the movements before
+  `--from`, so Claude can check against a statement ("on 31 October Bank showed
+  1,500,000.00"). The payee filter is how Claude finds how a payee was categorised
+  before.
 
-Writes, each with `--dry-run`:
+Writes:
 
-4. One write that records movements and transfers and deletes movements, any number of
-   each, all or nothing. Its dry run shows each change, and each touched account's
-   balance before and after.
-5. Create a tag; create a category.
-6. Create an account.
-7. Import the legacy export, once.
+- `quaestor movement write`, JSON on stdin with `movements`, `transfers` (a `from` and a
+  `to` half each) and `delete` (codes), any number of each, all or nothing. It shows what
+  it deleted and recorded, and each touched account's balance before and after. A write
+  that breaks a rule is refused whole, with every item at fault listed at once.
+- `quaestor tag add <name>` and `quaestor category add <name> --emoji <emoji>`.
+- `quaestor account add <name>` with `--emoji`, `--type`, `--currency`, `--opening` and
+  `--opening-date`.
+- `quaestor import <folder>`, once, into a store with no data.
 
 ## Importing the legacy export
 
@@ -225,19 +235,3 @@ Trimmed from the first proposal on 2026-11-24, at Angelo's agreement: editing in
 duplicate warnings in the dry run, a separate "how was this payee categorised" command,
 archiving an account, the time of day, and account types. Angelo brought account types
 back the same day, for the credit-card behaviour he plans.
-
-## Changes to `architecture.md`
-
-- Money: integer cents hold for every currency, KRW included; the CLI takes an amount as text,
-  as the bank shows it, and gives it back as a number.
-- Legacy data: the difference between a stored balance and its movements is carried as
-  the account's opening balance.
-- Skills: `record-movements` lives in `.claude/skills/` and calls the installed
-  `quaestor`.
-
-## Left to the builder
-
-- Command names, flags, input shape on stdin, output fields, and how Claude refers to an
-  account, a category or a movement. Two legacy categories share a name, one of them archived.
-- The tables and how the opening balance is stored.
-- The order of the slices.

@@ -4,21 +4,14 @@ Only what is still to do, in order. A finished item is deleted; git keeps the
 history. Each feature is rethought from scratch in its own conversation before it
 is built; nothing here inherits a rule from the legacy app.
 
-## 1. Recording movements
-
-The first feature, rethought in its own conversation. It brings the accounts,
-categories, tags and movements it needs from the legacy export and rewrites the
-`record-movements` skill over the CLI. Done when Claude records a real movement
-from a bank screenshot: a dry run first, then the write after Angelo says yes.
-
-## 2. Skeleton tests through the command
+## 1. Skeleton tests through the command
 
 The skeleton's tests that call internal functions (backup names, store
 backups, the connection, migrations, env resolution) are rewritten through the
 command where one reaches them, as `docs/workflow.md` now asks, and the rest
 go to Angelo one by one.
 
-## 3. `rebuild` becomes `main`
+## 2. `rebuild` becomes `main`
 
 GitHub's `main` already holds `rebuild` since 2026-11-24: a force-push of its
 history, scrubbed of every real figure and name, with the legacy branch
@@ -29,7 +22,7 @@ locally). What remains, once recording works: the local branches swap names
 `main`, the legacy container stops for good, and Angelo asks GitHub Support to
 purge the old commits still reachable by SHA.
 
-## 4. Next features
+## 3. Next features
 
 Rethought one at a time once recording works, in an order chosen then. What Angelo
 said he will ask Claude:
