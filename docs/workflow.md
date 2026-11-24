@@ -29,8 +29,12 @@ real data.
 ## Tests
 
 - Test-first: a failing test, the minimum code that passes, then refactor.
-- CLI tests run the real command through its entry point and assert what it
-  prints. Unit tests cover the core and the store adapter.
+- Tests are of behaviour, never of implementation: each runs the real command
+  through its entry point and asserts what it prints and its exit code. No test
+  calls an internal function, reads a table or writes SQL; setup goes through
+  commands too. Only code with no command of its own (the release script, the
+  lint rules) is tested through its exported function. Decided by Angelo on
+  2026-11-24.
 - Every rule and example in `docs/features/<name>.md` is covered by at least one
   CLI test, and the test's name says which.
 - Every money figure has a test in a currency other than COP.

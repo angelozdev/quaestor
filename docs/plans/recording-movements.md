@@ -249,9 +249,13 @@ error:
 - Each failure is a class extending `RefusedError` (exit 1) or `FailedError` (exit 2), and its
   stderr object holds `code` first, then data, then `message`. `ErrorData` widens to
   `Record<string, string | number | string[] | Record<string, string>[]>`.
-- Tests: every rule and example in the spec has a CLI test through `runCli` whose name states
-  the rule; every money figure is also tested in USD; fixtures are invented; no test reads
-  `~/.quaestor`.
+- Tests are of behaviour only. Every test runs `quaestor` through `runCli` and asserts what it
+  prints and its exit code. No test calls a core or store function, reads a table or writes
+  SQL, and setup goes through commands too: an archived account or category comes from
+  importing the fixture, since no command archives. The clock and `randomIndex` are injected
+  as the skeleton injects the clock. Every rule and example in the spec has a test whose name
+  states the rule; every money figure is also tested in USD; fixtures are invented; no test
+  reads `~/.quaestor`. Decided by Angelo on 2026-11-24.
 - Migrations: one per task that changes tables, generated with
   `pnpm db:generate --name <name>`, its SQL read before committing, never edited once
   committed.
@@ -276,13 +280,13 @@ error:
 ## File map
 
 - `src/core/ledger/`: `ledger.ts` (`isCurrency`, `drawCode`, `checkWrite`, `matchesPayee`),
-  `ledger.types.ts`, `ledger.constants.ts`, `ledger.errors.ts`, `ledger.test.ts`, `index.ts`.
-- `src/core/legacy/`: `legacy.ts` (`ledgerFrom`), `legacy.types.ts`, `legacy.test.ts`,
-  `index.ts`.
+  `ledger.types.ts`, `ledger.constants.ts`, `ledger.errors.ts`, `index.ts`.
+- `src/core/legacy/`: `legacy.ts` (`ledgerFrom`), `legacy.types.ts`, `index.ts`.
 - `src/shell/db/database/database.ts`: gains `inTransaction`, the foreign-keys pragma and
   `isUniqueViolation`.
 - `src/shell/db/accounts/`, `categories/`, `tags/`, `movements/` and `legacy-import/`: each
-  holds `<name>.schema.ts` (its tables), `<name>.ts` (its queries) and `<name>.test.ts`.
+  holds `<name>.schema.ts` (its tables), and `<name>.ts` (its
+  queries).
 - `src/shell/legacy/export/`: `export.ts` (`readLegacyExport`), `export.schema.ts`,
   `export.errors.ts`, plus `src/shell/legacy/index.ts`.
 - `src/shell/cli/invocation/stdin/` and `input/`: JSON on stdin, and zod issues turned into
@@ -304,7 +308,7 @@ command groups and the test helper.
 
 - Create: `drizzle.config.ts` (dialect `sqlite`, schema `./src/shell/db/**/*.schema.ts`, out
   `./migrations`); `src/core/ledger/{ledger.constants.ts,ledger.types.ts,index.ts}`;
-  `src/shell/db/accounts/{accounts.schema.ts,accounts.ts,accounts.test.ts}`;
+  `src/shell/db/accounts/{accounts.schema.ts,accounts.ts}`;
   `src/shell/cli/commands/account-list/{account-list.ts,account-list.test.ts}`;
   `tests/support/ledger/{ledger.ts,ledger.types.ts}`; `migrations/<ts>_accounts/`.
 - Modify: `package.json` (`drizzle-kit` 1.0.0-rc.5, `"db:generate": "drizzle-kit generate"`);
@@ -388,7 +392,7 @@ Expected: green, with knip seeing `drizzle.config.ts`.
 
 - Create: `src/shell/cli/commands/account-add/{account-add.ts,account-add.schema.ts,account-add.test.ts}`;
   `src/shell/cli/invocation/input/{input.ts,input.schema.ts,input.constants.ts,input.errors.ts}`;
-  `src/core/ledger/{ledger.ts,ledger.errors.ts,ledger.test.ts}`.
+  `src/core/ledger/{ledger.ts,ledger.errors.ts}`.
 - Modify: `src/shell/db/database/database.ts`, `src/shell/db/accounts/accounts.ts`,
   `src/shell/cli/main/{main.ts,main.types.ts}`, `context.types.ts`, `bin.ts`, `released.ts`,
   `tests/support/run-cli/run-cli.ts`, `docs/architecture.md`.
@@ -410,8 +414,7 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   It throws `AlreadyExistsError('account', name)`, code `already_exists`, data
   `{ kind, name }`, message `account <name> already exists`.
 - Produces: `isCurrency(code: string): boolean`; `AMOUNT_PATTERN`, `centsOf(text: string):
-  number` and `amountOf(cents: number): number`, with unit tests: `centsOf` gives `-1500000`
-  for `-15000`, `-3039` for `-30.39` and `120050` for `1200.5`.
+  number` and `amountOf(cents: number): number`.
 - Produces: `parsed<T>(schema: z.ZodType<T>, value: unknown): T`, which throws
   `InvalidInputError(issues: string[])`: code `invalid_input`, data `{ issues }`, message the
   issues joined by `; `, each issue `<path>: <message>`. Shared pieces in `input.schema.ts`:
@@ -437,10 +440,10 @@ required. Output: `{ dryRun, account: AccountRow }`.
     makes `account list` show balance `120.5`.
   - `an account keeps its emoji apart from its name`: `emoji: 💵`, `name: Wallet`.
   - `an emoji field that is not exactly one emoji is refused`: `🏦🏦` and `A`.
-  - `an account gets a four-character code`: with `randomIndex` yielding `0,1,2,3`, the code is
-    `0123`.
-  - `a code already taken is drawn again`: the second account's first draw repeats the first
-    account's code, and it gets the next draw.
+    - `an account gets a four-character code`: `id` matches `/^[0-9a-hjkmnp-tv-z]{4}$/`.
+  - `two accounts never share a code, even when the draw repeats`: with a `randomIndex` whose
+    second account's first draw repeats the first code, both accounts are created with
+    different codes.
   - `a credit card in debt opens with a negative balance`: `--opening -45000` gives balance
     `-45000`.
   - `--dry-run shows the account and leaves the store unchanged`: stdout `dryRun: true`, and
@@ -510,7 +513,7 @@ null and not blank, `archived` integer boolean not null default false, and a uni
 
 **Files:**
 
-- Create: `src/shell/db/movements/{movements.schema.ts,movements.ts,movements.types.ts,movements.test.ts}`;
+- Create: `src/shell/db/movements/{movements.schema.ts,movements.ts,movements.types.ts}`;
   `src/shell/cli/invocation/stdin/{stdin.ts,stdin.errors.ts,stdin.constants.ts}`;
   `src/shell/cli/commands/movement-write/{movement-write.ts,movement-write.schema.ts,movement-write.test.ts}`;
   `migrations/<ts>_movements/`.
@@ -518,7 +521,7 @@ null and not blank, `archived` integer boolean not null default false, and a uni
   `context.types.ts` (`InvocationContext` also omits `stdin`), `bin.ts` and `released.ts`
   (`stdin: processStdin`), `tests/support/run-cli/run-cli.ts` (default stdin `''`),
   `src/shell/db/accounts/accounts.ts` (balance = opening + sum of movements),
-  `src/core/ledger/{ledger.ts,ledger.types.ts,ledger.errors.ts,ledger.test.ts,index.ts}`,
+  `src/core/ledger/{ledger.ts,ledger.types.ts,ledger.errors.ts,index.ts}`,
   `main.test.ts`, `docs/architecture.md`.
 
 **Interfaces:**
@@ -539,15 +542,13 @@ null and not blank, `archived` integer boolean not null default false, and a uni
     every problem in input order, `item` being `movements[i]` (later `transfers[i].from`,
     `transfers[i].to` and `delete[i]`):
     - `not_found`: `<kind> <id> does not exist`.
-    - `archived`: `<kind> <id> is archived`.
+    
     - `currency_mismatch`: `account <account> holds <expected>, not <currency>`.
     - `before_opening`: `account <account> opens on <openingDate>, after <date>`.
   - `RefusedWriteError(problems: WriteProblem[])` in `ledger.errors.ts`: a `RefusedError`,
     code `refused`, data `{ errors: problems }`, message `1 item refused` or
     `<n> items refused`.
-  - `ledger.test.ts` has one unit test per problem, plus `every problem is returned, in
-    input order`, plus `a movement dated on its account's
-    opening date is accepted` and `an account without an opening date accepts any date`.
+  
 - Produces: `readJson(context: CliContext): Promise<unknown>`, which throws `InvalidJsonError`:
   `invalid_json`, message `invalid JSON on stdin: <reason on one line>`.
 - Produces: `type MovementRow = { id: string; date: string; account: string; payee: string;
@@ -607,16 +608,14 @@ until then their schemas take only `[]`.
   - `a COP amount copied with its thousands dot is refused`: `"-15.000"` (Review Focus 5).
   - `an amount given as a JSON number is refused`: `-15000`.
   - `an impossible date such as 2026-02-30 is refused`.
-    - `every item at fault is listed at once, and nothing is written`: an unknown category in
+  - `every item at fault is listed at once, and nothing is written`: an unknown category in
     `movements[0]` and another currency in `movements[2]` give `refused` with two `errors`, in
     that order. In the tests below, a rule's code is read from `errors[]`.
   - `a movement in another currency than its account's is refused`: `currency_mismatch`.
-  - `an archived account receives no new movement`: `archived`, `account <code> is archived`. The account
-    is
-    archived with `runSql` in the test.
-  - `an archived category receives no new movement`.
+  
   - `an unknown account, category or tag is refused`: `not_found`.
   - `a movement dated before its account's opening date is refused`: `before_opening`.
+  - `a movement dated on its account's opening date is accepted`.
   - `any category takes money in or money out`: +2000 COP into a spending category.
   - `a refusal anywhere in the write writes nothing`: the second of two movements is refused
     and the first is not stored.
@@ -627,8 +626,7 @@ until then their schemas take only `[]`.
 - [ ] **Step 3: Implement** in this order: the schema and migration, stdin, `writeMovements`,
   `movementWriteCommand`, and the balance sum in `listAccounts`.
 - [ ] **Step 4: `pnpm check` green.** Add `invalid_json` and `refused`, both 1, to "Codes so far",
-  with `not_found`, `archived`, `currency_mismatch` and `before_opening` as the codes inside
-  `refused`.
+  with `not_found`, `currency_mismatch` and `before_opening` as the codes inside `refused`.
 - [ ] **Step 5: Commit**: `feat(cli): record movements`.
 
 ---
@@ -638,13 +636,13 @@ until then their schemas take only `[]`.
 **Files:**
 
 - Create: `src/shell/cli/commands/movement-list/{movement-list.ts,movement-list.schema.ts,movement-list.test.ts}`.
-- Modify: `src/shell/db/movements/movements.ts`, `src/core/ledger/{ledger.ts,ledger.test.ts}`.
+- Modify: `src/shell/db/movements/movements.ts`, `src/core/ledger/ledger.ts`.
 
 **Interfaces:**
 
 - Produces in `#core/ledger`: `matchesPayee(payee: string, text: string): boolean`. It
   compares the two strings after NFD normalisation, removing `\p{Diacritic}` and lowercasing.
-  Its unit test: `matchesPayee finds Éxito from exito and Uber from UBER`.
+  
 - Produces: `type MovementFilter = { account?: string; from?: string; to?: string; payee?:
   string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, newest first, by
   `(date, seq)` descending, without deleted rows. `balance` is the row's account's opening amount plus the running sum
@@ -682,7 +680,7 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 **Files:**
 
 - Modify: `movement-write.schema.ts`, `src/shell/db/movements/movements.ts`,
-  `src/core/ledger/{ledger.ts,ledger.errors.ts,ledger.test.ts}`, the tests, and
+  `src/core/ledger/{ledger.ts,ledger.errors.ts}`, the tests, and
   `docs/architecture.md`.
 
 **Interfaces:**
@@ -718,7 +716,7 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 **Files:**
 
 - Modify: `movement-write.schema.ts`, `src/shell/db/movements/movements.ts`,
-  `src/core/ledger/{ledger.ts,ledger.test.ts}`, and the tests.
+  `src/core/ledger/ledger.ts`, and the tests.
 
 **Interfaces:**
 
@@ -731,7 +729,7 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 
 - [ ] **Step 1: Write the failing tests**
   - `a deleted movement leaves every list and its balance returns (USD)`.
-  - `a deleted movement stays stored with its deleted_at`: checked with `selectAll`.
+  
   - `a movement already deleted is not_found`.
   - `deleting one half of a transfer deletes both`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
@@ -752,12 +750,16 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 **Files:**
 
 - Create: `src/core/legacy/*`, `src/shell/legacy/export/*`, `src/shell/legacy/index.ts`,
-  `src/shell/db/legacy-import/{legacy-import.ts,legacy-import.errors.ts,legacy-import.test.ts}`,
+  `src/shell/db/legacy-import/{legacy-import.ts,legacy-import.errors.ts}`,
   `src/shell/cli/commands/import/{import.ts,import.test.ts}`,
   `tests/support/legacy-export/{legacy-export.ts,legacy-export.constants.ts,legacy-export.types.ts}`.
-- Modify: `src/shell/db/index.ts`, `main.ts`, `main.test.ts`, `docs/architecture.md`.
+- Modify: `src/shell/db/index.ts`, `main.ts`, `main.test.ts`, `docs/architecture.md`,
+  `src/core/ledger/ledger.ts`.
 
 **Interfaces:**
+
+- `checkWrite` adds the problem `archived`, `<kind> <id> is archived`, for an archived account
+  or category. It arrives here because only the import brings archived ones.
 
 - Produces in `#core/legacy`:
   - `type LegacyExport = { exportedAt: string; balances: Map<number, number>; accounts:
@@ -831,11 +833,14 @@ and `rows` of each file and each account's `balance`.
   - `a file whose sha256 differs from manifest.json stops the import` (exit 2, store
     unchanged).
   - `a row count that differs from manifest.json stops the import` (exit 2).
-  - A `ledgerFrom` unit test covering signs and openings.
+    - `an archived account receives no new movement`: after importing the fixture,
+    `movement write` into its archived account gives `archived` in `errors[]`.
+  - `an archived category receives no new movement`.
+  - `an account without an opening date accepts a movement on any date`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: `pnpm check` green.** Add `already_imported`, 1 and `export_mismatch`,
-  `balance_mismatch`, 2 to "Codes so far". In "Legacy data", the difference between a stored
+  `balance_mismatch`, 2 to "Codes so far", and `archived` to the codes inside `refused`. In "Legacy data", the difference between a stored
   balance and its movements becomes the account's opening balance.
 - [ ] **Step 5: Commit**: `feat(cli): import the legacy export`.
 - [ ] **Step 6: Run it on a copy of the real data.** Claude runs this, read-only on the export:
@@ -886,8 +891,7 @@ result to Angelo.
     `quaestor <group> <command>`, `quaestor import` and `quaestor backup` from `SKILL.md`, and
     expect `runCli([...words, '--help'])` to exit 0.
   - `the skill never calls pnpm quaestor`.
-    - `the skill states the amount format for COP and USD`: it contains `"45000.50"` and
-    `"10.85"`.
+    
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Write `SKILL.md`.**
 - [ ] **Step 4: `pnpm check` green.**
