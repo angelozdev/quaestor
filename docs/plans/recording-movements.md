@@ -542,13 +542,11 @@ null and not blank, `archived` integer boolean not null default false, and a uni
     every problem in input order, `item` being `movements[i]` (later `transfers[i].from`,
     `transfers[i].to` and `delete[i]`):
     - `not_found`: `<kind> <id> does not exist`.
-    
     - `currency_mismatch`: `account <account> holds <expected>, not <currency>`.
     - `before_opening`: `account <account> opens on <openingDate>, after <date>`.
   - `RefusedWriteError(problems: WriteProblem[])` in `ledger.errors.ts`: a `RefusedError`,
     code `refused`, data `{ errors: problems }`, message `1 item refused` or
     `<n> items refused`.
-  
 - Produces: `readJson(context: CliContext): Promise<unknown>`, which throws `InvalidJsonError`:
   `invalid_json`, message `invalid JSON on stdin: <reason on one line>`.
 - Produces: `type MovementRow = { id: string; date: string; account: string; payee: string;
@@ -602,7 +600,7 @@ until then their schemas take only `[]`.
   - `money in is positive and money out negative`.
   - `--dry-run shows each movement and the balance before and after, and writes nothing`.
   - `a payee and a category are required`.
-    - `a zero amount is refused`: `"0"` and `"0.00"`.
+  - `a zero amount is refused`: `"0"` and `"0.00"`.
   - `an amount is read back as written (USD)`: `"-30.39"` gives `amount: -30.39` and moves
     the balance by -30.39.
   - `a COP amount copied with its thousands dot is refused`: `"-15.000"` (Review Focus 5).
@@ -612,7 +610,6 @@ until then their schemas take only `[]`.
     `movements[0]` and another currency in `movements[2]` give `refused` with two `errors`, in
     that order. In the tests below, a rule's code is read from `errors[]`.
   - `a movement in another currency than its account's is refused`: `currency_mismatch`.
-  
   - `an unknown account, category or tag is refused`: `not_found`.
   - `a movement dated before its account's opening date is refused`: `before_opening`.
   - `a movement dated on its account's opening date is accepted`.
@@ -642,7 +639,6 @@ until then their schemas take only `[]`.
 
 - Produces in `#core/ledger`: `matchesPayee(payee: string, text: string): boolean`. It
   compares the two strings after NFD normalisation, removing `\p{Diacritic}` and lowercasing.
-  
 - Produces: `type MovementFilter = { account?: string; from?: string; to?: string; payee?:
   string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, newest first, by
   `(date, seq)` descending, without deleted rows. `balance` is the row's account's opening amount plus the running sum
@@ -729,7 +725,6 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 
 - [ ] **Step 1: Write the failing tests**
   - `a deleted movement leaves every list and its balance returns (USD)`.
-  
   - `a movement already deleted is not_found`.
   - `deleting one half of a transfer deletes both`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
@@ -891,7 +886,6 @@ result to Angelo.
     `quaestor <group> <command>`, `quaestor import` and `quaestor backup` from `SKILL.md`, and
     expect `runCli([...words, '--help'])` to exit 0.
   - `the skill never calls pnpm quaestor`.
-    
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Write `SKILL.md`.**
 - [ ] **Step 4: `pnpm check` green.**
