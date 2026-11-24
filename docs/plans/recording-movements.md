@@ -458,7 +458,7 @@ null and not blank, `archived` integer boolean not null default false, and a uni
 `WHERE archived = 0`. `tags` has `name` text primary key matching `TAG_PATTERN`.
 
 - [ ] **Step 1: Write the failing tests**
-    - `category add creates a category and category list shows it with its code`:
+  - `category add creates a category and category list shows it with its code`:
     `category add Games --emoji 🎮`.
   - `a category keeps its emoji apart from its name`.
   - `an unknown category name can be added once; a second active one is refused`: exits 1
@@ -680,7 +680,7 @@ Output: `{ movements }`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
   - `a correction is a delete and a new record in one write`: the balances show both changes,
     and the new movement gets a fresh code.
-    - `an unknown movement code is refused and nothing is deleted`: `not_found`, kind
+  - `an unknown movement code is refused and nothing is deleted`: `not_found`, kind
     `movement`.
   - `--dry-run of a delete writes nothing`.
 - [ ] **Step 2: Run them and see them fail.**
@@ -761,7 +761,7 @@ and `rows` of each file and each account's `balance`.
   - `posted movements in an archived account are imported`.
   - `a negative expense becomes money in`.
   - `skipped and planned rows stay in the export`.
-    - `every legacy account, category and movement gets a code, and each movement keeps its
+  - `every legacy account, category and movement gets a code, and each movement keeps its
     account, category, tags and transfer partner`.
   - `a legacy name splits into its emoji and its name, and a name without one keeps none`.
   - `movements of the same day keep their legacy order`.
