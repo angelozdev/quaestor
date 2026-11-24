@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { randomInt } from 'node:crypto'
 import { homedir } from 'node:os'
 import { releasedContext } from './invocation/context/context.ts'
 import type { Release } from './invocation/context/context.types.ts'
@@ -13,6 +14,7 @@ process.exitCode = await main(process.argv.slice(2), {
     vars: process.env,
     home: homedir(),
   }),
+  randomIndex: randomInt,
   stdout: process.stdout,
   stderr: process.stderr,
 })

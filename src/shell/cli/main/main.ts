@@ -1,4 +1,5 @@
-import { Command, CommanderError } from '@commander-js/extra-typings'
+import { Command, CommanderError, Option } from '@commander-js/extra-typings'
+import { accountAddCommand } from '../commands/account-add/account-add.ts'
 import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
 import { failureOf } from '../invocation/failure/failure.ts'
@@ -7,7 +8,7 @@ import { writeFailure, writeResult } from '../invocation/output/output.ts'
 import { COMMAND_GROUPS, ExitCode, HELP_FLAG, JSON_FLAG } from './main.constants.ts'
 import type { CliCommand, CliContext, CommandGroup } from './main.types.ts'
 
-const COMMANDS: CliCommand[] = [backupCommand, accountListCommand]
+const COMMANDS: CliCommand[] = [backupCommand, accountListCommand, accountAddCommand]
 
 const COMMAND_NAMES = [...new Set(COMMANDS.map((command) => command.group ?? command.name))]
 
@@ -44,6 +45,10 @@ type Parent = Program | ReturnType<typeof registerGroup>
 
 function register(root: Program, context: CliContext, parent: Parent, command: CliCommand): void {
   const subcommand = parent.command(command.name).description(command.description)
+  if (command.argument)
+    subcommand.argument(`<${command.argument.name}>`, command.argument.description)
+  for (const { flags, description, defaultValue } of command.options ?? [])
+    subcommand.addOption(new Option(flags, description).default(defaultValue))
   subcommand.action(async () => {
     const options = root.opts()
     const result = await command.run(context, options, subcommand.args, subcommand.opts())

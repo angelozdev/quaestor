@@ -20,8 +20,8 @@ describe('quaestor account list', () => {
       `${encode({
         error: {
           code: 'missing_command',
-          commands: ['list'],
-          message: 'missing command: use one of list',
+          commands: ['list', 'add'],
+          message: 'missing command: use one of list, add',
         },
       })}\n`,
     )

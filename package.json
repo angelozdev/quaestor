@@ -36,6 +36,7 @@
     "drizzle-kit": "1.0.0-rc.5",
     "drizzle-orm": "1.0.0-rc.5",
     "eslint-plugin-sonarjs": "4.2.2",
+    "fast-check": "4.10.2",
     "jscpd": "5.4.2",
     "knip": "6.43.0",
     "oxfmt": "0.74.0",

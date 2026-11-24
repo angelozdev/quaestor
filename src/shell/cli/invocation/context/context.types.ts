@@ -16,4 +16,4 @@ export type EntryDefaults = {
   migrationsDir: string
 }
 
-export type InvocationContext = Omit<CliContext, 'stdout' | 'stderr'>
+export type InvocationContext = Omit<CliContext, 'stdout' | 'stderr' | 'randomIndex'>

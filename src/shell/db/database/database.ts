@@ -1,11 +1,20 @@
 import { DatabaseSync } from 'node:sqlite'
 import { drizzle } from 'drizzle-orm/node-sqlite'
+import { drawCode, type RandomIndex } from '#core/ledger'
 import {
   applyMigrations,
   pendingMigrations,
   refuseUnknownMigrations,
 } from '../migrations/migrations.ts'
-import { BUSY_TIMEOUT_MS, FOREIGN_KEYS_ON } from './database.constants.ts'
+import {
+  BEGIN,
+  BUSY_TIMEOUT_MS,
+  COMMIT,
+  FOREIGN_KEYS_ON,
+  ROLLBACK,
+  SQLITE_CONSTRAINT_PRIMARYKEY,
+  SQLITE_CONSTRAINT_UNIQUE,
+} from './database.constants.ts'
 import type { Database, Store, StoreRequest } from './database.types.ts'
 
 function asStore(db: Database): Store {
@@ -40,4 +49,40 @@ export async function openStore({
 
 export function closeStore(store: Store): void {
   database(store).$client.close()
+}
+
+export function inTransaction<T>(store: Store, dryRun: boolean, work: () => T): T {
+  const { $client: client } = database(store)
+  client.exec(BEGIN)
+  try {
+    const result = work()
+    client.exec(dryRun ? ROLLBACK : COMMIT)
+    return result
+  } catch (error) {
+    client.exec(ROLLBACK)
+    throw error
+  }
+}
+
+function constraintCode(error: unknown): unknown {
+  const cause = error instanceof Error ? error.cause : undefined
+  return cause instanceof Error && 'errcode' in cause ? cause.errcode : undefined
+}
+
+export function isUniqueViolation(error: unknown): boolean {
+  return constraintCode(error) === SQLITE_CONSTRAINT_UNIQUE
+}
+
+function isTakenCode(error: unknown): boolean {
+  return constraintCode(error) === SQLITE_CONSTRAINT_PRIMARYKEY
+}
+
+export function withFreshCode<T>(randomIndex: RandomIndex, insert: (code: string) => T): T {
+  for (;;) {
+    try {
+      return insert(drawCode(randomIndex))
+    } catch (error) {
+      if (!isTakenCode(error)) throw error
+    }
+  }
 }

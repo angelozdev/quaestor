@@ -1,3 +1,4 @@
+import type { RandomIndex } from '#core/ledger'
 import type { COMMAND_GROUPS } from './main.constants.ts'
 
 export type Output = { write(chunk: string): unknown }
@@ -12,6 +13,7 @@ export type CliContext = {
   version: string
   vars: Vars
   clock: Clock
+  randomIndex: RandomIndex
   defaultEnv: string
   releaseOnlyEnvs: string[]
   dataDir: string | null

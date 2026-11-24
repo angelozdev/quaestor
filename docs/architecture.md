@@ -46,7 +46,8 @@ Written for a reader that is a model, not a person.
   `env: custom (<path>)`), `backup: <path> (before migrating)` (only in `prod`, and
   only when a migration is pending), `migrated: <name>` per migration applied, then
   the error object when the command fails. A call refused before a store is chosen,
-  such as a usage error or `invalid_env`, writes only the error object.
+  such as a usage error, `invalid_env` or `invalid_input`, writes only the error
+  object.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `invalid_env`) and the data needed to act on it.
 - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
@@ -75,8 +76,10 @@ Written for a reader that is a model, not a person.
   the `reason`; `migration_failed`, 2, when a pending migration fails, with the
   `migration` and the `reason`, the store left as it was; `unknown_migrations`, 2,
   when the store holds migrations this code does not ship, with their `names`, the
-  store left as it was; `unexpected`, 2, for any error no class names, with its
-  message.
+  store left as it was; `already_exists`, 1, when a name is already taken, with the
+  `kind` and the `name`; `invalid_input`, 1, when a flag or a field is wrong, with
+  every problem as `issues`, each `<field>: <what is wrong>`, found before a store
+  is opened; `unexpected`, 2, for any error no class names, with its message.
 - Quaestor's own failures are error classes in their module's `.errors.ts`, each
   extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`
   with its stable code. Commander's parse errors are not classes: `failure.ts` maps
@@ -103,6 +106,9 @@ Written for a reader that is a model, not a person.
   `4500050`.
 - One rounding function, under test, is the only place a fraction of a cent is
   resolved.
+- Integer cents hold for every currency, KRW included. The CLI takes an amount as
+  text, as the bank shows it (`"45000.50"`, at most two decimals, no thousands
+  separator), and gives it back as a number (`45000.5`).
 - How the dollar rate is stored is decided by the currency feature. The legacy rate has six decimals, and a six-decimal integer rate
   times a USD balance in cents passes JavaScript's safe-integer limit: 30,000.00 USD
   is 3,000,000 cents, and 3,000,000 × 4,000,000,000 (a rate of 4,000.000000) = 1.2 ×
