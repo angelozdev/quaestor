@@ -43,7 +43,23 @@ Written for a reader that is a model, not a person.
 - stderr carries diagnostics and an `env: <name>` line on every command.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `currency_mismatch`) and the data needed to act on
-  it. The exit-code numbering is fixed by the skeleton and documented here.
+  it.
+- Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
+  wrong or a rule said no, so Claude fixes the call and retries; 2 failed, the
+  environment broke, so Claude stops and tells Angelo.
+- The error is one object on stderr, TOON by default and one line of JSON with
+  `--json`: `error` holds `code` first, then the data needed to act on it, then
+  `message`. The example is pasted from the real stderr of `pnpm quaestor --nope`,
+  never written by hand (TOON quotes some values, `"--env"` for one):
+
+  ```
+  error:
+    code: unknown_option
+    message: unknown option '--nope'
+  ```
+
+- Codes so far, each with its exit code: commander's parse errors as snake_case
+  codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit

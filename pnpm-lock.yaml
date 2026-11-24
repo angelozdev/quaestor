@@ -14,6 +14,9 @@ importers:
       '@oxlint/plugins':
         specifier: 1.89.0
         version: 1.89.0
+      '@toon-format/toon':
+        specifier: 4.4.0
+        version: 4.4.0
       '@types/node':
         specifier: 26.6.5
         version: 26.6.5
@@ -836,6 +839,9 @@ packages:
 
   '@sonarsource/analyzer-commons-configurations@2.31.0-5284':
     resolution: {integrity: sha512-ruk3blMs9BE9RNSp9LPpWZAIjxJmq4Cp00E3cELIHz7Kym3WxdWGRlKOMYLRQ5tJg/de7jN5AtEElY3bGIfTcw==}
+
+  '@toon-format/toon@4.4.0':
+    resolution: {integrity: sha512-A6UcsVoWbNdhdLNhJbe6JpRlocmf/DZGG57fur3bd8oQtsjBaKWo2hHbOU2zTuy+byUmLIOyP1xJeitopCZzpQ==}
 
   '@tybys/wasm-util@0.10.5':
     resolution: {integrity: sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA==}
@@ -2151,6 +2157,8 @@ snapshots:
   '@rolldown/pluginutils@1.1.1': {}
 
   '@sonarsource/analyzer-commons-configurations@2.31.0-5284': {}
+
+  '@toon-format/toon@4.4.0': {}
 
   '@tybys/wasm-util@0.10.5':
     dependencies:
