@@ -25,6 +25,7 @@ export async function runCli(argv: string[], overrides: CliOverrides = {}): Prom
     defaultEnv: 'test',
     releaseOnlyEnvs: [],
     dataDir: null,
+    stdin: () => Promise.resolve(''),
     ...overrides,
     migrationsDir: overrides.migrationsDir ?? noMigrations(),
     stdout,

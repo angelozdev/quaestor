@@ -8,18 +8,24 @@ import type { LedgerCli } from './ledger.types.ts'
 export function ledgerCli(overrides: CliOverrides = {}): LedgerCli {
   const dataDir = tempDir('quaestor-ledger-')
   let migrated: Promise<void> | undefined
-  const cli = (argv: string[]) =>
-    runCli(argv, { dataDir, defaultEnv: 'test', migrationsDir: SHIPPED_MIGRATIONS, ...overrides })
+  const cli = (argv: string[], stdin = '') =>
+    runCli(argv, {
+      dataDir,
+      defaultEnv: 'test',
+      migrationsDir: SHIPPED_MIGRATIONS,
+      ...overrides,
+      stdin: () => Promise.resolve(stdin),
+    })
   const warmUp = async () => {
     const { code, stderr } = await cli(WARM_UP_ARGV)
     if (code !== 0) throw new Error(`the warm-up exited ${code}: ${stderr}`)
   }
   return {
     dataDir,
-    async run(argv) {
+    async run(argv, stdin) {
       migrated ??= warmUp()
       await migrated
-      return cli(argv)
+      return cli(argv, stdin)
     },
   }
 }

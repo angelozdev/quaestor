@@ -14,6 +14,7 @@ export type CliContext = {
   vars: Vars
   clock: Clock
   randomIndex: RandomIndex
+  stdin: () => Promise<string>
   defaultEnv: string
   releaseOnlyEnvs: string[]
   dataDir: string | null

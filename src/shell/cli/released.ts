@@ -3,6 +3,7 @@ import { randomInt } from 'node:crypto'
 import { homedir } from 'node:os'
 import { releasedContext } from './invocation/context/context.ts'
 import type { Release } from './invocation/context/context.types.ts'
+import { processStdin } from './invocation/stdin/stdin.ts'
 import { main } from './main/main.ts'
 
 declare const __QUAESTOR_RELEASE__: Release
@@ -15,6 +16,7 @@ process.exitCode = await main(process.argv.slice(2), {
     home: homedir(),
   }),
   randomIndex: randomInt,
+  stdin: processStdin,
   stdout: process.stdout,
   stderr: process.stderr,
 })
