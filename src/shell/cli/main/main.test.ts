@@ -1,8 +1,14 @@
 import { encode } from '@toon-format/toon'
+import { readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { runCli } from '../../../../tests/support/run-cli/run-cli.ts'
+import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
-const ONE_ERROR_OBJECT = /^error:\n {2}code: \S+\n {2}message: .+\n$/
+const MISSING_COMMAND = {
+  code: 'missing_command',
+  commands: ['backup'],
+  message: 'missing command: use one of backup',
+}
 
 describe('main', () => {
   it('--help prints usage with --env, --json and backup on stdout and exits 0', async () => {
@@ -75,18 +81,36 @@ describe('main', () => {
     )
   })
 
-  it.for([
-    ['an option and no command', ['--env', 'test']],
-    ['an unexpected argument for a command', ['backup', 'extra']],
-  ])(
-    'with %s stderr holds the one structured error and no help text',
-    async ([, argv], { expect }) => {
-      const { code, stdout, stderr } = await runCli(argv as string[])
+  it.for([['--env', 'test'], ['--json']])(
+    'global options and no command exit 1 as missing_command and open no store (%j)',
+    async (argv, { expect }) => {
+      const dataDir = tempDir('quaestor-cli-')
+
+      const { code, stdout, stderr } = await runCli(argv, { dataDir })
 
       expect(code).toBe(1)
       expect(stdout).toBe('')
-      expect(stderr).toMatch(ONE_ERROR_OBJECT)
-      expect(stderr).not.toContain('Usage:')
+      expect(stderr).toBe(
+        argv.includes('--json')
+          ? `${JSON.stringify({ error: MISSING_COMMAND })}\n`
+          : `${encode({ error: MISSING_COMMAND })}\n`,
+      )
+      expect(readdirSync(dataDir)).toEqual([])
     },
   )
+
+  it('an unexpected argument for a command exits 1 as excess_arguments with nothing else on stderr', async () => {
+    const { code, stdout, stderr } = await runCli(['backup', 'extra'])
+
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `${encode({
+        error: {
+          code: 'excess_arguments',
+          message: "too many arguments for 'backup'. Expected 0 arguments but got 1: extra.",
+        },
+      })}\n`,
+    )
+  })
 })

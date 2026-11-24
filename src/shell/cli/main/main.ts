@@ -7,6 +7,8 @@ import type { CliCommand, CliContext } from './main.types.ts'
 
 const COMMANDS: CliCommand[] = [backupCommand]
 
+const COMMAND_NAMES = COMMANDS.map((command) => command.name)
+
 function ignore(): void {}
 
 function program(context: CliContext) {
@@ -44,7 +46,7 @@ export async function main(argv: string[], context: CliContext): Promise<number>
   } catch (error) {
     if (error instanceof CommanderError && error.exitCode === ExitCode.Success)
       return ExitCode.Success
-    const { exitCode, payload } = failureOf(error)
+    const { exitCode, payload } = failureOf(error, COMMAND_NAMES)
     writeFailure(context.stderr, payload, argv.includes(JSON_FLAG))
     return exitCode
   }

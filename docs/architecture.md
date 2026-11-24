@@ -61,9 +61,10 @@ Written for a reader that is a model, not a person.
 
 - Codes so far, each with its exit code: commander's parse errors as snake_case
   codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1;
-  `named_env_disabled`, 1, because the default env needs a data folder and the
-  entry point has none (under vitest); `unexpected`, 2, for any error no class
-  names, with its message.
+  `missing_command`, 1, when a call has global options and no command, with the
+  `commands` it can use; `named_env_disabled`, 1, because the default env needs a
+  data folder and the entry point has none (under vitest); `unexpected`, 2, for
+  any error no class names, with its message.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit

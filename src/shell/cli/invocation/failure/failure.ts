@@ -5,8 +5,10 @@ import {
   CAMEL_CASE_BOUNDARY,
   COMMANDER_CODE_PREFIX,
   COMMANDER_MESSAGE_PREFIX,
+  HELP_ERROR_CODE,
   UNEXPECTED_CODE,
 } from './failure.constants.ts'
+import { MissingCommandError } from './failure.errors.ts'
 import type { Failure } from './failure.types.ts'
 
 function usageCode(commanderCode: string): string {
@@ -39,8 +41,15 @@ function unexpectedFailure(error: unknown): Failure {
   }
 }
 
-export function failureOf(error: unknown): Failure {
-  if (error instanceof CommanderError) return usageFailure(error)
+function isMissingCommand(error: CommanderError): boolean {
+  return error.code === HELP_ERROR_CODE && error.exitCode === ExitCode.Refused
+}
+
+export function failureOf(error: unknown, commands: string[]): Failure {
+  if (error instanceof CommanderError)
+    return isMissingCommand(error)
+      ? refusedFailure(new MissingCommandError(commands))
+      : usageFailure(error)
   if (error instanceof RefusedError) return refusedFailure(error)
   return unexpectedFailure(error)
 }
