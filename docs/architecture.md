@@ -85,6 +85,12 @@ Written for a reader that is a model, not a person.
   `release: refused: …` (exit 1) and `release: failed: …` (exit 2) lines.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
+- Claude runs one `quaestor` call at a time. Two calls at once can collide: copies
+  taken in the same millisecond share a name, so one exits 2 `backup_not_written`
+  with a reason ending in `already exists`, and two first runs with a pending
+  migration can both try to apply it. Either way the store is left correct.
+  Decided by Angelo on 2026-11-24, because parallel calls are too unlikely to
+  pay for handling them.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit
   and returns what would change, including each touched account's balance before
   and after.
