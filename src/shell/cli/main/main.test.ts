@@ -22,6 +22,28 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
+  it('--help lists backup as the only command', async () => {
+    const { stdout } = await runCli(['--help'])
+
+    const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
+    expect(commands).toEqual([
+      expect.stringMatching(/^ {2}backup\s+copy the current env's store to its backups folder$/),
+    ])
+  })
+
+  it.for([['help'], ['help', 'nope']])(
+    '%j exits 1 as unknown_command because help is not a command',
+    async (argv, { expect }) => {
+      const { code, stdout, stderr } = await runCli(argv)
+
+      expect(code).toBe(1)
+      expect(stdout).toBe('')
+      expect(stderr).toBe(
+        `${encode({ error: { code: 'unknown_command', message: "unknown command 'help'" } })}\n`,
+      )
+    },
+  )
+
   it('--version from the sources prints dev', async () => {
     const { code, stdout, stderr } = await runCli(['--version'])
 

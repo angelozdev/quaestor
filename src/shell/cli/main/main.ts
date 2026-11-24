@@ -16,6 +16,7 @@ function program(context: CliContext) {
     .version(context.version, '-V, --version')
     .option('--env <name>', 'use <name>.sqlite in the data folder')
     .option(JSON_FLAG, 'JSON instead of TOON on stdout')
+    .helpCommand(false)
     .exitOverride()
     .configureOutput({
       writeOut: (text) => context.stdout.write(text),
