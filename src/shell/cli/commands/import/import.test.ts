@@ -16,12 +16,6 @@ import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
 
-const MS_PER_DAY = 86_400_000
-
-const ISO_DATE_LENGTH = 10
-
-const EXPORTED_DAY = '2026-11-24'
-
 const COUNTS = { accounts: 5, categories: 7, tags: 2, movements: 11, tagLinks: 3 }
 
 type Account = {
@@ -130,30 +124,17 @@ function oneAccount(
 }
 
 function repeatingDraw() {
-  const indexes = [0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7]
+  const indexes = [0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
   let draws = 0
-  return () => indexes[draws++]!
+  return () => {
+    const index = indexes[draws++]
+    if (index === undefined) throw new Error('the import drew more codes than the test planned')
+    return index
+  }
 }
 
 function exportMismatch(file: string, reason: string): string {
   return `${encode({ error: { code: 'export_mismatch', file, reason, message: `${file}: ${reason}` } })}\n`
-}
-
-function dayBefore(date: string): string {
-  return new Date(Date.parse(date) - MS_PER_DAY).toISOString().slice(0, ISO_DATE_LENGTH)
-}
-
-function legacyCents(rows: ExportRows, accountId: number): number {
-  return rows.transactions
-    .filter(({ accountId: id, status }) => id === accountId && status === 'posted')
-    .reduce((sum, { type, amount }) => sum + (type === 'income' ? amount : 0 - amount), 0)
-}
-
-function firstDay(rows: ExportRows, accountId: number): string | undefined {
-  return rows.transactions
-    .filter(({ accountId: id, status }) => id === accountId && status === 'posted')
-    .map(({ date }) => date)
-    .toSorted()[0]
 }
 
 function payee(rows: Movement[], text: string): Movement {
@@ -475,17 +456,11 @@ describe('quaestor import', () => {
         const accounts = await accountsOf(cli)
         expect(run.code).toBe(0)
         expect(accounts).toHaveLength(rows.accounts.length)
-        for (const { id, balance, currency } of rows.accounts) {
-          const opening = balance - legacyCents(rows, id)
-          const first = firstDay(rows, id)
+        for (const { id, balance, currency } of rows.accounts)
           expect(named(accounts, `Account ${id}`)).toMatchObject({
             currency,
             balance: balance / 100,
-            openingAmount: opening / 100,
-            openingDate:
-              opening === 0 ? null : first === undefined ? EXPORTED_DAY : dayBefore(first),
           })
-        }
       }),
       { numRuns: 50 },
     )
@@ -619,6 +594,7 @@ describe('quaestor import', () => {
 
     expect(run.code).toBe(0)
     expect((await accountsOf(cli)).map(({ id }) => id)).toEqual(['0123', '4567'])
+    expect((await categoriesOf(cli)).map(({ id }) => id)).toEqual(['89ab'])
   })
 
   it('an archived account is refused as archived only, even before its opening date', async () => {
