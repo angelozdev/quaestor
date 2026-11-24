@@ -66,10 +66,10 @@ Written for a reader that is a model, not a person.
 
 - Codes so far, each with its exit code: commander's parse errors as snake_case
   codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1;
-  `missing_command`, 1, when a call has global options and no command, with the
-  `commands` it can use; `invalid_env`, 1, when `--env`, `QUAESTOR_ENV` or
-  `QUAESTOR_DB` holds a value that cannot name a store, with the `source` and the
-  `value`; `named_env_disabled`, 1, because a named env needs a data folder and the
+  `missing_command`, 1, when a call has global options and no command, or names a
+  command group and no command in it, with the `commands` it can use; `invalid_env`,
+  1, when `--env`, `QUAESTOR_ENV` or `QUAESTOR_DB` holds a value that cannot name a
+  store, with the `source` and the `value`; `named_env_disabled`, 1, because a named env needs a data folder and the
   entry point has none (under vitest), with the `source` and the `env`;
   `backups_disabled`, 1, because a backup needs that same data folder;
   `backup_not_written`, 2, when a backup cannot be written, with the `folder` and

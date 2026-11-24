@@ -71,7 +71,7 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
    JSON
    ```
 
-   `delete`, `movements`, `transfers`, `tags` and `note` may be left out, but a write names at least one change. Add `delete` only to correct a movement already recorded: it holds the old code, and the corrected record goes in `movements` of the same write.
+   `delete`, `movements`, `transfers`, `tags` and `note` may be left out, but a write names at least one change. `movement list` prints `tags` as one space-joined text (`trip:lima-2026 who:alex`), while stdin wants a list (`["trip:lima-2026", "who:alex"]`): split it. Add `delete` only to correct a movement already recorded: it holds the old code, and the corrected record goes in `movements` of the same write.
 
    ```json
    {
@@ -82,14 +82,14 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
    }
    ```
 
-   The output lists `deleted`, `recorded` and `balances[]` with `account`, `currency`, `before` and `after`.
+   The output lists `deleted`, `recorded` and `balances[]` with `account`, `currency`, `before` and `after`. A dry run's codes are not the write's: codes are drawn again on the real write, so never carry a `recorded[].id` from a dry run into a later step.
 
 7. Compare before asking for the yes. For every touched account, set `balances[].after` beside the bank's balance, to the cent. `after` counts every movement the account has, whatever its date: if some are newer than the bank's balance, take them out of `after` first (`quaestor movement list --account n8d3 --from <next day>`).
    - Equal: show Angelo each movement (date, payee, amount, category, tags), each deletion, and each account's balance before and after next to the bank's, and ask for the yes.
    - Different: do not ask for the yes. Recheck your transcription first: a row missed or dropped wrongly, a wrong sign, a thousands dot read as a decimal, a pending row. Fix it and dry run again.
    - Still different: the cause is unknown, so there is no yes yet. Do not conclude that the gap predates this write: only a balance the bank itself showed for an earlier point, such as a running-balance column or an earlier statement, can show that, and the bank's balance minus these rows is not one. Investigate with Angelo what is missing, one question per message: a fee, interest, a refund, a movement no screenshot shows. Once found, record it as a real movement with its category (bank interest, a refund, a fee) in the same write, and dry run again. Never add a balancing row and never write with a known difference.
 
-8. After the yes, run the same `quaestor movement write` without `--dry-run`, with the same JSON.
+8. After the yes, run the same `quaestor movement write` without `--dry-run`, with the same JSON. The codes in its output are the real ones, and every later step (a correction, a deletion) uses them.
 
 9. Compare the final balance with the bank's.
 
@@ -112,6 +112,7 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
   | KRW ₩15.000 | `"15000"` |
 
 - On a COP or KRW screen the dot separates thousands. `"-15.000"` is refused for its three decimals, but `"-15.00"` passes silently as 15 pesos; only the balance comparison catches it.
+- On a credit account the bank shows what is owed as a positive number, and the balance is minus that: owing 1.000.000 is `-1000000`. A purchase is negative and a payment into the card is positive.
 - A movement is always in its account's currency, and `currency` must match it. A purchase in another currency is what the account was charged: 500 MXN paid from a USD account that was charged 28.00 is `"-28.00"` in `USD`. Put the original amount in `note` when Angelo wants it.
 - Nothing converts between currencies and nothing adds two currencies together.
 
@@ -144,11 +145,15 @@ quaestor category add Bakery --emoji 🥐 --dry-run
 quaestor account add Savings --emoji 🏦 --type savings --currency COP --opening 500000 --opening-date 2026-11-01 --dry-run
 ```
 
-After the yes, run the same command without `--dry-run`. A category is an emoji and an English name. A tag is lowercase letters, digits, colons and dashes. An account's opening balance is what the bank showed the day before the first row you will record; ask Angelo for it.
+After the yes, run the same command without `--dry-run`. The dry run's code for a new account or category is not the real one: use the code the real command prints in the movement write. A category is an emoji and an English name. A tag is lowercase letters, digits, colons and dashes. An account's opening balance is what the bank showed the day before the first row you will record; ask Angelo for it.
 
 ## When a command fails
 
-- Exit 1, with stdout empty: nothing was written. stderr has `error:` with a `code` (`refused`, `invalid_input` or `invalid_json`) and every item at fault, such as `movements[2]` or `transfers[0].from`. Fix every listed item, dry run again, and show Angelo the new dry run.
+- Exit 1, with stdout empty: nothing was written. stderr has `error:` with a `code`.
+  - `refused`, `invalid_input` and `invalid_json` list every item at fault, such as `movements[2]` or `transfers[0].from`. Fix every listed item, dry run again, and show Angelo the new dry run.
+  - `already_exists` means the account, category or tag name is taken: use the existing one, and read its code from the matching `list`.
+  - The usage codes (`unknown_option`, `unknown_command`, `option_missing_argument`, `missing_command`) mean the command line is wrong: read the message, fix it and run again.
+- A command that fails before opening a store (`invalid_input`, `invalid_json`, `export_mismatch`, the usage codes) prints no `env:` line. No `env:` line means no store was opened, not that the wrong store was.
 - Exit 2: stop and tell Angelo what stderr said. Do not retry or work around it.
 
 ## Not part of a session
