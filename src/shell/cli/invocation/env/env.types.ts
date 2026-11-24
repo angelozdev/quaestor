@@ -4,6 +4,7 @@ export type EnvSources = {
   flag: string | undefined
   vars: Vars
   defaultEnv: string
+  releaseOnlyEnvs: string[]
   dataDir: string | null
 }
 

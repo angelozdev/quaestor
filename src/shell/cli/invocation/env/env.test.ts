@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { resolveEnv } from './env.ts'
 import type { Env, EnvSources } from './env.types.ts'
 
-const base: EnvSources = { flag: undefined, vars: {}, defaultEnv: 'test', dataDir: '/d' }
+const base: EnvSources = {
+  flag: undefined,
+  vars: {},
+  defaultEnv: 'test',
+  releaseOnlyEnvs: [],
+  dataDir: '/d',
+}
 
 const everySource = { QUAESTOR_DB: '/tmp/x.sqlite', QUAESTOR_ENV: 'staging' }
 

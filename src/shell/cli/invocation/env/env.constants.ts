@@ -6,6 +6,8 @@ export const ENV_VAR = 'QUAESTOR_ENV'
 
 export const ENV_FLAG = '--env'
 
+export const INSTALLED_RELEASE = 'the installed quaestor'
+
 export const DEFAULT_SOURCE = 'default'
 
 export const STORE_EXTENSION = '.sqlite'

@@ -43,6 +43,7 @@ export async function withStore(
     flag: options.env,
     vars: context.vars,
     defaultEnv: context.defaultEnv,
+    releaseOnlyEnvs: context.releaseOnlyEnvs,
     dataDir: context.dataDir,
   })
   writeEnvLine(context.stderr, env)

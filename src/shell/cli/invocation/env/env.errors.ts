@@ -1,5 +1,5 @@
 import { RefusedError } from '#core/errors'
-import { CUSTOM_ENV, DB_VAR } from './env.constants.ts'
+import { DB_VAR } from './env.constants.ts'
 
 class InvalidEnvError extends RefusedError {
   constructor(source: string, value: string, problem: string) {
@@ -18,8 +18,8 @@ export class EnvNameFormatError extends InvalidEnvError {
 }
 
 export class ReservedEnvNameError extends InvalidEnvError {
-  constructor(source: string) {
-    super(source, CUSTOM_ENV, `${CUSTOM_ENV} is reserved for ${DB_VAR}`)
+  constructor(source: string, name: string, owner: string) {
+    super(source, name, `${name} is reserved for ${owner}`)
   }
 }
 

@@ -11,6 +11,7 @@ export type CliContext = {
   vars: Vars
   clock: Clock
   defaultEnv: string
+  releaseOnlyEnvs: string[]
   dataDir: string | null
   migrationsDir: string
 }

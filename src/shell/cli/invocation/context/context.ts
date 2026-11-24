@@ -26,7 +26,7 @@ function outsideVitest(vars: Vars, path: string): string | null {
 }
 
 function invocationContext(
-  { version, defaultEnv, dataDir, migrationsDir }: EntryDefaults,
+  { version, defaultEnv, releaseOnlyEnvs, dataDir, migrationsDir }: EntryDefaults,
   vars: Vars,
 ): InvocationContext {
   return {
@@ -34,6 +34,7 @@ function invocationContext(
     vars,
     clock: () => new Date(),
     defaultEnv,
+    releaseOnlyEnvs,
     dataDir: outsideVitest(vars, dataDir),
     migrationsDir,
   }
@@ -44,6 +45,7 @@ export function sourceContext({ repoRoot, vars }: SourceInvocation): InvocationC
     {
       version: DEV_VERSION,
       defaultEnv: SOURCE_DEFAULT_ENV,
+      releaseOnlyEnvs: [RELEASE_DEFAULT_ENV],
       dataDir: join(repoRoot, SOURCE_DATA_FOLDER),
       migrationsDir: join(repoRoot, MIGRATIONS_FOLDER),
     },
@@ -61,6 +63,7 @@ export function releasedContext({
     {
       version: releaseVersion(release),
       defaultEnv: RELEASE_DEFAULT_ENV,
+      releaseOnlyEnvs: [],
       dataDir: join(home, RELEASE_DATA_FOLDER),
       migrationsDir: join(entryDir, '..', MIGRATIONS_FOLDER),
     },

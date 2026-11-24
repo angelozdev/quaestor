@@ -12,6 +12,7 @@ export async function runCli(argv: string[], overrides: CliOverrides = {}): Prom
     vars: {},
     clock: () => new Date(FIXED_INSTANT),
     defaultEnv: 'test',
+    releaseOnlyEnvs: [],
     dataDir: null,
     ...overrides,
     migrationsDir: overrides.migrationsDir ?? noMigrations(),

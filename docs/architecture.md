@@ -116,8 +116,9 @@ Written for a reader that is a model, not a person.
   shuts out other users, and the Mac has one person account. Decided by Angelo on
   2026-11-24.
 - Running the sources (`pnpm quaestor`) defaults to `test` and keeps its stores in
-  the repo's `data/<env>.sqlite`, ignored by git. Even `--env prod` from the sources
-  is the repo's `data/prod.sqlite`, never the release's `~/.quaestor/prod.sqlite`.
+  the repo's `data/<env>.sqlite`, ignored by git. The sources refuse `prod`, from
+  `--env` or `QUAESTOR_ENV`, as `invalid_env` (exit 1): `prod` only ever means the
+  installed release's `~/.quaestor/prod.sqlite`. Decided by Angelo on 2026-11-24.
 - Tests use temporary stores and folders that they remove, and under vitest both
   entry points refuse named environments, so a test can never reach a real store.
 - Resolution order: `--env`, then `QUAESTOR_DB` (an absolute path), then

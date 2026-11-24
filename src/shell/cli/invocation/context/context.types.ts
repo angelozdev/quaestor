@@ -11,6 +11,7 @@ export type ReleasedInvocation = Invocation & { release: Release; entryDir: stri
 export type EntryDefaults = {
   version: string
   defaultEnv: string
+  releaseOnlyEnvs: string[]
   dataDir: string
   migrationsDir: string
 }
