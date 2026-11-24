@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  FAILING_MIGRATIONS,
   FIXTURE_MIGRATIONS,
   MIGRATION_FILE,
   SHIPPED_MIGRATIONS,
@@ -36,6 +37,24 @@ describe('migrations', () => {
       '20261123000000_first',
       '20261123000100_second',
     ])
+  })
+
+  it('a failing migration keeps none of the pending ones', async () => {
+    const path = join(tempDir('quaestor-store-'), 'store.sqlite')
+    const migrationsDir = writeMigrations(tempDir('quaestor-migrations-'), FAILING_MIGRATIONS)
+
+    await expect(openTestStore(path, migrationsDir)).rejects.toThrow(
+      new RegExp(
+        `^${RegExp.escape('migration 20261123000100_second failed: near "this": syntax error')}$`,
+      ),
+    )
+    expect(
+      firstColumn(
+        path,
+        "select name from sqlite_master where type = 'table' and name like 'fixture_%'",
+      ),
+    ).toEqual([])
+    expect(firstColumn(path, 'select name from __drizzle_migrations')).toEqual([])
   })
 
   it('the shipped migrations folder opens a store', async () => {

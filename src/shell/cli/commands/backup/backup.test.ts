@@ -4,11 +4,15 @@ import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileS
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { closeStore } from '#shell/db'
-import { FIXTURE_MIGRATIONS } from '../../../../../tests/support/fixture-migrations/fixture-migrations.constants.ts'
+import {
+  FAILING_MIGRATIONS,
+  FIXTURE_MIGRATIONS,
+} from '../../../../../tests/support/fixture-migrations/fixture-migrations.constants.ts'
 import {
   noMigrations,
   writeMigrations,
 } from '../../../../../tests/support/fixture-migrations/fixture-migrations.ts'
+import type { FixtureMigrations } from '../../../../../tests/support/fixture-migrations/fixture-migrations.types.ts'
 import { FIXED_INSTANT } from '../../../../../tests/support/run-cli/run-cli.constants.ts'
 import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
 import type { CliOverrides } from '../../../../../tests/support/run-cli/run-cli.types.ts'
@@ -37,8 +41,8 @@ function backup(argv: string[] = [], overrides: CliOverrides = {}) {
   return runCli(['backup', ...argv], { defaultEnv: 'test', dataDir, ...overrides })
 }
 
-function fixtureMigrations(): string {
-  return writeMigrations(tempDir('quaestor-migrations-'), FIXTURE_MIGRATIONS)
+function fixtureMigrations(migrations: FixtureMigrations = FIXTURE_MIGRATIONS): string {
+  return writeMigrations(tempDir('quaestor-migrations-'), migrations)
 }
 
 function advancingClock(): () => Date {
@@ -324,6 +328,80 @@ describe('quaestor backup', () => {
       'prod-2026-11-23T21-04-05-123Z.sqlite',
       'prod-2026-11-23T21-04-05-124Z.sqlite',
     ])
+  })
+
+  it('a prod store with pending migrations and an unwritable backups folder exits 2 as backup_not_written and migrates nothing', async () => {
+    const folder = join(dataDir, 'backups')
+    mkdirSync(folder, { mode: 0o500 })
+    lockedFolder = folder
+
+    const { code, stdout, stderr } = await backup(['--env', 'prod'], {
+      migrationsDir: fixtureMigrations(),
+    })
+
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toMatch(
+      new RegExp(
+        `^${RegExp.escape(`env: prod\nerror:\n  code: backup_not_written\n  folder: ${folder}\n  reason: `)}`,
+      ),
+    )
+    expect(stderr).not.toContain('migrated:')
+    expect(readdirSync(folder)).toEqual([])
+    expect(fixtureTables(join(dataDir, 'prod.sqlite'))).toEqual([])
+  })
+
+  it('a failing migration in prod exits 2 as migration_failed and keeps the copy taken before it', async () => {
+    const folder = join(dataDir, 'backups')
+    const beforeMigrating = join(folder, 'prod-2026-11-23T21-04-05-123Z.sqlite')
+
+    const { code, stdout, stderr } = await backup(['--env', 'prod'], {
+      migrationsDir: fixtureMigrations(FAILING_MIGRATIONS),
+      clock: advancingClock(),
+    })
+
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `env: prod\nbackup: ${beforeMigrating} (before migrating)\n${encode({
+        error: {
+          code: 'migration_failed',
+          migration: '20261123000100_second',
+          reason: 'near "this": syntax error',
+          message: 'migration 20261123000100_second failed: near "this": syntax error',
+        },
+      })}\n`,
+    )
+    expect(readdirSync(folder)).toEqual(['prod-2026-11-23T21-04-05-123Z.sqlite'])
+    expect(fixtureTables(join(dataDir, 'prod.sqlite'))).toEqual([])
+  })
+
+  it('a store with migrations this code does not know exits 2 as unknown_migrations and is unchanged', async () => {
+    const store = join(dataDir, 'prod.sqlite')
+    closeStore(await openTestStore(store, fixtureMigrations()))
+    const before = sha256(store)
+
+    const { code, stdout, stderr } = await backup(['--env', 'prod'], {
+      migrationsDir: fixtureMigrations({
+        '20261123000000_first': FIXTURE_MIGRATIONS['20261123000000_first'],
+        '20261123000200_third': 'CREATE TABLE fixture_c (id integer primary key);',
+      }),
+      clock: advancingClock(),
+    })
+
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `env: prod\n${encode({
+        error: {
+          code: 'unknown_migrations',
+          names: ['20261123000100_second'],
+          message: 'the store has migrations this code does not know: 20261123000100_second',
+        },
+      })}\n`,
+    )
+    expect(sha256(store)).toBe(before)
+    expect(readdirSync(dataDir)).toEqual(['prod.sqlite'])
   })
 
   it('a current store takes no backup and reports nothing about schema', async () => {

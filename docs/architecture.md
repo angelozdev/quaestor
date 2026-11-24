@@ -70,8 +70,11 @@ Written for a reader that is a model, not a person.
   `value`; `named_env_disabled`, 1, because a named env needs a data folder and the
   entry point has none (under vitest); `backups_disabled`, 1, because a backup needs
   that same data folder; `backup_not_written`, 2, when a backup cannot be written,
-  with the `folder` and the `reason`; `unexpected`, 2, for any error no class names,
-  with its message.
+  with the `folder` and the `reason`; `migration_failed`, 2, when a pending
+  migration fails, with the `migration` and the `reason`, the store left as it was;
+  `unknown_migrations`, 2, when the store holds migrations this code does not ship,
+  with their `names`, the store left as it was; `unexpected`, 2, for any error no
+  class names, with its message.
 - Every failure is an error class in its module's `.errors.ts` that extends
   `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors` with its
   stable code.
