@@ -215,5 +215,5 @@ Written for a reader that is a model, not a person.
 ## Skills
 
 - Skills never touch the database; every read and write goes through `quaestor`.
-- `record-movements` is rewritten over the CLI by the recording feature. Until
-  then, nothing records movements.
+- `record-movements` lives in `.claude/skills/` and calls the installed `quaestor`, never
+  `pnpm quaestor`, so it works only with Claude open in this repo.
