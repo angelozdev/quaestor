@@ -46,8 +46,12 @@ These are hard to change once real data sits on them.
   that Claude never sees: they are ordered by `(date, seq)`. Every list carries `created_at`,
   `updated_at` and `deleted_at`, and deleting marks `deleted_at` instead of removing the row.
   Decided by Angelo on 2026-11-24.
-- **Amounts are whole numbers in the currency's smallest unit**, in both input and output:
-  COP 45,000.50 is `4500050`, USD 10.85 is `1085`. Every movement given to `quaestor` states
+- **Amounts are written as the bank shows them.** Claude gives each amount as text with a dot
+  before at most two decimals and no thousands separator: COP $15.000 is `"-15000"`, USD
+  $30,39 is `"-30.39"`, KRW ₩15.000 is `"-15000"`. `quaestor` gives it back as a number,
+  `-15000` or `-30.39`. A COP amount copied as `"-15.000"` has three decimals and is refused.
+  Every currency is stored as integer cents, KRW included, so `quaestor` keeps no table of
+  decimals per currency; Node's says COP has none. Decided by Angelo on 2026-11-24. Every movement given to `quaestor` states
   its currency, and `quaestor` refuses one that differs from its account's.
 - **Reading movements.** Each row carries its account's balance after it, even when the list
   mixes accounts; tags come out as one space-joined text so the rows stay one TOON table, and
@@ -59,18 +63,19 @@ These are hard to change once real data sits on them.
 
 Every store command writes `env: <name>` on stderr first. The examples below were rendered
 with `@toon-format/toon` `encode`, using invented values; `--json` gives the same object on
-one line.
+one line. Amounts come out as numbers in the currency's units: `-15000` is −15.000 COP and
+`95.5` is 95,50 USD.
 
 `quaestor account list`, exit 0:
 
 ```
 accounts[3]{id,emoji,name,type,currency,archived,openingAmount,openingDate,balance}:
-  w2k9,💵,Wallet,debit,USD,false,12000,2026-01-05,9550
-  n8d3,🏦,Bank,debit,COP,false,0,null,150000000
-  c4tz,💳,Card,credit,COP,false,0,2026-11-24,-4500000
+  w2k9,💵,Wallet,debit,USD,false,120,2026-01-05,95.5
+  n8d3,🏦,Bank,debit,COP,false,0,null,1500000
+  c4tz,💳,Card,credit,COP,false,0,2026-11-24,-45000
 ```
 
-`quaestor account add Savings --emoji 🏦 --type savings --currency COP --opening 50000000 --opening-date 2026-11-24 --dry-run`,
+`quaestor account add Savings --emoji 🏦 --type savings --currency COP --opening 500000 --opening-date 2026-11-24 --dry-run`,
 exit 0:
 
 ```
@@ -82,9 +87,9 @@ account:
   type: savings
   currency: COP
   archived: false
-  openingAmount: 50000000
+  openingAmount: 500000
   openingDate: 2026-11-24
-  balance: 50000000
+  balance: 500000
 ```
 
 `quaestor category list` and `quaestor tag list`, exit 0:
@@ -114,17 +119,18 @@ cross-currency transfer, exit 0:
 ```
 dryRun: true
 deleted[1]{id,date,account,payee,amount,currency,category,tags,note,transfer}:
-  h4vw,2026-11-20,n8d3,Uber,-2500000,COP,x9ta,"",null,null
+  h4vw,2026-11-20,n8d3,Uber,-25000,COP,x9ta,"",null,null
 recorded[3]{id,date,account,payee,amount,currency,category,tags,note,transfer}:
-  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null
-  m3pe,2026-11-21,w2k9,To Bank,-10000,USD,null,"",null,3qxa
-  3qxa,2026-11-21,n8d3,From Wallet,40000000,COP,null,"",null,m3pe
+  k7f2,2026-11-20,n8d3,Uber,-15000,COP,x9ta,"",null,null
+  m3pe,2026-11-21,w2k9,To Bank,-100,USD,null,"",null,3qxa
+  3qxa,2026-11-21,n8d3,From Wallet,400000,COP,null,"",null,m3pe
 balances[2]{account,currency,before,after}:
-  n8d3,COP,111000000,152000000
-  w2k9,USD,19550,9550
+  n8d3,COP,1110000,1520000
+  w2k9,USD,195.5,95.5
 ```
 
-The stdin it reads:
+The stdin it reads. Every amount is text, as the bank shows it, with a dot before at most two
+decimals and no thousands separator:
 
 ```json
 {
@@ -136,7 +142,7 @@ The stdin it reads:
       "account": "n8d3",
       "date": "2026-11-20",
       "payee": "Uber",
-      "amount": -1500000,
+      "amount": "-15000",
       "currency": "COP",
       "category": "x9ta"
     }
@@ -147,14 +153,14 @@ The stdin it reads:
         "account": "w2k9",
         "date": "2026-11-21",
         "payee": "To Bank",
-        "amount": -10000,
+        "amount": "-100",
         "currency": "USD"
       },
       "to": {
         "account": "n8d3",
         "date": "2026-11-21",
         "payee": "From Wallet",
-        "amount": 40000000,
+        "amount": "400000",
         "currency": "COP"
       }
     }
@@ -170,8 +176,8 @@ are listed, newest first:
 ```
 total: 2
 movements[2]{id,date,account,payee,amount,currency,category,tags,note,transfer,balance}:
-  3qxa,2026-11-21,n8d3,From Wallet,40000000,COP,null,"trip:lima-2026",cambio a 4.000,m3pe,150000000
-  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null,110000000
+  3qxa,2026-11-21,n8d3,From Wallet,400000,COP,null,"trip:lima-2026",cambio a 4.000,m3pe,1500000
+  k7f2,2026-11-20,n8d3,Uber,-15000,COP,x9ta,"",null,null,1100000
 ```
 
 `quaestor import ~/.quaestor/legacy --dry-run`, exit 0:
@@ -185,7 +191,7 @@ imported:
   movements: 9
   tagLinks: 2
 openings[1]{account,amount,currency,date}:
-  w2k9,12000,USD,2026-01-05
+  w2k9,120,USD,2026-01-05
 ```
 
 A refusal leaves stdout empty and exits 1. The error goes on stderr after the `env:` line:
@@ -209,11 +215,13 @@ error:
   message: "account w2k9 holds USD, not COP"
 ```
 
+An amount copied from a COP screen as `"-15.000"`:
+
 ```
 error:
   code: invalid_input
-  issues[2]: "movements[0].amount: must not be 0","movements[1].date: must be a date like 2026-11-24"
-  message: "movements[0].amount: must not be 0; movements[1].date: must be a date like 2026-11-24"
+  issues[2]: "movements[0].amount: must be an amount like \"-15000\" or \"-30.39\": no thousands separator, at most 2 decimals","movements[1].date: must be a date like 2026-11-24"
+  message: "movements[0].amount: must be an amount like \"-15000\" or \"-30.39\": no thousands separator, at most 2 decimals; movements[1].date: must be a date like 2026-11-24"
 ```
 
 ## Global Constraints
@@ -226,7 +234,12 @@ error:
   `shortcut:` notes).
 - `src/core` imports no `node:*`, `drizzle-orm` or `#shell/*`. Only `src/shell/db` imports
   `node:sqlite` and `drizzle-orm`. `tests/support/store` may use `node:sqlite`.
-- An amount is a non-zero JavaScript integer, signed: positive money in, negative money out. A
+- An amount is signed: positive money in, negative money out. Stored, it is a non-zero integer
+  in cents for every currency. Claude writes it as text matching
+  `AMOUNT_PATTERN = /^-?\d+(\.\d{1,2})?$/`, turned into cents by `centsOf(text)` without
+  floating point, and reads it as a number, `amountOf(cents) = cents / 100`. Both live in
+  `#core/ledger`, and every amount Claude reads (`amount`, `balance`, `openingAmount`,
+  `before`, `after`) goes through `amountOf`. A
   currency is a member of `Intl.supportedValuesOf('currency')`. A date is `YYYY-MM-DD` and a
   real calendar day (`z.iso.date()`).
 - A code is `ID_LENGTH = 4` characters from `ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'`,
@@ -260,9 +273,10 @@ error:
 3. A delete list can name the same code twice, or both halves of one transfer. Each movement
    is deleted once and listed once. Tested in Task 7.
 4. Empty stdin on `movement write` is `invalid_json`, not a crash or an empty write. Tested in Task 4.
-5. Amount scale: a COP amount given ×100 too small or too large is only caught by the balance
-   after. The skill makes Claude compare `balances[].after` with the bank before asking for the
-   yes, and states each currency's scale. Tested in Task 9.
+5. Amount format: `"-15.000"` copied from a COP screen, where the dot separates thousands, is
+   refused for its three decimals (Task 4). `"-15.00"` would still pass as 15 pesos and only the
+   balance after shows it, so the skill makes Claude compare `balances[].after` with the bank
+   before asking for the yes, and states the format (Task 9).
 
 ## File map
 
@@ -400,13 +414,17 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   `updated_at` to `now`.
   It throws `AlreadyExistsError('account', name)`, code `already_exists`, data
   `{ kind, name }`, message `account <name> already exists`.
-- Produces: `isCurrency(code: string): boolean`.
+- Produces: `isCurrency(code: string): boolean`; `AMOUNT_PATTERN`, `centsOf(text: string):
+  number` and `amountOf(cents: number): number`, with unit tests: `centsOf` gives `-1500000`
+  for `-15000`, `-3039` for `-30.39` and `120050` for `1200.5`.
 - Produces: `parsed<T>(schema: z.ZodType<T>, value: unknown): T`, which throws
   `InvalidInputError(issues: string[])`: code `invalid_input`, data `{ issues }`, message the
   issues joined by `; `, each issue `<path>: <message>`. Shared pieces in `input.schema.ts`:
   - `requiredText`: `is required`.
   - `dateText`: `must be a date like 2026-11-24`.
-  - `flagInteger`: a flag string that is an integer, `must be a whole number`.
+    - `amountText`: text matching `AMOUNT_PATTERN`, turned into cents, `must be an amount like
+    "-15000" or "-30.39": no thousands separator, at most 2 decimals`. A JSON number gets the
+    same message.
   - `currencyCode`: `must be an ISO 4217 code such as COP`.
   - `oneOf(values)`: `must be one of savings, debit, credit or cash`.
   - `emojiText`: exactly one emoji, `/^\p{RGI_Emoji}$/v`, `must be one emoji such as 🏦`.
@@ -420,23 +438,24 @@ required. Output: `{ dryRun, account: AccountRow }`.
 
 - [ ] **Step 1: Write the failing tests**
   - `an account is created with its opening balance as its balance (USD)`:
-    `Wallet --emoji 💵 --type debit --currency USD --opening 12000 --opening-date 2026-01-05`
-    makes `account list` show balance `12000`.
+    `Wallet --emoji 💵 --type debit --currency USD --opening 120.50 --opening-date 2026-01-05`
+    makes `account list` show balance `120.5`.
   - `an account keeps its emoji apart from its name`: `emoji: 💵`, `name: Wallet`.
   - `an emoji field that is not exactly one emoji is refused`: `🏦🏦` and `A`.
   - `an account gets a four-character code`: with `randomIndex` yielding `0,1,2,3`, the code is
     `0123`.
   - `a code already taken is drawn again`: the second account's first draw repeats the first
     account's code, and it gets the next draw.
-  - `a credit card in debt opens with a negative balance`: `--opening -4500000` gives balance
-    `-4500000`.
+  - `a credit card in debt opens with a negative balance`: `--opening -45000` gives balance
+    `-45000`.
   - `--dry-run shows the account and leaves the store unchanged`: stdout `dryRun: true`, and
     `account list` is still empty.
   - `a currency that is not ISO 4217 is refused`: `--currency UDS` exits 1 `invalid_input` with
     issue `currency: must be an ISO 4217 code such as COP`.
   - `a type outside savings, debit, credit and cash is refused`.
   - `an account name already taken is refused`: exits 1 `already_exists`, kind `account`.
-  - `an opening amount that is not a whole number is refused`: `--opening 12.5`.
+    - `an opening amount with a thousands separator or more than two decimals is refused`:
+    `--opening 15.000` and `--opening 1,500`.
   - `the opening date is required`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement** `accountAddCommand`: parse the flags with zod, then
@@ -444,8 +463,8 @@ required. Output: `{ dryRun, account: AccountRow }`.
   `isUniqueViolation` to `AlreadyExistsError`. The `main.ts` registration passes `args` and
   the command's own `opts()`.
 - [ ] **Step 4: `pnpm check` green.** Add `already_exists`, 1 and `invalid_input`, 1 to
-  "Codes so far" in `architecture.md`. In its Money section, an amount becomes an integer in
-  its currency's ISO 4217 minor unit.
+  "Codes so far" in `architecture.md`. In its Money section, add: integer cents hold for every
+  currency, KRW included, and the CLI takes an amount as text and gives it back as a number.
 - [ ] **Step 5: Commit**: `feat(cli): account add with a dry run`.
 
 ---
@@ -570,7 +589,7 @@ these fields:
 - `account` and `category`: codes (strings);
 - `date`;
 - `payee`: required text;
-- `amount`: a non-zero integer (`must not be 0`);
+- `amount`: `amountText`, not 0 (`must not be 0`);
 - `currency`: text;
 - `tags`: optional, `TAG_PATTERN`, no repeats (`is repeated`);
 - `note`: optional string.
@@ -583,7 +602,11 @@ until then their schemas take only `[]`.
   - `money in is positive and money out negative`.
   - `--dry-run shows each movement and the balance before and after, and writes nothing`.
   - `a payee and a category are required`.
-  - `a zero amount is refused`.
+    - `a zero amount is refused`: `"0"` and `"0.00"`.
+  - `an amount is read back as written (USD)`: `"-30.39"` gives `amount: -30.39` and moves
+    the balance by -30.39.
+  - `a COP amount copied with its thousands dot is refused`: `"-15.000"` (Review Focus 5).
+  - `an amount given as a JSON number is refused`: `-15000`.
   - `an impossible date such as 2026-02-30 is refused`.
   - `a movement in another currency than its account's is refused`: `currency_mismatch`.
   - `an archived account receives no new movement`: `archived`, kind `account`. The account is
@@ -672,8 +695,8 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 
 - [ ] **Step 1: Write the failing tests**
   - `a transfer writes both halves, each in its own account`.
-  - `a transfer across currencies carries both amounts and converts nothing`: -10000 USD and
-    +40000000 COP.
+  - `a transfer across currencies carries both amounts and converts nothing`: `"-100"` USD and
+    `"400000"` COP.
   - `each half keeps its own date, payee and note`: from on 2026-11-10, to on 2026-11-11.
   - `a transfer has no category`: `category` on a half is `is not a field`.
   - `a transfer between an account and itself is refused`: `same_account_transfer`.
@@ -820,8 +843,8 @@ QUAESTOR_DB=$SCRATCH/copy.sqlite pnpm -s quaestor import ~/.quaestor/legacy
 QUAESTOR_DB=$SCRATCH/copy.sqlite pnpm -s quaestor account list --json > $SCRATCH/accounts.json
 ```
 
-Then compare each account's `balance` with `~/.quaestor/legacy/manifest.json` in cents, with a
-script, not by eye, matching each account by `<emoji> <name>` against the manifest's name. Expected: every account equal, and the openings Angelo approved, which Claude keeps outside the repo. Report the
+Then compare each account's `balance`, times 100 and rounded, with the cents in
+`~/.quaestor/legacy/manifest.json`, with a script, not by eye, matching each account by `<emoji> <name>` against the manifest's name. Expected: every account equal, and the openings Angelo approved, which Claude keeps outside the repo. Report the
 result to Angelo.
 
 ---
@@ -842,8 +865,8 @@ result to Angelo.
 - A frontmatter description that triggers on screenshots and on "anotar", "registrar
   movimientos" or "poner al día la cuenta".
 - The session from the spec, step by step, with the command for each step.
-- The amount scale per currency: COP 45.000,50 → `4500050`, USD 10,85 → `1085`, KRW 15.000 →
-  `15000`.
+- The amount format: as the bank shows it, a dot before the decimals and no thousands
+  separator: COP $45.000,50 → `"45000.50"`, USD $10,85 → `"10.85"`, KRW ₩15.000 → `"15000"`.
 - Before asking for the yes, a comparison of each `balances[].after` with the bank's balance
   (Review Focus 5).
 - The rules:
@@ -859,7 +882,8 @@ result to Angelo.
     `quaestor <group> <command>`, `quaestor import` and `quaestor backup` from `SKILL.md`, and
     expect `runCli([...words, '--help'])` to exit 0.
   - `the skill never calls pnpm quaestor`.
-  - `the skill states the amount scale for COP and USD`: it contains `4500050` and `1085`.
+    - `the skill states the amount format for COP and USD`: it contains `"45000.50"` and
+    `"10.85"`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Write `SKILL.md`.**
 - [ ] **Step 4: `pnpm check` green.**
@@ -873,7 +897,8 @@ result to Angelo.
   `rebuild` and `pnpm release`; he runs both.
 - [ ] **Step 2:** After the release, Claude runs `quaestor backup`, then
   `quaestor import ~/.quaestor/legacy --dry-run`, then `quaestor import ~/.quaestor/legacy`.
-  Then `quaestor account list --json`, comparing it with `manifest.json` in cents as in Task 8.
+  Then `quaestor account list --json`, comparing it with `manifest.json` in cents as in
+  Task 8.
 - [ ] **Step 3:** The first real session. Angelo sends a bank screenshot, Claude follows the
   skill with a dry run first, and writes after his yes. That meets the spec's Done.
 - [ ] **Step 4:** Cleanup, in one commit on a branch:

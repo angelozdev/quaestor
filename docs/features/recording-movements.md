@@ -100,8 +100,14 @@ by Angelo on 2026-11-24:
 
 ## Amounts and currencies
 
-- An amount is an integer in its currency's minor unit, as ISO 4217 defines it: COP
-  45,000.50 is `4500050`, USD 10.85 is `1085`, KRW 15,000 is `15000`.
+- Claude writes an amount as the bank shows it, with a dot before at most two decimals and no
+  thousands separator: COP $45.000,50 is `"45000.50"`, USD $10,85 is `"10.85"`, KRW ₩15.000 is
+  `"15000"`. `quaestor` gives it back as a number: `45000.5`, `10.85`, `15000`. A COP amount
+  copied as `"15.000"` has three decimals and is refused. Decided by Angelo on 2026-11-24.
+- Every currency is stored as integer cents, KRW included, so `quaestor` keeps no table of
+  decimals per currency: Node's says COP has none, which would drop the legacy centavos. A
+  currency with three decimals cannot be written (Claude's call: none of Angelo's accounts
+  uses one).
 - It is signed: positive is money into the account, negative is money out. Zero is
   refused (Claude's call).
 - A movement is always in its account's currency. A purchase made in another currency
@@ -228,8 +234,8 @@ back the same day, for the credit-card behaviour he plans.
 
 ## Changes to `architecture.md`
 
-- Money: an amount is an integer in its currency's ISO 4217 minor unit, not always
-  cents.
+- Money: integer cents hold for every currency, KRW included; the CLI takes an amount as text,
+  as the bank shows it, and gives it back as a number.
 - Legacy data: the difference between a stored balance and its movements is carried as
   the account's opening balance.
 - Skills: `record-movements` lives in `.claude/skills/` and calls the installed
