@@ -29,6 +29,9 @@ said he will ask Claude:
 - how much he has available this month;
 - whether he can afford something, such as a trip next year.
 
+Credit accounts get behaviour of their own, such as a cut date and a payment date.
+Loan is a loan typed `credit`, so that feature decides whether it gets them too.
+
 Legacy rows that no feature claims yet (funds, metas, planned payments, repeating
 rules, the dollar rate) wait in the export and are imported only if a feature
 brings them back.
