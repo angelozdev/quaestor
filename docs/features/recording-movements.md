@@ -20,7 +20,8 @@ legacy data over and lets Claude keep it up to date from bank screenshots.
 ## Not in this feature
 
 Budgets, repeating charges and planned rows, metas, funds, the dollar rate, spending
-reports, category groups and category flags, account types, archiving an account,
+reports, category groups and category flags, any behaviour tied to an account type
+(such as a card's cut and payment dates), archiving an account,
 splitting one charge across categories, the time of day, editing a movement in place,
 duplicate detection in code, the original foreign amount as data, and any total across
 currencies.
@@ -51,15 +52,18 @@ The skill drives it; `quaestor` answers.
 
 ## Accounts
 
-- An account has a name, a currency, an archived mark and an opening balance.
+- An account has a name, a type, a currency, an archived mark and an opening balance.
+- The type is `savings`, `debit`, `credit` or `cash`. Nothing depends on it yet: a later
+  feature gives credit accounts their cut and payment dates. Decided by Angelo on
+  2026-11-24.
 - A currency is any ISO 4217 code; anything else, such as `UDS`, is refused.
 - The balance is the opening balance plus the sum of the account's movements. It is
   always computed and never stored, so it cannot drift the way Card C's did when it
   was reset by hand.
 - A credit card in debt has a negative balance: Card B is at -1,000,000.00 COP.
 - An archived account receives no new movement. Card A and Trip fund arrive archived.
-- A new account is created with its name, currency, and opening balance and date, the
-  opening balance being 0 when the account starts empty.
+- A new account is created with its name, type, currency, and opening balance and date,
+  the opening balance being 0 when the account starts empty.
 
 ## Opening balance
 
@@ -163,7 +167,7 @@ Writes, each with `--dry-run`:
   `manifest.json`, and validates every row with zod before writing anything.
 - It refuses a store that already holds data, so nothing is imported twice.
 - What comes over:
-  - every account, some of them archived. The legacy account type is dropped.
+  - every account, some of them archived, each with its legacy type: `debit` (Wallet, Bank), `credit` (Card A, Card C, Loan, Card B), `savings` (Reserve, Trip fund, Earnings, Invest) and `cash` (Loans).
   - every category, some of them archived, with
     no posted movement in an archived one. Their groups and flags stay in the export
     for the reports feature.
@@ -201,7 +205,8 @@ How a movement is stored:
 
 Trimmed from the first proposal on 2026-11-24, at Angelo's agreement: editing in place,
 duplicate warnings in the dry run, a separate "how was this payee categorised" command,
-archiving an account, the time of day, and account types.
+archiving an account, the time of day, and account types. Angelo brought account types
+back the same day, for the credit-card behaviour he plans.
 
 ## Changes to `architecture.md`
 
