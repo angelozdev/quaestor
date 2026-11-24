@@ -19,3 +19,5 @@ export const INSTALLED_BIN = 'quaestor'
 export const HELP_FLAG = '--help'
 
 export const VERSION_FLAG = '--version'
+
+export const COMMAND_SEPARATOR = ' '

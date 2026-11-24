@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { ExitCode, releaseVersion, type Release } from '#shell/cli'
 import { BUNDLE_FILE } from '../build/build.constants.ts'
-import type { Runner } from '../runner/runner.types.ts'
+import type { RunResult, Runner } from '../runner/runner.types.ts'
 import {
   CHECK_SCRIPT,
   CHECK_SEPARATOR,
@@ -17,6 +17,7 @@ import {
 } from './release.constants.ts'
 import {
   CheckFailedError,
+  CommandFailedError,
   MissingMigrationsError,
   NotOnTrunkError,
   PackedHelpFailedError,
@@ -31,13 +32,28 @@ async function printed(run: Runner, command: string, args: string[], cwd?: strin
   return (await run(command, args, { cwd })).stdout.trim()
 }
 
+async function checked(
+  run: Runner,
+  command: string,
+  args: string[],
+  cwd?: string,
+): Promise<RunResult> {
+  const result = await run(command, args, { cwd })
+  if (result.status !== ExitCode.Success) throw new CommandFailedError(command, args, result.status)
+  return result
+}
+
+async function checkedPrinted(run: Runner, command: string, args: string[], cwd?: string) {
+  return (await checked(run, command, args, cwd)).stdout.trim()
+}
+
 async function assertOnTrunk({ run, repoRoot }: ReleaseDeps): Promise<void> {
-  const branch = await printed(run, 'git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot)
+  const branch = await checkedPrinted(run, 'git', ['rev-parse', '--abbrev-ref', 'HEAD'], repoRoot)
   if (branch !== TRUNK_BRANCH) throw new NotOnTrunkError(branch)
 }
 
 async function assertCleanTree({ run, repoRoot }: ReleaseDeps): Promise<void> {
-  const changes = await printed(run, 'git', ['status', '--porcelain'], repoRoot)
+  const changes = await checkedPrinted(run, 'git', ['status', '--porcelain'], repoRoot)
   if (changes) throw new UncommittedChangesError()
 }
 
@@ -55,24 +71,24 @@ async function assertChecksPass({ run, packageJson, repoRoot }: ReleaseDeps): Pr
 }
 
 async function releaseOfHead({ run, packageJson, repoRoot }: ReleaseDeps): Promise<Release> {
-  const commit = await printed(run, 'git', ['rev-parse', '--short', 'HEAD'], repoRoot)
+  const commit = await checkedPrinted(run, 'git', ['rev-parse', '--short', 'HEAD'], repoRoot)
   return { version: packageJson.version, commit, repoRoot }
 }
 
 async function pack({ run, packageJson, repoRoot }: ReleaseDeps): Promise<string> {
-  await run('pnpm', ['pack', '--pack-destination', RELEASE_DIR], { cwd: repoRoot })
+  await checked(run, 'pnpm', ['pack', '--pack-destination', RELEASE_DIR], repoRoot)
   const tarballName = `${packageJson.name}-${packageJson.version}${TARBALL_EXTENSION}`
   return join(repoRoot, RELEASE_DIR, tarballName)
 }
 
 async function assertShipsMigrations(run: Runner, tarball: string): Promise<void> {
-  const entries = (await printed(run, 'tar', ['-tzf', tarball])).split('\n')
+  const entries = (await checkedPrinted(run, 'tar', ['-tzf', tarball])).split('\n')
   const prefix = `${PACKED_ROOT}/${PACKED_MIGRATIONS}`
   if (!entries.some((entry) => entry.startsWith(prefix))) throw new MissingMigrationsError()
 }
 
 async function smokeRun(run: Runner, tarball: string, dir: string, expected: string) {
-  await run('tar', ['-xzf', tarball, '-C', dir])
+  await checked(run, 'tar', ['-xzf', tarball, '-C', dir])
   const bin = join(dir, PACKED_ROOT, BUNDLE_FILE)
   const help = await run('node', [bin, HELP_FLAG], { cwd: dir })
   if (help.status !== ExitCode.Success) throw new PackedHelpFailedError(help.status)
@@ -81,7 +97,7 @@ async function smokeRun(run: Runner, tarball: string, dir: string, expected: str
 }
 
 async function install(run: Runner, tarball: string, dir: string, expected: string) {
-  await run('pnpm', ['add', '-g', tarball], { cwd: dir })
+  await checked(run, 'pnpm', ['add', '-g', tarball], dir)
   const version = await printed(run, INSTALLED_BIN, [VERSION_FLAG], dir)
   if (version !== expected) throw new PathMismatchError(version, expected)
 }

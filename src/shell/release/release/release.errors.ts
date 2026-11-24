@@ -1,5 +1,6 @@
 import { ExitCode } from '#shell/cli'
 import {
+  COMMAND_SEPARATOR,
   HELP_FLAG,
   INSTALLED_BIN,
   PACKED_MIGRATIONS,
@@ -14,6 +15,18 @@ export class ReleaseError extends Error {
     super(message)
     this.name = new.target.name
     this.exitCode = exitCode
+  }
+}
+
+export class CommandFailedError extends ReleaseError {
+  readonly commandLine: string
+  readonly status: number
+
+  constructor(command: string, args: string[], status: number) {
+    const line = [command, ...args].join(COMMAND_SEPARATOR)
+    super(`release: failed: ${line} exited ${status}`, ExitCode.Failed)
+    this.commandLine = line
+    this.status = status
   }
 }
 

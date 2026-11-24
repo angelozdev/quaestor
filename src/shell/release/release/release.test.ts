@@ -212,6 +212,56 @@ describe('release from a clean green rebuild', () => {
   })
 })
 
+describe('release command failures', () => {
+  const preBuild = false
+  const postBuild = true
+  const freshTempDir = true
+
+  it.for<[string, string, number, boolean, boolean]>([
+    ['git rev-parse --abbrev-ref HEAD', 'git rev-parse --abbrev-ref HEAD', 128, preBuild, false],
+    ['git status --porcelain', 'git status --porcelain', 128, preBuild, false],
+    ['git rev-parse --short HEAD', 'git rev-parse --short HEAD', 129, preBuild, false],
+    ['pnpm pack', 'pnpm pack --pack-destination .release', 4, postBuild, false],
+    ['tar -tzf', `tar -tzf ${tarball}`, 2, postBuild, false],
+    ['tar -xzf', `tar -xzf ${tarball} -C ${tempDir}`, 2, postBuild, freshTempDir],
+    ['pnpm add -g', `pnpm add -g ${tarball}`, 1, postBuild, freshTempDir],
+  ])(
+    'fails with exit 2 and stops when %s exits non-zero',
+    async ([, line, status, built, removesTempDir]) => {
+      const result = await releaseWith({ ...onGreenRebuild, [line]: { status } })
+
+      expect(result).toMatchObject({
+        code: 2,
+        stdout: '',
+        stderr: `release: failed: ${line} exited ${status}\n`,
+      })
+      expect(commandLines(result.calls).at(-1)).toBe(line)
+      expect(result.build.mock.calls.length > 0).toBe(built)
+      if (removesTempDir) expectTempDirRemovedLast(result)
+      else expect(result.removeTempDir).not.toHaveBeenCalled()
+    },
+  )
+
+  it('keeps the PATH mismatch failure when quaestor --version exits non-zero', async () => {
+    const result = await releaseWith({ ...onGreenRebuild, 'quaestor --version': { status: 127 } })
+
+    expect(result).toMatchObject({
+      code: 2,
+      stdout: '',
+      stderr: `release: failed: quaestor on PATH prints "", expected "${released}"\n`,
+    })
+  })
+
+  it('keeps the smoke refusal when the packed --version exits non-zero', async () => {
+    const result = await releaseWith({
+      ...onGreenRebuild,
+      [`node ${packedBin} --version`]: { status: 127 },
+    })
+
+    expectRefused(result, `smoke run failed: --version printed "", expected "${released}"`)
+  })
+})
+
 describe('release temp folder', () => {
   it.for<[string, Parameters<typeof fakeRunner>[0]]>([
     ['once installed', onGreenRebuild],
