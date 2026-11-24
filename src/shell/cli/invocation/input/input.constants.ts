@@ -5,6 +5,8 @@ export const DATE_MESSAGE = 'must be a date like 2026-11-24'
 export const AMOUNT_MESSAGE =
   'must be an amount like "-15000" or "-30.39": no thousands separator, at most 2 decimals'
 
+export const AMOUNT_TOO_LARGE_MESSAGE = 'is too large: at most 90071992547409.91 either way'
+
 export const CURRENCY_MESSAGE = 'must be an ISO 4217 code such as COP'
 
 export const EMOJI_MESSAGE = 'must be one emoji such as 🏦'

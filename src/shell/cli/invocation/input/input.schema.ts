@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { AMOUNT_PATTERN, centsOf, isCurrency } from '#core/ledger'
 import {
   AMOUNT_MESSAGE,
+  AMOUNT_TOO_LARGE_MESSAGE,
   CURRENCY_MESSAGE,
   DATE_MESSAGE,
   EMOJI_MESSAGE,
@@ -28,6 +29,7 @@ export const amountText = z
   .string(wrongOr(AMOUNT_MESSAGE))
   .regex(AMOUNT_PATTERN, AMOUNT_MESSAGE)
   .transform(centsOf)
+  .refine(Number.isSafeInteger, AMOUNT_TOO_LARGE_MESSAGE)
 
 export const currencyCode = z.string(wrongOr(CURRENCY_MESSAGE)).refine(isCurrency, CURRENCY_MESSAGE)
 

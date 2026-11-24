@@ -108,7 +108,8 @@ Written for a reader that is a model, not a person.
   resolved.
 - Integer cents hold for every currency, KRW included. The CLI takes an amount as
   text, as the bank shows it (`"45000.50"`, at most two decimals, no thousands
-  separator), and gives it back as a number (`45000.5`).
+  separator), and gives it back as a number (`45000.5`). An amount whose cents are
+  not a safe integer, beyond 90071992547409.91 either way, is refused.
 - How the dollar rate is stored is decided by the currency feature. The legacy rate has six decimals, and a six-decimal integer rate
   times a USD balance in cents passes JavaScript's safe-integer limit: 30,000.00 USD
   is 3,000,000 cents, and 3,000,000 × 4,000,000,000 (a rate of 4,000.000000) = 1.2 ×

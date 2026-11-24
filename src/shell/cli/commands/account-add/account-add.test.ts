@@ -32,6 +32,12 @@ function invalidInput(...issues: string[]): string {
   return `${encode({ error: { code: 'invalid_input', issues, message: issues.join('; ') } })}\n`
 }
 
+async function expectRefused(argv: string[], stderr: string) {
+  const run = await ledgerCli().run(argv)
+
+  expect(run).toEqual({ code: 1, stdout: '', stderr })
+}
+
 function repeatingDraw() {
   const indexes = [0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7]
   let draws = 0
@@ -74,12 +80,11 @@ describe('quaestor account add', () => {
 
   it.for(['🏦🏦', 'A'])(
     'an emoji field that is not exactly one emoji is refused (%s)',
-    async (emoji, { expect }) => {
-      const { code, stdout, stderr } = await ledgerCli().run(addArgv({ '--emoji': emoji }))
-
-      expect(code).toBe(1)
-      expect(stdout).toBe('')
-      expect(stderr).toBe(invalidInput('emoji: must be one emoji such as 🏦'))
+    async (emoji) => {
+      await expectRefused(
+        addArgv({ '--emoji': emoji }),
+        invalidInput('emoji: must be one emoji such as 🏦'),
+      )
     },
   )
 
@@ -131,19 +136,17 @@ describe('quaestor account add', () => {
   })
 
   it('a currency that is not ISO 4217 is refused', async () => {
-    const { code, stdout, stderr } = await ledgerCli().run(addArgv({ '--currency': 'UDS' }))
-
-    expect(code).toBe(1)
-    expect(stdout).toBe('')
-    expect(stderr).toBe(invalidInput('currency: must be an ISO 4217 code such as COP'))
+    await expectRefused(
+      addArgv({ '--currency': 'UDS' }),
+      invalidInput('currency: must be an ISO 4217 code such as COP'),
+    )
   })
 
   it('a type outside savings, debit, credit and cash is refused', async () => {
-    const { code, stdout, stderr } = await ledgerCli().run(addArgv({ '--type': 'checking' }))
-
-    expect(code).toBe(1)
-    expect(stdout).toBe('')
-    expect(stderr).toBe(invalidInput('type: must be one of savings, debit, credit or cash'))
+    await expectRefused(
+      addArgv({ '--type': 'checking' }),
+      invalidInput('type: must be one of savings, debit, credit or cash'),
+    )
   })
 
   it('an account name already taken is refused', async () => {
@@ -170,39 +173,55 @@ describe('quaestor account add', () => {
 
   it.for(['15.000', '1,500'])(
     'an opening amount with a thousands separator or more than two decimals is refused (%s)',
-    async (opening, { expect }) => {
-      const { code, stdout, stderr } = await ledgerCli().run(addArgv({ '--opening': opening }))
+    async (opening) => {
+      await expectRefused(
+        addArgv({ '--opening': opening }),
+        invalidInput(`opening: ${AMOUNT_MESSAGE}`),
+      )
+    },
+  )
 
-      expect(code).toBe(1)
-      expect(stdout).toBe('')
-      expect(stderr).toBe(invalidInput(`opening: ${AMOUNT_MESSAGE}`))
+  it.for(['90071992547409.92', '-99999999999999999999'])(
+    'an amount beyond 90071992547409.91 either way is refused (%s)',
+    async (opening) => {
+      await expectRefused(
+        addArgv({ '--opening': opening }),
+        invalidInput('opening: is too large: at most 90071992547409.91 either way'),
+      )
+    },
+  )
+
+  it.for(['90071992547409.91', '-90071992547409.91'])(
+    'an amount of exactly 90071992547409.91 either way is still accepted (%s)',
+    async (opening, { expect }) => {
+      const cli = ledgerCli()
+
+      const added = await cli.run(addArgv({ '--opening': opening }))
+      const listed = await cli.run(['account', 'list'])
+
+      expect(added.code).toBe(0)
+      expect(decode(listed.stdout)).toMatchObject({
+        accounts: [{ openingAmount: Number(opening), balance: Number(opening) }],
+      })
     },
   )
 
   it('the opening date is required', async () => {
-    const { code, stdout, stderr } = await ledgerCli().run(addArgv({ '--opening-date': undefined }))
-
-    expect(code).toBe(1)
-    expect(stdout).toBe('')
-    expect(stderr).toBe(invalidInput('openingDate: is required'))
+    await expectRefused(
+      addArgv({ '--opening-date': undefined }),
+      invalidInput('openingDate: is required'),
+    )
   })
 
   it('an opening date that is not a calendar day is refused', async () => {
-    const { code, stdout, stderr } = await ledgerCli().run(
+    await expectRefused(
       addArgv({ '--opening-date': '2026-02-30' }),
+      invalidInput('openingDate: must be a date like 2026-11-24'),
     )
-
-    expect(code).toBe(1)
-    expect(stdout).toBe('')
-    expect(stderr).toBe(invalidInput('openingDate: must be a date like 2026-11-24'))
   })
 
   it('an account name with no text is refused', async () => {
-    const { code, stdout, stderr } = await ledgerCli().run(addArgv({}, '  '))
-
-    expect(code).toBe(1)
-    expect(stdout).toBe('')
-    expect(stderr).toBe(invalidInput('name: is required'))
+    await expectRefused(addArgv({}, '  '), invalidInput('name: is required'))
   })
 
   it('every invalid field is reported, in one error and in field order', async () => {
