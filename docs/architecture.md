@@ -125,7 +125,9 @@ Written for a reader that is a model, not a person.
   a lowercase letter and holds only lowercase letters, digits and dashes, and
   `custom` is reserved: `QUAESTOR_DB` is the only way to a store outside the data
   folder, shown as `env: custom (<path>)`, and the folder it names must already
-  exist.
+  exist, or the call is refused as `invalid_env` (exit 1). A folder that exists
+  but cannot be written still fails as `unexpected` (exit 2). Decided by Angelo on
+  2026-11-24.
 
 ## Migrations and backups
 

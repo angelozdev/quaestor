@@ -1,4 +1,5 @@
-import { join } from 'node:path'
+import { statSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import {
   CUSTOM_ENV,
   DB_VAR,
@@ -9,6 +10,7 @@ import {
 } from './env.constants.ts'
 import {
   EnvNameFormatError,
+  MissingDatabaseFolderError,
   NamedEnvDisabledError,
   RelativeDatabasePathError,
   ReservedEnvNameError,
@@ -25,6 +27,8 @@ function namedEnv(source: string, name: string, dataDir: string | null): Env {
 
 function customEnv(dbPath: string): Env {
   if (!dbPathSchema.safeParse(dbPath).success) throw new RelativeDatabasePathError(dbPath)
+  if (!statSync(dirname(dbPath), { throwIfNoEntry: false })?.isDirectory())
+    throw new MissingDatabaseFolderError(dbPath)
   return { name: CUSTOM_ENV, dbPath }
 }
 

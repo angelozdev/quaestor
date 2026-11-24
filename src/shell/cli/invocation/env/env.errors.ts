@@ -29,6 +29,12 @@ export class RelativeDatabasePathError extends InvalidEnvError {
   }
 }
 
+export class MissingDatabaseFolderError extends InvalidEnvError {
+  constructor(value: string) {
+    super(DB_VAR, value, 'its folder does not exist')
+  }
+}
+
 export class NamedEnvDisabledError extends RefusedError {
   constructor(source: string, env: string) {
     super(

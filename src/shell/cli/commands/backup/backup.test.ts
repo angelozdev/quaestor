@@ -294,9 +294,34 @@ describe('quaestor backup', () => {
     expect(readdirSync(storeDir)).toEqual(['x.sqlite'])
   })
 
-  it('QUAESTOR_DB in a folder that does not exist exits 2 as unexpected and creates nothing', async () => {
+  it('QUAESTOR_DB in a folder that does not exist exits 1 as invalid_env and creates nothing', async () => {
     const storeDir = tempDir('quaestor-store-')
     const dbPath = join(storeDir, 'missing', 'x.sqlite')
+
+    const { code, stdout, stderr } = await backup([], { vars: { QUAESTOR_DB: dbPath } })
+
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `${encode({
+        error: {
+          code: 'invalid_env',
+          source: 'QUAESTOR_DB',
+          value: dbPath,
+          message: `invalid QUAESTOR_DB "${dbPath}": its folder does not exist`,
+        },
+      })}\n`,
+    )
+    expect(readdirSync(storeDir)).toEqual([])
+    expect(readdirSync(dataDir)).toEqual([])
+  })
+
+  it('QUAESTOR_DB in a folder that exists but cannot be written exits 2 as unexpected and creates nothing', async () => {
+    const storeDir = tempDir('quaestor-store-')
+    const folder = join(storeDir, 'locked')
+    mkdirSync(folder, { mode: 0o500 })
+    lockedFolder = folder
+    const dbPath = join(folder, 'x.sqlite')
 
     const { code, stdout, stderr } = await backup([], { vars: { QUAESTOR_DB: dbPath } })
 
@@ -307,7 +332,7 @@ describe('quaestor backup', () => {
         error: { code: 'unexpected', message: 'unable to open database file' },
       })}\n`,
     )
-    expect(readdirSync(storeDir)).toEqual([])
+    expect(readdirSync(folder)).toEqual([])
     expect(readdirSync(dataDir)).toEqual([])
   })
 
