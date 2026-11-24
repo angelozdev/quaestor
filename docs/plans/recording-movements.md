@@ -51,8 +51,7 @@ These are hard to change once real data sits on them.
   its currency, and `quaestor` refuses one that differs from its account's.
 - **Reading movements.** Each row carries its account's balance after it, even when the list
   mixes accounts; tags come out as one space-joined text so the rows stay one TOON table, and
-  go in as a list. `movement list` lists at most `--limit` movements, 50 by default, the most
-  recent ones, and `total` says how many matched. Confirmed by Angelo on 2026-11-24.
+  go in as a list. `movement list` lists at most `--limit` movements, 50 by default, the most recent ones, newest first, and `total` says how many matched. Confirmed by Angelo on 2026-11-24.
 - **Order.** Prod's first write is the import. Nothing writes to `~/.quaestor/prod.sqlite`
   before the import (Task 8) has run there, even if a release ships an earlier slice.
 
@@ -166,13 +165,13 @@ The stdin it reads:
 `quaestor movement list --account n8d3 --from 2026-11-20`, exit 0. `balance` is the row's
 account's balance after that movement, counting every earlier movement, including those before
 `--from`. `total` counts every movement the filters match; at most `--limit` (50 by default)
-are listed, the most recent, oldest first:
+are listed, newest first:
 
 ```
 total: 2
 movements[2]{id,date,account,payee,amount,currency,category,tags,note,transfer,balance}:
-  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null,110000000
   3qxa,2026-11-21,n8d3,From Wallet,40000000,COP,null,"trip:lima-2026",cambio a 4.000,m3pe,150000000
+  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null,110000000
 ```
 
 `quaestor import ~/.quaestor/legacy --dry-run`, exit 0:
@@ -620,14 +619,15 @@ until then their schemas take only `[]`.
   compares the two strings after NFD normalisation, removing `\p{Diacritic}` and lowercasing.
   Its unit test: `matchesPayee finds Éxito from exito and Uber from UBER`.
 - Produces: `type MovementFilter = { account?: string; from?: string; to?: string; payee?:
-  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, ordered by `(date, seq)`, without deleted rows. `balance` is the row's account's opening amount plus the running sum
+  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, newest first, by
+  `(date, seq)` descending, without deleted rows. `balance` is the row's account's opening amount plus the running sum
   partitioned by account in `(date, seq)` order. It is computed over every movement in SQL
   before `from` and `to` filter the rows, and the payee filter runs afterwards in the shell
   with `matchesPayee`.
 
 Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee <text>` and
 `--limit <n>`, a whole number above 0 that defaults to `50` (`must be a whole number above 0`).
-`listMovements` returns every match; the command keeps the last `limit` of them. Output:
+`listMovements` returns every match; the command keeps the first `limit` of them. Output:
 `{ total, movements }`, `total` being the number of matches.
 
 - [ ] **Step 1: Write the failing tests**
@@ -637,8 +637,10 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `--payee finds Éxito from exito and Uber from UBER` (Review Focus 2).
   - `--payee across all accounts shows how a payee was categorised before`.
     - `a --from after --to gives no movements`.
-  - `without --limit the 50 most recent matches are listed, oldest first, and total counts
-    them all`: 52 movements give `total: 52` and rows 3 to 52.
+    - `movements are listed newest first, and same-day ones by the reverse of their recorded
+    order`.
+  - `without --limit the 50 most recent matches are listed and total counts them all`: 52
+    movements give `total: 52` and rows 52 down to 3.
   - `--limit 2 lists the 2 most recent matches`.
   - `a --limit that is not a whole number above 0 is refused`: `0` and `abc`, `invalid_input`.
 - [ ] **Step 2: Run them and see them fail.**
