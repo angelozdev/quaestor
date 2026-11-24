@@ -252,7 +252,8 @@ describe('quaestor backup', () => {
           code: 'invalid_env',
           source: '--env',
           value: 'Prod',
-          message: 'invalid --env "Prod": use lowercase letters, digits and dashes',
+          message:
+            'invalid --env "Prod": start with a lowercase letter, then use lowercase letters, digits and dashes',
         },
       })}\n`,
     )

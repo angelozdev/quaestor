@@ -45,21 +45,22 @@ describe('resolveEnv', () => {
     expect(resolveEnv({ ...base, flag: 'x' }).dbPath).toBe('/d/x.sqlite')
   })
 
-  it('an env name that is not lowercase letters, digits and dashes is refused as invalid_env', () => {
-    expect(() => resolveEnv({ ...base, flag: 'Prod' })).toThrow(
-      refusal('invalid_env', 'invalid --env "Prod": use lowercase letters, digits and dashes', {
-        source: '--env',
-        value: 'Prod',
-      }),
-    )
-    expect(() => resolveEnv({ ...base, vars: { QUAESTOR_ENV: 'a b' } })).toThrow(
-      refusal(
-        'invalid_env',
-        'invalid QUAESTOR_ENV "a b": use lowercase letters, digits and dashes',
-        { source: 'QUAESTOR_ENV', value: 'a b' },
-      ),
-    )
-  })
+  it.each([
+    { source: '--env', value: 'Prod', sources: { flag: 'Prod' } },
+    { source: 'QUAESTOR_ENV', value: 'a b', sources: { vars: { QUAESTOR_ENV: 'a b' } } },
+    { source: '--env', value: '1prod', sources: { flag: '1prod' } },
+  ])(
+    'an env name that breaks the naming rule is refused as invalid_env with the whole rule: $value',
+    ({ source, value, sources }) => {
+      expect(() => resolveEnv({ ...base, ...sources })).toThrow(
+        refusal(
+          'invalid_env',
+          `invalid ${source} "${value}": start with a lowercase letter, then use lowercase letters, digits and dashes`,
+          { source, value },
+        ),
+      )
+    },
+  )
 
   it('custom is refused unless it comes from QUAESTOR_DB', () => {
     expect(() => resolveEnv({ ...base, flag: 'custom' })).toThrow(

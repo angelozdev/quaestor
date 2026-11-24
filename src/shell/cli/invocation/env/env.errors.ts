@@ -9,7 +9,11 @@ class InvalidEnvError extends RefusedError {
 
 export class EnvNameFormatError extends InvalidEnvError {
   constructor(source: string, value: string) {
-    super(source, value, 'use lowercase letters, digits and dashes')
+    super(
+      source,
+      value,
+      'start with a lowercase letter, then use lowercase letters, digits and dashes',
+    )
   }
 }
 
