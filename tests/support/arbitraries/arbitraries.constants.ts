@@ -25,3 +25,19 @@ export const MAX_FAULTY_ITEMS = 8
 export const MOVED_ACCOUNTS = ['wallet', 'savings', 'bank'] as const
 
 export const MAX_MOVED = 8
+
+export const LEGACY_FIRST_DAY = '2026-01-05'
+
+export const LEGACY_CURRENCIES = ['USD', 'COP'] as const
+
+export const LEGACY_KINDS = ['expense', 'income'] as const
+
+export const LEGACY_STATUSES = ['posted', 'posted', 'skipped', 'planned'] as const
+
+export const MAX_LEGACY_ACCOUNTS = 4
+
+export const MAX_LEGACY_ENTRIES = 12
+
+export const MAX_LEGACY_BALANCE_CENTS = 100_000_000_000
+
+export const LEGACY_CREATED_AT = '2026-01-05T10:00:00'

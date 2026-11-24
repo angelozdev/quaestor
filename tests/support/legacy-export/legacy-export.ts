@@ -80,7 +80,7 @@ function tableRows(rows: ExportRows): Record<TableName, Row[]> {
   } as Record<TableName, Row[]>
 }
 
-function writeLegacyExport(rows: ExportRows, options: ExportOptions = {}): string {
+export function writeLegacyExport(rows: ExportRows, options: ExportOptions = {}): string {
   const folder = tempDir('quaestor-legacy-')
   mkdirSync(join(folder, 'tables'))
   const tables = Object.entries(tableRows(rows)).map(([name, tableRow]) => {

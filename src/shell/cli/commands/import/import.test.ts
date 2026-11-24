@@ -1,13 +1,25 @@
 import { decode, encode } from '@toon-format/toon'
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { list } from '../../../../../tests/support/books/books.ts'
+import { legacyRows } from '../../../../../tests/support/arbitraries/arbitraries.ts'
+import { addAccount, list } from '../../../../../tests/support/books/books.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import { FIXTURE_ROWS } from '../../../../../tests/support/legacy-export/legacy-export.constants.ts'
-import { fixtureExport } from '../../../../../tests/support/legacy-export/legacy-export.ts'
+import {
+  fixtureExport,
+  writeLegacyExport,
+} from '../../../../../tests/support/legacy-export/legacy-export.ts'
+import type { ExportRows } from '../../../../../tests/support/legacy-export/legacy-export.types.ts'
 import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
+
+const MS_PER_DAY = 86_400_000
+
+const ISO_DATE_LENGTH = 10
+
+const EXPORTED_DAY = '2026-11-24'
 
 const COUNTS = { accounts: 5, categories: 7, tags: 2, movements: 11, tagLinks: 3 }
 
@@ -66,6 +78,27 @@ async function imported(flags: string[] = []) {
   const cli = ledgerCli()
   const run = await cli.run(['import', fixtureExport(), ...flags])
   return { cli, run }
+}
+
+function exportMismatch(file: string, reason: string): string {
+  return `${encode({ error: { code: 'export_mismatch', file, reason, message: `${file}: ${reason}` } })}\n`
+}
+
+function dayBefore(date: string): string {
+  return new Date(Date.parse(date) - MS_PER_DAY).toISOString().slice(0, ISO_DATE_LENGTH)
+}
+
+function legacyCents(rows: ExportRows, accountId: number): number {
+  return rows.transactions
+    .filter(({ accountId: id, status }) => id === accountId && status === 'posted')
+    .reduce((sum, { type, amount }) => sum + (type === 'income' ? amount : 0 - amount), 0)
+}
+
+function firstDay(rows: ExportRows, accountId: number): string | undefined {
+  return rows.transactions
+    .filter(({ accountId: id, status }) => id === accountId && status === 'posted')
+    .map(({ date }) => date)
+    .toSorted()[0]
 }
 
 function payee(rows: Movement[], text: string): Movement {
@@ -278,5 +311,160 @@ describe('quaestor import', () => {
     expect(accounts).toEqual([])
     expect(await categoriesOf(cli)).toEqual([])
     expect((await list(cli)).stdout).toBe(`${encode({ total: 0, movements: [] })}\n`)
+  })
+
+  it('import refuses a store that already holds data', async () => {
+    const cli = ledgerCli()
+    await addAccount(cli, 'Savings', 'USD', '10')
+    const before = await accountsOf(cli)
+
+    const run = await cli.run(['import', fixtureExport()])
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: `env: test\n${encode({ error: { code: 'already_imported', message: 'the legacy export is imported only into an empty store' } })}\n`,
+    })
+    expect(await accountsOf(cli)).toEqual(before)
+    expect((await list(cli)).stdout).toBe(`${encode({ total: 0, movements: [] })}\n`)
+  })
+
+  it('a file whose sha256 differs from manifest.json stops the import', async () => {
+    const cli = ledgerCli()
+    const folder = fixtureExport({ manifest: { transaction: { sha256: 'f'.repeat(64) } } })
+
+    const run = await cli.run(['import', folder])
+
+    expect(run).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: exportMismatch('tables/transaction.jsonl', 'sha256 differs from manifest.json'),
+    })
+    expect(await accountsOf(cli)).toEqual([])
+  })
+
+  it('a row count that differs from manifest.json stops the import', async () => {
+    const cli = ledgerCli()
+    const folder = fixtureExport({ manifest: { account: { rows: 6 } } })
+
+    const run = await cli.run(['import', folder])
+
+    expect(run).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: exportMismatch('tables/account.jsonl', 'has 5 rows, manifest.json says 6'),
+    })
+    expect(await accountsOf(cli)).toEqual([])
+  })
+
+  it('a table the import does not use is checked against the manifest too', async () => {
+    const cli = ledgerCli()
+    const folder = fixtureExport({ manifest: { settings: { rows: 0 } } })
+
+    const run = await cli.run(['import', folder])
+
+    expect(run).toEqual({
+      code: 2,
+      stdout: '',
+      stderr: exportMismatch('tables/settings.jsonl', 'has 1 rows, manifest.json says 0'),
+    })
+  })
+
+  it.for([
+    ['transaction', '{"id":"abc"}', 'line 14: id: must be a whole number'],
+    ['tag', 'not json', 'line 3: is not valid JSON'],
+  ] as const)(
+    'a row that does not parse stops the import before anything is written (%s)',
+    async ([table, line, reason], { expect }) => {
+      const cli = ledgerCli()
+      const folder = fixtureExport({ extraLines: { [table]: [line] } })
+
+      const run = await cli.run(['import', folder])
+
+      expect(run).toEqual({
+        code: 2,
+        stdout: '',
+        stderr: exportMismatch(`tables/${table}.jsonl`, reason),
+      })
+      expect(await accountsOf(cli)).toEqual([])
+    },
+  )
+
+  it('a balance that cannot be held to the cent stops the import and writes nothing', async () => {
+    const cli = ledgerCli()
+    const income = { type: 'income', status: 'posted', categoryId: 1, accountId: 1 } as const
+    const folder = writeLegacyExport({
+      accounts: [
+        { id: 1, name: '💵 Wallet', type: 'debit', currency: 'USD', archived: false, balance: 0 },
+      ],
+      categories: [{ id: 1, name: '🍽️ Food', archived: false }],
+      tags: [],
+      transactions: [
+        {
+          ...income,
+          id: 1,
+          date: '2026-11-20',
+          payee: 'A',
+          notes: null,
+          amount: 9000000000000001,
+          transferGroup: null,
+          direction: null,
+          createdAt: '2026-11-20T10:00:00',
+        },
+        {
+          ...income,
+          id: 2,
+          date: '2026-11-20',
+          payee: 'B',
+          notes: null,
+          amount: 9000000000000000,
+          transferGroup: null,
+          direction: null,
+          createdAt: '2026-11-20T10:00:00',
+        },
+      ],
+      tagLinks: [],
+    })
+
+    const run = await cli.run(['import', folder])
+
+    expect(run.code).toBe(2)
+    expect(run.stdout).toBe('')
+    expect(decode(run.stderr.replace('env: test\n', ''))).toEqual({
+      error: {
+        code: 'balance_mismatch',
+        account: expect.stringMatching(CODE),
+        expected: 0,
+        actual: expect.any(Number),
+        message: expect.stringMatching(/^account \w{4} holds .+, the export says 0$/),
+      },
+    })
+    expect(await accountsOf(cli)).toEqual([])
+  })
+
+  it("for any export, every imported balance equals the manifest's, whatever the movements (USD and COP)", async () => {
+    await fc.assert(
+      fc.asyncProperty(legacyRows, async (rows) => {
+        const cli = ledgerCli()
+
+        const run = await cli.run(['import', writeLegacyExport(rows)])
+
+        const accounts = await accountsOf(cli)
+        expect(run.code).toBe(0)
+        expect(accounts).toHaveLength(rows.accounts.length)
+        for (const { id, balance, currency } of rows.accounts) {
+          const opening = balance - legacyCents(rows, id)
+          const first = firstDay(rows, id)
+          expect(named(accounts, `Account ${id}`)).toMatchObject({
+            currency,
+            balance: balance / 100,
+            openingAmount: opening / 100,
+            openingDate:
+              opening === 0 ? null : first === undefined ? EXPORTED_DAY : dayBefore(first),
+          })
+        }
+      }),
+      { numRuns: 50 },
+    )
   })
 })

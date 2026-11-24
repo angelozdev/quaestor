@@ -1,13 +1,22 @@
 import fc from 'fast-check'
+import type { ExportRows } from '../legacy-export/legacy-export.types.ts'
 import {
   BOOKED_ACCOUNTS,
   CENTS_PER_UNIT,
   FAULTS,
   ISO_DATE_LENGTH,
+  LEGACY_CREATED_AT,
+  LEGACY_CURRENCIES,
+  LEGACY_FIRST_DAY,
+  LEGACY_KINDS,
+  LEGACY_STATUSES,
   MAX_BOOKED,
   MAX_DAYS_AFTER,
   MAX_DECIMAL_DIGITS,
   MAX_FAULTY_ITEMS,
+  MAX_LEGACY_ACCOUNTS,
+  MAX_LEGACY_BALANCE_CENTS,
+  MAX_LEGACY_ENTRIES,
   MAX_MOVED,
   MAX_MOVEMENT_CENTS,
   MAX_WHOLE_PART,
@@ -93,3 +102,47 @@ export function moved(openingDate: string): fc.Arbitrary<Moved[]> {
       })),
     )
 }
+
+export const legacyRows: fc.Arbitrary<ExportRows> = fc
+  .record({
+    accounts: fc.array(
+      fc.record({
+        currency: fc.constantFrom(...LEGACY_CURRENCIES),
+        balance: fc.integer({ min: -MAX_LEGACY_BALANCE_CENTS, max: MAX_LEGACY_BALANCE_CENTS }),
+        archived: fc.boolean(),
+      }),
+      { minLength: 1, maxLength: MAX_LEGACY_ACCOUNTS },
+    ),
+    entries: fc.array(
+      fc.record({
+        account: fc.nat(),
+        amount: movementCents,
+        date: dateOnOrAfter(LEGACY_FIRST_DAY),
+        type: fc.constantFrom(...LEGACY_KINDS),
+        status: fc.constantFrom(...LEGACY_STATUSES),
+      }),
+      { maxLength: MAX_LEGACY_ENTRIES },
+    ),
+  })
+  .map(({ accounts, entries }) => ({
+    accounts: accounts.map((account, index) => ({
+      ...account,
+      id: index + 1,
+      name: `🏦 Account ${index + 1}`,
+      type: 'debit' as const,
+    })),
+    categories: [{ id: 1, name: '🍽️ Food', archived: false }],
+    tags: [],
+    transactions: entries.map(({ account, ...entry }, index) => ({
+      ...entry,
+      id: index + 1,
+      payee: 'Payee',
+      notes: null,
+      accountId: (account % accounts.length) + 1,
+      categoryId: 1,
+      transferGroup: null,
+      direction: null,
+      createdAt: LEGACY_CREATED_AT,
+    })),
+    tagLinks: [],
+  }))
