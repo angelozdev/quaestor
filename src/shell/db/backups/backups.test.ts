@@ -82,6 +82,47 @@ describe('backupStore', () => {
     closeStore(store)
   })
 
+  it('a second backup at the same instant fails as backup_not_written and leaves the first copy intact', async () => {
+    const storePath = join(tempDir('quaestor-store-'), 'store.sqlite')
+    const store = await openTestStore(storePath)
+    runSql(storePath, 'create table notes (id integer primary key, body text)')
+    runSql(storePath, "insert into notes (body) values ('first')")
+    const root = tempDir('quaestor-data-')
+    const folder = join(root, 'backups')
+    const name = 'test-2026-11-23T21-04-05-123Z.sqlite'
+    const { path } = await backupStore({ store, env: 'test', root, now: NOW })
+    runSql(storePath, "insert into notes (body) values ('second')")
+
+    const error = await notWritten(backupStore({ store, env: 'test', root, now: NOW }))
+
+    expect(error.code).toBe('backup_not_written')
+    expect(error.data).toEqual({ folder, reason: `${name} already exists` })
+    expect(error.message).toBe(`cannot write backup to ${folder}: ${name} already exists`)
+    expect(readdirSync(folder)).toEqual([name])
+    expect(selectAll(path, 'select body from notes order by id')).toEqual([{ body: 'first' }])
+    closeStore(store)
+  })
+
+  it('a clock older than the copies on disk keeps the copy it just wrote', async () => {
+    const store = await tempStore()
+    const root = tempDir('quaestor-data-')
+    const folder = join(root, 'backups')
+    const newer = [1, 2, 3, 4, 5].map((day) => `prod-2026-12-0${day}T10-00-00-000Z.sqlite`)
+    mkdirSync(folder)
+    for (const name of newer) writeFileSync(join(folder, name), name)
+
+    const { path, removed } = await backupStore({ store, env: 'prod', root, now: NOW })
+
+    expect(path).toBe(join(folder, 'prod-2026-11-23T21-04-05-123Z.sqlite'))
+    expect(removed).toEqual([])
+    expect(readdirSync(folder).toSorted()).toEqual([
+      'prod-2026-11-23T21-04-05-123Z.sqlite',
+      ...newer,
+    ])
+    for (const name of newer) expect(readFileSync(join(folder, name), 'utf8')).toBe(name)
+    closeStore(store)
+  })
+
   it('a copy that cannot be moved into place is a backup_not_written and leaves no .partial', async () => {
     const store = await tempStore()
     const root = tempDir('quaestor-data-')

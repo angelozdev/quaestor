@@ -83,6 +83,32 @@ describe('quaestor backup', () => {
     expect(existsSync(join(dataDir, 'backups', COPY_NAME))).toBe(true)
   })
 
+  it('a second backup at the same instant exits 2 as backup_not_written and keeps the first copy', async () => {
+    const folder = join(dataDir, 'backups')
+    await backup()
+    const copy = join(folder, COPY_NAME)
+    const before = sha256(copy)
+    runSql(join(dataDir, 'test.sqlite'), 'create table notes (id integer primary key)')
+
+    const { code, stdout, stderr } = await backup()
+
+    const reason = `${COPY_NAME} already exists`
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `env: test\n${encode({
+        error: {
+          code: 'backup_not_written',
+          folder,
+          reason,
+          message: `cannot write backup to ${folder}: ${reason}`,
+        },
+      })}\n`,
+    )
+    expect(sha256(copy)).toBe(before)
+    expect(readdirSync(folder)).toEqual([COPY_NAME])
+  })
+
   it('backup prints the copy it removed', async () => {
     const folder = join(dataDir, 'backups')
     const seeded = [1, 2, 3, 4, 5].map((day) => `test-2026-11-0${day}T10-00-00-000Z.sqlite`)

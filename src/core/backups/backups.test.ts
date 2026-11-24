@@ -50,4 +50,26 @@ describe('backup copies', () => {
   it('copiesToRemove removes nothing with five copies or fewer', () => {
     expect(copiesToRemove('prod', [...prodCopies.slice(1), ...others])).toEqual([])
   })
+
+  it('copiesToRemove never lists the protected copy, even when it is the oldest', () => {
+    expect(copiesToRemove('prod', prodCopies, prodCopies[0])).toEqual([])
+  })
+
+  it('copiesToRemove lists what it would list without the protected copy, nothing more', () => {
+    const names = ['prod-2026-10-01T10-00-00-000Z.sqlite', ...prodCopies]
+
+    expect(copiesToRemove('prod', names)).toEqual([
+      'prod-2026-10-01T10-00-00-000Z.sqlite',
+      'prod-2026-11-01T10-00-00-000Z.sqlite',
+    ])
+    expect(copiesToRemove('prod', names, 'prod-2026-10-01T10-00-00-000Z.sqlite')).toEqual([
+      'prod-2026-11-01T10-00-00-000Z.sqlite',
+    ])
+  })
+
+  it('copiesToRemove with the newest copy protected removes the same copies as without', () => {
+    expect(copiesToRemove('prod', prodCopies, prodCopies.at(-1))).toEqual(
+      copiesToRemove('prod', prodCopies),
+    )
+  })
 })

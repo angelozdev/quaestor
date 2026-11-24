@@ -18,8 +18,13 @@ function copyPattern(env: string): RegExp {
   )
 }
 
-export function copiesToRemove(env: string, names: string[], keep = COPIES_KEPT): string[] {
+export function copiesToRemove(
+  env: string,
+  names: string[],
+  protect?: string,
+  keep = COPIES_KEPT,
+): string[] {
   const pattern = copyPattern(env)
   const copies = names.filter((name) => pattern.test(name)).toSorted()
-  return copies.slice(0, Math.max(0, copies.length - keep))
+  return copies.slice(0, Math.max(0, copies.length - keep)).filter((name) => name !== protect)
 }
