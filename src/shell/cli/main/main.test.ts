@@ -6,8 +6,8 @@ import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
 const MISSING_COMMAND = {
   code: 'missing_command',
-  commands: ['backup', 'account', 'category', 'tag', 'movement'],
-  message: 'missing command: use one of backup, account, category, tag, movement',
+  commands: ['backup', 'account', 'category', 'tag', 'movement', 'import'],
+  message: 'missing command: use one of backup, account, category, tag, movement, import',
 }
 
 describe('main', () => {
@@ -22,7 +22,7 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
-  it('--help lists backup and the account, category, tag and movement groups as its commands', async () => {
+  it('--help lists backup, the account, category, tag and movement groups and import as its commands', async () => {
     const { stdout } = await runCli(['--help'])
 
     const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
@@ -32,6 +32,9 @@ describe('main', () => {
       expect.stringMatching(/^ {2}category\s+categories a movement can take$/),
       expect.stringMatching(/^ {2}tag\s+tags a movement can carry$/),
       expect.stringMatching(/^ {2}movement\s+movements and transfers$/),
+      expect.stringMatching(
+        /^ {2}import \[options\] <folder>\s+import the legacy export, once, into an empty store$/,
+      ),
     ])
   })
 

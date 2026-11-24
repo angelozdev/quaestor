@@ -42,6 +42,20 @@ export function listAccounts(store: Store): AccountRow[] {
     .map(({ movementTotal, ...stored }) => rowOf(stored, movementTotal))
 }
 
+export function balancesInCents(store: Store): Map<string, number> {
+  return new Map(
+    database(store)
+      .select({
+        id: accounts.id,
+        cents: sql<number>`${accounts.openingAmount} + ${MOVEMENT_TOTAL}`,
+      })
+      .from(accounts)
+      .where(isNull(accounts.deletedAt))
+      .all()
+      .map(({ id, cents }) => [id, cents]),
+  )
+}
+
 export function insertAccount(
   store: Store,
   draft: AccountDraft,

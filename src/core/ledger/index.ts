@@ -2,6 +2,7 @@ export { ACCOUNT_TYPES, AMOUNT_PATTERN, ID_LENGTH, TAG_PATTERN } from './ledger.
 export { AlreadyExistsError, RefusedWriteError } from './ledger.errors.ts'
 export { amountOf, centsOf, checkWrite, drawCode, isCurrency, matchesPayee } from './ledger.ts'
 export type {
+  Account,
   AccountDraft,
   AccountRow,
   AccountType,
