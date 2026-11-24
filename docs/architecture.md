@@ -46,8 +46,8 @@ Written for a reader that is a model, not a person.
   `env: custom (<path>)`), `backup: <path> (before migrating)` (only in `prod`, and
   only when a migration is pending), `migrated: <name>` per migration applied, then
   the error object when the command fails. A call refused before a store is chosen,
-  such as a usage error, `invalid_env`, `invalid_json` or `invalid_input`, writes
-  only the error object.
+  such as a usage error, `invalid_env`, `invalid_json`, `invalid_input` or
+  `export_mismatch`, writes only the error object.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `invalid_env`) and the data needed to act on it.
 - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
@@ -84,7 +84,13 @@ Written for a reader that is a model, not a person.
   message; `refused`, 1, when a write breaks a rule, with every item at fault as `errors`,
   each `{code, item, message}` where `item` is the position (`delete[0]`,
   `movements[2]`, `transfers[0].from`) and `code` is `not_found`, `currency_mismatch`,
-  `before_opening` or `same_account_transfer`, and nothing written; `unexpected`,
+  `before_opening`, `same_account_transfer` or `archived`, and nothing written;
+  `already_imported`, 1, when `import` meets a store that already holds an account;
+  `export_mismatch`, 2, when a legacy export file's sha256 or row count differs from
+  `manifest.json` or one of its rows does not parse, with the `file` (relative to the
+  export folder) and the `reason`, found before a store is opened; `balance_mismatch`, 2,
+  when an imported account's balance would differ from the export's, with the `account`
+  and the `expected` and `actual` balance, nothing written; `unexpected`,
   2, for any error no class names, with its message.
 - Quaestor's own failures are error classes in their module's `.errors.ts`, each
   extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`
@@ -197,9 +203,9 @@ Written for a reader that is a model, not a person.
   the cent. On 2026-11-23, several legacy accounts did not equal the sum of
   their movements (one stored COP 30,000,000.00 while its movements added up to COP
   9,000,000.00), because opening balances and manual resets were never
-  movements. The import carries that difference explicitly; it is never dropped
-  and never silently "fixed". How it is represented is decided by the feature
-  that imports accounts.
+  movements. The import carries that difference as the account's opening
+  balance, dated the day before its first posted movement (the day of the export
+  when it has none); it is never dropped and never silently "fixed".
 
 ## Skills
 

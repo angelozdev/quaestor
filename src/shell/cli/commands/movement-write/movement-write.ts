@@ -9,7 +9,7 @@ import { movementWriteSchema } from './movement-write.schema.ts'
 export const movementWriteCommand: CliCommand = {
   name: 'write',
   group: 'movement',
-  description: 'record movements from JSON on stdin, all or nothing',
+  description: 'record, transfer and delete movements from JSON on stdin, all or nothing',
   options: [DRY_RUN_OPTION],
   run: async (context, options, _args, flags) => {
     const request = parsed(movementWriteSchema, await readJson(context))

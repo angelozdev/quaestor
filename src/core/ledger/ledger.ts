@@ -50,6 +50,10 @@ function notFound(item: string, kind: string, id: string): WriteProblem {
   return { code: PROBLEM_CODES.NotFound, item, message: `${kind} ${id} does not exist` }
 }
 
+function archived(item: string, kind: string, id: string): WriteProblem {
+  return { code: PROBLEM_CODES.Archived, item, message: `${kind} ${id} is archived` }
+}
+
 function accountProblems(account: Account, movement: HalfDraft, item: string): WriteProblem[] {
   const problems: WriteProblem[] = []
   if (account.openingDate !== null && movement.date < account.openingDate)
@@ -73,9 +77,20 @@ function accountChecks(
   accounts: Catalog['accounts'],
 ): WriteProblem[] {
   const account = accounts.get(half.account)
-  return account === undefined
-    ? [notFound(item, 'account', half.account)]
+  if (account === undefined) return [notFound(item, 'account', half.account)]
+  return account.archived
+    ? [archived(item, 'account', account.id)]
     : accountProblems(account, half, item)
+}
+
+function categoryChecks(
+  id: string,
+  item: string,
+  categories: Catalog['categories'],
+): WriteProblem[] {
+  const category = categories.get(id)
+  if (category === undefined) return [notFound(item, 'category', id)]
+  return category.archived ? [archived(item, 'category', category.id)] : []
 }
 
 function tagChecks(half: HalfDraft, item: string, tags: Catalog['tags']): WriteProblem[] {
@@ -89,7 +104,7 @@ function movementProblems(
 ): WriteProblem[] {
   return [
     ...accountChecks(movement, item, accounts),
-    ...(categories.has(movement.category) ? [] : [notFound(item, 'category', movement.category)]),
+    ...categoryChecks(movement.category, item, categories),
     ...tagChecks(movement, item, tags),
   ]
 }

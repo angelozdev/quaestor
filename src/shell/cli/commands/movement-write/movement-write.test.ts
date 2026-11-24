@@ -211,6 +211,18 @@ function problemOf(books: Books, fault: Fault, item: string): Problem {
 }
 
 describe('quaestor movement write', () => {
+  it('--help says it records, transfers and deletes, all or nothing', async () => {
+    const cli = ledgerCli()
+
+    const { code, stdout, stderr } = await cli.run(['movement', 'write', '--help'])
+
+    expect(code).toBe(0)
+    expect(stdout).toContain(
+      'record, transfer and delete movements from JSON on stdin, all or nothing',
+    )
+    expect(stderr).toBe('')
+  })
+
   it('a movement is recorded in its account and its balance moves by its amount (USD)', async () => {
     const books = await openBooks()
     const spending = spend(books)

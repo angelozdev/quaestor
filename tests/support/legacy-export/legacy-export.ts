@@ -94,7 +94,7 @@ export function writeLegacyExport(rows: ExportRows, options: ExportOptions = {})
     return { name, file, rows: lines.length, sha256, ...options.manifest?.[name] }
   })
   const manifest = {
-    exportedAt: options.exportedAt ?? EXPORTED_AT,
+    exportedAt: EXPORTED_AT,
     source: MANIFEST_SOURCE,
     format: MANIFEST_FORMAT,
     dump: MANIFEST_DUMP,

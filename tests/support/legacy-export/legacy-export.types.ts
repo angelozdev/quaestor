@@ -16,7 +16,6 @@ export type ExportRows = {
 type ManifestOverride = { rows?: number; sha256?: string }
 
 export type ExportOptions = {
-  exportedAt?: string
   manifest?: Partial<Record<TableName, ManifestOverride>>
   extraLines?: Partial<Record<TableName, string[]>>
 }

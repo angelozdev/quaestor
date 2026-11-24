@@ -2,7 +2,7 @@ import { decode, encode } from '@toon-format/toon'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { legacyRows } from '../../../../../tests/support/arbitraries/arbitraries.ts'
-import { addAccount, list } from '../../../../../tests/support/books/books.ts'
+import { addAccount, list, write } from '../../../../../tests/support/books/books.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import { FIXTURE_ROWS } from '../../../../../tests/support/legacy-export/legacy-export.constants.ts'
@@ -11,6 +11,7 @@ import {
   writeLegacyExport,
 } from '../../../../../tests/support/legacy-export/legacy-export.ts'
 import type { ExportRows } from '../../../../../tests/support/legacy-export/legacy-export.types.ts'
+import { refused } from '../../../../../tests/support/refusals/refusals.ts'
 import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
@@ -78,6 +79,60 @@ async function imported(flags: string[] = []) {
   const cli = ledgerCli()
   const run = await cli.run(['import', fixtureExport(), ...flags])
   return { cli, run }
+}
+
+function archived(item: string, kind: string, id: string) {
+  return { code: 'archived', item, message: `${kind} ${id} is archived` }
+}
+
+function spending(account: string, category: string, extra: Record<string, unknown> = {}) {
+  return {
+    account,
+    date: '2026-11-25',
+    payee: 'Netflix',
+    amount: '-5000',
+    currency: 'COP',
+    category,
+    ...extra,
+  }
+}
+
+function halfOf(account: string, currency: string, amount: string) {
+  return { account, date: '2026-11-25', payee: 'Move', amount, currency }
+}
+
+function oneAccount(
+  currency: string,
+  balance: number,
+  amounts: number[],
+  archived = false,
+): ExportRows {
+  return {
+    accounts: [{ id: 1, name: '🏦 Bank', type: 'debit', currency, archived, balance }],
+    categories: [{ id: 1, name: '💰 Salary', archived: false }],
+    tags: [],
+    transactions: amounts.map((amount, index) => ({
+      id: index + 1,
+      date: '2026-11-20',
+      payee: `Salary ${index + 1}`,
+      notes: null,
+      type: 'income',
+      status: 'posted',
+      amount,
+      accountId: 1,
+      categoryId: 1,
+      transferGroup: null,
+      direction: null,
+      createdAt: '2026-11-20T08:00:00',
+    })),
+    tagLinks: [],
+  }
+}
+
+function repeatingDraw() {
+  const indexes = [0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7]
+  let draws = 0
+  return () => indexes[draws++]!
 }
 
 function exportMismatch(file: string, reason: string): string {
@@ -392,39 +447,7 @@ describe('quaestor import', () => {
 
   it('a balance that cannot be held to the cent stops the import and writes nothing', async () => {
     const cli = ledgerCli()
-    const income = { type: 'income', status: 'posted', categoryId: 1, accountId: 1 } as const
-    const folder = writeLegacyExport({
-      accounts: [
-        { id: 1, name: '💵 Wallet', type: 'debit', currency: 'USD', archived: false, balance: 0 },
-      ],
-      categories: [{ id: 1, name: '🍽️ Food', archived: false }],
-      tags: [],
-      transactions: [
-        {
-          ...income,
-          id: 1,
-          date: '2026-11-20',
-          payee: 'A',
-          notes: null,
-          amount: 9000000000000001,
-          transferGroup: null,
-          direction: null,
-          createdAt: '2026-11-20T10:00:00',
-        },
-        {
-          ...income,
-          id: 2,
-          date: '2026-11-20',
-          payee: 'B',
-          notes: null,
-          amount: 9000000000000000,
-          transferGroup: null,
-          direction: null,
-          createdAt: '2026-11-20T10:00:00',
-        },
-      ],
-      tagLinks: [],
-    })
+    const folder = writeLegacyExport(oneAccount('USD', 0, [9000000000000001, 9000000000000000]))
 
     const run = await cli.run(['import', folder])
 
@@ -466,5 +489,153 @@ describe('quaestor import', () => {
       }),
       { numRuns: 50 },
     )
+  })
+
+  it('an archived account receives no new movement', async () => {
+    const { cli } = await imported()
+    const card = named(await accountsOf(cli), 'Old Card')
+    const food = named(await categoriesOf(cli), 'Restaurants')
+    const before = await accountsOf(cli)
+
+    const run = await write(cli, {
+      movements: [spending(card.id, food.id), spending(card.id, food.id, { currency: 'USD' })],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        archived('movements[0]', 'account', card.id),
+        archived('movements[1]', 'account', card.id),
+      ),
+    })
+    expect(await accountsOf(cli)).toEqual(before)
+  })
+
+  it('an archived account cannot be either half', async () => {
+    const { cli } = await imported()
+    const accounts = await accountsOf(cli)
+    const card = named(accounts, 'Old Card')
+    const piggy = named(accounts, 'Piggy')
+
+    const leaving = await write(cli, {
+      transfers: [{ from: halfOf(card.id, 'COP', '-100'), to: halfOf(piggy.id, 'USD', '1') }],
+    })
+    const arriving = await write(cli, {
+      transfers: [{ from: halfOf(piggy.id, 'USD', '-1'), to: halfOf(card.id, 'USD', '100') }],
+    })
+
+    expect(leaving).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(archived('transfers[0].from', 'account', card.id)),
+    })
+    expect(arriving).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(archived('transfers[0].to', 'account', card.id)),
+    })
+    expect(await accountsOf(cli)).toEqual(accounts)
+  })
+
+  it('an archived category receives no new movement', async () => {
+    const { cli } = await imported()
+    const accounts = await accountsOf(cli)
+    const bank = named(accounts, 'Bank')
+    const card = named(accounts, 'Old Card')
+    const gifts = (await categoriesOf(cli)).filter(({ name }) => name === 'Gifts')
+    const [archivedGifts, activeGifts] = gifts.toSorted(
+      (a, b) => Number(b.archived) - Number(a.archived),
+    )
+    const misc = named(await categoriesOf(cli), 'Misc')
+
+    const refusedOne = await write(cli, { movements: [spending(bank.id, archivedGifts.id)] })
+    const refusedInOrder = await write(cli, {
+      movements: [spending(card.id, misc.id, { tags: ['trip:nowhere'] })],
+    })
+    const accepted = await write(
+      cli,
+      { movements: [spending(bank.id, activeGifts.id)] },
+      '--dry-run',
+    )
+
+    expect(refusedOne).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(archived('movements[0]', 'category', archivedGifts.id)),
+    })
+    expect(refusedInOrder).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        archived('movements[0]', 'account', card.id),
+        archived('movements[0]', 'category', misc.id),
+        { code: 'not_found', item: 'movements[0]', message: 'tag trip:nowhere does not exist' },
+      ),
+    })
+    expect(accepted.code).toBe(0)
+  })
+
+  it('an account without an opening date accepts a movement on any date', async () => {
+    const { cli } = await imported()
+    const bank = named(await accountsOf(cli), 'Bank')
+    const food = named(await categoriesOf(cli), 'Restaurants')
+
+    const run = await write(
+      cli,
+      { movements: [spending(bank.id, food.id, { date: '1999-01-01' })] },
+      '--dry-run',
+    )
+
+    expect(run.code).toBe(0)
+    const { recorded } = decode(run.stdout) as { recorded: { date: string }[] }
+    expect(recorded.map(({ date }) => date)).toEqual(['1999-01-01'])
+  })
+
+  it('an account storing 1,000,000.00 COP whose movements add up to 400,000.00 COP opens with 600,000.00', async () => {
+    const cli = ledgerCli()
+
+    const run = await cli.run([
+      'import',
+      writeLegacyExport(oneAccount('COP', 100000000, [40000000])),
+    ])
+
+    const [bank] = await accountsOf(cli)
+    expect(run.code).toBe(0)
+    expect(bank).toMatchObject({
+      currency: 'COP',
+      openingAmount: 600000,
+      openingDate: '2026-11-19',
+      balance: 1000000,
+    })
+  })
+
+  it('codes drawn twice are drawn again, so no two accounts share one', async () => {
+    const cli = ledgerCli({ randomIndex: repeatingDraw() })
+    const twoAccounts = oneAccount('USD', 0, [])
+    twoAccounts.accounts.push({ ...twoAccounts.accounts[0]!, id: 2, name: '💵 Wallet' })
+
+    const run = await cli.run(['import', writeLegacyExport(twoAccounts)])
+
+    expect(run.code).toBe(0)
+    expect((await accountsOf(cli)).map(({ id }) => id)).toEqual(['0123', '4567'])
+  })
+
+  it('an archived account is refused as archived only, even before its opening date', async () => {
+    const cli = ledgerCli()
+    await cli.run(['import', writeLegacyExport(oneAccount('COP', 100000000, [40000000], true))])
+    const [bank] = await accountsOf(cli)
+    const [salary] = await categoriesOf(cli)
+
+    const run = await write(cli, {
+      movements: [spending(bank!.id, salary!.id, { date: '2026-11-01', currency: 'USD' })],
+    })
+
+    expect(bank!.openingDate).toBe('2026-11-19')
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(archived('movements[0]', 'account', bank!.id)),
+    })
   })
 })
