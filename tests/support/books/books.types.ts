@@ -11,3 +11,7 @@ export type Books = {
 }
 
 export type Spender = Pick<Books, 'wallet' | 'food'>
+
+export type Mover = Pick<Books, 'wallet' | 'savings'>
+
+export type Transfer = { from: Json; to: Json }

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import {
+  ARRIVING_AMOUNT_MESSAGE,
+  LEAVING_AMOUNT_MESSAGE,
   NOTHING_TO_WRITE_MESSAGE,
   REPEATED_MESSAGE,
   ZERO_AMOUNT_MESSAGE,
@@ -12,7 +14,10 @@ import {
   tagText,
 } from '../../invocation/input/input.schema.ts'
 
-const movementAmount = amountText.refine((cents) => cents !== 0, ZERO_AMOUNT_MESSAGE)
+const movementAmount = amountText.refine((cents) => cents !== 0, {
+  error: ZERO_AMOUNT_MESSAGE,
+  abort: true,
+})
 
 const tagList = z
   .array(tagText)
@@ -42,10 +47,19 @@ const movement = fields({
     .transform((note) => note ?? null),
 })
 
+const half = movement.omit({ category: true })
+
+const transfer = fields({
+  from: half.extend({
+    amount: movementAmount.refine((cents) => cents < 0, LEAVING_AMOUNT_MESSAGE),
+  }),
+  to: half.extend({ amount: movementAmount.refine((cents) => cents > 0, ARRIVING_AMOUNT_MESSAGE) }),
+})
+
 export const movementWriteSchema = fields({
   delete: z.array(z.never()).default([]),
   movements: z.array(movement).default([]),
-  transfers: z.array(z.never()).default([]),
+  transfers: z.array(transfer).default([]),
 }).check((ctx) => {
   const { delete: deleted, movements, transfers } = ctx.value
   if (deleted.length + movements.length + transfers.length === 0)

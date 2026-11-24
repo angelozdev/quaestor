@@ -1,10 +1,10 @@
 import { decode } from '@toon-format/toon'
 import { amountTextOf } from '../arbitraries/arbitraries.ts'
-import type { Booked } from '../arbitraries/arbitraries.types.ts'
+import type { Booked, Moved } from '../arbitraries/arbitraries.types.ts'
 import { ledgerCli } from '../ledger/ledger.ts'
 import type { LedgerCli } from '../ledger/ledger.types.ts'
-import { DAY, OPENING_DATE } from './books.constants.ts'
-import type { Books, Json, Spender } from './books.types.ts'
+import { CURRENCIES, DAY, OPENING_DATE } from './books.constants.ts'
+import type { Books, Json, Mover, Spender, Transfer } from './books.types.ts'
 
 async function added(cli: LedgerCli, argv: string[], kind: string): Promise<string> {
   const { stdout } = await cli.run(argv)
@@ -52,6 +52,37 @@ export function bookedMovements(books: Books, items: Booked[]): Json[] {
   const accounts = { wallet: books.wallet, savings: books.savings }
   return items.map(({ account, cents, date }) =>
     spend(books, { account: accounts[account], amount: amountTextOf(cents), date }),
+  )
+}
+
+export function transfer(books: Mover, from: Json = {}, to: Json = {}): Transfer {
+  return {
+    from: {
+      account: books.wallet,
+      date: DAY,
+      payee: 'To Savings',
+      amount: '-10',
+      currency: 'USD',
+      ...from,
+    },
+    to: {
+      account: books.savings,
+      date: DAY,
+      payee: 'From Wallet',
+      amount: '10',
+      currency: 'USD',
+      ...to,
+    },
+  }
+}
+
+export function movedTransfers(books: Books, items: Moved[]): Transfer[] {
+  return items.map(({ from, to, sent, received, date }) =>
+    transfer(
+      books,
+      { account: books[from], currency: CURRENCIES[from], amount: amountTextOf(-sent), date },
+      { account: books[to], currency: CURRENCIES[to], amount: amountTextOf(received), date },
+    ),
   )
 }
 

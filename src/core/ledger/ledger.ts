@@ -10,8 +10,10 @@ import {
 import type {
   Account,
   Catalog,
+  HalfDraft,
   MovementDraft,
   RandomIndex,
+  TransferDraft,
   WriteProblem,
   WriteRequest,
 } from './ledger.types.ts'
@@ -48,7 +50,7 @@ function notFound(item: string, kind: string, id: string): WriteProblem {
   return { code: PROBLEM_CODES.NotFound, item, message: `${kind} ${id} does not exist` }
 }
 
-function accountProblems(account: Account, movement: MovementDraft, item: string): WriteProblem[] {
+function accountProblems(account: Account, movement: HalfDraft, item: string): WriteProblem[] {
   const problems: WriteProblem[] = []
   if (account.openingDate !== null && movement.date < account.openingDate)
     problems.push({
@@ -65,23 +67,64 @@ function accountProblems(account: Account, movement: MovementDraft, item: string
   return problems
 }
 
+function accountChecks(
+  half: HalfDraft,
+  item: string,
+  accounts: Catalog['accounts'],
+): WriteProblem[] {
+  const account = accounts.get(half.account)
+  return account === undefined
+    ? [notFound(item, 'account', half.account)]
+    : accountProblems(account, half, item)
+}
+
+function tagChecks(half: HalfDraft, item: string, tags: Catalog['tags']): WriteProblem[] {
+  return half.tags.filter((tag) => !tags.has(tag)).map((tag) => notFound(item, 'tag', tag))
+}
+
 function movementProblems(
   movement: MovementDraft,
   item: string,
   { accounts, categories, tags }: Catalog,
 ): WriteProblem[] {
-  const account = accounts.get(movement.account)
   return [
-    ...(account === undefined
-      ? [notFound(item, 'account', movement.account)]
-      : accountProblems(account, movement, item)),
+    ...accountChecks(movement, item, accounts),
     ...(categories.has(movement.category) ? [] : [notFound(item, 'category', movement.category)]),
-    ...movement.tags.filter((tag) => !tags.has(tag)).map((tag) => notFound(item, 'tag', tag)),
+    ...tagChecks(movement, item, tags),
+  ]
+}
+
+function halfProblems(half: HalfDraft, item: string, { accounts, tags }: Catalog): WriteProblem[] {
+  return [...accountChecks(half, item, accounts), ...tagChecks(half, item, tags)]
+}
+
+function transferProblems(
+  { from, to }: TransferDraft,
+  item: string,
+  catalog: Catalog,
+): WriteProblem[] {
+  return [
+    ...(from.account === to.account
+      ? [
+          {
+            code: PROBLEM_CODES.SameAccountTransfer,
+            item,
+            message: `a transfer needs two different accounts, not ${from.account} twice`,
+          },
+        ]
+      : []),
+    ...halfProblems(from, `${item}.from`, catalog),
+    ...halfProblems(to, `${item}.to`, catalog),
   ]
 }
 
 export function checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[] {
-  return request.movements.flatMap((movement, index) =>
-    movementProblems(movement, `movements[${index}]`, catalog),
-  )
+  return [
+    ...request.movements.flatMap((movement, index) =>
+      movementProblems(movement, `movements[${index}]`, catalog),
+    ),
+    ...request.transfers.flatMap((transfer, index) =>
+      transferProblems(transfer, `transfers[${index}]`, catalog),
+    ),
+  ]
 }

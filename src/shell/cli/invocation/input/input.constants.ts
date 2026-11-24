@@ -17,6 +17,10 @@ export const UNKNOWN_KEY_MESSAGE = 'is not a field'
 
 export const ZERO_AMOUNT_MESSAGE = 'must not be 0'
 
+export const LEAVING_AMOUNT_MESSAGE = 'must be negative: the money leaves this account'
+
+export const ARRIVING_AMOUNT_MESSAGE = 'must be positive: the money arrives in this account'
+
 export const LIMIT_MESSAGE = 'must be a whole number above 0'
 
 export const REPEATED_MESSAGE = 'is repeated'

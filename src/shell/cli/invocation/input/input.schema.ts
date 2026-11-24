@@ -30,7 +30,7 @@ export const amountText = z
   .string(wrongOr(AMOUNT_MESSAGE))
   .regex(AMOUNT_PATTERN, AMOUNT_MESSAGE)
   .transform(centsOf)
-  .refine(Number.isSafeInteger, AMOUNT_TOO_LARGE_MESSAGE)
+  .refine(Number.isSafeInteger, { error: AMOUNT_TOO_LARGE_MESSAGE, abort: true })
 
 export const currencyCode = z.string(wrongOr(CURRENCY_MESSAGE)).refine(isCurrency, CURRENCY_MESSAGE)
 

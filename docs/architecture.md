@@ -82,8 +82,9 @@ Written for a reader that is a model, not a person.
   field inside a list), found before a store is opened; `invalid_json`, 1, when stdin
   holds no valid JSON, found before a store is opened, with the reason on one line in its
   message; `refused`, 1, when a write breaks a rule, with every item at fault as `errors`,
-  each `{code, item, message}` where `item` is the position (`movements[2]`) and `code` is
-  `not_found`, `currency_mismatch` or `before_opening`, and nothing written; `unexpected`,
+  each `{code, item, message}` where `item` is the position (`movements[2]`,
+  `transfers[0].from`) and `code` is `not_found`, `currency_mismatch`, `before_opening` or
+  `same_account_transfer`, and nothing written; `unexpected`,
   2, for any error no class names, with its message.
 - Quaestor's own failures are error classes in their module's `.errors.ts`, each
   extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`

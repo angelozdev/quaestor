@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/sqlite-core'
 import {
   RefusedWriteError,
   amountOf,
@@ -6,7 +7,8 @@ import {
   matchesPayee,
   type AccountRow,
   type Catalog,
-  type MovementDraft,
+  type HalfDraft,
+  type TransferDraft,
   type WriteDeps,
   type WriteRequest,
 } from '#core/ledger'
@@ -43,8 +45,9 @@ function loadCatalog(store: Store): Catalog {
 
 function insertMovement(
   store: Store,
-  draft: MovementDraft,
+  draft: HalfDraft & { category: string | null },
   { randomIndex, now }: WriteDeps,
+  transfer: string | null = null,
 ): MovementRow {
   const instant = now.toISOString()
   const id = withFreshCode(
@@ -59,6 +62,7 @@ function insertMovement(
           payee: draft.payee,
           amount: draft.amount,
           categoryId: draft.category,
+          transfer,
           note: draft.note,
           createdAt: instant,
           updatedAt: instant,
@@ -83,7 +87,7 @@ function insertMovement(
     category: draft.category,
     tags: draft.tags.join(TAG_SEPARATOR),
     note: draft.note,
-    transfer: null,
+    transfer,
   })
 }
 
@@ -102,12 +106,28 @@ function changesBetween(before: AccountRow[], after: AccountRow[]): BalanceChang
   }))
 }
 
+function insertTransfer(store: Store, { from, to }: TransferDraft, deps: WriteDeps): MovementRow[] {
+  const key = crypto.randomUUID()
+  const leaving = insertMovement(store, { ...from, category: null }, deps, key)
+  const arriving = insertMovement(store, { ...to, category: null }, deps, key)
+  return [
+    { ...leaving, transfer: arriving.id },
+    { ...arriving, transfer: leaving.id },
+  ]
+}
+
 export function writeMovements(store: Store, request: WriteRequest, deps: WriteDeps): WriteResult {
   const problems = checkWrite(request, loadCatalog(store))
   if (problems.length > 0) throw new RefusedWriteError(problems)
-  const touched = new Set(request.movements.map(({ account }) => account))
+  const touched = new Set([
+    ...request.movements.map(({ account }) => account),
+    ...request.transfers.flatMap(({ from, to }) => [from.account, to.account]),
+  ])
   const before = touchedAccounts(store, touched)
-  const recorded = request.movements.map((draft) => insertMovement(store, draft, deps))
+  const recorded = [
+    ...request.movements.map((draft) => insertMovement(store, draft, deps)),
+    ...request.transfers.flatMap((draft) => insertTransfer(store, draft, deps)),
+  ]
   return {
     deleted: [],
     recorded,
@@ -127,6 +147,7 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
     .from(movements)
     .where(isNull(movements.deletedAt))
     .as('sums')
+  const partner = alias(movements, 'partner')
   return db
     .select({
       id: movements.id,
@@ -138,12 +159,13 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
       category: movements.categoryId,
       tags: TAGS,
       note: movements.note,
-      transfer: movements.transfer,
+      transfer: partner.id,
       balance: sql<number>`${accounts.openingAmount} + ${sums.sum}`,
     })
     .from(movements)
     .innerJoin(accounts, eq(accounts.id, movements.accountId))
     .innerJoin(sums, eq(sums.seq, movements.seq))
+    .leftJoin(partner, and(eq(partner.transfer, movements.transfer), ne(partner.id, movements.id)))
     .where(
       and(
         isNull(movements.deletedAt),

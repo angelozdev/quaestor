@@ -18,6 +18,7 @@ export const PROBLEM_CODES = {
   NotFound: 'not_found',
   CurrencyMismatch: 'currency_mismatch',
   BeforeOpening: 'before_opening',
+  SameAccountTransfer: 'same_account_transfer',
 } as const
 
 export const DIACRITICS = /\p{Diacritic}/gu

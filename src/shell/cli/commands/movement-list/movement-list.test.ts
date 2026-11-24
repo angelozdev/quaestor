@@ -9,9 +9,10 @@ import {
   list,
   openBooks,
   spend,
+  transfer,
   write,
 } from '../../../../../tests/support/books/books.ts'
-import type { Books, Json } from '../../../../../tests/support/books/books.types.ts'
+import type { Books, Json, Transfer } from '../../../../../tests/support/books/books.types.ts'
 import { invalidInput } from '../../../../../tests/support/refusals/refusals.ts'
 import type { CliRun } from '../../../../../tests/support/run-cli/run-cli.types.ts'
 
@@ -34,6 +35,12 @@ function cents(amount: unknown): number {
 async function recordAll(books: Books, movements: Json[]): Promise<Json[]> {
   const run = await write(books.cli, { movements })
   return (decode(run.stdout) as { recorded: Json[] }).recorded
+}
+
+async function recordTransfer(books: Books, moving: Transfer): Promise<[Json, Json]> {
+  const run = await write(books.cli, { transfers: [moving] })
+  const [leaving, arriving] = (decode(run.stdout) as { recorded: Json[] }).recorded
+  return [leaving!, arriving!]
 }
 
 function shown(run: CliRun): Listing {
@@ -83,6 +90,27 @@ describe('quaestor movement list', () => {
       withBalance(ride, 108),
     ])
     expect(refund?.tags).toBe('who:alex trip:lima-2026')
+  })
+
+  it("a transfer is listed in each account, with the other half's code and no category (USD and COP)", async () => {
+    const books = await openBooks()
+    const [leaving, arriving] = await recordTransfer(
+      books,
+      transfer(
+        books,
+        { amount: '-100' },
+        { account: books.bank, currency: 'COP', amount: '400000' },
+      ),
+    )
+
+    const everything = await list(books.cli)
+    const bank = await list(books.cli, '--account', books.bank)
+
+    expectListing(everything, [withBalance(arriving, 1400000), withBalance(leaving, 20.5)])
+    expectListing(bank, [withBalance(arriving, 1400000)])
+    expect(arriving?.transfer).toBe(leaving?.id)
+    expect(leaving?.transfer).toBe(arriving?.id)
+    expect(shown(bank).movements[0]?.category).toBeNull()
   })
 
   it('movement list without filters shows every account, each with its own balance', async () => {

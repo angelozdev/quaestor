@@ -1,23 +1,27 @@
 import { decode } from '@toon-format/toon'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { booked, faultyItems } from '../../../../../tests/support/arbitraries/arbitraries.ts'
+import { booked, faultyItems, moved } from '../../../../../tests/support/arbitraries/arbitraries.ts'
 import type {
   Booked,
   BookedAccount,
   Fault,
+  Moved,
+  MovedAccount,
 } from '../../../../../tests/support/arbitraries/arbitraries.types.ts'
 import {
   addAccount,
   addCategory,
   bookedMovements,
   list,
+  movedTransfers,
   openBooks,
   spend,
+  transfer,
   write,
 } from '../../../../../tests/support/books/books.ts'
 import { OPENING_DATE } from '../../../../../tests/support/books/books.constants.ts'
-import type { Books, Json } from '../../../../../tests/support/books/books.types.ts'
+import type { Books, Json, Transfer } from '../../../../../tests/support/books/books.types.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import {
@@ -25,6 +29,7 @@ import {
   invalidJson,
   refused,
 } from '../../../../../tests/support/refusals/refusals.ts'
+import type { CliRun } from '../../../../../tests/support/run-cli/run-cli.types.ts'
 import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
@@ -38,7 +43,17 @@ const DATE_MESSAGE = 'must be a date like 2026-11-24'
 
 const NOTHING_TO_WRITE = 'nothing to write: give delete, movements or transfers'
 
+const LEAVING_MESSAGE = 'must be negative: the money leaves this account'
+
+const ARRIVING_MESSAGE = 'must be positive: the money arrives in this account'
+
+const ZERO_MESSAGE = 'must not be 0'
+
+const TOO_LARGE_MESSAGE = 'is too large: at most 90071992547409.91 either way'
+
 type Problem = { code: string; item: string; message: string }
+
+type BalanceChange = { account: string; currency: string; before: number; after: number }
 
 function recorded(movement: Json, extra: Json = {}): Json {
   return {
@@ -76,6 +91,46 @@ function beforeOpening(item: string, account: string, date: string): Problem {
   }
 }
 
+function half(movement: Json, extra: Json = {}): Json {
+  return recorded(movement, { category: null, ...extra })
+}
+
+function recordedRows(run: CliRun): Json[] {
+  return (decode(run.stdout) as { recorded: Json[] }).recorded
+}
+
+function recordedHalves(
+  run: CliRun,
+  moving: Transfer,
+  fromExtra: Json = {},
+  toExtra: Json = {},
+): Json[] {
+  const [leaving, arriving] = recordedRows(run).slice(-2)
+  return [
+    half(moving.from, { transfer: arriving?.id, ...fromExtra }),
+    half(moving.to, { transfer: leaving?.id, ...toExtra }),
+  ]
+}
+
+function walletToSavings(books: Books): BalanceChange[] {
+  return [
+    { account: books.wallet, currency: 'USD', before: 120.5, after: 110.5 },
+    { account: books.savings, currency: 'USD', before: 0, after: 10 },
+  ].toSorted(byAccount)
+}
+
+function sameAccount(item: string, account: string): Problem {
+  return {
+    code: 'same_account_transfer',
+    item,
+    message: `a transfer needs two different accounts, not ${account} twice`,
+  }
+}
+
+function byAccount(a: { account: string }, b: { account: string }): number {
+  return a.account < b.account ? -1 : 1
+}
+
 async function accountsText(cli: LedgerCli): Promise<string> {
   return (await cli.run(['account', 'list'])).stdout
 }
@@ -90,12 +145,20 @@ function drawing(indexes: number[]) {
   return () => indexes[draws++]!
 }
 
-const OPENING_CENTS = { wallet: 12050, savings: 0 }
+const OPENING_CENTS = { wallet: 12050, savings: 0, bank: 100_000_000 }
 
 function totalCents(items: Booked[], account: BookedAccount): number {
   return items
     .filter((item) => item.account === account)
     .reduce((total, { cents }) => total + cents, OPENING_CENTS[account])
+}
+
+function movedCents(items: Moved[], account: MovedAccount): number {
+  return items.reduce(
+    (total, { from, to, sent, received }) =>
+      total - (from === account ? sent : 0) + (to === account ? received : 0),
+    OPENING_CENTS[account],
+  )
 }
 
 function faultyMovement(books: Books, fault: Fault | undefined): Json {
@@ -320,6 +383,253 @@ describe('quaestor movement write', () => {
     )
   })
 
+  it('a transfer writes both halves, each in its own account (USD)', async () => {
+    const books = await openBooks()
+    const moving = transfer(books)
+
+    const run = await write(books.cli, { transfers: [moving] })
+    const listed = await accountsText(books.cli)
+
+    expectWrite(run, false, {
+      deleted: [],
+      recorded: recordedHalves(run, moving),
+      balances: walletToSavings(books),
+    })
+    expect(balancesById(listed)).toEqual({
+      [books.bank]: 1000000,
+      [books.savings]: 10,
+      [books.wallet]: 110.5,
+    })
+  })
+
+  it('a transfer across currencies carries both amounts and converts nothing', async () => {
+    const books = await openBooks()
+    const moving = transfer(
+      books,
+      { amount: '-100' },
+      { account: books.bank, currency: 'COP', amount: '400000' },
+    )
+
+    const run = await write(books.cli, { transfers: [moving] })
+
+    expectWrite(run, false, {
+      deleted: [],
+      recorded: recordedHalves(run, moving),
+      balances: [
+        { account: books.wallet, currency: 'USD', before: 120.5, after: 20.5 },
+        { account: books.bank, currency: 'COP', before: 1000000, after: 1400000 },
+      ].toSorted(byAccount),
+    })
+  })
+
+  it('each half keeps its own date, payee and note', async () => {
+    const books = await openBooks()
+    const moving = transfer(
+      books,
+      { date: '2026-11-10', payee: 'Wire out', note: 'left on the 10th' },
+      { date: '2026-11-11', payee: 'Wire in', note: 'arrived on the 11th' },
+    )
+
+    const run = await write(books.cli, { transfers: [moving] })
+
+    expect(recordedRows(run)).toEqual(
+      recordedHalves(run, moving, { note: 'left on the 10th' }, { note: 'arrived on the 11th' }),
+    )
+  })
+
+  it('tags can go on a transfer half', async () => {
+    const books = await openBooks()
+    await books.cli.run(['tag', 'add', 'trip:lima-2026'])
+    await books.cli.run(['tag', 'add', 'who:alex'])
+    const moving = transfer(books, { tags: ['trip:lima-2026', 'who:alex'] }, { tags: ['who:alex'] })
+
+    const run = await write(books.cli, { transfers: [moving] })
+
+    expect(recordedRows(run)).toEqual(
+      recordedHalves(run, moving, { tags: 'trip:lima-2026 who:alex' }, { tags: 'who:alex' }),
+    )
+  })
+
+  it('--dry-run of a transfer shows both halves and the balances, and writes nothing', async () => {
+    const books = await openBooks()
+    const moving = transfer(books)
+    const before = await accountsText(books.cli)
+    const listedBefore = (await list(books.cli)).stdout
+
+    const dry = await write(books.cli, { transfers: [moving] }, '--dry-run')
+
+    expectWrite(dry, true, {
+      deleted: [],
+      recorded: recordedHalves(dry, moving),
+      balances: walletToSavings(books),
+    })
+    expect(await accountsText(books.cli)).toBe(before)
+    expect((await list(books.cli)).stdout).toBe(listedBefore)
+  })
+
+  it('a transfer is written after the movements, and each account joins the balances once', async () => {
+    const books = await openBooks()
+    const spending = spend(books)
+    const moving = transfer(books)
+
+    const run = await write(books.cli, { movements: [spending], transfers: [moving] })
+
+    expectWrite(run, false, {
+      deleted: [],
+      recorded: [recorded(spending), ...recordedHalves(run, moving)],
+      balances: [
+        { account: books.wallet, currency: 'USD', before: 120.5, after: 98 },
+        { account: books.savings, currency: 'USD', before: 0, after: 10 },
+      ].toSorted(byAccount),
+    })
+  })
+
+  it('a transfer has no category', async () => {
+    const books = await openBooks()
+    const moving = transfer(books, { category: books.food }, { category: books.food })
+
+    const run = await write(books.cli, { transfers: [moving] })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: invalidInput(
+        'transfers[0].from.category: is not a field',
+        'transfers[0].to.category: is not a field',
+      ),
+    })
+  })
+
+  it('a transfer between an account and itself is refused', async () => {
+    const books = await openBooks()
+    const before = await accountsText(books.cli)
+
+    const run = await write(books.cli, {
+      transfers: [transfer(books, {}, { account: books.wallet })],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(sameAccount('transfers[0]', books.wallet)),
+    })
+    expect(await accountsText(books.cli)).toBe(before)
+  })
+
+  it('the half that leaves must be negative and the half that arrives positive', async () => {
+    const books = await openBooks()
+
+    const run = await write(books.cli, {
+      transfers: [transfer(books, { amount: '10' }, { amount: '-10' })],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: invalidInput(
+        `transfers[0].from.amount: ${LEAVING_MESSAGE}`,
+        `transfers[0].to.amount: ${ARRIVING_MESSAGE}`,
+      ),
+    })
+  })
+
+  it('a half of zero or beyond the limit is refused for that, not for its sign', async () => {
+    const books = await openBooks()
+
+    const run = await write(books.cli, {
+      transfers: [
+        transfer(books, { amount: '0' }, { amount: '0.00' }),
+        transfer(books, { amount: '90071992547409.92' }, { amount: '-90071992547409.92' }),
+      ],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: invalidInput(
+        `transfers[0].from.amount: ${ZERO_MESSAGE}`,
+        `transfers[0].to.amount: ${ZERO_MESSAGE}`,
+        `transfers[1].from.amount: ${TOO_LARGE_MESSAGE}`,
+        `transfers[1].to.amount: ${TOO_LARGE_MESSAGE}`,
+      ),
+    })
+  })
+
+  it('a refused half writes neither half', async () => {
+    const books = await openBooks()
+    const before = await accountsText(books.cli)
+    const listedBefore = (await list(books.cli)).stdout
+
+    const run = await write(books.cli, {
+      movements: [spend(books)],
+      transfers: [transfer(books), transfer(books, {}, { currency: 'EUR' })],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(wrongCurrency('transfers[1].to', books.savings, 'USD', 'EUR')),
+    })
+    expect(await accountsText(books.cli)).toBe(before)
+    expect((await list(books.cli)).stdout).toBe(listedBefore)
+  })
+
+  it('a transfer lists its accounts, then its from half, then its to half', async () => {
+    const books = await openBooks()
+
+    const run = await write(books.cli, {
+      movements: [spend(books, { category: NO_SUCH_CODE })],
+      transfers: [
+        transfer(books),
+        transfer(
+          books,
+          { account: books.savings, currency: 'EUR', tags: ['trip:nowhere'] },
+          { account: books.savings, date: '2026-01-04' },
+        ),
+        transfer(books, { account: NO_SUCH_CODE }, { account: NO_SUCH_CODE, tags: ['who:nobody'] }),
+      ],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        notFound('movements[0]', 'category', NO_SUCH_CODE),
+        sameAccount('transfers[1]', books.savings),
+        wrongCurrency('transfers[1].from', books.savings, 'USD', 'EUR'),
+        notFound('transfers[1].from', 'tag', 'trip:nowhere'),
+        beforeOpening('transfers[1].to', books.savings, '2026-01-04'),
+        sameAccount('transfers[2]', NO_SUCH_CODE),
+        notFound('transfers[2].from', 'account', NO_SUCH_CODE),
+        notFound('transfers[2].to', 'account', NO_SUCH_CODE),
+        notFound('transfers[2].to', 'tag', 'who:nobody'),
+      ),
+    })
+  })
+
+  it('a transfer moves each account by its own half and no other account (USD and COP)', async () => {
+    await fc.assert(
+      fc.asyncProperty(moved(OPENING_DATE), async (items) => {
+        const books = await openBooks()
+
+        const run = await write(books.cli, { transfers: movedTransfers(books, items) })
+        const listed = balancesById(await accountsText(books.cli))
+
+        const rows = recordedRows(run)
+        expect(run.code).toBe(0)
+        expect(listed).toEqual({
+          [books.wallet]: movedCents(items, 'wallet') / 100,
+          [books.savings]: movedCents(items, 'savings') / 100,
+          [books.bank]: movedCents(items, 'bank') / 100,
+        })
+        expect(rows).toHaveLength(items.length * 2)
+        for (const [index, row] of rows.entries())
+          expect(row.transfer).toBe(rows[index % 2 === 0 ? index + 1 : index - 1]?.id)
+      }),
+      { numRuns: 50 },
+    )
+  })
+
   it('a dry run changes nothing, and its balances after are what the write then shows', async () => {
     await fc.assert(
       fc.asyncProperty(booked(OPENING_DATE), async (items) => {
@@ -508,6 +818,18 @@ describe('quaestor movement write', () => {
 
     const shown = decode(run.stdout) as { recorded: { id: string }[] }
     expect(shown.recorded.map(({ id }) => id)).toEqual(['0123', '4567'])
+  })
+
+  it('the two halves of a transfer never share a code, even when the draw repeats', async () => {
+    const cli = ledgerCli({
+      randomIndex: drawing([0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 0, 1, 2, 3, 4, 5, 6, 7]),
+    })
+    const wallet = await addAccount(cli, 'Wallet', 'USD', '120.50')
+    const savings = await addAccount(cli, 'Savings', 'USD', '0')
+
+    const run = await write(cli, { transfers: [transfer({ wallet, savings })] })
+
+    expect(recordedRows(run).map(({ id }) => id)).toEqual(['0123', '4567'])
   })
 
   it('two writes never share a code, even when the draw starts over', async () => {

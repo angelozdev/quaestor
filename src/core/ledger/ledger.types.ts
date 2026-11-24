@@ -48,9 +48,9 @@ export type MovementDraft = {
   note: string | null
 }
 
-type HalfDraft = Omit<MovementDraft, 'category'>
+export type HalfDraft = Omit<MovementDraft, 'category'>
 
-type TransferDraft = { from: HalfDraft; to: HalfDraft }
+export type TransferDraft = { from: HalfDraft; to: HalfDraft }
 
 export type WriteRequest = {
   delete: string[]

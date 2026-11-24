@@ -21,3 +21,7 @@ export const MAX_BOOKED = 20
 export const FAULTS = ['category', 'currency', 'opening'] as const
 
 export const MAX_FAULTY_ITEMS = 8
+
+export const MOVED_ACCOUNTS = ['wallet', 'savings', 'bank'] as const
+
+export const MAX_MOVED = 8

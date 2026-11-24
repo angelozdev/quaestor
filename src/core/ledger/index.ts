@@ -8,8 +8,9 @@ export type {
   Catalog,
   Category,
   CategoryDraft,
-  MovementDraft,
+  HalfDraft,
   RandomIndex,
+  TransferDraft,
   WriteDeps,
   WriteRequest,
 } from './ledger.types.ts'

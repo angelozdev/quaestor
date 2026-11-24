@@ -8,12 +8,14 @@ import {
   MAX_DAYS_AFTER,
   MAX_DECIMAL_DIGITS,
   MAX_FAULTY_ITEMS,
+  MAX_MOVED,
   MAX_MOVEMENT_CENTS,
   MAX_WHOLE_PART,
+  MOVED_ACCOUNTS,
   MS_PER_DAY,
   SIGNS,
 } from './arbitraries.constants.ts'
-import type { Booked, Fault } from './arbitraries.types.ts'
+import type { Booked, Fault, Moved } from './arbitraries.types.ts'
 
 export const amountText = fc
   .tuple(
@@ -26,8 +28,10 @@ export const amountText = fc
       `${sign}${whole}${decimals.length === 0 ? '' : `.${decimals.join('')}`}`,
   )
 
+const positiveCents = fc.integer({ min: 1, max: MAX_MOVEMENT_CENTS })
+
 const movementCents = fc
-  .tuple(fc.constantFrom(1, -1), fc.integer({ min: 1, max: MAX_MOVEMENT_CENTS }))
+  .tuple(fc.constantFrom(1, -1), positiveCents)
   .map(([sign, magnitude]) => sign * magnitude)
 
 export function amountTextOf(cents: number): string {
@@ -62,3 +66,24 @@ export const faultyItems: fc.Arbitrary<(Fault | undefined)[]> = fc
     fc.constantFrom(...FAULTS),
   )
   .map(([faults, at, fault]) => faults.with(at % faults.length, fault))
+
+export function moved(openingDate: string): fc.Arbitrary<Moved[]> {
+  return fc
+    .array(
+      fc.record({
+        from: fc.constantFrom(...MOVED_ACCOUNTS),
+        step: fc.integer({ min: 1, max: MOVED_ACCOUNTS.length - 1 }),
+        sent: positiveCents,
+        received: positiveCents,
+        date: dateOnOrAfter(openingDate),
+      }),
+      { minLength: 1, maxLength: MAX_MOVED },
+    )
+    .map((items) =>
+      items.map(({ from, step, ...amounts }) => ({
+        from,
+        to: MOVED_ACCOUNTS[(MOVED_ACCOUNTS.indexOf(from) + step) % MOVED_ACCOUNTS.length]!,
+        ...amounts,
+      })),
+    )
+}
