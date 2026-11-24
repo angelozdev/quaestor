@@ -1,6 +1,6 @@
 import type { ErrorData } from './errors.types.ts'
 
-export class RefusedError extends Error {
+class CodedError extends Error {
   readonly code: string
   readonly data: ErrorData
 
@@ -11,3 +11,7 @@ export class RefusedError extends Error {
     this.data = data
   }
 }
+
+export class RefusedError extends CodedError {}
+
+export class FailedError extends CodedError {}

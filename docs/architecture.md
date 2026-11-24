@@ -63,8 +63,12 @@ Written for a reader that is a model, not a person.
   codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1;
   `missing_command`, 1, when a call has global options and no command, with the
   `commands` it can use; `named_env_disabled`, 1, because the default env needs a
-  data folder and the entry point has none (under vitest); `unexpected`, 2, for
-  any error no class names, with its message.
+  data folder and the entry point has none (under vitest); `backup_not_written`, 2,
+  when a backup cannot be written, with the `folder` and the `reason`; `unexpected`,
+  2, for any error no class names, with its message.
+- Every failure is an error class in its module's `.errors.ts` that extends
+  `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors` with its
+  stable code.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit

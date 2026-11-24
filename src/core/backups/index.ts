@@ -1,1 +1,1 @@
-export { backupFileName } from './backups.ts'
+export { backupFileName, copiesToRemove } from './backups.ts'

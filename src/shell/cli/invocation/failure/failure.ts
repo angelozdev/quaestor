@@ -1,5 +1,5 @@
 import { CommanderError } from '@commander-js/extra-typings'
-import { RefusedError } from '#core/errors'
+import { FailedError, RefusedError } from '#core/errors'
 import { ExitCode } from '../../main/main.constants.ts'
 import {
   CAMEL_CASE_BOUNDARY,
@@ -29,8 +29,11 @@ function usageFailure(error: CommanderError): Failure {
   }
 }
 
-function refusedFailure({ code, data, message }: RefusedError): Failure {
-  return { exitCode: ExitCode.Refused, payload: { error: { code, ...data, message } } }
+function codedFailure(
+  exitCode: number,
+  { code, data, message }: RefusedError | FailedError,
+): Failure {
+  return { exitCode, payload: { error: { code, ...data, message } } }
 }
 
 function unexpectedFailure(error: unknown): Failure {
@@ -48,8 +51,9 @@ function isMissingCommand(error: CommanderError): boolean {
 export function failureOf(error: unknown, commands: string[]): Failure {
   if (error instanceof CommanderError)
     return isMissingCommand(error)
-      ? refusedFailure(new MissingCommandError(commands))
+      ? codedFailure(ExitCode.Refused, new MissingCommandError(commands))
       : usageFailure(error)
-  if (error instanceof RefusedError) return refusedFailure(error)
+  if (error instanceof RefusedError) return codedFailure(ExitCode.Refused, error)
+  if (error instanceof FailedError) return codedFailure(ExitCode.Failed, error)
   return unexpectedFailure(error)
 }
