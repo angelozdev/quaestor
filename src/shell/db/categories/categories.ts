@@ -16,7 +16,7 @@ export function listCategories(store: Store): Category[] {
     .select(STORED_FIELDS)
     .from(categories)
     .where(isNull(categories.deletedAt))
-    .orderBy(categories.name)
+    .orderBy(categories.name, categories.id)
     .all()
 }
 
