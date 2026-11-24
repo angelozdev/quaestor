@@ -49,14 +49,12 @@ function transactionRow(transaction: ExportTransaction, currency: string): Row {
   })
 }
 
-function tableRows(rows: ExportRows): Record<TableName, Row[]> {
+function tableRows(rows: ExportRows): Partial<Record<TableName, Row[]>> {
   const currencies = new Map(rows.accounts.map(({ id, currency }) => [id, currency]))
-  const unparsed = Object.fromEntries(
-    Object.entries(UNPARSED_TABLES).map(([name, table]) => [name, table.map(rowOf)]),
-  )
   return {
-    ...Object.fromEntries(TABLE_NAMES.map((name) => [name, []])),
-    ...unparsed,
+    ...Object.fromEntries(
+      Object.entries(UNPARSED_TABLES).map(([name, table]) => [name, table.map(rowOf)]),
+    ),
     account: rows.accounts.map(rowOf),
     category: rows.categories.map(({ id, name, archived }) =>
       rowOf({
@@ -77,22 +75,23 @@ function tableRows(rows: ExportRows): Record<TableName, Row[]> {
     transaction_tag: rows.tagLinks.map(({ transactionId, tagId }) =>
       rowOf({ transaction_id: transactionId, tag_id: tagId }),
     ),
-  } as Record<TableName, Row[]>
+  }
 }
 
 export function writeLegacyExport(rows: ExportRows, options: ExportOptions = {}): string {
   const folder = tempDir('quaestor-legacy-')
   mkdirSync(join(folder, 'tables'))
-  const tables = Object.entries(tableRows(rows)).map(([name, tableRow]) => {
+  const contents = tableRows(rows)
+  const tables = TABLE_NAMES.map((name) => {
     const file = `tables/${name}.jsonl`
     const lines = [
-      ...tableRow.map((row) => JSON.stringify(row)),
-      ...(options.extraLines?.[name as TableName] ?? []),
+      ...(contents[name] ?? []).map((row) => JSON.stringify(row)),
+      ...(options.extraLines?.[name] ?? []),
     ]
     const text = lines.map((line) => `${line}\n`).join('')
     writeFileSync(join(folder, file), text)
     const sha256 = createHash('sha256').update(text).digest('hex')
-    return { name, file, rows: lines.length, sha256, ...options.manifest?.[name as TableName] }
+    return { name, file, rows: lines.length, sha256, ...options.manifest?.[name] }
   })
   const manifest = {
     exportedAt: options.exportedAt ?? EXPORTED_AT,

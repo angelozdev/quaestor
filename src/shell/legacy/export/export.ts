@@ -61,13 +61,13 @@ export async function readLegacyExport(folder: string): Promise<LegacyExport> {
   const manifest = manifestSchema.parse(
     JSON.parse(await readFile(join(folder, MANIFEST_FILE), 'utf8')),
   )
-  const tables = new Map(manifest.tables.map((table) => [table.name, table]))
-  const checked = new Map<string, string[]>()
-  for (const table of manifest.tables) checked.set(table.name, await checkedLines(folder, table))
-  const rowsOf = <T>(name: string, schema: z.ZodType<T>): T[] =>
-    checked
-      .get(name)!
-      .map((line, index) => parsedLine(tables.get(name)!.file, line, index + 1, schema))
+  const checked = new Map<string, { file: string; lines: string[] }>()
+  for (const table of manifest.tables)
+    checked.set(table.name, { file: table.file, lines: await checkedLines(folder, table) })
+  const rowsOf = <T>(name: string, schema: z.ZodType<T>): T[] => {
+    const { file, lines } = checked.get(name)!
+    return lines.map((line, index) => parsedLine(file, line, index + 1, schema))
+  }
   return {
     exportedAt: manifest.exportedAt,
     balances: new Map(manifest.accounts.map(({ id, balance }) => [id, balance])),
