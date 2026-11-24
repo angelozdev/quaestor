@@ -28,7 +28,28 @@ import type {
   WriteResult,
 } from './movements.types.ts'
 
+const partner = alias(movements, 'partner')
+
 const TAGS = sql<string>`coalesce((select group_concat(${movementTags.tag}, ${TAG_SEPARATOR} order by ${movementTags}.rowid) from ${movementTags} where ${movementTags.movementId} = ${movements.id}), '')`
+
+const MOVEMENT_FIELDS = {
+  id: movements.id,
+  date: movements.date,
+  account: movements.accountId,
+  payee: movements.payee,
+  amount: movements.amount,
+  currency: accounts.currency,
+  category: movements.categoryId,
+  tags: TAGS,
+  note: movements.note,
+  transfer: partner.id,
+}
+
+const PARTNER_IS_LIVE = and(
+  eq(partner.transfer, movements.transfer),
+  ne(partner.id, movements.id),
+  isNull(partner.deletedAt),
+)
 
 function rowOf<T extends MovementRow>(stored: T): T {
   return { ...stored, amount: amountOf(stored.amount) }
@@ -147,32 +168,15 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
     .from(movements)
     .where(isNull(movements.deletedAt))
     .as('sums')
-  const partner = alias(movements, 'partner')
   return db
     .select({
-      id: movements.id,
-      date: movements.date,
-      account: movements.accountId,
-      payee: movements.payee,
-      amount: movements.amount,
-      currency: accounts.currency,
-      category: movements.categoryId,
-      tags: TAGS,
-      note: movements.note,
-      transfer: partner.id,
+      ...MOVEMENT_FIELDS,
       balance: sql<number>`${accounts.openingAmount} + ${sums.sum}`,
     })
     .from(movements)
     .innerJoin(accounts, eq(accounts.id, movements.accountId))
     .innerJoin(sums, eq(sums.seq, movements.seq))
-    .leftJoin(
-      partner,
-      and(
-        eq(partner.transfer, movements.transfer),
-        ne(partner.id, movements.id),
-        isNull(partner.deletedAt),
-      ),
-    )
+    .leftJoin(partner, PARTNER_IS_LIVE)
     .where(
       and(
         isNull(movements.deletedAt),
