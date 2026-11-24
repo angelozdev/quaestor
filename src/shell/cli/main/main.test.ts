@@ -6,8 +6,8 @@ import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
 const MISSING_COMMAND = {
   code: 'missing_command',
-  commands: ['backup'],
-  message: 'missing command: use one of backup',
+  commands: ['backup', 'account'],
+  message: 'missing command: use one of backup, account',
 }
 
 describe('main', () => {
@@ -22,12 +22,13 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
-  it('--help lists backup as the only command', async () => {
+  it('--help lists backup and the account group as its commands', async () => {
     const { stdout } = await runCli(['--help'])
 
     const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
     expect(commands).toEqual([
       expect.stringMatching(/^ {2}backup\s+copy the current env's store to its backups folder$/),
+      expect.stringMatching(/^ {2}account\s+accounts and their balances$/),
     ])
   })
 

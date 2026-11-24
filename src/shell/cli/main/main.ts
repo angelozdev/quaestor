@@ -1,13 +1,15 @@
 import { Command, CommanderError } from '@commander-js/extra-typings'
+import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
 import { failureOf } from '../invocation/failure/failure.ts'
+import { MissingCommandError } from '../invocation/failure/failure.errors.ts'
 import { writeFailure, writeResult } from '../invocation/output/output.ts'
-import { ExitCode, HELP_FLAG, JSON_FLAG } from './main.constants.ts'
-import type { CliCommand, CliContext } from './main.types.ts'
+import { COMMAND_GROUPS, ExitCode, HELP_FLAG, JSON_FLAG } from './main.constants.ts'
+import type { CliCommand, CliContext, CommandGroup } from './main.types.ts'
 
-const COMMANDS: CliCommand[] = [backupCommand]
+const COMMANDS: CliCommand[] = [backupCommand, accountListCommand]
 
-const COMMAND_NAMES = COMMANDS.map((command) => command.name)
+const COMMAND_NAMES = [...new Set(COMMANDS.map((command) => command.group ?? command.name))]
 
 function ignore(): void {}
 
@@ -27,20 +29,44 @@ function program(context: CliContext) {
 
 type Program = ReturnType<typeof program>
 
-function register(root: Program, context: CliContext, command: CliCommand): void {
-  root
-    .command(command.name)
-    .description(command.description)
-    .action(async () => {
-      const options = root.opts()
-      const result = await command.run(context, options)
-      writeResult(context.stdout, result, options.json === true)
+function registerGroup(root: Program, group: CommandGroup) {
+  const names = COMMANDS.filter((command) => command.group === group).map(({ name }) => name)
+  return root
+    .command(group)
+    .description(COMMAND_GROUPS[group])
+    .helpCommand(false)
+    .action(() => {
+      throw new MissingCommandError(names)
     })
+}
+
+type Parent = Program | ReturnType<typeof registerGroup>
+
+function register(root: Program, context: CliContext, parent: Parent, command: CliCommand): void {
+  const subcommand = parent.command(command.name).description(command.description)
+  subcommand.action(async () => {
+    const options = root.opts()
+    const result = await command.run(context, options, subcommand.args, subcommand.opts())
+    writeResult(context.stdout, result, options.json === true)
+  })
+}
+
+function parentOf(root: Program, groups: Map<CommandGroup, Parent>, group?: CommandGroup): Parent {
+  if (group === undefined) return root
+  const parent = groups.get(group) ?? registerGroup(root, group)
+  groups.set(group, parent)
+  return parent
+}
+
+function registerAll(root: Program, context: CliContext): void {
+  const groups = new Map<CommandGroup, Parent>()
+  for (const command of COMMANDS)
+    register(root, context, parentOf(root, groups, command.group), command)
 }
 
 export async function main(argv: string[], context: CliContext): Promise<number> {
   const root = program(context)
-  for (const command of COMMANDS) register(root, context, command)
+  registerAll(root, context)
   try {
     await root.parseAsync(argv.length === 0 ? [HELP_FLAG] : argv, { from: 'user' })
     return ExitCode.Success

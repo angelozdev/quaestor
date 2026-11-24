@@ -5,7 +5,7 @@ import {
   pendingMigrations,
   refuseUnknownMigrations,
 } from '../migrations/migrations.ts'
-import { BUSY_TIMEOUT_MS } from './database.constants.ts'
+import { BUSY_TIMEOUT_MS, FOREIGN_KEYS_ON } from './database.constants.ts'
 import type { Database, Store, StoreRequest } from './database.types.ts'
 
 function asStore(db: Database): Store {
@@ -25,6 +25,7 @@ export async function openStore({
   const client = new DatabaseSync(path, { timeout: BUSY_TIMEOUT_MS })
   const db = drizzle({ client })
   try {
+    client.exec(FOREIGN_KEYS_ON)
     refuseUnknownMigrations(db, migrationsDir)
     const pending = pendingMigrations(db, migrationsDir)
     await beforeMigrating(asStore(db), pending)

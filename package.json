@@ -24,7 +24,8 @@
     "format:check": "oxfmt --check",
     "typecheck": "tsc --noEmit",
     "dead-code": "knip",
-    "duplication": "jscpd"
+    "duplication": "jscpd",
+    "db:generate": "drizzle-kit generate"
   },
   "devDependencies": {
     "@commander-js/extra-typings": "15.0.0",
@@ -32,6 +33,7 @@
     "@toon-format/toon": "4.4.0",
     "@types/node": "26.6.5",
     "commander": "15.0.0",
+    "drizzle-kit": "1.0.0-rc.5",
     "drizzle-orm": "1.0.0-rc.5",
     "eslint-plugin-sonarjs": "4.2.2",
     "jscpd": "5.4.2",

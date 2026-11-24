@@ -1,0 +1,186 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "741e585e-7b02-4982-afa9-140431cb9b79",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "ddl": [
+    {
+      "name": "accounts",
+      "entityType": "tables"
+    },
+    {
+      "table": "accounts",
+      "name": "id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "emoji",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "type",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "currency",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "archived",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "opening_amount",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "opening_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_name_unique",
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"accounts\".\"deleted_at\" IS NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_pk",
+      "columns": ["id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_id",
+      "value": "\"id\" IS NOT NULL AND length(\"id\") = 4 AND \"id\" NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_name",
+      "value": "length(trim(\"name\")) > 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_type",
+      "value": "\"type\" IN ('savings','debit','credit','cash')",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_currency",
+      "value": "length(\"currency\") = 3 AND \"currency\" NOT GLOB '*[^A-Z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_archived",
+      "value": "\"archived\" IN (0, 1)",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_opening_date",
+      "value": "\"opening_date\" IS NULL OR date(\"opening_date\") IS \"opening_date\"",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_opening_amount",
+      "value": "\"opening_amount\" = 0 OR \"opening_date\" IS NOT NULL",
+      "entityType": "checks"
+    }
+  ],
+  "renames": []
+}

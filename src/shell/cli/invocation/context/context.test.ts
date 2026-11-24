@@ -1,10 +1,9 @@
 import { encode } from '@toon-format/toon'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
 import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
-import { REPO_ROOT } from '../../bin/bin.constants.ts'
 import { releasedContext, sourceContext } from './context.ts'
 import type { ReleasedInvocation } from './context.types.ts'
 
@@ -53,7 +52,9 @@ describe('invocation context', () => {
 
   it("the release's first run creates ~/.quaestor and its store", async () => {
     const home = tempDir('quaestor-home-')
-    const entryDir = join(REPO_ROOT, 'dist')
+    const entryDir = join(tempDir('quaestor-package-'), 'dist')
+    mkdirSync(entryDir)
+    mkdirSync(join(entryDir, '..', 'migrations'))
 
     const { code, stdout, stderr } = await runCli(
       ['backup'],

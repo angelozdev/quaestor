@@ -1,1 +1,1 @@
-export type ErrorData = Record<string, string | string[]>
+export type ErrorData = Record<string, string | number | string[] | Record<string, string>[]>

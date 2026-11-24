@@ -1,3 +1,4 @@
+export { listAccounts } from './accounts/accounts.ts'
 export { backupStore } from './backups/backups.ts'
 export type { BackupResult } from './backups/backups.types.ts'
 export { closeStore, openStore } from './database/database.ts'
