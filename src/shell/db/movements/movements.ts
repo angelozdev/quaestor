@@ -165,7 +165,14 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
     .from(movements)
     .innerJoin(accounts, eq(accounts.id, movements.accountId))
     .innerJoin(sums, eq(sums.seq, movements.seq))
-    .leftJoin(partner, and(eq(partner.transfer, movements.transfer), ne(partner.id, movements.id)))
+    .leftJoin(
+      partner,
+      and(
+        eq(partner.transfer, movements.transfer),
+        ne(partner.id, movements.id),
+        isNull(partner.deletedAt),
+      ),
+    )
     .where(
       and(
         isNull(movements.deletedAt),
