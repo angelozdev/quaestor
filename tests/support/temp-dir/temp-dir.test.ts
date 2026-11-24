@@ -28,7 +28,7 @@ describe('tempDir', () => {
     fill(dir)
   })
 
-  it('with the test context onTestFinished the folder is gone once that test finishes', (context) => {
+  it("with the test context's onTestFinished the folder is gone once that test finishes", (context) => {
     let dir = ''
     context.onTestFinished(() => expect(existsSync(dir)).toBe(false))
 

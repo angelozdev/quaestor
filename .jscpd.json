@@ -1,0 +1,6 @@
+{
+  "path": ["src", "tests"],
+  "format": ["typescript"],
+  "exitCode": 1,
+  "reporters": ["console"]
+}

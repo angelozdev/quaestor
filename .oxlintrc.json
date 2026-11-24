@@ -1,0 +1,182 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
+  "jsPlugins": ["./tools/lint/local.ts", "eslint-plugin-sonarjs"],
+  "rules": {
+    "local/no-comments": "error",
+    "sonarjs/cognitive-complexity": ["error", 15],
+    "unicorn/filename-case": [
+      "error",
+      {
+        "case": "kebabCase"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "patterns": [
+          {
+            "group": ["node:sqlite", "drizzle-orm", "drizzle-orm/*"],
+            "message": "only src/shell/db knows the database"
+          },
+          {
+            "group": ["just-*", "just-*/*"],
+            "message": "only src/core/utils wraps just-* packages"
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/shell/db/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["just-*", "just-*/*"],
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/**/*.test.ts", "tests/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "node:fs",
+                "importNames": ["mkdtemp", "mkdtempSync"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              },
+              {
+                "name": "node:fs/promises",
+                "importNames": ["mkdtemp"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["node:sqlite", "drizzle-orm", "drizzle-orm/*"],
+                "message": "only src/shell/db knows the database"
+              },
+              {
+                "group": ["just-*", "just-*/*"],
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/shell/db/**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "node:fs",
+                "importNames": ["mkdtemp", "mkdtempSync"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              },
+              {
+                "name": "node:fs/promises",
+                "importNames": ["mkdtemp"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["just-*", "just-*/*"],
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["tests/support/temp-dir/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:sqlite", "drizzle-orm", "drizzle-orm/*"],
+                "message": "only src/shell/db knows the database"
+              },
+              {
+                "group": ["just-*", "just-*/*"],
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/core/**"],
+      "rules": {
+        "import/no-nodejs-modules": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*"],
+                "message": "src/core performs no I/O"
+              },
+              {
+                "group": ["drizzle-orm", "drizzle-orm/*"],
+                "message": "only src/shell/db knows the ORM"
+              },
+              {
+                "group": ["#shell/*"],
+                "message": "src/core never imports the shell"
+              },
+              {
+                "group": ["just-*", "just-*/*"],
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/core/utils/**"],
+      "rules": {
+        "import/no-nodejs-modules": "error",
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["node:*"],
+                "message": "src/core performs no I/O"
+              },
+              {
+                "group": ["drizzle-orm", "drizzle-orm/*"],
+                "message": "only src/shell/db knows the ORM"
+              },
+              {
+                "group": ["#shell/*"],
+                "message": "src/core never imports the shell"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
