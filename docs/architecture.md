@@ -85,7 +85,8 @@ Written for a reader that is a model, not a person.
   each `{code, item, message}` where `item` is the position (`delete[0]`,
   `movements[2]`, `transfers[0].from`) and `code` is `not_found`, `currency_mismatch`,
   `before_opening`, `same_account_transfer` or `archived`, and nothing written;
-  `already_imported`, 1, when `import` meets a store that already holds an account;
+  `already_imported`, 1, when `import` meets a store that holds any data (an account, a category, a tag or
+  a movement, deleted ones included);
   `export_mismatch`, 2, when a legacy export cannot be trusted, with the `file` (relative
   to the export folder) and the `reason`, found before a store is opened: a file cannot be
   read (`cannot be read: ENOENT`), its sha256 or row count differs from `manifest.json`,

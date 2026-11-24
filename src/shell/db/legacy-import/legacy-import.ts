@@ -24,8 +24,13 @@ export function importLedger(
   now: Date,
 ): ImportCounts {
   const db = database(store)
-  if (db.select({ id: accounts.id }).from(accounts).limit(1).get() !== undefined)
-    throw new AlreadyImportedError()
+  const held = [
+    db.select({ id: accounts.id }).from(accounts).limit(1).get(),
+    db.select({ id: categories.id }).from(categories).limit(1).get(),
+    db.select({ name: tags.name }).from(tags).limit(1).get(),
+    db.select({ id: movements.id }).from(movements).limit(1).get(),
+  ]
+  if (held.some((row) => row !== undefined)) throw new AlreadyImportedError()
   const instant = now.toISOString()
   for (const account of ledger.accounts)
     db.insert(accounts)

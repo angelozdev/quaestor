@@ -51,6 +51,8 @@ type Movement = {
   balance: number
 }
 
+const ALREADY_IMPORTED = `env: test\n${encode({ error: { code: 'already_imported', message: 'the legacy export is imported only into an empty store' } })}\n`
+
 function plain(name: string): string {
   return name.slice(name.indexOf(' ') + 1)
 }
@@ -72,6 +74,16 @@ async function categoriesOf(cli: LedgerCli): Promise<Category[]> {
 
 async function movementsOf(cli: LedgerCli, ...flags: string[]): Promise<Movement[]> {
   return (decode((await list(cli, ...flags)).stdout) as { movements: Movement[] }).movements
+}
+
+async function storeOf(cli: LedgerCli): Promise<string[]> {
+  const runs = [
+    ['account', 'list'],
+    ['category', 'list'],
+    ['tag', 'list'],
+    ['movement', 'list'],
+  ]
+  return Promise.all(runs.map(async (argv) => (await cli.run(argv)).stdout))
 }
 
 async function imported(flags: string[] = []) {
@@ -361,13 +373,23 @@ describe('quaestor import', () => {
 
     const run = await cli.run(['import', fixtureExport()])
 
-    expect(run).toEqual({
-      code: 1,
-      stdout: '',
-      stderr: `env: test\n${encode({ error: { code: 'already_imported', message: 'the legacy export is imported only into an empty store' } })}\n`,
-    })
+    expect(run).toEqual({ code: 1, stdout: '', stderr: ALREADY_IMPORTED })
     expect(await accountsOf(cli)).toEqual(before)
     expect((await list(cli)).stdout).toBe(`${encode({ total: 0, movements: [] })}\n`)
+  })
+
+  it.for([
+    ['a tag', ['tag', 'add', 'trip:lima-2026']],
+    ['a category', ['category', 'add', 'Groceries', '--emoji', '🛒']],
+  ] as const)('import refuses a store that holds only %s', async ([, argv], { expect }) => {
+    const cli = ledgerCli()
+    await cli.run([...argv])
+    const before = await storeOf(cli)
+
+    const run = await cli.run(['import', fixtureExport()])
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: ALREADY_IMPORTED })
+    expect(await storeOf(cli)).toEqual(before)
   })
 
   it('a file whose sha256 differs from manifest.json stops the import', async () => {
