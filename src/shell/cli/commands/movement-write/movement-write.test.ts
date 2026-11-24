@@ -3,9 +3,14 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
   amountTextOf,
-  dateOnOrAfter,
-  movementCents,
+  booked,
+  faultyItems,
 } from '../../../../../tests/support/arbitraries/arbitraries.ts'
+import type {
+  Booked,
+  BookedAccount,
+  Fault,
+} from '../../../../../tests/support/arbitraries/arbitraries.types.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import {
@@ -132,17 +137,6 @@ function drawing(indexes: number[]) {
 
 const OPENING_CENTS = { wallet: 12050, savings: 0 }
 
-const BOOKED = fc.array(
-  fc.record({
-    account: fc.constantFrom('wallet', 'savings'),
-    cents: movementCents,
-    date: dateOnOrAfter(OPENING_DATE),
-  }),
-  { minLength: 1, maxLength: 20 },
-)
-
-type Booked = { account: 'wallet' | 'savings'; cents: number; date: string }
-
 function bookedMovements(books: Books, items: Booked[]): Json[] {
   const accounts = { wallet: books.wallet, savings: books.savings }
   return items.map(({ account, cents, date }) =>
@@ -150,23 +144,11 @@ function bookedMovements(books: Books, items: Booked[]): Json[] {
   )
 }
 
-function totalCents(items: Booked[], account: 'wallet' | 'savings'): number {
+function totalCents(items: Booked[], account: BookedAccount): number {
   return items
     .filter((item) => item.account === account)
     .reduce((total, { cents }) => total + cents, OPENING_CENTS[account])
 }
-
-const FAULTS = ['category', 'currency', 'opening'] as const
-
-type Fault = (typeof FAULTS)[number]
-
-const FAULTY_ITEMS = fc
-  .tuple(
-    fc.array(fc.constantFrom(...FAULTS, undefined), { minLength: 1, maxLength: 8 }),
-    fc.nat(),
-    fc.constantFrom(...FAULTS),
-  )
-  .map(([faults, at, fault]) => faults.with(at % faults.length, fault))
 
 function faultyMovement(books: Books, fault: Fault | undefined): Json {
   if (fault === 'category') return spend(books, { category: NO_SUCH_CODE })
@@ -350,7 +332,7 @@ describe('quaestor movement write', () => {
 
   it("an account's balance is its opening plus the sum of its movements, for any movements (USD)", async () => {
     await fc.assert(
-      fc.asyncProperty(BOOKED, async (items) => {
+      fc.asyncProperty(booked(OPENING_DATE), async (items) => {
         const books = await openBooks()
 
         const run = await write(books.cli, { movements: bookedMovements(books, items) })
@@ -371,7 +353,7 @@ describe('quaestor movement write', () => {
 
   it('a write with faulty items writes nothing and lists exactly those items, in order', async () => {
     await fc.assert(
-      fc.asyncProperty(FAULTY_ITEMS, async (faults) => {
+      fc.asyncProperty(faultyItems, async (faults) => {
         const books = await openBooks()
         const before = await accountsText(books.cli)
         const movements = faults.map((fault) => faultyMovement(books, fault))
@@ -390,7 +372,7 @@ describe('quaestor movement write', () => {
 
   it('a dry run changes nothing, and its balances after are what the write then shows', async () => {
     await fc.assert(
-      fc.asyncProperty(BOOKED, async (items) => {
+      fc.asyncProperty(booked(OPENING_DATE), async (items) => {
         const books = await openBooks()
         const body = { movements: bookedMovements(books, items) }
         const before = await accountsText(books.cli)
