@@ -77,9 +77,12 @@ Written for a reader that is a model, not a person.
   when the store holds migrations this code does not ship, with their `names`, the
   store left as it was; `unexpected`, 2, for any error no class names, with its
   message.
-- Every failure is an error class in its module's `.errors.ts` that extends
-  `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors` with its
-  stable code.
+- Quaestor's own failures are error classes in their module's `.errors.ts`, each
+  extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`
+  with its stable code. Commander's parse errors are not classes: `failure.ts` maps
+  them to snake_case usage codes, exit 1. Anything else that is thrown is
+  `unexpected`, exit 2. `pnpm release` is outside this contract: it prints its own
+  `release: refused: …` (exit 1) and `release: failed: …` (exit 2) lines.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit
@@ -133,6 +136,10 @@ Written for a reader that is a model, not a person.
 - `pnpm release`, run by Angelo from a clean, green `rebuild` until it replaces
   `main`, then from `main`, bundles the sources with Rolldown, packs them and
   installs them globally with `pnpm add -g`.
+- A `git`, `tar`, `pnpm pack` or `pnpm add -g` command that exits non-zero stops
+  the release with `release: failed: <command and arguments> exited <status>`
+  (exit 2), so it is never read as a clean tree, another branch or a missing
+  `migrations/`.
 - The installed binary is the only thing that touches `prod`. Work in progress in
   the repo never does.
 
