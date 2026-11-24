@@ -1,9 +1,10 @@
 #!/usr/bin/env node
+import { sourceContext } from '../invocation/context/context.ts'
 import { main } from '../main/main.ts'
-import { DEV_VERSION } from './bin.constants.ts'
+import { REPO_ROOT } from './bin.constants.ts'
 
 process.exitCode = await main(process.argv.slice(2), {
-  version: DEV_VERSION,
+  ...sourceContext({ repoRoot: REPO_ROOT }),
   stdout: process.stdout,
   stderr: process.stderr,
 })

@@ -27,6 +27,7 @@ from a bank screenshot: a dry run first, then the write after Angelo says yes.
 
 Once recording works, Angelo replaces `main` with `rebuild`, which means a
 force-push on GitHub, and stops the legacy container for good.
+`TRUNK_BRANCH` in `src/shell/release/release/release.constants.ts` becomes `main`.
 
 ## 4. Next features
 

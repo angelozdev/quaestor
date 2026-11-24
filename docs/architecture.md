@@ -88,8 +88,9 @@ Written for a reader that is a model, not a person.
 
 ## Release
 
-- `pnpm release`, run by Angelo from a clean, green `main`, bundles the sources
-  with Rolldown, packs them and installs them globally with `pnpm add -g`.
+- `pnpm release`, run by Angelo from a clean, green `rebuild` until it replaces
+  `main`, then from `main`, bundles the sources with Rolldown, packs them and
+  installs them globally with `pnpm add -g`.
 - The installed binary is the only thing that touches `prod`. Work in progress in
   the repo never does.
 

@@ -1,3 +1,3 @@
-import type { Output } from '../../../src/shell/cli/main/main.types.ts'
+import type { Output } from '#shell/cli'
 
 export type CapturedStream = Output & { text(): string }
