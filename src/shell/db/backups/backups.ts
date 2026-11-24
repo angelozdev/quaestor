@@ -13,7 +13,7 @@ function alreadyExists(error: Error): boolean {
 }
 
 async function writeCopy(store: Store, folder: string, path: string): Promise<void> {
-  const partial = `${path}${PARTIAL_SUFFIX}`
+  const partial = `${path}.${process.pid}${PARTIAL_SUFFIX}`
   try {
     await mkdir(folder, { recursive: true })
     await backup(database(store).$client, partial)
@@ -30,7 +30,7 @@ async function writeCopy(store: Store, folder: string, path: string): Promise<vo
 
 async function removeOldCopies(folder: string, env: string, kept: string): Promise<string[]> {
   const removed = copiesToRemove(env, await readdir(folder), kept).map((name) => join(folder, name))
-  await Promise.all(removed.map((path) => rm(path)))
+  await Promise.all(removed.map((path) => rm(path, { force: true })))
   return removed
 }
 

@@ -16,6 +16,7 @@ const others = [
   'notes.txt',
   'prod-backup.sqlite',
   'prod-2026-10-01T10-00-00-000Z.sqlite.partial',
+  'prod-2026-10-01T10-00-00-000Z.sqlite.4242.partial',
 ]
 
 describe('backup copies', () => {

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -17,6 +18,26 @@ import { closeStore, openStore } from './database.ts'
 afterEach(() => {
   vi.restoreAllMocks()
 })
+
+const HOLD_EXCLUSIVE_LOCK = `
+const { DatabaseSync } = require('node:sqlite')
+const db = new DatabaseSync(process.argv[1])
+db.exec('BEGIN EXCLUSIVE')
+process.stdout.write('locked\\n')
+setTimeout(() => {
+  db.exec('COMMIT')
+  db.close()
+}, 400)
+`
+
+function holdExclusiveLock(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', HOLD_EXCLUSIVE_LOCK, path])
+    child.once('error', reject)
+    child.stdout.once('data', () => resolve())
+    child.once('close', () => reject(new Error('the writer ended before it held the file')))
+  })
+}
 
 function storePath(): string {
   return join(tempDir('quaestor-store-'), 'store.sqlite')
@@ -65,5 +86,17 @@ describe('openStore', () => {
     )
 
     expect(close).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('openStore with another process writing', () => {
+  it('waits for a writer that holds the file briefly instead of failing as locked', async () => {
+    const path = storePath()
+    closeStore(await openTestStore(path, noMigrations()))
+    await holdExclusiveLock(path)
+
+    const store = await openTestStore(path, noMigrations())
+
+    closeStore(store)
   })
 })

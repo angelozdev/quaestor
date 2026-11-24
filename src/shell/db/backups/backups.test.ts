@@ -103,6 +103,23 @@ describe('backupStore', () => {
     closeStore(store)
   })
 
+  it('a partial copy another process left or is still writing is neither used nor removed', async () => {
+    const store = await tempStore()
+    const root = tempDir('quaestor-data-')
+    const folder = join(root, 'backups')
+    const name = 'test-2026-11-23T21-04-05-123Z.sqlite'
+    const foreign = [`${name}.partial`, `${name}.0.partial`]
+    mkdirSync(folder)
+    for (const partial of foreign) writeFileSync(join(folder, partial), partial)
+
+    const { path } = await backupStore({ store, env: 'test', root, now: NOW })
+
+    expect(readdirSync(folder).toSorted()).toEqual([name, ...foreign].toSorted())
+    for (const partial of foreign) expect(readFileSync(join(folder, partial), 'utf8')).toBe(partial)
+    closeStore(await openTestStore(path))
+    closeStore(store)
+  })
+
   it('a clock older than the copies on disk keeps the copy it just wrote', async () => {
     const store = await tempStore()
     const root = tempDir('quaestor-data-')
