@@ -10,9 +10,6 @@ The first feature, rethought in its own conversation. It brings the accounts,
 categories, tags and movements it needs from the legacy export and rewrites the
 `record-movements` skill over the CLI. Done when Claude records a real movement
 from a bank screenshot: a dry run first, then the write after Angelo says yes.
-Measure TOON against compact JSON, in tokens, on real movement lists and single
-objects (expected on 2026-11-23: about 35 % saved on uniform lists, slightly worse
-on single objects).
 
 ## 2. `rebuild` becomes `main`
 

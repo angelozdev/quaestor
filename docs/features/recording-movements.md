@@ -14,8 +14,6 @@ legacy data over and lets Claude keep it up to date from bank screenshots.
   legacy stored balance to the cent.
 - Claude has recorded a real movement from a bank screenshot with the installed
   release: a dry run first, then the write after Angelo says yes.
-- TOON has been measured against compact JSON, in tokens, on real movement lists and on
-  single objects.
 
 ## Not in this feature
 
@@ -23,8 +21,9 @@ Budgets, repeating charges and planned rows, metas, funds, the dollar rate, spen
 reports, category groups and category flags, any behaviour tied to an account type
 (such as a card's cut and payment dates), archiving an account,
 splitting one charge across categories, the time of day, editing a movement in place,
-duplicate detection in code, the original foreign amount as data, and any total across
-currencies.
+duplicate detection in code, the original foreign amount as data, any total across
+currencies, and measuring TOON against JSON in tokens: TOON stays the output whatever
+the result, so Angelo dropped the measurement on 2026-11-24.
 
 ## What must never happen
 
