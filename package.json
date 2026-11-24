@@ -16,6 +16,7 @@
   },
   "scripts": {
     "quaestor": "node src/shell/cli/bin/bin.ts",
+    "release": "node src/shell/release/bin/bin.ts",
     "check": "pnpm test && pnpm lint && pnpm format:check && pnpm typecheck && pnpm dead-code && pnpm duplication",
     "test": "vitest run",
     "lint": "oxlint",
@@ -35,6 +36,7 @@
     "knip": "6.43.0",
     "oxfmt": "0.74.0",
     "oxlint": "1.89.0",
+    "rolldown": "1.2.15",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   },

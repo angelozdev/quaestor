@@ -1,4 +1,5 @@
 export { REPO_ROOT } from './bin/bin.constants.ts'
+export { releaseVersion } from './invocation/context/context.ts'
 export type { Release } from './invocation/context/context.types.ts'
 export { ExitCode } from './main/main.constants.ts'
 export type { Output } from './main/main.types.ts'

@@ -6,7 +6,7 @@ import type {
   SourceInvocation,
 } from './context.types.ts'
 
-function releaseVersion(release: Release): string {
+export function releaseVersion(release: Release): string {
   return `${release.version} (${release.commit})`
 }
 

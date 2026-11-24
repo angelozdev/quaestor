@@ -1,9 +1,27 @@
-import { ExitCode } from '#shell/cli'
+import { join } from 'node:path'
+import { ExitCode, releaseVersion, type Release } from '#shell/cli'
+import { BUNDLE_FILE } from '../build/build.constants.ts'
 import type { Runner } from '../runner/runner.types.ts'
-import { CHECK_SCRIPT, CHECK_SEPARATOR, PNPM_PREFIX, TRUNK_BRANCH } from './release.constants.ts'
+import {
+  CHECK_SCRIPT,
+  CHECK_SEPARATOR,
+  HELP_FLAG,
+  INSTALLED_BIN,
+  PACKED_MIGRATIONS,
+  PACKED_ROOT,
+  PNPM_PREFIX,
+  RELEASE_DIR,
+  TARBALL_EXTENSION,
+  TRUNK_BRANCH,
+  VERSION_FLAG,
+} from './release.constants.ts'
 import {
   CheckFailedError,
+  MissingMigrationsError,
   NotOnTrunkError,
+  PackedHelpFailedError,
+  PackedVersionMismatchError,
+  PathMismatchError,
   ReleaseError,
   UncommittedChangesError,
 } from './release.errors.ts'
@@ -36,10 +54,55 @@ async function assertChecksPass({ run, packageJson, repoRoot }: ReleaseDeps): Pr
   }
 }
 
+async function releaseOfHead({ run, packageJson, repoRoot }: ReleaseDeps): Promise<Release> {
+  const commit = await printed(run, 'git', ['rev-parse', '--short', 'HEAD'], repoRoot)
+  return { version: packageJson.version, commit, repoRoot }
+}
+
+async function pack({ run, packageJson, repoRoot }: ReleaseDeps): Promise<string> {
+  await run('pnpm', ['pack', '--pack-destination', RELEASE_DIR], { cwd: repoRoot })
+  const tarballName = `${packageJson.name}-${packageJson.version}${TARBALL_EXTENSION}`
+  return join(repoRoot, RELEASE_DIR, tarballName)
+}
+
+async function assertShipsMigrations(run: Runner, tarball: string): Promise<void> {
+  const entries = (await printed(run, 'tar', ['-tzf', tarball])).split('\n')
+  const prefix = `${PACKED_ROOT}/${PACKED_MIGRATIONS}`
+  if (!entries.some((entry) => entry.startsWith(prefix))) throw new MissingMigrationsError()
+}
+
+async function smokeRun(run: Runner, tarball: string, dir: string, expected: string) {
+  await run('tar', ['-xzf', tarball, '-C', dir])
+  const bin = join(dir, PACKED_ROOT, BUNDLE_FILE)
+  const help = await run('node', [bin, HELP_FLAG], { cwd: dir })
+  if (help.status !== ExitCode.Success) throw new PackedHelpFailedError(help.status)
+  const version = await printed(run, 'node', [bin, VERSION_FLAG], dir)
+  if (version !== expected) throw new PackedVersionMismatchError(version, expected)
+}
+
+async function install(run: Runner, tarball: string, dir: string, expected: string) {
+  await run('pnpm', ['add', '-g', tarball], { cwd: dir })
+  const version = await printed(run, INSTALLED_BIN, [VERSION_FLAG], dir)
+  if (version !== expected) throw new PathMismatchError(version, expected)
+}
+
 async function releaseSteps(deps: ReleaseDeps): Promise<void> {
   await assertOnTrunk(deps)
   await assertCleanTree(deps)
   await assertChecksPass(deps)
+  const target = await releaseOfHead(deps)
+  await deps.build(target)
+  const tarball = await pack(deps)
+  await assertShipsMigrations(deps.run, tarball)
+  const dir = deps.makeTempDir()
+  const expected = releaseVersion(target)
+  try {
+    await smokeRun(deps.run, tarball, dir, expected)
+    await install(deps.run, tarball, dir, expected)
+  } finally {
+    deps.removeTempDir(dir)
+  }
+  deps.stdout.write(`release: ${expected} installed\n`)
 }
 
 export async function release(deps: ReleaseDeps): Promise<number> {
@@ -49,6 +112,6 @@ export async function release(deps: ReleaseDeps): Promise<number> {
   } catch (error) {
     if (!(error instanceof ReleaseError)) throw error
     deps.stderr.write(`${error.message}\n`)
-    return ExitCode.Refused
+    return error.exitCode
   }
 }
