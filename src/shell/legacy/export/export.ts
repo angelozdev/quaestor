@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { z } from 'zod'
 import type { LegacyExport } from '#core/legacy'
 import {
+  CANNOT_READ,
   HEX,
   LINE_BREAK,
   MANIFEST_FILE,
@@ -11,6 +12,7 @@ import {
   PATH_SEPARATOR,
   SHA256,
   SHA256_DIFFERS,
+  USED_TABLES,
 } from './export.constants.ts'
 import { ExportMismatchError } from './export.errors.ts'
 import {
@@ -24,6 +26,18 @@ import {
 
 type Table = z.infer<typeof manifestSchema>['tables'][number]
 
+function causeOf(error: unknown): string {
+  return error instanceof Error && 'code' in error ? String(error.code) : String(error)
+}
+
+async function bytesOf(folder: string, file: string): Promise<Buffer> {
+  try {
+    return await readFile(join(folder, file))
+  } catch (error) {
+    throw new ExportMismatchError(file, `${CANNOT_READ}${causeOf(error)}`)
+  }
+}
+
 function linesOf(text: string): string[] {
   const lines = text.split(LINE_BREAK)
   if (lines.at(-1) === '') lines.pop()
@@ -31,7 +45,7 @@ function linesOf(text: string): string[] {
 }
 
 async function checkedLines(folder: string, { file, rows, sha256 }: Table): Promise<string[]> {
-  const bytes = await readFile(join(folder, file))
+  const bytes = await bytesOf(folder, file)
   if (createHash(SHA256).update(bytes).digest(HEX) !== sha256)
     throw new ExportMismatchError(file, SHA256_DIFFERS)
   const lines = linesOf(bytes.toString())
@@ -44,11 +58,14 @@ function issueText({ path, message }: z.core.$ZodIssue): string {
   return path.length === 0 ? message : `${path.join(PATH_SEPARATOR)}: ${message}`
 }
 
-function parsedLine<T>(file: string, line: string, number: number, schema: z.ZodType<T>): T {
-  const reject = (issue: string) => new ExportMismatchError(file, `line ${number}: ${issue}`)
+function parsedJson<T>(
+  text: string,
+  schema: z.ZodType<T>,
+  reject: (issue: string) => ExportMismatchError,
+): T {
   let value: unknown
   try {
-    value = JSON.parse(line)
+    value = JSON.parse(text)
   } catch {
     throw reject(NOT_JSON)
   }
@@ -57,21 +74,42 @@ function parsedLine<T>(file: string, line: string, number: number, schema: z.Zod
   return result.data
 }
 
-export async function readLegacyExport(folder: string): Promise<LegacyExport> {
-  const manifest = manifestSchema.parse(
-    JSON.parse(await readFile(join(folder, MANIFEST_FILE), 'utf8')),
+async function readManifest(folder: string) {
+  const manifest = parsedJson(
+    (await bytesOf(folder, MANIFEST_FILE)).toString(),
+    manifestSchema,
+    (issue) => new ExportMismatchError(MANIFEST_FILE, issue),
   )
+  for (const name of USED_TABLES)
+    if (!manifest.tables.some((table) => table.name === name))
+      throw new ExportMismatchError(MANIFEST_FILE, `lists no ${name} table`)
+  return manifest
+}
+
+export async function readLegacyExport(folder: string): Promise<LegacyExport> {
+  const manifest = await readManifest(folder)
   const checked = new Map<string, { file: string; lines: string[] }>()
   for (const table of manifest.tables)
     checked.set(table.name, { file: table.file, lines: await checkedLines(folder, table) })
-  const rowsOf = <T>(name: string, schema: z.ZodType<T>): T[] => {
+  const rowsOf = <T>(name: (typeof USED_TABLES)[number], schema: z.ZodType<T>): T[] => {
     const { file, lines } = checked.get(name)!
-    return lines.map((line, index) => parsedLine(file, line, index + 1, schema))
+    return lines.map((line, index) =>
+      parsedJson(
+        line,
+        schema,
+        (issue) => new ExportMismatchError(file, `line ${index + 1}: ${issue}`),
+      ),
+    )
   }
+  const balances = new Map(manifest.accounts.map(({ id, balance }) => [id, balance]))
+  const accounts = rowsOf('account', accountSchema)
+  const unbalanced = accounts.find(({ id }) => !balances.has(id))
+  if (unbalanced !== undefined)
+    throw new ExportMismatchError(MANIFEST_FILE, `account ${unbalanced.id} has no balance`)
   return {
     exportedAt: manifest.exportedAt,
-    balances: new Map(manifest.accounts.map(({ id, balance }) => [id, balance])),
-    accounts: rowsOf('account', accountSchema),
+    balances,
+    accounts,
     categories: rowsOf('category', categorySchema),
     tags: rowsOf('tag', tagSchema),
     transactions: rowsOf('transaction', transactionSchema),

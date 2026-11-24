@@ -86,9 +86,14 @@ Written for a reader that is a model, not a person.
   `movements[2]`, `transfers[0].from`) and `code` is `not_found`, `currency_mismatch`,
   `before_opening`, `same_account_transfer` or `archived`, and nothing written;
   `already_imported`, 1, when `import` meets a store that already holds an account;
-  `export_mismatch`, 2, when a legacy export file's sha256 or row count differs from
-  `manifest.json` or one of its rows does not parse, with the `file` (relative to the
-  export folder) and the `reason`, found before a store is opened; `balance_mismatch`, 2,
+  `export_mismatch`, 2, when a legacy export cannot be trusted, with the `file` (relative
+  to the export folder) and the `reason`, found before a store is opened: a file cannot be
+  read (`cannot be read: ENOENT`), its sha256 or row count differs from `manifest.json`,
+  one of its rows does not parse (`line 14: id: must be a whole number`), or
+  `manifest.json` itself is not valid JSON, fails validation
+  (`exportedAt: Invalid input: ...`), lists no `account`, `category`, `tag`,
+  `transaction` or `transaction_tag` table (`lists no tag table`) or gives an account no
+  balance (`account 3 has no balance`); `balance_mismatch`, 2,
   when an imported account's balance would differ from the export's, with the `account`
   and the `expected` and `actual` balance, nothing written; `unexpected`,
   2, for any error no class names, with its message.

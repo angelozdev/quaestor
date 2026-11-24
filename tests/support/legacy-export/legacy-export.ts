@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDir } from '../temp-dir/temp-dir.ts'
 import {
@@ -15,6 +15,7 @@ import type {
   ExportOptions,
   ExportRows,
   ExportTransaction,
+  Manifest,
   TableName,
 } from './legacy-export.types.ts'
 
@@ -105,6 +106,13 @@ export function writeLegacyExport(rows: ExportRows, options: ExportOptions = {})
   }
   writeFileSync(join(folder, 'manifest.json'), JSON.stringify(manifest, null, 2))
   return folder
+}
+
+export function rewriteManifest(folder: string, change: (manifest: Manifest) => unknown): void {
+  const path = join(folder, 'manifest.json')
+  const manifest = JSON.parse(readFileSync(path, 'utf8')) as Manifest
+  change(manifest)
+  writeFileSync(path, JSON.stringify(manifest, null, 2))
 }
 
 export function fixtureExport(options: ExportOptions = {}): string {

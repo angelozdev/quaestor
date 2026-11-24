@@ -1,5 +1,7 @@
 import { decode, encode } from '@toon-format/toon'
 import fc from 'fast-check'
+import { rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { legacyRows } from '../../../../../tests/support/arbitraries/arbitraries.ts'
 import { addAccount, list, write } from '../../../../../tests/support/books/books.ts'
@@ -8,6 +10,7 @@ import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types
 import { FIXTURE_ROWS } from '../../../../../tests/support/legacy-export/legacy-export.constants.ts'
 import {
   fixtureExport,
+  rewriteManifest,
   writeLegacyExport,
 } from '../../../../../tests/support/legacy-export/legacy-export.ts'
 import type { ExportRows } from '../../../../../tests/support/legacy-export/legacy-export.types.ts'
@@ -17,6 +20,8 @@ import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
 
 const COUNTS = { accounts: 5, categories: 7, tags: 2, movements: 11, tagLinks: 3 }
+
+type Damaged = [name: string, file: string, reason: string, damage: (folder: string) => unknown]
 
 type Account = {
   id: string
@@ -614,4 +619,61 @@ describe('quaestor import', () => {
       stderr: refused(archived('movements[0]', 'account', bank!.id)),
     })
   })
+
+  it.for<Damaged>([
+    [
+      'manifest.json is missing',
+      'manifest.json',
+      'cannot be read: ENOENT',
+      (folder: string) => rmSync(join(folder, 'manifest.json')),
+    ],
+    [
+      'manifest.json is not JSON',
+      'manifest.json',
+      'is not valid JSON',
+      (folder: string) => writeFileSync(join(folder, 'manifest.json'), 'not json'),
+    ],
+    [
+      'manifest.json fails validation',
+      'manifest.json',
+      'exportedAt: Invalid input: expected string, received undefined',
+      (folder: string) => rewriteManifest(folder, (manifest) => delete manifest.exportedAt),
+    ],
+    [
+      'a table file is missing',
+      'tables/tag.jsonl',
+      'cannot be read: ENOENT',
+      (folder: string) => rmSync(join(folder, 'tables', 'tag.jsonl')),
+    ],
+    [
+      'a table the import uses is not in the manifest',
+      'manifest.json',
+      'lists no tag table',
+      (folder: string) =>
+        rewriteManifest(folder, (manifest) => {
+          manifest.tables = manifest.tables.filter(({ name }) => name !== 'tag')
+        }),
+    ],
+    [
+      'an account has no balance in the manifest',
+      'manifest.json',
+      'account 3 has no balance',
+      (folder: string) =>
+        rewriteManifest(folder, (manifest) => {
+          manifest.accounts = manifest.accounts.filter(({ id }) => id !== '3')
+        }),
+    ],
+  ])(
+    'an export that cannot be read stops the import before anything is written (%s)',
+    async ([, file, reason, damage], { expect }) => {
+      const cli = ledgerCli()
+      const folder = fixtureExport()
+      damage(folder)
+
+      const run = await cli.run(['import', folder])
+
+      expect(run).toEqual({ code: 2, stdout: '', stderr: exportMismatch(file, reason) })
+      expect(await accountsOf(cli)).toEqual([])
+    },
+  )
 })

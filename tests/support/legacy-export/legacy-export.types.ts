@@ -19,3 +19,9 @@ export type ExportOptions = {
   manifest?: Partial<Record<TableName, ManifestOverride>>
   extraLines?: Partial<Record<TableName, string[]>>
 }
+
+export type Manifest = {
+  tables: { name: string }[]
+  accounts: { id: string | null }[]
+  [key: string]: unknown
+}
