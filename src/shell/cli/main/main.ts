@@ -4,6 +4,7 @@ import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
 import { categoryAddCommand } from '../commands/category-add/category-add.ts'
 import { categoryListCommand } from '../commands/category-list/category-list.ts'
+import { movementWriteCommand } from '../commands/movement-write/movement-write.ts'
 import { tagAddCommand } from '../commands/tag-add/tag-add.ts'
 import { tagListCommand } from '../commands/tag-list/tag-list.ts'
 import { failureOf } from '../invocation/failure/failure.ts'
@@ -20,6 +21,7 @@ const COMMANDS: CliCommand[] = [
   categoryAddCommand,
   tagListCommand,
   tagAddCommand,
+  movementWriteCommand,
 ]
 
 const COMMAND_NAMES = [...new Set(COMMANDS.map((command) => command.group ?? command.name))]

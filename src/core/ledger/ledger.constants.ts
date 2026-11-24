@@ -13,3 +13,9 @@ export const DECIMAL_DIGITS = 2
 export const CENTS_PER_UNIT = 100
 
 export const CURRENCIES = new Set(Intl.supportedValuesOf('currency'))
+
+export const PROBLEM_CODES = {
+  NotFound: 'not_found',
+  CurrencyMismatch: 'currency_mismatch',
+  BeforeOpening: 'before_opening',
+} as const

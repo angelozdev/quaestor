@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { invalidInput } from '../../../../tests/support/refusals/refusals.ts'
 import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 import { REPO_ROOT } from './bin.constants.ts'
 
@@ -12,10 +13,11 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-function runBin(args: string[]) {
+function runBin(args: string[], input = '') {
   return spawnSync(process.execPath, [bin, ...args], {
     cwd: tempDir('quaestor-bin-'),
     encoding: 'utf8',
+    input,
     env: { ...process.env, QUAESTOR_DB: undefined, QUAESTOR_ENV: undefined },
   })
 }
@@ -27,6 +29,16 @@ describe('source bin', () => {
     expect(result.status).toBe(0)
     expect(result.stdout).toContain('--env')
     expect(result.stderr).toBe('')
+  })
+
+  it('the source bin reads the JSON of movement write from its stdin', () => {
+    const result = runBin(['movement', 'write'], '{}')
+
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toBe(
+      invalidInput('nothing to write: give delete, movements or transfers'),
+    )
   })
 
   it('the source bin under vitest refuses its default env', () => {

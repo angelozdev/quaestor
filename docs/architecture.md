@@ -46,8 +46,8 @@ Written for a reader that is a model, not a person.
   `env: custom (<path>)`), `backup: <path> (before migrating)` (only in `prod`, and
   only when a migration is pending), `migrated: <name>` per migration applied, then
   the error object when the command fails. A call refused before a store is chosen,
-  such as a usage error, `invalid_env` or `invalid_input`, writes only the error
-  object.
+  such as a usage error, `invalid_env`, `invalid_json` or `invalid_input`, writes
+  only the error object.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `invalid_env`) and the data needed to act on it.
 - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
@@ -78,8 +78,13 @@ Written for a reader that is a model, not a person.
   when the store holds migrations this code does not ship, with their `names`, the
   store left as it was; `already_exists`, 1, when a name is already taken, with the
   `kind` and the `name`; `invalid_input`, 1, when a flag or a field is wrong, with
-  every problem as `issues`, each `<field>: <what is wrong>`, found before a store
-  is opened; `unexpected`, 2, for any error no class names, with its message.
+  every problem as `issues`, each `<field>: <what is wrong>` (`movements[0].amount` for a
+  field inside a list), found before a store is opened; `invalid_json`, 1, when stdin
+  holds no valid JSON, found before a store is opened, with the reason on one line in its
+  message; `refused`, 1, when a write breaks a rule, with every item at fault as `errors`,
+  each `{code, item, message}` where `item` is the position (`movements[2]`) and `code` is
+  `not_found`, `currency_mismatch` or `before_opening`, and nothing written; `unexpected`,
+  2, for any error no class names, with its message.
 - Quaestor's own failures are error classes in their module's `.errors.ts`, each
   extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`
   with its stable code. Commander's parse errors are not classes: `failure.ts` maps

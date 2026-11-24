@@ -15,6 +15,12 @@ export const TAG_MESSAGE = 'must be lowercase letters, digits, colons and dashes
 
 export const UNKNOWN_KEY_MESSAGE = 'is not a field'
 
+export const ZERO_AMOUNT_MESSAGE = 'must not be 0'
+
+export const REPEATED_MESSAGE = 'is repeated'
+
+export const NOTHING_TO_WRITE_MESSAGE = 'nothing to write: give delete, movements or transfers'
+
 export const EMOJI_PATTERN = /^\p{RGI_Emoji}$/v
 
 export const ISSUE_SEPARATOR = '; '

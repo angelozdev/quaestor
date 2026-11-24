@@ -15,7 +15,7 @@ export type AccountDraft = {
   openingDate: string
 }
 
-type Account = {
+export type Account = {
   id: string
   emoji: string | null
   name: string
@@ -36,3 +36,33 @@ export type Category = {
   name: string
   archived: boolean
 }
+
+export type MovementDraft = {
+  account: string
+  date: string
+  payee: string
+  amount: number
+  currency: string
+  category: string
+  tags: string[]
+  note: string | null
+}
+
+type HalfDraft = Omit<MovementDraft, 'category'>
+
+type TransferDraft = { from: HalfDraft; to: HalfDraft }
+
+export type WriteRequest = {
+  delete: string[]
+  movements: MovementDraft[]
+  transfers: TransferDraft[]
+}
+
+export type Catalog = {
+  accounts: Map<string, Account>
+  categories: Map<string, Category>
+  tags: Set<string>
+  movements: Set<string>
+}
+
+export type WriteProblem = { code: string; item: string; message: string }

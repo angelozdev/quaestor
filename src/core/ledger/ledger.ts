@@ -4,8 +4,16 @@ import {
   DECIMAL_DIGITS,
   ID_ALPHABET,
   ID_LENGTH,
+  PROBLEM_CODES,
 } from './ledger.constants.ts'
-import type { RandomIndex } from './ledger.types.ts'
+import type {
+  Account,
+  Catalog,
+  MovementDraft,
+  RandomIndex,
+  WriteProblem,
+  WriteRequest,
+} from './ledger.types.ts'
 
 export function drawCode(randomIndex: RandomIndex): string {
   return Array.from({ length: ID_LENGTH }, () =>
@@ -25,4 +33,46 @@ export function centsOf(text: string): number {
 
 export function amountOf(cents: number): number {
   return cents / CENTS_PER_UNIT
+}
+
+function notFound(item: string, kind: string, id: string): WriteProblem {
+  return { code: PROBLEM_CODES.NotFound, item, message: `${kind} ${id} does not exist` }
+}
+
+function accountProblems(account: Account, movement: MovementDraft, item: string): WriteProblem[] {
+  const problems: WriteProblem[] = []
+  if (account.openingDate !== null && movement.date < account.openingDate)
+    problems.push({
+      code: PROBLEM_CODES.BeforeOpening,
+      item,
+      message: `account ${account.id} opens on ${account.openingDate}, after ${movement.date}`,
+    })
+  if (movement.currency !== account.currency)
+    problems.push({
+      code: PROBLEM_CODES.CurrencyMismatch,
+      item,
+      message: `account ${account.id} holds ${account.currency}, not ${movement.currency}`,
+    })
+  return problems
+}
+
+function movementProblems(
+  movement: MovementDraft,
+  item: string,
+  { accounts, categories, tags }: Catalog,
+): WriteProblem[] {
+  const account = accounts.get(movement.account)
+  return [
+    ...(account === undefined
+      ? [notFound(item, 'account', movement.account)]
+      : accountProblems(account, movement, item)),
+    ...(categories.has(movement.category) ? [] : [notFound(item, 'category', movement.category)]),
+    ...movement.tags.filter((tag) => !tags.has(tag)).map((tag) => notFound(item, 'tag', tag)),
+  ]
+}
+
+export function checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[] {
+  return request.movements.flatMap((movement, index) =>
+    movementProblems(movement, `movements[${index}]`, catalog),
+  )
 }
