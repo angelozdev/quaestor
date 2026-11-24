@@ -420,7 +420,7 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   issues joined by `; `, each issue `<path>: <message>`. Shared pieces in `input.schema.ts`:
   - `requiredText`: `is required`.
   - `dateText`: `must be a date like 2026-11-24`.
-    - `amountText`: text matching `AMOUNT_PATTERN`, turned into cents, `must be an amount like
+  - `amountText`: text matching `AMOUNT_PATTERN`, turned into cents, `must be an amount like
     "-15000" or "-30.39": no thousands separator, at most 2 decimals`. A JSON number gets the
     same message.
   - `currencyCode`: `must be an ISO 4217 code such as COP`.
@@ -440,7 +440,7 @@ required. Output: `{ dryRun, account: AccountRow }`.
     makes `account list` show balance `120.5`.
   - `an account keeps its emoji apart from its name`: `emoji: 💵`, `name: Wallet`.
   - `an emoji field that is not exactly one emoji is refused`: `🏦🏦` and `A`.
-    - `an account gets a four-character code`: `id` matches `/^[0-9a-hjkmnp-tv-z]{4}$/`.
+  - `an account gets a four-character code`: `id` matches `/^[0-9a-hjkmnp-tv-z]{4}$/`.
   - `two accounts never share a code, even when the draw repeats`: with a `randomIndex` whose
     second account's first draw repeats the first code, both accounts are created with
     different codes.
@@ -452,7 +452,7 @@ required. Output: `{ dryRun, account: AccountRow }`.
     issue `currency: must be an ISO 4217 code such as COP`.
   - `a type outside savings, debit, credit and cash is refused`.
   - `an account name already taken is refused`: exits 1 `already_exists`, kind `account`.
-    - `an opening amount with a thousands separator or more than two decimals is refused`:
+  - `an opening amount with a thousands separator or more than two decimals is refused`:
     `--opening 15.000` and `--opening 1,500`.
   - `the opening date is required`.
 - [ ] **Step 2: Run them and see them fail.**
@@ -537,7 +537,7 @@ null and not blank, `archived` integer boolean not null default false, and a uni
   - `type Catalog = { accounts: Map<string, Account>; categories: Map<string, Category>;
     tags: Set<string>; movements: Set<string> }`, where `movements` holds the codes asked to
     be deleted that exist.
-    - `type WriteProblem = { code: string; item: string; message: string }`.
+  - `type WriteProblem = { code: string; item: string; message: string }`.
   - `checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[]`, pure. It returns
     every problem in input order, `item` being `movements[i]` (later `transfers[i].from`,
     `transfers[i].to` and `delete[i]`):
@@ -657,8 +657,8 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `--from and --to keep the days in between, both included`.
   - `--payee finds Éxito from exito and Uber from UBER` (Review Focus 2).
   - `--payee across all accounts shows how a payee was categorised before`.
-    - `a --from after --to gives no movements`.
-    - `movements are listed newest first, and same-day ones by the reverse of their recorded
+  - `a --from after --to gives no movements`.
+  - `movements are listed newest first, and same-day ones by the reverse of their recorded
     order`.
   - `without --limit the 50 most recent matches are listed and total counts them all`: 52
     movements give `total: 52` and rows 52 down to 3.
@@ -828,7 +828,7 @@ and `rows` of each file and each account's `balance`.
   - `a file whose sha256 differs from manifest.json stops the import` (exit 2, store
     unchanged).
   - `a row count that differs from manifest.json stops the import` (exit 2).
-    - `an archived account receives no new movement`: after importing the fixture,
+  - `an archived account receives no new movement`: after importing the fixture,
     `movement write` into its archived account gives `archived` in `errors[]`.
   - `an archived category receives no new movement`.
   - `an account without an opening date accepts a movement on any date`.
