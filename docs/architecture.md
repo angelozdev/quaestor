@@ -112,6 +112,9 @@ Written for a reader that is a model, not a person.
 
 - The installed `quaestor` defaults to `prod` and keeps its store in
   `~/.quaestor/prod.sqlite`, outside the repo.
+- Files under `~/.quaestor` keep the default permissions: the home folder already
+  shuts out other users, and the Mac has one person account. Decided by Angelo on
+  2026-11-24.
 - Running the sources (`pnpm quaestor`) defaults to `test` and keeps its stores in
   the repo's `data/<env>.sqlite`, ignored by git. Even `--env prod` from the sources
   is the repo's `data/prod.sqlite`, never the release's `~/.quaestor/prod.sqlite`.
