@@ -6,6 +6,8 @@ export const ID_LENGTH = 4
 
 export const AMOUNT_PATTERN = /^-?\d+(\.\d{1,2})?$/
 
+export const TAG_PATTERN = /^[a-z0-9:-]+$/
+
 export const DECIMAL_DIGITS = 2
 
 export const CENTS_PER_UNIT = 100

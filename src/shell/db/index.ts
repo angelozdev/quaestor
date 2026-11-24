@@ -1,5 +1,7 @@
 export { insertAccount, listAccounts } from './accounts/accounts.ts'
 export { backupStore } from './backups/backups.ts'
 export type { BackupResult } from './backups/backups.types.ts'
+export { insertCategory, listCategories } from './categories/categories.ts'
 export { closeStore, inTransaction, openStore } from './database/database.ts'
 export type { Store } from './database/database.types.ts'
+export { insertTag, listTags } from './tags/tags.ts'

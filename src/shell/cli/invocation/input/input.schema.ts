@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { AMOUNT_PATTERN, centsOf, isCurrency } from '#core/ledger'
+import { AMOUNT_PATTERN, TAG_PATTERN, centsOf, isCurrency } from '#core/ledger'
 import {
   AMOUNT_MESSAGE,
   AMOUNT_TOO_LARGE_MESSAGE,
@@ -8,6 +8,7 @@ import {
   EMOJI_MESSAGE,
   EMOJI_PATTERN,
   REQUIRED_MESSAGE,
+  TAG_MESSAGE,
   UNKNOWN_KEY_MESSAGE,
 } from './input.constants.ts'
 
@@ -34,6 +35,8 @@ export const amountText = z
 export const currencyCode = z.string(wrongOr(CURRENCY_MESSAGE)).refine(isCurrency, CURRENCY_MESSAGE)
 
 export const emojiText = z.string(wrongOr(EMOJI_MESSAGE)).regex(EMOJI_PATTERN, EMOJI_MESSAGE)
+
+export const tagText = z.string(wrongOr(TAG_MESSAGE)).regex(TAG_PATTERN, TAG_MESSAGE)
 
 export const dryRun = z.boolean().default(false)
 

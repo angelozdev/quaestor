@@ -73,7 +73,7 @@ export function isUniqueViolation(error: unknown): boolean {
   return constraintCode(error) === SQLITE_CONSTRAINT_UNIQUE
 }
 
-function isTakenCode(error: unknown): boolean {
+export function isPrimaryKeyViolation(error: unknown): boolean {
   return constraintCode(error) === SQLITE_CONSTRAINT_PRIMARYKEY
 }
 
@@ -82,7 +82,7 @@ export function withFreshCode<T>(randomIndex: RandomIndex, insert: (code: string
     try {
       return insert(drawCode(randomIndex))
     } catch (error) {
-      if (!isTakenCode(error)) throw error
+      if (!isPrimaryKeyViolation(error)) throw error
     }
   }
 }

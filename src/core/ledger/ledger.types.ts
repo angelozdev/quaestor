@@ -27,3 +27,12 @@ type Account = {
 }
 
 export type AccountRow = Account & { balance: number }
+
+export type CategoryDraft = { emoji: string; name: string }
+
+export type Category = {
+  id: string
+  emoji: string | null
+  name: string
+  archived: boolean
+}

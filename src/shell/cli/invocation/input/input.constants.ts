@@ -11,6 +11,8 @@ export const CURRENCY_MESSAGE = 'must be an ISO 4217 code such as COP'
 
 export const EMOJI_MESSAGE = 'must be one emoji such as 🏦'
 
+export const TAG_MESSAGE = 'must be lowercase letters, digits, colons and dashes'
+
 export const UNKNOWN_KEY_MESSAGE = 'is not a field'
 
 export const EMOJI_PATTERN = /^\p{RGI_Emoji}$/v

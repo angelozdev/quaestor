@@ -2,13 +2,25 @@ import { Command, CommanderError, Option } from '@commander-js/extra-typings'
 import { accountAddCommand } from '../commands/account-add/account-add.ts'
 import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
+import { categoryAddCommand } from '../commands/category-add/category-add.ts'
+import { categoryListCommand } from '../commands/category-list/category-list.ts'
+import { tagAddCommand } from '../commands/tag-add/tag-add.ts'
+import { tagListCommand } from '../commands/tag-list/tag-list.ts'
 import { failureOf } from '../invocation/failure/failure.ts'
 import { MissingCommandError } from '../invocation/failure/failure.errors.ts'
 import { writeFailure, writeResult } from '../invocation/output/output.ts'
 import { COMMAND_GROUPS, ExitCode, HELP_FLAG, JSON_FLAG } from './main.constants.ts'
 import type { CliCommand, CliContext, CommandGroup } from './main.types.ts'
 
-const COMMANDS: CliCommand[] = [backupCommand, accountListCommand, accountAddCommand]
+const COMMANDS: CliCommand[] = [
+  backupCommand,
+  accountListCommand,
+  accountAddCommand,
+  categoryListCommand,
+  categoryAddCommand,
+  tagListCommand,
+  tagAddCommand,
+]
 
 const COMMAND_NAMES = [...new Set(COMMANDS.map((command) => command.group ?? command.name))]
 
