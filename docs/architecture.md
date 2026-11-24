@@ -43,11 +43,12 @@ Written for a reader that is a model, not a person.
 - stderr carries diagnostics and, for every command that opens a store, an
   `env: <name>` line. `--help` and `--version` open no store and print none.
 - The stderr diagnostic lines, in their order: `env: <name>` (or
-  `env: custom (<path>)`), `backup: <path> (before migrating)`, `migrated: <name>`
-  per migration applied, then the error object when the command fails.
+  `env: custom (<path>)`), `backup: <path> (before migrating)` (only in `prod`, and
+  only when a migration is pending), `migrated: <name>` per migration applied, then
+  the error object when the command fails. A call refused before a store is chosen,
+  such as a usage error or `invalid_env`, writes only the error object.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
-  a stable `code` (for example `currency_mismatch`) and the data needed to act on
-  it.
+  a stable `code` (for example `invalid_env`) and the data needed to act on it.
 - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
   wrong or a rule said no, so Claude fixes the call and retries; 2 failed, the
   environment broke, so Claude stops and tells Angelo.
@@ -68,13 +69,14 @@ Written for a reader that is a model, not a person.
   `commands` it can use; `invalid_env`, 1, when `--env`, `QUAESTOR_ENV` or
   `QUAESTOR_DB` holds a value that cannot name a store, with the `source` and the
   `value`; `named_env_disabled`, 1, because a named env needs a data folder and the
-  entry point has none (under vitest); `backups_disabled`, 1, because a backup needs
-  that same data folder; `backup_not_written`, 2, when a backup cannot be written,
-  with the `folder` and the `reason`; `migration_failed`, 2, when a pending
-  migration fails, with the `migration` and the `reason`, the store left as it was;
-  `unknown_migrations`, 2, when the store holds migrations this code does not ship,
-  with their `names`, the store left as it was; `unexpected`, 2, for any error no
-  class names, with its message.
+  entry point has none (under vitest), with the `source` and the `env`;
+  `backups_disabled`, 1, because a backup needs that same data folder;
+  `backup_not_written`, 2, when a backup cannot be written, with the `folder` and
+  the `reason`; `migration_failed`, 2, when a pending migration fails, with the
+  `migration` and the `reason`, the store left as it was; `unknown_migrations`, 2,
+  when the store holds migrations this code does not ship, with their `names`, the
+  store left as it was; `unexpected`, 2, for any error no class names, with its
+  message.
 - Every failure is an error class in its module's `.errors.ts` that extends
   `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors` with its
   stable code.
@@ -102,15 +104,16 @@ Written for a reader that is a model, not a person.
 - The installed `quaestor` defaults to `prod` and keeps its store in
   `~/.quaestor/prod.sqlite`, outside the repo.
 - Running the sources (`pnpm quaestor`) defaults to `test` and keeps its stores in
-  the repo's `data/<env>.sqlite`, ignored by git. The sources never reach `prod`
-  unless told to with `--env prod`.
+  the repo's `data/<env>.sqlite`, ignored by git. Even `--env prod` from the sources
+  is the repo's `data/prod.sqlite`, never the release's `~/.quaestor/prod.sqlite`.
 - Tests use temporary stores and folders that they remove, and under vitest both
   entry points refuse named environments, so a test can never reach a real store.
 - Resolution order: `--env`, then `QUAESTOR_DB` (an absolute path), then
-  `QUAESTOR_ENV`, then the default of whoever is running. An env name is lowercase
-  letters, digits and dashes, and `custom` is reserved: `QUAESTOR_DB` is the only
-  way to a store outside the data folder, shown as `env: custom (<path>)`, and the
-  folder it names must already exist.
+  `QUAESTOR_ENV`, then the default of whoever is running. An env name starts with
+  a lowercase letter and holds only lowercase letters, digits and dashes, and
+  `custom` is reserved: `QUAESTOR_DB` is the only way to a store outside the data
+  folder, shown as `env: custom (<path>)`, and the folder it names must already
+  exist.
 
 ## Migrations and backups
 
@@ -118,11 +121,12 @@ Written for a reader that is a model, not a person.
 - In `prod`, a backup is taken before any migration runs.
 - A store written by a newer release refuses an older one.
 - `quaestor backup` copies the data file on demand.
-- Backups live in a `backups/` folder next to the store, as in Aletheia: the
+- Backups live in a `backups/` folder inside the data folder, as in Aletheia: the
   installed release writes to `~/.quaestor/backups/`, the sources to the repo's
-  `data/backups/`. Decided by Angelo on 2026-11-23. Nothing goes to iCloud Drive,
-  so a copy off the Mac is Time Machine's job; losing the Mac without one loses
-  the store and its backups together.
+  `data/backups/`, and a `QUAESTOR_DB` store is copied there as `custom-<instant>`,
+  not beside its own file. Decided by Angelo on 2026-11-23. Nothing goes to iCloud
+  Drive, so a copy off the Mac is Time Machine's job; losing the Mac without one
+  loses the store and its backups together.
 
 ## Release
 
