@@ -56,6 +56,9 @@ These are hard to change once real data sits on them.
 - **Reading movements.** Each row carries its account's balance after it, even when the list
   mixes accounts; tags come out as one space-joined text so the rows stay one TOON table, and
   go in as a list. `movement list` lists at most `--limit` movements, 50 by default, the most recent ones, newest first, and `total` says how many matched. Confirmed by Angelo on 2026-11-24.
+- **Refusals.** A write that breaks a rule is refused whole, and every item at fault is listed
+  at once, one line each, so Claude fixes them all in one round. Decided by Angelo on
+  2026-11-24.
 - **Order.** Prod's first write is the import. Nothing writes to `~/.quaestor/prod.sqlite`
   before the import (Task 8) has run there, even if a release ships an earlier slice.
 
@@ -194,25 +197,17 @@ openings[1]{account,amount,currency,date}:
   w2k9,120,USD,2026-01-05
 ```
 
-A refusal leaves stdout empty and exits 1. The error goes on stderr after the `env:` line:
+A refusal leaves stdout empty and exits 1. The error goes on stderr after the `env:` line. A
+write that breaks rules lists every item at fault at once:
 
 ```
 error:
-  code: archived
-  kind: account
-  id: c4tz
-  item: "movements[0]"
-  message: account c4tz is archived
-```
-
-```
-error:
-  code: currency_mismatch
-  item: "transfers[0].from"
-  account: w2k9
-  currency: COP
-  expected: USD
-  message: "account w2k9 holds USD, not COP"
+  code: refused
+  errors[3]{code,item,message}:
+    not_found,"movements[2]",category zz99 does not exist
+    archived,"movements[5]",account c4tz is archived
+    currency_mismatch,"transfers[0].from","account w2k9 holds USD, not COP"
+  message: 3 items refused
 ```
 
 An amount copied from a COP screen as `"-15.000"`:
@@ -253,7 +248,7 @@ error:
   write's stdout starts with `dryRun: <true|false>`.
 - Each failure is a class extending `RefusedError` (exit 1) or `FailedError` (exit 2), and its
   stderr object holds `code` first, then data, then `message`. `ErrorData` widens to
-  `Record<string, string | number | string[]>`.
+  `Record<string, string | number | string[] | Record<string, string>[]>`.
 - Tests: every rule and example in the spec has a CLI test through `runCli` whose name states
   the rule; every money figure is also tested in USD; fixtures are invented; no test reads
   `~/.quaestor`.
@@ -539,16 +534,19 @@ null and not blank, `archived` integer boolean not null default false, and a uni
   - `type Catalog = { accounts: Map<string, Account>; categories: Map<string, Category>;
     tags: Set<string>; movements: Set<string> }`, where `movements` holds the codes asked to
     be deleted that exist.
-  - `checkWrite(request: WriteRequest, catalog: Catalog): void`, pure. It throws the first
-    refusal, with `item` set to `movements[i]` (later `transfers[i].from`,
+    - `type WriteProblem = { code: string; item: string; message: string }`.
+  - `checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[]`, pure. It returns
+    every problem in input order, `item` being `movements[i]` (later `transfers[i].from`,
     `transfers[i].to` and `delete[i]`):
-    - `NotFoundError(kind, id, item)`: `not_found`, message `<kind> <id> does not exist`.
-    - `ArchivedError(kind, id, item)`: `archived`, message `<kind> <id> is archived`.
-    - `CurrencyMismatchError`: `currency_mismatch`, data `{ item, account, currency,
-      expected }`, message `account <account> holds <expected>, not <currency>`.
-    - `BeforeOpeningError`: `before_opening`, data `{ item, account, date, openingDate }`,
-      message `account <account> opens on <openingDate>, after <date>`.
-  - `ledger.test.ts` has one unit test per error, plus `a movement dated on its account's
+    - `not_found`: `<kind> <id> does not exist`.
+    - `archived`: `<kind> <id> is archived`.
+    - `currency_mismatch`: `account <account> holds <expected>, not <currency>`.
+    - `before_opening`: `account <account> opens on <openingDate>, after <date>`.
+  - `RefusedWriteError(problems: WriteProblem[])` in `ledger.errors.ts`: a `RefusedError`,
+    code `refused`, data `{ errors: problems }`, message `1 item refused` or
+    `<n> items refused`.
+  - `ledger.test.ts` has one unit test per problem, plus `every problem is returned, in
+    input order`, plus `a movement dated on its account's
     opening date is accepted` and `an account without an opening date accepts any date`.
 - Produces: `readJson(context: CliContext): Promise<unknown>`, which throws `InvalidJsonError`:
   `invalid_json`, message `invalid JSON on stdin: <reason on one line>`.
@@ -560,7 +558,8 @@ null and not blank, `archived` integer boolean not null default false, and a uni
   balances: BalanceChange[] }`.
 - Produces: `writeMovements(store: Store, request: WriteRequest, deps: WriteDeps):
   WriteResult`. It loads the
-  catalog and calls `checkWrite`, then reads the touched accounts' balances, writes in order
+  catalog and calls `checkWrite`, throwing `RefusedWriteError` when it returns any problem, then
+  reads the touched accounts' balances, writes in order
   (deletes, movements, transfers), reads the balances again, and returns the result with
   `balances` sorted by account.
 
@@ -608,6 +607,9 @@ until then their schemas take only `[]`.
   - `a COP amount copied with its thousands dot is refused`: `"-15.000"` (Review Focus 5).
   - `an amount given as a JSON number is refused`: `-15000`.
   - `an impossible date such as 2026-02-30 is refused`.
+    - `every item at fault is listed at once, and nothing is written`: an unknown category in
+    `movements[0]` and another currency in `movements[2]` give `refused` with two `errors`, in
+    that order. In the tests below, a rule's code is read from `errors[]`.
   - `a movement in another currency than its account's is refused`: `currency_mismatch`.
   - `an archived account receives no new movement`: `archived`, kind `account`. The account is
     archived with `runSql` in the test.
@@ -623,8 +625,9 @@ until then their schemas take only `[]`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement** in this order: the schema and migration, stdin, `writeMovements`,
   `movementWriteCommand`, and the balance sum in `listAccounts`.
-- [ ] **Step 4: `pnpm check` green.** Add `invalid_json`, `not_found`, `archived`,
-  `currency_mismatch` and `before_opening`, all 1, to "Codes so far".
+- [ ] **Step 4: `pnpm check` green.** Add `invalid_json` and `refused`, both 1, to "Codes so far",
+  with `not_found`, `archived`, `currency_mismatch` and `before_opening` as the codes inside
+  `refused`.
 - [ ] **Step 5: Commit**: `feat(cli): record movements`.
 
 ---
@@ -684,8 +687,7 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 **Interfaces:**
 
 - `checkWrite` also checks each half like a movement, without the category, `from` before
-  `to`. It adds `SameAccountTransferError`: `same_account_transfer`, data `{ item, account }`,
-  message `a transfer needs two different accounts, not <account> twice`.
+  `to`. It adds the problem `same_account_transfer`, message `a transfer needs two different accounts, not <account> twice`.
 - A transfer in stdin is a strict object `{ from: Half, to: Half }`.
   - `from.amount` must be negative: `must be negative: the money leaves this account`.
   - `to.amount` must be positive: `must be positive: the money arrives in this account`.
@@ -705,7 +707,7 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `an archived account cannot be either half`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
-- [ ] **Step 4: `pnpm check` green.** Add `same_account_transfer`, 1, to "Codes so far".
+- [ ] **Step 4: `pnpm check` green.** Add `same_account_transfer` to the codes inside `refused`.
 - [ ] **Step 5: Commit**: `feat(cli): transfers between accounts`.
 
 ---
@@ -719,23 +721,23 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
 
 **Interfaces:**
 
-- `checkWrite` checks the deletes first: an id missing from `catalog.movements` is
-  `NotFoundError('movement', id, 'delete[i]')`.
+- `checkWrite` checks the deletes first: an id missing from `catalog.movements` is the problem
+  `not_found`, `movement <id> does not exist`, item `delete[i]`.
 - `delete` is an array of codes. They are deduplicated, and each is expanded to both
   halves of its transfer. A delete sets `deleted_at` and `updated_at` to `now` on
   both halves; rows and their tags stay stored. `deleted` lists each movement once, by
   `(date, seq)`.
 
 - [ ] **Step 1: Write the failing tests**
-    - `a deleted movement leaves every list and its balance returns (USD)`.
+  - `a deleted movement leaves every list and its balance returns (USD)`.
   - `a deleted movement stays stored with its deleted_at`: checked with `selectAll`.
   - `a movement already deleted is not_found`.
   - `deleting one half of a transfer deletes both`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
   - `a correction is a delete and a new record in one write`: the balances show both changes,
     and the new movement gets a fresh code.
-  - `an unknown movement code is refused and nothing is deleted`: `not_found`, kind
-    `movement`.
+  - `an unknown movement code is refused and nothing is deleted`: `not_found` in
+    `errors[]`.
   - `--dry-run of a delete writes nothing`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
