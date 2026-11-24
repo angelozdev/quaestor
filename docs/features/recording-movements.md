@@ -10,8 +10,8 @@ legacy data over and lets Claude keep it up to date from bank screenshots.
 
 ## Done when
 
-- The legacy export is imported, and every account's balance equals its
-  legacy stored balance to the cent.
+- The legacy export is imported, and every account's balance equals its legacy stored
+  balance to the cent.
 - Claude has recorded a real movement from a bank screenshot with the installed
   release: a dry run first, then the write after Angelo says yes.
 
@@ -55,25 +55,23 @@ The skill drives it; `quaestor` answers.
 
 Accounts, categories and movements are each identified by a random four-character code from
 `0123456789abcdefghjkmnpqrstvwxyz`, as Aletheia's cards are: `n8d3`, `k7f2`. They are never
-numbered in sequence. A code already taken is drawn again, so two never share one, and
-1,048,576 fit in each list: more than a lifetime of movements. Decided by Angelo on
+numbered in sequence. A code already taken is drawn again, so two never share one, and 1,048,576 fit in each list, more than a lifetime of movements. Decided by Angelo on
 2026-11-24.
 
 ## Accounts
 
 - An account has an emoji, a name, a type, a currency, an archived mark and an opening
   balance.
-- The emoji is a field of its own, one emoji such as 🏦, and the name is plain text such as
-  Bank. Categories work the same way. Decided by Angelo on 2026-11-24.
+- The emoji is a field of its own, one emoji such as 🏦, and the name is plain text such as Bank. Categories work the same way. Decided by Angelo on 2026-11-24.
 - The type is `savings`, `debit`, `credit` or `cash`. Nothing depends on it yet: a later
   feature gives credit accounts their cut and payment dates. Decided by Angelo on
   2026-11-24.
 - A currency is any ISO 4217 code; anything else, such as `UDS`, is refused.
 - The balance is the opening balance plus the sum of the account's movements. It is
-  always computed and never stored, so it cannot drift the way Card C's did when it
-  was reset by hand.
-- A credit card in debt has a negative balance: Card B is at -1,000,000.00 COP.
-- An archived account receives no new movement. Card A and Trip fund arrive archived.
+  always computed and never stored, so it cannot drift the way a legacy balance did when it was reset by hand.
+- A credit card in debt has a negative balance: a card owing 1,000,000.00 COP is at
+  -1,000,000.00 COP.
+- An archived account receives no new movement. Some legacy accounts arrive archived.
 - A new account is created with its emoji, name, type, currency, and opening balance and date,
   the opening balance being 0 when the account starts empty.
 
@@ -85,18 +83,12 @@ one, and the account's running balance starts from it. A movement dated before i
 account's opening date is refused (Claude's call, so a running balance never starts
 mid-history).
 
-Some legacy accounts get one, dated the day before their first posted movement. Decided
-by Angelo on 2026-11-24:
-
-- 🆘 Reserve: +5,000,000.00 COP on 2026-03-01.
-- 📈 Invest: +1,000.00 USD on 2026-07-01.
-- 💵 Wallet: +500.00 USD on 2026-01-05.
-- 🏦 Bank: +1,200,000.00 COP on 2026-01-05.
-- 💳 Card C: -300,000.00 COP on 2026-01-05. The difference really comes from the
-  hand reset of 2026-08-01, so the balance today is exact and the balances before that
-  date are not.
-- 💳 Card A: -2,000,000.00 COP on 2026-02-01. Its origin is unknown; today's
-  balance, 0, is exact.
+Every legacy account whose stored balance differs from the sum of its movements gets one,
+dated the day before its first posted movement, so its balance today is exact. Decided by
+Angelo on 2026-11-24, account by account; the approved list stays outside the repo, which is
+public. For example, an account storing 1,000,000.00 COP whose movements add up to
+400,000.00 COP opens with +600,000.00 COP. When the difference comes from a balance reset by
+hand, today's balance is exact and the balances before the reset are not.
 
 ## Amounts and currencies
 
@@ -111,8 +103,8 @@ by Angelo on 2026-11-24:
 - It is signed: positive is money into the account, negative is money out. Zero is
   refused (Claude's call).
 - A movement is always in its account's currency. A purchase made in another currency
-  is recorded as what the account was charged: the 500 MXN tacos paid with Wallet
-  are -30.39 USD on Wallet. The original amount goes in the note when Angelo wants
+  is recorded as what the account was charged: a 500 MXN purchase paid
+  from a USD account is the -28.00 USD it was charged. The original amount goes in the note when Angelo wants
   it. Decided by Angelo on 2026-11-24.
 - Nothing converts between currencies, and nothing adds two currencies together.
 
@@ -124,7 +116,7 @@ by Angelo on 2026-11-24:
   keep the order in which they were recorded. Decided by Angelo on 2026-11-24, when he
   dropped the time of day: it can be added later as optional, and every earlier
   movement would then simply have none.
-- Any category takes money in or money out. A 20.00 refund from Rappi on a 50.00 order
+- Any category takes money in or money out. A 20.00 refund on a 50.00 delivery order
   can go into 📦 Food Delivery, leaving delivery at 30.00 for the month. Decided by
   Angelo on 2026-11-24, as YNAB, Actual Budget and Rocket Money recommend.
 - One bank charge is one movement with one category (Claude's call).
@@ -141,22 +133,21 @@ by Angelo on 2026-11-24:
   date, its own payee and its own note. It has no category. Decided by Angelo on
   2026-11-24 over double-entry bookkeeping (see Approaches).
 - Both halves are written together or not at all, and deleting one half deletes both.
-- Paying a card, moving money to the Reserve and lending to someone (through 🤝
-  Loans) are transfers.
+- Paying a card, moving money to a savings account and lending to someone (through the
+  account that holds loans) are transfers.
 - A transfer across currencies carries both amounts: -100.00 USD from Wallet, +400,000.00
   COP into Bank. `quaestor` does not compare them, because it knows no rate. Both are
   shown side by side so Claude can check the rate they imply against the statement
   (Claude's call: no rate is computed).
 - Each half having its own date is Claude's call: a transfer can leave one bank on the
-  10th and reach the other on the 11th, and each statement shows its own date. All 48
-  legacy pairs share a date.
+  10th and reach the other on the 11th, and each statement shows its own date. Every legacy pair shares a date.
 
 ## Categories and tags
 
 - A category has an emoji, an English name and an archived mark: 🍽️ and Restaurants. A tag has a name such
-  as `trip:lima-2026` or `who:alex`.
+  as `trip:japon-2027` or `who:alex`.
 - An unknown category or tag is refused. Creating one is a separate write with its own
-  dry run, so a misspelt `trip:lima-2062` never slips in. Decided by Angelo on
+  dry run, so a misspelt `trip:japon-2072` never slips in. Decided by Angelo on
   2026-11-24.
 - An archived category receives no new movement.
 - Tags can go on any movement, transfer halves included (Claude's call). The legacy data
@@ -189,19 +180,22 @@ Writes, each with `--dry-run`:
 - It refuses a store that already holds data, so nothing is imported twice.
 - Every account, category and movement gets a new code; the legacy numbers are not kept.
 - What comes over:
-  - every account, some of them archived, each with its legacy type: `debit` (Wallet, Bank), `credit` (Card A, Card C, Loan, Card B), `savings` (Reserve, Trip fund, Earnings, Invest) and `cash` (Loans).
-  - every category, some of them archived, with
-    no posted movement in an archived one. Their groups and flags stay in the export
-    for the reports feature.
-  - Each legacy name splits into its leading emoji and the rest: 🏦 Bank becomes 🏦
-    and Bank. A name without an emoji keeps none.
-  - every tag.
-  - every posted movement: expenses, incomes and both halves of every transfer.
-  - every tag link, all on posted movements.
+  - every account, with its legacy type and archived mark: `debit`, `credit`, `savings`, and
+    `cash` for the account that holds loans to other people;
+  - every category, archived ones included, with no posted movement in an archived one; their
+    groups and flags stay in the export for the reports feature;
+  - each legacy name split into its leading emoji and the rest: 🏦 Bank becomes 🏦 and Bank,
+    and a name without an emoji keeps none;
+  - every tag;
+  - every posted movement: expenses, incomes and both halves of every transfer;
+  - every tag link on a posted movement.
+- The import's counts are checked against the export itself, not written here.
 - Signs: an expense becomes money out and an income money in, a transfer's `out` half
-  becomes money out and its `in_` half money in. A negative expense, which the legacy app used for money coming back, therefore becomes money in, as it was.
-- What stays in the export: the skipped and planned rows, the links to metas and to repeating rules, and `source`. Movements keep their legacy `created_at`.
-- The six opening balances above are added. After the import every account's balance
+  becomes money out and its `in_` half money in. A negative expense, which the legacy app used for money coming back, therefore becomes
+  money in, as it was.
+- What stays in the export: the skipped and planned rows, the links to metas and to repeating
+  rules, and `source`. Movements keep their legacy `created_at`.
+- The opening balances above are added. After the import every account's balance
   equals its `manifest.json` balance to the cent; if any differs, nothing is written.
 - Claude runs it on a copy of the real data first, then on `prod`.
 
@@ -244,7 +238,6 @@ back the same day, for the credit-card behaviour he plans.
 ## Left to the builder
 
 - Command names, flags, input shape on stdin, output fields, and how Claude refers to an
-  account, a category or a movement. Two categories share the name Gifts,
-  one of them archived.
+  account, a category or a movement. Two legacy categories share a name, one of them archived.
 - The tables and how the opening balance is stored.
 - The order of the slices.

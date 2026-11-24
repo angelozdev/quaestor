@@ -36,7 +36,7 @@ These are hard to change once real data sits on them.
   fit in each list. The import gives every legacy row a new code, so the legacy numbers are
   not kept. Decided by Angelo on 2026-11-24.
 - **Claude names things by code.** Claude never refers to an account or a category by its
-  name: two categories are called Gifts. Tags are referred to by name.
+  name: two legacy categories share a name. Tags are referred to by name.
 - **Emoji apart.** An account and a category carry their emoji in a field of their own, apart
   from the name: `🏦` and `Bank`. Decided by Angelo on 2026-11-24.
 - **Storage.** There are four lists: accounts, categories, tags and movements, plus which tags
@@ -99,10 +99,10 @@ account:
 
 ```
 categories[4]{id,emoji,name,archived}:
-  q5d0,null,Food,true
+  q5d0,null,Misc,true
   r3sb,🍽️,Restaurants,false
   x9ta,🚕,Rideshare/Taxi,false
-  a7hn,🛡️,Gifts,true
+  a7hn,🎁,Gifts,true
 ```
 
 ```
@@ -876,7 +876,8 @@ QUAESTOR_DB=$SCRATCH/copy.sqlite pnpm -s quaestor account list --json > $SCRATCH
 ```
 
 Then compare each account's `balance`, times 100 and rounded, with the cents in
-`~/.quaestor/legacy/manifest.json`, with a script, not by eye, matching each account by `<emoji> <name>` against the manifest's name. Expected: every account equal, and the openings Angelo approved, which Claude keeps outside the repo. Report the
+`~/.quaestor/legacy/manifest.json`, with a script, not by eye, matching each account by `<emoji> <name>` against the manifest's name. Expected: every account equal, and the openings Angelo approved,
+which Claude keeps outside the repo. Report the
 result to Angelo.
 
 ---

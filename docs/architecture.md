@@ -103,10 +103,10 @@ Written for a reader that is a model, not a person.
   `4500050`.
 - One rounding function, under test, is the only place a fraction of a cent is
   resolved.
-- How the dollar rate is stored is decided by the currency feature. The legacy
-  rate has six decimals (4,000.000000), and a six-decimal integer rate times a USD
-  balance in cents passes JavaScript's safe-integer limit: 3,000,000 cents ×
-  4,000,000,000 = 1.2 × 10^16, above 2^53 ≈ 9.0 × 10^15.
+- How the dollar rate is stored is decided by the currency feature. The legacy rate has six decimals, and a six-decimal integer rate
+  times a USD balance in cents passes JavaScript's safe-integer limit: 30,000.00 USD
+  is 3,000,000 cents, and 3,000,000 × 4,000,000,000 (a rate of 4,000.000000) = 1.2 ×
+  10^16, above 2^53 ≈ 9.0 × 10^15.
 
 ## Environments and data
 
@@ -182,8 +182,8 @@ Written for a reader that is a model, not a person.
   imported twice.
 - After an import, every account's balance equals its legacy stored balance to
   the cent. On 2026-11-23, several legacy accounts did not equal the sum of
-  their movements (Reserve stores COP 30,000,000.00 while its movements add
-  up to COP 9,000,000.00), because opening balances and manual resets were never
+  their movements (one stored COP 30,000,000.00 while its movements added up to COP
+  9,000,000.00), because opening balances and manual resets were never
   movements. The import carries that difference explicitly; it is never dropped
   and never silently "fixed". How it is represented is decided by the feature
   that imports accounts.
