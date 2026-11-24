@@ -53,7 +53,10 @@ The skill drives it; `quaestor` answers.
 
 ## Accounts
 
-- An account has a name, a type, a currency, an archived mark and an opening balance.
+- An account has an emoji, a name, a type, a currency, an archived mark and an opening
+  balance.
+- The emoji is a field of its own, one emoji such as 🏦, and the name is plain text such as
+  Bank. Categories work the same way. Decided by Angelo on 2026-11-24.
 - The type is `savings`, `debit`, `credit` or `cash`. Nothing depends on it yet: a later
   feature gives credit accounts their cut and payment dates. Decided by Angelo on
   2026-11-24.
@@ -63,7 +66,7 @@ The skill drives it; `quaestor` answers.
   was reset by hand.
 - A credit card in debt has a negative balance: Card B is at -1,000,000.00 COP.
 - An archived account receives no new movement. Card A and Trip fund arrive archived.
-- A new account is created with its name, type, currency, and opening balance and date,
+- A new account is created with its emoji, name, type, currency, and opening balance and date,
   the opening balance being 0 when the account starts empty.
 
 ## Opening balance
@@ -133,7 +136,7 @@ by Angelo on 2026-11-24:
 
 ## Categories and tags
 
-- A category has a name (emoji and English) and an archived mark. A tag has a name such
+- A category has an emoji, an English name and an archived mark: 🍽️ and Restaurants. A tag has a name such
   as `trip:lima-2026` or `who:alex`.
 - An unknown category or tag is refused. Creating one is a separate write with its own
   dry run, so a misspelt `trip:lima-2062` never slips in. Decided by Angelo on
@@ -170,8 +173,10 @@ Writes, each with `--dry-run`:
 - What comes over:
   - every account, some of them archived, each with its legacy type: `debit` (Wallet, Bank), `credit` (Card A, Card C, Loan, Card B), `savings` (Reserve, Trip fund, Earnings, Invest) and `cash` (Loans).
   - every category, some of them archived, with
-    no posted movement in an archived one. Their groups and flags stay in the export
+        no posted movement in an archived one. Their groups and flags stay in the export
     for the reports feature.
+  - Each legacy name splits into its leading emoji and the rest: 🏦 Bank becomes 🏦
+    and Bank. A name without an emoji keeps none.
   - every tag.
   - every posted movement: expenses, incomes and both halves of every transfer.
   - every tag link, all on posted movements.
@@ -221,7 +226,7 @@ back the same day, for the credit-card behaviour he plans.
 ## Left to the builder
 
 - Command names, flags, input shape on stdin, output fields, and how Claude refers to an
-  account, a category or a movement. Two categories share the name 🎁 Gifts,
+  account, a category or a movement. Two categories share the name Gifts,
   one of them archived.
 - The tables and how the opening balance is stored.
 - The order of the slices.
