@@ -156,6 +156,90 @@ describe('quaestor backup', () => {
     expect(existsSync(join(spaced, 'backups', COPY_NAME))).toBe(true)
   })
 
+  it('with --env, QUAESTOR_DB and QUAESTOR_ENV all set, backup uses --env', async () => {
+    const storeDir = tempDir('quaestor-store-')
+    const vars = { QUAESTOR_DB: join(storeDir, 'x.sqlite'), QUAESTOR_ENV: 'other' }
+
+    const { code, stdout, stderr } = await backup(['--env', 'staging'], { vars })
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('env: staging\n')
+    expect(stdout).toBe(
+      `${encode({ path: join(dataDir, 'backups', 'staging-2026-11-23T21-04-05-123Z.sqlite'), removed: [] })}\n`,
+    )
+    expect(existsSync(join(dataDir, 'staging.sqlite'))).toBe(true)
+    expect(readdirSync(storeDir)).toEqual([])
+  })
+
+  it('an invalid env exits 1 as invalid_env before any store is opened', async () => {
+    const { code, stdout, stderr } = await backup(['--env', 'Prod'])
+
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `${encode({
+        error: {
+          code: 'invalid_env',
+          source: '--env',
+          value: 'Prod',
+          message: 'invalid --env "Prod": use lowercase letters, digits and dashes',
+        },
+      })}\n`,
+    )
+    expect(readdirSync(dataDir)).toEqual([])
+  })
+
+  it('QUAESTOR_DB names a custom store shown as env: custom (<path>)', async () => {
+    const storeDir = tempDir('quaestor-store-')
+    const dbPath = join(storeDir, 'x.sqlite')
+
+    const { code, stdout, stderr } = await backup([], { vars: { QUAESTOR_DB: dbPath } })
+
+    const copy = join(dataDir, 'backups', 'custom-2026-11-23T21-04-05-123Z.sqlite')
+    expect(code).toBe(0)
+    expect(stderr).toBe(`env: custom (${dbPath})\n`)
+    expect(stdout).toBe(`${encode({ path: copy, removed: [] })}\n`)
+    expect(existsSync(dbPath)).toBe(true)
+    expect(existsSync(copy)).toBe(true)
+    expect(readdirSync(dataDir)).toEqual(['backups'])
+  })
+
+  it('QUAESTOR_DB with no data folder exits 1 as backups_disabled and writes no copy', async () => {
+    const storeDir = tempDir('quaestor-store-')
+    const dbPath = join(storeDir, 'x.sqlite')
+
+    const { code, stdout, stderr } = await backup([], {
+      dataDir: null,
+      vars: { QUAESTOR_DB: dbPath },
+    })
+
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `env: custom (${dbPath})\n${encode({
+        error: { code: 'backups_disabled', message: 'backups are disabled here (under vitest)' },
+      })}\n`,
+    )
+    expect(readdirSync(storeDir)).toEqual(['x.sqlite'])
+  })
+
+  it('QUAESTOR_DB in a folder that does not exist exits 2 as unexpected and creates nothing', async () => {
+    const storeDir = tempDir('quaestor-store-')
+    const dbPath = join(storeDir, 'missing', 'x.sqlite')
+
+    const { code, stdout, stderr } = await backup([], { vars: { QUAESTOR_DB: dbPath } })
+
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `env: custom (${dbPath})\n${encode({
+        error: { code: 'unexpected', message: 'unable to open database file' },
+      })}\n`,
+    )
+    expect(readdirSync(storeDir)).toEqual([])
+    expect(readdirSync(dataDir)).toEqual([])
+  })
+
   it('bare quaestor prints the help on stdout and exits 0', async () => {
     const { code, stdout, stderr } = await runCli([], { dataDir })
 

@@ -81,6 +81,19 @@ describe('main', () => {
     )
   })
 
+  it('--env without a value exits 1 as option_missing_argument', async () => {
+    const dataDir = tempDir('quaestor-cli-')
+
+    const { code, stdout, stderr } = await runCli(['backup', '--env'], { dataDir })
+
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toBe(
+      `${encode({ error: { code: 'option_missing_argument', message: "option '--env <name>' argument missing" } })}\n`,
+    )
+    expect(readdirSync(dataDir)).toEqual([])
+  })
+
   it.for([['--env', 'test'], ['--json']])(
     'global options and no command exit 1 as missing_command and open no store (%j)',
     async (argv, { expect }) => {

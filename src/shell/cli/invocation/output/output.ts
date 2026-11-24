@@ -1,5 +1,6 @@
 import { encode } from '@toon-format/toon'
 import type { Output } from '../../main/main.types.ts'
+import { CUSTOM_ENV } from '../env/env.constants.ts'
 import type { Env } from '../env/env.types.ts'
 import type { FailurePayload } from '../failure/failure.types.ts'
 import { ENV_PREFIX, LINE_END } from './output.constants.ts'
@@ -16,6 +17,7 @@ export function writeFailure(stderr: Output, payload: FailurePayload, json: bool
   stderr.write(line(payload, json))
 }
 
-export function writeEnvLine(stderr: Output, { name }: Env): void {
-  stderr.write(`${ENV_PREFIX}${name}${LINE_END}`)
+export function writeEnvLine(stderr: Output, { name, dbPath }: Env): void {
+  const shown = name === CUSTOM_ENV ? `${name} (${dbPath})` : name
+  stderr.write(`${ENV_PREFIX}${shown}${LINE_END}`)
 }

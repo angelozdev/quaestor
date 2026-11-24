@@ -62,10 +62,13 @@ Written for a reader that is a model, not a person.
 - Codes so far, each with its exit code: commander's parse errors as snake_case
   codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1;
   `missing_command`, 1, when a call has global options and no command, with the
-  `commands` it can use; `named_env_disabled`, 1, because the default env needs a
-  data folder and the entry point has none (under vitest); `backup_not_written`, 2,
-  when a backup cannot be written, with the `folder` and the `reason`; `unexpected`,
-  2, for any error no class names, with its message.
+  `commands` it can use; `invalid_env`, 1, when `--env`, `QUAESTOR_ENV` or
+  `QUAESTOR_DB` holds a value that cannot name a store, with the `source` and the
+  `value`; `named_env_disabled`, 1, because a named env needs a data folder and the
+  entry point has none (under vitest); `backups_disabled`, 1, because a backup needs
+  that same data folder; `backup_not_written`, 2, when a backup cannot be written,
+  with the `folder` and the `reason`; `unexpected`, 2, for any error no class names,
+  with its message.
 - Every failure is an error class in its module's `.errors.ts` that extends
   `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors` with its
   stable code.
@@ -98,7 +101,10 @@ Written for a reader that is a model, not a person.
 - Tests use temporary stores and folders that they remove, and under vitest both
   entry points refuse named environments, so a test can never reach a real store.
 - Resolution order: `--env`, then `QUAESTOR_DB` (an absolute path), then
-  `QUAESTOR_ENV`, then the default of whoever is running.
+  `QUAESTOR_ENV`, then the default of whoever is running. An env name is lowercase
+  letters, digits and dashes, and `custom` is reserved: `QUAESTOR_DB` is the only
+  way to a store outside the data folder, shown as `env: custom (<path>)`, and the
+  folder it names must already exist.
 
 ## Migrations and backups
 
