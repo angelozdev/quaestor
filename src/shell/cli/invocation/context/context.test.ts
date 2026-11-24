@@ -1,24 +1,26 @@
+import { encode } from '@toon-format/toon'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { captureStream } from '../../../../../tests/support/streams/streams.ts'
-import { main } from '../../main/main.ts'
+import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
+import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
 import { releasedContext, sourceContext } from './context.ts'
-import type { InvocationContext } from './context.types.ts'
+import type { ReleasedInvocation } from './context.types.ts'
 
-async function printedVersion(context: InvocationContext) {
-  const stdout = captureStream()
-  const stderr = captureStream()
-  const code = await main(['--version'], { ...context, stdout, stderr })
-  return { code, stdout: stdout.text(), stderr: stderr.text() }
+function released(vars: ReleasedInvocation['vars'], home = '/h'): ReleasedInvocation {
+  return {
+    release: { version: '0.0.0', commit: '2033257', repoRoot: '/r' },
+    entryDir: '/pkg/dist',
+    vars,
+    home,
+  }
 }
 
 describe('invocation context', () => {
   it('the release context prints <version> (<commit>) for --version', async () => {
-    const context = releasedContext({
-      release: { version: '0.0.0', commit: '2033257', repoRoot: '/r' },
-      entryDir: '/pkg/dist',
-    })
+    const context = releasedContext(released({}))
 
-    expect(await printedVersion(context)).toEqual({
+    expect(await runCli(['--version'], context)).toEqual({
       code: 0,
       stdout: '0.0.0 (2033257)\n',
       stderr: '',
@@ -26,8 +28,49 @@ describe('invocation context', () => {
   })
 
   it('the source context prints dev', async () => {
-    const context = sourceContext({ repoRoot: '/r' })
+    const context = sourceContext({ repoRoot: '/r', vars: {} })
 
-    expect(await printedVersion(context)).toEqual({ code: 0, stdout: 'dev\n', stderr: '' })
+    expect(await runCli(['--version'], context)).toEqual({
+      code: 0,
+      stdout: 'dev\n',
+      stderr: '',
+    })
+  })
+
+  it('the source context defaults to test under <repoRoot>/data and the release context to prod under <home>/.quaestor', () => {
+    const source = sourceContext({ repoRoot: '/r', vars: {} })
+    const release = releasedContext(released({}))
+
+    expect(source).toMatchObject({ defaultEnv: 'test', dataDir: '/r/data' })
+    expect(release).toMatchObject({ defaultEnv: 'prod', dataDir: '/h/.quaestor' })
+  })
+
+  it("the release's first run creates ~/.quaestor and its store", async () => {
+    const home = tempDir('quaestor-home-')
+
+    const { code, stdout, stderr } = await runCli(['backup'], releasedContext(released({}, home)))
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('env: prod\n')
+    expect(existsSync(join(home, '.quaestor', 'prod.sqlite'))).toBe(true)
+    const copies = readdirSync(join(home, '.quaestor', 'backups'))
+    expect(copies).toEqual([expect.stringMatching(/^prod-.+\.sqlite$/)])
+    expect(stdout).toBe(
+      `${encode({ path: join(home, '.quaestor', 'backups', copies[0]), removed: [] })}\n`,
+    )
+  })
+
+  it('under vitest the contexts have no data folder', async () => {
+    const vars = { VITEST: 'true' }
+    const repoRoot = tempDir('quaestor-repo-')
+    const source = sourceContext({ repoRoot, vars })
+
+    expect(source.dataDir).toBeNull()
+    expect(releasedContext(released(vars)).dataDir).toBeNull()
+    const { code, stdout, stderr } = await runCli(['backup'], source)
+    expect(code).toBe(1)
+    expect(stdout).toBe('')
+    expect(stderr).toContain('code: named_env_disabled')
+    expect(existsSync(join(repoRoot, 'data'))).toBe(false)
   })
 })

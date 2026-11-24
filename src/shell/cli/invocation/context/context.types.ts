@@ -1,9 +1,13 @@
-import type { CliContext } from '../../main/main.types.ts'
+import type { CliContext, Vars } from '../../main/main.types.ts'
 
 export type Release = { version: string; commit: string; repoRoot: string }
 
-export type SourceInvocation = { repoRoot: string }
+type Invocation = { vars: Vars }
 
-export type ReleasedInvocation = { release: Release; entryDir: string }
+export type SourceInvocation = Invocation & { repoRoot: string }
+
+export type ReleasedInvocation = Invocation & { release: Release; entryDir: string; home: string }
+
+export type EntryDefaults = { version: string; defaultEnv: string; dataDir: string }
 
 export type InvocationContext = Omit<CliContext, 'stdout' | 'stderr'>

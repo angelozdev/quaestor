@@ -1,0 +1,1 @@
+export const FIXED_INSTANT = '2026-11-23T21:04:05.123Z'

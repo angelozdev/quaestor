@@ -16,4 +16,15 @@ describe('source bin', () => {
     expect(result.stdout).toContain('--env')
     expect(result.stderr).toBe('')
   })
+
+  it('the source bin under vitest refuses its default env', () => {
+    const cwd = tempDir('quaestor-bin-')
+
+    const result = spawnSync(process.execPath, [bin, 'backup'], { cwd, encoding: 'utf8' })
+
+    expect(process.env.VITEST).toBeTruthy()
+    expect(result.status).toBe(1)
+    expect(result.stdout).toBe('')
+    expect(result.stderr).toContain('code: named_env_disabled')
+  })
 })

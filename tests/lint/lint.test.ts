@@ -142,6 +142,7 @@ describe.concurrent('lint', () => {
       'src/core/sample/sample.ts',
       'tests/sample/sample.test.ts',
       'tests/support/temp-dir/sample.ts',
+      'tests/support/store/sample.ts',
     ]
     const inside = ['src/core/utils/sample.ts']
 
@@ -259,6 +260,32 @@ describe.concurrent('lint', () => {
       expectEachFailure(expect, results, testFiles, 'tests make temp folders with tempDir')
     },
   )
+
+  it('tests/support/store may import node:sqlite but not drizzle-orm', async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const storeFile = 'tests/support/store/sample.ts'
+
+    const [sqlite, drizzle] = await Promise.all([
+      lintFixture(onTestFinished, { [storeFile]: sqliteImport }),
+      lintFixture(onTestFinished, { [storeFile]: drizzleImport }),
+    ])
+
+    expectPass(expect, sqlite, storeFile)
+    expectFailure(expect, drizzle, storeFile, 'only src/shell/db knows the ORM')
+  })
+
+  it('fails when tests/support/store imports mkdtemp instead of using tempDir', async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const storeFile = 'tests/support/store/sample.ts'
+
+    const result = await lintFixture(onTestFinished, { [storeFile]: mkdtempSyncImport })
+
+    expectFailure(expect, result, storeFile, 'tests make temp folders with tempDir')
+  })
 
   it('passes mkdtempSync in tests/support/temp-dir and in non-test files', async ({
     expect,

@@ -105,6 +105,38 @@
       }
     },
     {
+      "files": ["tests/support/store/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "node:fs",
+                "importNames": ["mkdtemp", "mkdtempSync"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              },
+              {
+                "name": "node:fs/promises",
+                "importNames": ["mkdtemp"],
+                "message": "tests make temp folders with tempDir from tests/support/temp-dir, which removes them"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["drizzle-orm", "drizzle-orm/*"],
+                "message": "only src/shell/db knows the ORM"
+              },
+              {
+                "regex": "^just-",
+                "message": "only src/core/utils wraps just-* packages"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["tests/support/temp-dir/**"],
       "rules": {
         "no-restricted-imports": [

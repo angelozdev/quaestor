@@ -40,7 +40,8 @@ Written for a reader that is a model, not a person.
 
 - stdout carries the result and nothing else: TOON by default, one-line JSON with
   `--json`.
-- stderr carries diagnostics and an `env: <name>` line on every command.
+- stderr carries diagnostics and, for every command that opens a store, an
+  `env: <name>` line. `--help` and `--version` open no store and print none.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `currency_mismatch`) and the data needed to act on
   it.
@@ -59,7 +60,10 @@ Written for a reader that is a model, not a person.
   ```
 
 - Codes so far, each with its exit code: commander's parse errors as snake_case
-  codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1.
+  codes (`unknown_option`, `unknown_command`, `option_missing_argument`, …), 1;
+  `named_env_disabled`, 1, because the default env needs a data folder and the
+  entry point has none (under vitest); `unexpected`, 2, for any error no class
+  names, with its message.
 - Nothing is interactive. Every input is a flag, or JSON on stdin when it is long
   or nested. No prompts, no colours, no spinners.
 - Every write accepts `--dry-run`. A dry run does all the work except the commit
@@ -86,7 +90,8 @@ Written for a reader that is a model, not a person.
 - Running the sources (`pnpm quaestor`) defaults to `test` and keeps its stores in
   the repo's `data/<env>.sqlite`, ignored by git. The sources never reach `prod`
   unless told to with `--env prod`.
-- Tests use `:memory:` and can never reach a real store.
+- Tests use temporary stores and folders that they remove, and under vitest both
+  entry points refuse named environments, so a test can never reach a real store.
 - Resolution order: `--env`, then `QUAESTOR_DB` (an absolute path), then
   `QUAESTOR_ENV`, then the default of whoever is running.
 
