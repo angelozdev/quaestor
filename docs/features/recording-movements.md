@@ -61,7 +61,6 @@ numbered in sequence. A code already taken is drawn again, so two never share on
 
 ## Accounts
 
-
 - An account has an emoji, a name, a type, a currency, an archived mark and an opening
   balance.
 - The emoji is a field of its own, one emoji such as 🏦, and the name is plain text such as
@@ -186,7 +185,7 @@ Writes, each with `--dry-run`:
 - What comes over:
   - every account, some of them archived, each with its legacy type: `debit` (Wallet, Bank), `credit` (Card A, Card C, Loan, Card B), `savings` (Reserve, Trip fund, Earnings, Invest) and `cash` (Loans).
   - every category, some of them archived, with
-        no posted movement in an archived one. Their groups and flags stay in the export
+    no posted movement in an archived one. Their groups and flags stay in the export
     for the reports feature.
   - Each legacy name splits into its leading emoji and the rest: 🏦 Bank becomes 🏦
     and Bank. A name without an emoji keeps none.
