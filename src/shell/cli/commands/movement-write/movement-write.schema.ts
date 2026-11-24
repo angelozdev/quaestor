@@ -57,7 +57,7 @@ const transfer = fields({
 })
 
 export const movementWriteSchema = fields({
-  delete: z.array(z.never()).default([]),
+  delete: z.array(requiredText).default([]),
   movements: z.array(movement).default([]),
   transfers: z.array(transfer).default([]),
 }).check((ctx) => {

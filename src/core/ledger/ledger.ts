@@ -120,6 +120,9 @@ function transferProblems(
 
 export function checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[] {
   return [
+    ...request.delete.flatMap((id, index) =>
+      catalog.movements.has(id) ? [] : [notFound(`delete[${index}]`, 'movement', id)],
+    ),
     ...request.movements.flatMap((movement, index) =>
       movementProblems(movement, `movements[${index}]`, catalog),
     ),

@@ -1,7 +1,12 @@
 import { decode } from '@toon-format/toon'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import { booked, faultyItems, moved } from '../../../../../tests/support/arbitraries/arbitraries.ts'
+import {
+  booked,
+  bookedWithDeletes,
+  faultyItems,
+  moved,
+} from '../../../../../tests/support/arbitraries/arbitraries.ts'
 import type {
   Booked,
   BookedAccount,
@@ -138,6 +143,37 @@ async function accountsText(cli: LedgerCli): Promise<string> {
 function balancesById(stdout: string): Record<string, number> {
   const { accounts } = decode(stdout) as { accounts: { id: string; balance: number }[] }
   return Object.fromEntries(accounts.map(({ id, balance }) => [id, balance]))
+}
+
+function idOf(row: Json | undefined): string {
+  return String(row?.id)
+}
+
+async function recordedBy(cli: LedgerCli, body: Json): Promise<Json[]> {
+  return recordedRows(await write(cli, body))
+}
+
+async function listedText(cli: LedgerCli): Promise<string> {
+  return (await list(cli)).stdout
+}
+
+async function bookedRide() {
+  const books = await openBooks()
+  const [ride] = await recordedBy(books.cli, { movements: [spend(books)] })
+  return {
+    books,
+    ride,
+    before: await accountsText(books.cli),
+    listedBefore: await listedText(books.cli),
+  }
+}
+
+function nothingListed(stdout: string): void {
+  expect(decode(stdout)).toEqual({ total: 0, movements: [] })
+}
+
+function walletBack(books: Pick<Books, 'wallet'>, before: number, after: number): BalanceChange {
+  return { account: books.wallet, currency: 'USD', before, after }
 }
 
 function drawing(indexes: number[]) {
@@ -844,6 +880,252 @@ describe('quaestor movement write', () => {
     expect(ids[0]).toMatch(CODE)
     expect(ids[1]).toMatch(CODE)
     expect(ids[1]).not.toBe(ids[0])
+  })
+
+  it('a deleted movement leaves every list and its balance returns (USD)', async () => {
+    const books = await openBooks()
+    const [ride, dinner] = await recordedBy(books.cli, {
+      movements: [
+        spend(books, { date: '2026-11-20' }),
+        spend(books, { date: '2026-11-21', payee: 'Dinner', amount: '-10' }),
+      ],
+    })
+
+    const run = await write(books.cli, { delete: [idOf(ride)] })
+    const listed = await accountsText(books.cli)
+    const remaining = await list(books.cli, '--account', books.wallet)
+
+    expectWrite(run, false, {
+      deleted: [ride],
+      recorded: [],
+      balances: [walletBack(books, 98, 110.5)],
+    })
+    expect(balancesById(listed)[books.wallet]).toBe(110.5)
+    expect(decode(remaining.stdout)).toEqual({
+      total: 1,
+      movements: [{ ...dinner, balance: 110.5 }],
+    })
+    expect(decode((await list(books.cli)).stdout)).toEqual(decode(remaining.stdout))
+  })
+
+  it('a movement already deleted is not_found', async () => {
+    const books = await openBooks()
+    const [ride] = await recordedBy(books.cli, { movements: [spend(books)] })
+    await write(books.cli, { delete: [idOf(ride)] })
+    const before = await accountsText(books.cli)
+
+    const run = await write(books.cli, { delete: [idOf(ride)] })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(notFound('delete[0]', 'movement', idOf(ride))),
+    })
+    expect(await accountsText(books.cli)).toBe(before)
+  })
+
+  it('deleting one half of a transfer deletes both', async () => {
+    const books = await openBooks()
+    const [leaving, arriving] = await recordedBy(books.cli, { transfers: [transfer(books)] })
+
+    const run = await write(books.cli, { delete: [idOf(arriving)] })
+    const listed = await accountsText(books.cli)
+
+    expectWrite(run, false, {
+      deleted: [leaving, arriving],
+      recorded: [],
+      balances: [
+        walletBack(books, 110.5, 120.5),
+        { account: books.savings, currency: 'USD', before: 10, after: 0 },
+      ].toSorted(byAccount),
+    })
+    expect(balancesById(listed)).toEqual({
+      [books.bank]: 1000000,
+      [books.savings]: 0,
+      [books.wallet]: 120.5,
+    })
+    nothingListed(await listedText(books.cli))
+  })
+
+  it('naming a movement twice, or both halves, deletes each once', async () => {
+    const books = await openBooks()
+    const [late, early, leaving, arriving] = await recordedBy(books.cli, {
+      movements: [
+        spend(books, { date: '2026-11-22' }),
+        spend(books, { date: '2026-11-20', payee: 'Dinner' }),
+      ],
+      transfers: [transfer(books, { date: '2026-11-21' }, { date: '2026-11-21' })],
+    })
+
+    const run = await write(books.cli, {
+      delete: [idOf(late), idOf(arriving), idOf(late), idOf(leaving), idOf(arriving)],
+    })
+
+    expectWrite(run, false, {
+      deleted: [leaving, arriving, late],
+      recorded: [],
+      balances: [
+        walletBack(books, 85.5, 108),
+        { account: books.savings, currency: 'USD', before: 10, after: 0 },
+      ].toSorted(byAccount),
+    })
+    expect(decode((await list(books.cli)).stdout)).toMatchObject({
+      total: 1,
+      movements: [early],
+    })
+  })
+
+  it('a correction is a delete and a new record in one write', async () => {
+    const cli = ledgerCli({
+      randomIndex: drawing([0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5, 2, 3, 4, 5, 6, 7, 8, 9]),
+    })
+    const books = {
+      wallet: await addAccount(cli, 'Wallet', 'USD', '120.50'),
+      food: await addCategory(cli),
+    }
+    const [ride] = await recordedBy(cli, { movements: [spend(books)] })
+    const correcting = spend(books, { amount: '-15' })
+
+    const run = await write(cli, { delete: [idOf(ride)], movements: [correcting] })
+    const listed = await accountsText(cli)
+
+    expect(idOf(ride)).toBe('2345')
+    expectWrite(run, false, {
+      deleted: [ride],
+      recorded: [recorded(correcting, { id: '6789' })],
+      balances: [walletBack(books, 108, 105.5)],
+    })
+    expect(balancesById(listed)[books.wallet]).toBe(105.5)
+    expect(decode((await list(cli)).stdout)).toEqual({
+      total: 1,
+      movements: [{ ...recorded(correcting, { id: '6789' }), balance: 105.5 }],
+    })
+  })
+
+  it('a correction can move a movement to another account', async () => {
+    const books = await openBooks()
+    const [ride] = await recordedBy(books.cli, { movements: [spend(books)] })
+    const correcting = spend(books, { account: books.savings, amount: '-15' })
+
+    const run = await write(books.cli, { delete: [idOf(ride)], movements: [correcting] })
+
+    expectWrite(run, false, {
+      deleted: [ride],
+      recorded: [recorded(correcting)],
+      balances: [
+        walletBack(books, 108, 120.5),
+        { account: books.savings, currency: 'USD', before: 0, after: -15 },
+      ].toSorted(byAccount),
+    })
+  })
+
+  it('an unknown movement code is refused and nothing is deleted', async () => {
+    const { books, ride, before, listedBefore } = await bookedRide()
+
+    const run = await write(books.cli, { delete: [NO_SUCH_CODE, idOf(ride), NO_SUCH_CODE] })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        notFound('delete[0]', 'movement', NO_SUCH_CODE),
+        notFound('delete[2]', 'movement', NO_SUCH_CODE),
+      ),
+    })
+    expect(await accountsText(books.cli)).toBe(before)
+    expect(await listedText(books.cli)).toBe(listedBefore)
+  })
+
+  it("a delete's problems are listed before the movements' and the transfers'", async () => {
+    const books = await openBooks()
+
+    const run = await write(books.cli, {
+      delete: [NO_SUCH_CODE],
+      movements: [spend(books, { category: NO_SUCH_CODE })],
+      transfers: [transfer(books, {}, { account: books.wallet })],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        notFound('delete[0]', 'movement', NO_SUCH_CODE),
+        notFound('movements[0]', 'category', NO_SUCH_CODE),
+        sameAccount('transfers[0]', books.wallet),
+      ),
+    })
+  })
+
+  it('--dry-run of a delete writes nothing', async () => {
+    const { books, ride, before, listedBefore } = await bookedRide()
+
+    const dry = await write(books.cli, { delete: [idOf(ride)] }, '--dry-run')
+    const untouched = await accountsText(books.cli)
+    const untouchedList = await listedText(books.cli)
+    const real = await write(books.cli, { delete: [idOf(ride)] })
+
+    expect(dry.stdout.startsWith('dryRun: true\n')).toBe(true)
+    expectWrite(dry, true, {
+      deleted: [ride],
+      recorded: [],
+      balances: [walletBack(books, 108, 120.5)],
+    })
+    expect(untouched).toBe(before)
+    expect(untouchedList).toBe(listedBefore)
+    expect(await listedText(books.cli)).not.toBe(listedBefore)
+    expect(decode(real.stdout)).toEqual({ ...(decode(dry.stdout) as Json), dryRun: false })
+  })
+
+  it('a delete item that is not a code is refused', async () => {
+    const run = await write(ledgerCli(), { delete: ['', 7, null] })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: invalidInput(
+        'delete[0]: is required',
+        'delete[1]: is required',
+        'delete[2]: is required',
+      ),
+    })
+  })
+
+  it("deleting any of an account's movements leaves its balance at the opening plus the rest", async () => {
+    await fc.assert(
+      fc.asyncProperty(bookedWithDeletes(OPENING_DATE), async ({ items, deletes }) => {
+        const books = await openBooks()
+        const ids = (await recordedBy(books.cli, { movements: bookedMovements(books, items) })).map(
+          idOf,
+        )
+        const struck = [...new Set(deletes)]
+        const kept = items.filter((_, index) => !struck.includes(index))
+        const recordedOrder = (index: number) =>
+          `${items[index]!.date}#${String(index).padStart(3, '0')}`
+
+        const run = await write(books.cli, { delete: deletes.map((index) => ids[index]) })
+        const listed = balancesById(await accountsText(books.cli))
+
+        const shown = decode(run.stdout) as {
+          deleted: { id: string }[]
+          balances: { account: string; after: number }[]
+        }
+        const touched = struck.map((index) => books[items[index]!.account])
+        expect(run.code).toBe(0)
+        expect(listed[books.wallet]).toBe(totalCents(kept, 'wallet') / 100)
+        expect(listed[books.savings]).toBe(totalCents(kept, 'savings') / 100)
+        expect(shown.deleted.map(({ id }) => id)).toEqual(
+          struck
+            .toSorted((a, b) => (recordedOrder(a) < recordedOrder(b) ? -1 : 1))
+            .map((index) => ids[index]),
+        )
+        expect(shown.balances.map(({ account }) => account)).toEqual(
+          [...new Set(touched)].toSorted(),
+        )
+        for (const { account, after } of shown.balances) expect(after).toBe(listed[account])
+        expect(decode((await list(books.cli)).stdout)).toMatchObject({ total: kept.length })
+      }),
+      { numRuns: 50 },
+    )
   })
 
   it('empty stdin is invalid_json', async () => {

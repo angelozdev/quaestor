@@ -15,3 +15,5 @@ export type Moved = {
   received: number
   date: string
 }
+
+export type BookedWithDeletes = { items: Booked[]; deletes: number[] }

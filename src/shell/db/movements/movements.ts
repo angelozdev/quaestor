@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, ne, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import {
   RefusedWriteError,
@@ -55,12 +55,23 @@ function rowOf<T extends MovementRow>(stored: T): T {
   return { ...stored, amount: amountOf(stored.amount) }
 }
 
-function loadCatalog(store: Store): Catalog {
+function liveCodes(store: Store, codes: string[]): Set<string> {
+  return new Set(
+    database(store)
+      .select({ id: movements.id })
+      .from(movements)
+      .where(and(inArray(movements.id, codes), isNull(movements.deletedAt)))
+      .all()
+      .map(({ id }) => id),
+  )
+}
+
+function loadCatalog(store: Store, request: WriteRequest): Catalog {
   return {
     accounts: new Map(listAccounts(store).map((account) => [account.id, account])),
     categories: new Map(listCategories(store).map((category) => [category.id, category])),
     tags: new Set(listTags(store)),
-    movements: new Set(),
+    movements: liveCodes(store, request.delete),
   }
 }
 
@@ -137,20 +148,59 @@ function insertTransfer(store: Store, { from, to }: TransferDraft, deps: WriteDe
   ]
 }
 
+function movementsToDelete(store: Store, codes: string[]): MovementRow[] {
+  const db = database(store)
+  const named = db
+    .select({ transfer: movements.transfer })
+    .from(movements)
+    .where(inArray(movements.id, codes))
+  return db
+    .select(MOVEMENT_FIELDS)
+    .from(movements)
+    .innerJoin(accounts, eq(accounts.id, movements.accountId))
+    .leftJoin(partner, PARTNER_IS_LIVE)
+    .where(
+      and(
+        isNull(movements.deletedAt),
+        or(inArray(movements.id, codes), inArray(movements.transfer, named)),
+      ),
+    )
+    .orderBy(movements.date, movements.seq)
+    .all()
+    .map(rowOf)
+}
+
+function markDeleted(store: Store, rows: MovementRow[], { now }: WriteDeps): void {
+  const instant = now.toISOString()
+  database(store)
+    .update(movements)
+    .set({ deletedAt: instant, updatedAt: instant })
+    .where(
+      inArray(
+        movements.id,
+        rows.map(({ id }) => id),
+      ),
+    )
+    .run()
+}
+
 export function writeMovements(store: Store, request: WriteRequest, deps: WriteDeps): WriteResult {
-  const problems = checkWrite(request, loadCatalog(store))
+  const problems = checkWrite(request, loadCatalog(store, request))
   if (problems.length > 0) throw new RefusedWriteError(problems)
+  const deleted = movementsToDelete(store, request.delete)
   const touched = new Set([
+    ...deleted.map(({ account }) => account),
     ...request.movements.map(({ account }) => account),
     ...request.transfers.flatMap(({ from, to }) => [from.account, to.account]),
   ])
   const before = touchedAccounts(store, touched)
+  markDeleted(store, deleted, deps)
   const recorded = [
     ...request.movements.map((draft) => insertMovement(store, draft, deps)),
     ...request.transfers.flatMap((draft) => insertTransfer(store, draft, deps)),
   ]
   return {
-    deleted: [],
+    deleted,
     recorded,
     balances: changesBetween(before, touchedAccounts(store, touched)),
   }

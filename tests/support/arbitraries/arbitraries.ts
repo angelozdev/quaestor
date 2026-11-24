@@ -15,7 +15,7 @@ import {
   MS_PER_DAY,
   SIGNS,
 } from './arbitraries.constants.ts'
-import type { Booked, Fault, Moved } from './arbitraries.types.ts'
+import type { Booked, Fault, Moved, BookedWithDeletes } from './arbitraries.types.ts'
 
 export const amountText = fc
   .tuple(
@@ -57,6 +57,12 @@ export function booked(openingDate: string): fc.Arbitrary<Booked[]> {
     }),
     { minLength: 1, maxLength: MAX_BOOKED },
   )
+}
+
+export function bookedWithDeletes(openingDate: string): fc.Arbitrary<BookedWithDeletes> {
+  return fc
+    .tuple(booked(openingDate), fc.array(fc.nat(), { minLength: 1, maxLength: MAX_BOOKED }))
+    .map(([items, picks]) => ({ items, deletes: picks.map((pick) => pick % items.length) }))
 }
 
 export const faultyItems: fc.Arbitrary<(Fault | undefined)[]> = fc

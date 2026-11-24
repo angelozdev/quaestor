@@ -113,6 +113,20 @@ describe('quaestor movement list', () => {
     expect(shown(bank).movements[0]?.category).toBeNull()
   })
 
+  it('a transfer half is never listed with a deleted partner', async () => {
+    const books = await openBooks()
+    const [, arriving] = await recordTransfer(books, transfer(books))
+    await write(books.cli, { delete: [arriving.id] })
+
+    const everything = await list(books.cli)
+    const savings = await list(books.cli, '--account', books.savings)
+    const wallet = await list(books.cli, '--account', books.wallet)
+
+    expectListing(everything, [])
+    expectListing(savings, [])
+    expectListing(wallet, [])
+  })
+
   it('movement list without filters shows every account, each with its own balance', async () => {
     const books = await openBooks()
     const [ride, deposit] = await recordAll(books, [
