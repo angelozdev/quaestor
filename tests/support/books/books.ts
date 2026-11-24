@@ -1,4 +1,6 @@
 import { decode } from '@toon-format/toon'
+import { amountTextOf } from '../arbitraries/arbitraries.ts'
+import type { Booked } from '../arbitraries/arbitraries.types.ts'
 import { ledgerCli } from '../ledger/ledger.ts'
 import type { LedgerCli } from '../ledger/ledger.types.ts'
 import { DAY, OPENING_DATE } from './books.constants.ts'
@@ -44,4 +46,11 @@ export function spend(books: Spender, extra: Json = {}): Json {
     category: books.food,
     ...extra,
   }
+}
+
+export function bookedMovements(books: Books, items: Booked[]): Json[] {
+  const accounts = { wallet: books.wallet, savings: books.savings }
+  return items.map(({ account, cents, date }) =>
+    spend(books, { account: accounts[account], amount: amountTextOf(cents), date }),
+  )
 }

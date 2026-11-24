@@ -1,11 +1,7 @@
 import { decode } from '@toon-format/toon'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
-import {
-  amountTextOf,
-  booked,
-  faultyItems,
-} from '../../../../../tests/support/arbitraries/arbitraries.ts'
+import { booked, faultyItems } from '../../../../../tests/support/arbitraries/arbitraries.ts'
 import type {
   Booked,
   BookedAccount,
@@ -14,6 +10,7 @@ import type {
 import {
   addAccount,
   addCategory,
+  bookedMovements,
   openBooks,
   spend,
   write,
@@ -93,13 +90,6 @@ function drawing(indexes: number[]) {
 }
 
 const OPENING_CENTS = { wallet: 12050, savings: 0 }
-
-function bookedMovements(books: Books, items: Booked[]): Json[] {
-  const accounts = { wallet: books.wallet, savings: books.savings }
-  return items.map(({ account, cents, date }) =>
-    spend(books, { account: accounts[account], amount: amountTextOf(cents), date }),
-  )
-}
 
 function totalCents(items: Booked[], account: BookedAccount): number {
   return items
