@@ -3,9 +3,16 @@ import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { closeStore } from '#shell/db'
+import { FIXTURE_MIGRATIONS } from '../../../../../tests/support/fixture-migrations/fixture-migrations.constants.ts'
+import {
+  noMigrations,
+  writeMigrations,
+} from '../../../../../tests/support/fixture-migrations/fixture-migrations.ts'
+import { FIXED_INSTANT } from '../../../../../tests/support/run-cli/run-cli.constants.ts'
 import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
 import type { CliOverrides } from '../../../../../tests/support/run-cli/run-cli.types.ts'
-import { runSql } from '../../../../../tests/support/store/store.ts'
+import { openTestStore, runSql, selectAll } from '../../../../../tests/support/store/store.ts'
 import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
 
 const COPY_NAME = 'test-2026-11-23T21-04-05-123Z.sqlite'
@@ -28,6 +35,38 @@ function sha256(path: string): string {
 
 function backup(argv: string[] = [], overrides: CliOverrides = {}) {
   return runCli(['backup', ...argv], { defaultEnv: 'test', dataDir, ...overrides })
+}
+
+function fixtureMigrations(): string {
+  return writeMigrations(tempDir('quaestor-migrations-'), FIXTURE_MIGRATIONS)
+}
+
+function advancingClock(): () => Date {
+  let calls = 0
+  return () => new Date(Date.parse(FIXED_INSTANT) + calls++)
+}
+
+function fixtureTables(path: string): unknown[] {
+  return selectAll(path, "select name from sqlite_master where name like 'fixture_%' order by name")
+}
+
+async function expectNotAStoreLeftAlone(env: string) {
+  const store = join(dataDir, `${env}.sqlite`)
+  writeFileSync(store, 'not a store\n')
+  const before = sha256(store)
+
+  const { code, stdout, stderr } = await backup(['--env', env], {
+    migrationsDir: fixtureMigrations(),
+    clock: advancingClock(),
+  })
+
+  expect(code).toBe(2)
+  expect(stdout).toBe('')
+  expect(stderr).toBe(
+    `env: ${env}\n${encode({ error: { code: 'unexpected', message: 'file is not a database' } })}\n`,
+  )
+  expect(sha256(store)).toBe(before)
+  expect(readdirSync(dataDir)).toEqual([`${env}.sqlite`])
 }
 
 describe('quaestor backup', () => {
@@ -121,6 +160,7 @@ describe('quaestor backup', () => {
 
   it('an unwritable backups folder exits 2 as backup_not_written, leaves no copy and leaves the store unchanged', async () => {
     const store = join(dataDir, 'test.sqlite')
+    closeStore(await openTestStore(store, noMigrations()))
     runSql(
       store,
       "create table notes (id integer primary key, body text); insert into notes (body) values ('first')",
@@ -238,6 +278,73 @@ describe('quaestor backup', () => {
     )
     expect(readdirSync(storeDir)).toEqual([])
     expect(readdirSync(dataDir)).toEqual([])
+  })
+
+  it('backup on a new store applies the migrations first', async () => {
+    const { code, stdout, stderr } = await backup([], { migrationsDir: fixtureMigrations() })
+
+    const copy = join(dataDir, 'backups', COPY_NAME)
+    expect(code).toBe(0)
+    expect(stderr).toBe(
+      'env: test\nmigrated: 20261123000000_first\nmigrated: 20261123000100_second\n',
+    )
+    expect(stdout).toBe(`${encode({ path: copy, removed: [] })}\n`)
+    expect(fixtureTables(copy)).toEqual([{ name: 'fixture_a' }, { name: 'fixture_b' }])
+  })
+
+  it('in a non-prod env pending migrations apply without a backup', async () => {
+    const { code, stderr } = await backup(['--env', 'test'], { migrationsDir: fixtureMigrations() })
+
+    expect(code).toBe(0)
+    expect(stderr).toBe(
+      'env: test\nmigrated: 20261123000000_first\nmigrated: 20261123000100_second\n',
+    )
+    expect(readdirSync(join(dataDir, 'backups'))).toEqual([COPY_NAME])
+  })
+
+  it('a prod store with pending migrations is backed up before they apply', async () => {
+    const folder = join(dataDir, 'backups')
+    const beforeMigrating = join(folder, 'prod-2026-11-23T21-04-05-123Z.sqlite')
+    const own = join(folder, 'prod-2026-11-23T21-04-05-124Z.sqlite')
+
+    const { code, stdout, stderr } = await backup(['--env', 'prod'], {
+      migrationsDir: fixtureMigrations(),
+      clock: advancingClock(),
+    })
+
+    expect(code).toBe(0)
+    expect(stderr).toBe(
+      `env: prod\nbackup: ${beforeMigrating} (before migrating)\n` +
+        'migrated: 20261123000000_first\nmigrated: 20261123000100_second\n',
+    )
+    expect(stdout).toBe(`${encode({ path: own, removed: [] })}\n`)
+    expect(fixtureTables(beforeMigrating)).toEqual([])
+    expect(fixtureTables(own)).toEqual([{ name: 'fixture_a' }, { name: 'fixture_b' }])
+    expect(readdirSync(folder)).toEqual([
+      'prod-2026-11-23T21-04-05-123Z.sqlite',
+      'prod-2026-11-23T21-04-05-124Z.sqlite',
+    ])
+  })
+
+  it('a current store takes no backup and reports nothing about schema', async () => {
+    const folder = join(dataDir, 'backups')
+    const prod = { migrationsDir: fixtureMigrations(), clock: advancingClock() }
+    await backup(['--env', 'prod'], prod)
+    const before = readdirSync(folder)
+
+    const { code, stderr } = await backup(['--env', 'prod'], prod)
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('env: prod\n')
+    expect(readdirSync(folder).filter((name) => !before.includes(name))).toHaveLength(1)
+  })
+
+  it('a store file that is not SQLite exits 2 as unexpected and is left unchanged', async () => {
+    await expectNotAStoreLeftAlone('test')
+  })
+
+  it('a prod store file that is not SQLite is left unchanged and gets no copy before migrating', async () => {
+    await expectNotAStoreLeftAlone('prod')
   })
 
   it('bare quaestor prints the help on stdout and exits 0', async () => {

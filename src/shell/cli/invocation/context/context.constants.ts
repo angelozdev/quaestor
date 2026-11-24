@@ -8,4 +8,6 @@ export const SOURCE_DATA_FOLDER = 'data'
 
 export const RELEASE_DATA_FOLDER = '.quaestor'
 
+export const MIGRATIONS_FOLDER = 'migrations'
+
 export const VITEST_VAR = 'VITEST'

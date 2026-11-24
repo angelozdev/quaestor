@@ -1,4 +1,5 @@
 import { main } from '#shell/cli'
+import { noMigrations } from '../fixture-migrations/fixture-migrations.ts'
 import { captureStream } from '../streams/streams.ts'
 import { FIXED_INSTANT } from './run-cli.constants.ts'
 import type { CliOverrides, CliRun } from './run-cli.types.ts'
@@ -13,6 +14,7 @@ export async function runCli(argv: string[], overrides: CliOverrides = {}): Prom
     defaultEnv: 'test',
     dataDir: null,
     ...overrides,
+    migrationsDir: overrides.migrationsDir ?? noMigrations(),
     stdout,
     stderr,
   })

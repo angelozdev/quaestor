@@ -42,6 +42,9 @@ Written for a reader that is a model, not a person.
   `--json`.
 - stderr carries diagnostics and, for every command that opens a store, an
   `env: <name>` line. `--help` and `--version` open no store and print none.
+- The stderr diagnostic lines, in their order: `env: <name>` (or
+  `env: custom (<path>)`), `backup: <path> (before migrating)`, `migrated: <name>`
+  per migration applied, then the error object when the command fails.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `currency_mismatch`) and the data needed to act on
   it.

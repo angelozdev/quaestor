@@ -12,6 +12,7 @@ export type CliContext = {
   clock: Clock
   defaultEnv: string
   dataDir: string | null
+  migrationsDir: string
 }
 
 export type GlobalOptions = { env?: string; json?: boolean }

@@ -8,6 +8,11 @@ export type SourceInvocation = Invocation & { repoRoot: string }
 
 export type ReleasedInvocation = Invocation & { release: Release; entryDir: string; home: string }
 
-export type EntryDefaults = { version: string; defaultEnv: string; dataDir: string }
+export type EntryDefaults = {
+  version: string
+  defaultEnv: string
+  dataDir: string
+  migrationsDir: string
+}
 
 export type InvocationContext = Omit<CliContext, 'stdout' | 'stderr'>

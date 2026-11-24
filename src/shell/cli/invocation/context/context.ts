@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import {
   DEV_VERSION,
+  MIGRATIONS_FOLDER,
   RELEASE_DATA_FOLDER,
   RELEASE_DEFAULT_ENV,
   SOURCE_DATA_FOLDER,
@@ -25,7 +26,7 @@ function outsideVitest(vars: Vars, path: string): string | null {
 }
 
 function invocationContext(
-  { version, defaultEnv, dataDir }: EntryDefaults,
+  { version, defaultEnv, dataDir, migrationsDir }: EntryDefaults,
   vars: Vars,
 ): InvocationContext {
   return {
@@ -34,6 +35,7 @@ function invocationContext(
     clock: () => new Date(),
     defaultEnv,
     dataDir: outsideVitest(vars, dataDir),
+    migrationsDir,
   }
 }
 
@@ -43,17 +45,24 @@ export function sourceContext({ repoRoot, vars }: SourceInvocation): InvocationC
       version: DEV_VERSION,
       defaultEnv: SOURCE_DEFAULT_ENV,
       dataDir: join(repoRoot, SOURCE_DATA_FOLDER),
+      migrationsDir: join(repoRoot, MIGRATIONS_FOLDER),
     },
     vars,
   )
 }
 
-export function releasedContext({ release, vars, home }: ReleasedInvocation): InvocationContext {
+export function releasedContext({
+  release,
+  entryDir,
+  vars,
+  home,
+}: ReleasedInvocation): InvocationContext {
   return invocationContext(
     {
       version: releaseVersion(release),
       defaultEnv: RELEASE_DEFAULT_ENV,
       dataDir: join(home, RELEASE_DATA_FOLDER),
+      migrationsDir: join(entryDir, '..', MIGRATIONS_FOLDER),
     },
     vars,
   )

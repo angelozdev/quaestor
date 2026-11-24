@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
 import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
+import { REPO_ROOT } from '../../bin/bin.constants.ts'
 import { releasedContext, sourceContext } from './context.ts'
 import type { ReleasedInvocation } from './context.types.ts'
 
@@ -45,10 +46,19 @@ describe('invocation context', () => {
     expect(release).toMatchObject({ defaultEnv: 'prod', dataDir: '/h/.quaestor' })
   })
 
+  it('the source context finds migrations in <repoRoot>/migrations and the release context in <entryDir>/../migrations', () => {
+    expect(sourceContext({ repoRoot: '/r', vars: {} }).migrationsDir).toBe('/r/migrations')
+    expect(releasedContext(released({})).migrationsDir).toBe('/pkg/migrations')
+  })
+
   it("the release's first run creates ~/.quaestor and its store", async () => {
     const home = tempDir('quaestor-home-')
+    const entryDir = join(REPO_ROOT, 'dist')
 
-    const { code, stdout, stderr } = await runCli(['backup'], releasedContext(released({}, home)))
+    const { code, stdout, stderr } = await runCli(
+      ['backup'],
+      releasedContext({ ...released({}, home), entryDir }),
+    )
 
     expect(code).toBe(0)
     expect(stderr).toBe('env: prod\n')

@@ -11,3 +11,5 @@ export const DEFAULT_SOURCE = 'default'
 export const STORE_EXTENSION = '.sqlite'
 
 export const ENV_NAME_PATTERN = /^[a-z][a-z0-9-]*$/
+
+export const PROD_ENV = 'prod'

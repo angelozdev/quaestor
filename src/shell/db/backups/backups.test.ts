@@ -1,9 +1,9 @@
 import { chmodSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runSql, selectAll } from '../../../../tests/support/store/store.ts'
+import { openTestStore, runSql, selectAll } from '../../../../tests/support/store/store.ts'
 import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
-import { closeStore, openStore } from '../database/database.ts'
+import { closeStore } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
 import { backupStore } from './backups.ts'
 import { BackupNotWrittenError } from './backups.errors.ts'
@@ -18,7 +18,7 @@ afterEach(() => {
 })
 
 function tempStore(): Promise<Store> {
-  return openStore(join(tempDir('quaestor-store-'), 'store.sqlite'))
+  return openTestStore(join(tempDir('quaestor-store-'), 'store.sqlite'))
 }
 
 async function notWritten(promise: Promise<unknown>): Promise<BackupNotWrittenError> {
@@ -34,7 +34,7 @@ async function notWritten(promise: Promise<unknown>): Promise<BackupNotWrittenEr
 describe('backupStore', () => {
   it('the copy opens as a store with the same content', async () => {
     const storePath = join(tempDir('quaestor-store-'), 'store.sqlite')
-    const store = await openStore(storePath)
+    const store = await openTestStore(storePath)
     runSql(storePath, 'create table notes (id integer primary key, body text)')
     runSql(storePath, "insert into notes (body) values ('first'), ('second')")
     const root = tempDir('quaestor-data-')
@@ -44,7 +44,7 @@ describe('backupStore', () => {
     const folder = join(root, 'backups')
     expect(path).toBe(join(folder, 'test-2026-11-23T21-04-05-123Z.sqlite'))
     expect(removed).toEqual([])
-    const copy = await openStore(path)
+    const copy = await openTestStore(path)
     expect(selectAll(path, 'select * from notes order by id')).toEqual(
       selectAll(storePath, 'select * from notes order by id'),
     )
