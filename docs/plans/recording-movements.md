@@ -394,7 +394,7 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   - `dateText`: `must be a date like 2026-11-24`.
   - `flagInteger`: a flag string that is an integer, `must be a whole number`.
   - `currencyCode`: `must be an ISO 4217 code such as COP`.
-    - `oneOf(values)`: `must be one of savings, debit, credit or cash`.
+  - `oneOf(values)`: `must be one of savings, debit, credit or cash`.
   - `emojiText`: exactly one emoji, `/^\p{RGI_Emoji}$/v`, `must be one emoji such as 🏦`.
   - An unknown key: `is not a field`.
 - Produces: `DRY_RUN_OPTION = { flags: '--dry-run', description: 'do everything but commit,
@@ -405,7 +405,7 @@ Flags: `account add <name> --emoji <emoji> --type <type> --currency <code> --ope
 required. Output: `{ dryRun, account: AccountRow }`.
 
 - [ ] **Step 1: Write the failing tests**
-    - `an account is created with its opening balance as its balance (USD)`:
+  - `an account is created with its opening balance as its balance (USD)`:
     `Wallet --emoji 💵 --type debit --currency USD --opening 12000 --opening-date 2026-01-05`
     makes `account list` show balance `12000`.
   - `an account keeps its emoji apart from its name`: `emoji: 💵`, `name: Wallet`.
