@@ -127,7 +127,9 @@ Written for a reader that is a model, not a person.
 ## Migrations and backups
 
 - Drizzle's migrator applies pending migrations at startup, all or nothing.
-- In `prod`, a backup is taken before any migration runs.
+- In `prod`, a backup is taken before any migration runs. A `QUAESTOR_DB` store
+  gets none, so `QUAESTOR_DB` always names a copy, never
+  `~/.quaestor/prod.sqlite`. Decided by Angelo on 2026-11-24.
 - A store written by a newer release refuses an older one.
 - `quaestor backup` copies the data file on demand.
 - Backups live in a `backups/` folder inside the data folder, as in Aletheia: the
