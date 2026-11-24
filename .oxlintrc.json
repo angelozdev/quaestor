@@ -20,7 +20,7 @@
             "message": "only src/shell/db knows the database"
           },
           {
-            "group": ["just-*", "just-*/*"],
+            "regex": "^just-",
             "message": "only src/core/utils wraps just-* packages"
           }
         ]
@@ -36,7 +36,7 @@
           {
             "patterns": [
               {
-                "group": ["just-*", "just-*/*"],
+                "regex": "^just-",
                 "message": "only src/core/utils wraps just-* packages"
               }
             ]
@@ -68,7 +68,7 @@
                 "message": "only src/shell/db knows the database"
               },
               {
-                "group": ["just-*", "just-*/*"],
+                "regex": "^just-",
                 "message": "only src/core/utils wraps just-* packages"
               }
             ]
@@ -96,7 +96,7 @@
             ],
             "patterns": [
               {
-                "group": ["just-*", "just-*/*"],
+                "regex": "^just-",
                 "message": "only src/core/utils wraps just-* packages"
               }
             ]
@@ -116,7 +116,7 @@
                 "message": "only src/shell/db knows the database"
               },
               {
-                "group": ["just-*", "just-*/*"],
+                "regex": "^just-",
                 "message": "only src/core/utils wraps just-* packages"
               }
             ]
@@ -145,7 +145,7 @@
                 "message": "src/core never imports the shell"
               },
               {
-                "group": ["just-*", "just-*/*"],
+                "regex": "^just-",
                 "message": "only src/core/utils wraps just-* packages"
               }
             ]

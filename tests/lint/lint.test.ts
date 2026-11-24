@@ -86,6 +86,9 @@ const justImport = "import groupBy from 'just-group-by'\nexport const group = gr
 
 const justSubpathImport = "import pick from 'just-pick/index.mjs'\nexport const choose = pick\n"
 
+const justDeepSubpathImport =
+  "import group from 'just-group-by/a/b/c.js'\nexport const choose = group\n"
+
 const mkdtempSyncImport = "import { mkdtempSync } from 'node:fs'\nexport const make = mkdtempSync\n"
 
 const justMessage = 'only src/core/utils wraps just-* packages'
@@ -142,15 +145,39 @@ describe.concurrent('lint', () => {
     ]
     const inside = ['src/core/utils/sample.ts']
 
-    const [outsideResults, subpathResults, insideResults] = await Promise.all([
+    const [outsideResults, subpathResults, deepSubpathResults, insideResults] = await Promise.all([
       lintEach(onTestFinished, outside, justImport),
       lintEach(onTestFinished, outside, justSubpathImport),
+      lintEach(onTestFinished, outside, justDeepSubpathImport),
       lintEach(onTestFinished, inside, justImport),
     ])
 
     expectEachFailure(expect, outsideResults, outside, justMessage)
     expectEachFailure(expect, subpathResults, outside, justMessage)
+    expectEachFailure(expect, deepSubpathResults, outside, justMessage)
     expectEachPass(expect, insideResults, inside)
+  })
+
+  it('passes an import whose path only contains just-, outside src/core/utils', async ({
+    expect,
+    onTestFinished,
+  }) => {
+    const importing = 'src/shell/cli/just-added.ts'
+    const local = 'src/shell/cli/just-it.ts'
+
+    const result = await lintFixture(onTestFinished, {
+      [local]: 'export const a = 1\n',
+      [importing]: [
+        "import { a } from './just-it.ts'",
+        "import b from '#core/just-x'",
+        "import c from '@scope/just-pick'",
+        'export const all = [a, b, c]',
+        '',
+      ].join('\n'),
+    })
+
+    expectPass(expect, result, importing)
+    expectPass(expect, result, local)
   })
 
   it('fails when src/core/utils imports node:*, drizzle-orm or #shell/*', async ({
