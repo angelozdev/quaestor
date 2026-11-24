@@ -29,15 +29,20 @@ These are hard to change once real data sits on them.
   `quaestor tag add <name>`, `quaestor movement list`, `quaestor movement write` (JSON on
   stdin: records, transfers and deletes in one go), and `quaestor import <folder>`. Every write
   takes `--dry-run`.
-- **Claude names things by number.** Accounts, categories and movements are referred to by
-  their number, never by name. Names carry emoji such as 🛡️ that a model can copy wrong, and
-  two categories are called 🎁 Gifts. Tags are referred to by name.
-- **Numbering.** Imported accounts, categories and movements keep their legacy numbers, so
-  an account keeps its number and movements keep theirs. A new movement always gets a number above
-  every earlier one, and a deleted number is never handed out again.
+- **Codes, not sequences.** Accounts, categories and movements are identified by a random
+  four-character code from `0123456789abcdefghjkmnpqrstvwxyz`, as Aletheia's cards are:
+  `n8d3`, `k7f2`. A code already taken is drawn again, so two never share one, and 1,048,576
+  fit in each list. The import gives every legacy row a new code, so the legacy numbers are
+  not kept. Decided by Angelo on 2026-11-24.
+- **Claude names things by code.** Claude never refers to an account or a category by its
+  name: two categories are called Gifts. Tags are referred to by name.
+- **Emoji apart.** An account and a category carry their emoji in a field of their own, apart
+  from the name: `🏦` and `Bank`. Decided by Angelo on 2026-11-24.
 - **Storage.** There are four lists: accounts, categories, tags and movements, plus which tags
   each movement carries. A transfer is two movements that share a link. A balance is never
-  stored: it is the opening balance plus the sum of the account's movements.
+  stored: it is the opening balance plus the sum of the account's movements. Movements on the
+  same day keep the order they were stored in, through SQLite's internal `rowid`, which Claude
+  never sees.
 - **Amounts are whole numbers in the currency's smallest unit**, in both input and output:
   COP 45,000.50 is `4500050`, USD 10.85 is `1085`. Every movement given to `quaestor` states
   its currency, and `quaestor` refuses one that differs from its account's.
@@ -47,26 +52,27 @@ These are hard to change once real data sits on them.
 ## What Claude reads
 
 Every store command writes `env: <name>` on stderr first. The examples below were rendered
-with `@toon-format/toon` `encode`, using invented numbers; `--json` gives the same object on
+with `@toon-format/toon` `encode`, using invented values; `--json` gives the same object on
 one line.
 
 `quaestor account list`, exit 0:
 
 ```
-accounts[3]{id,name,type,currency,archived,openingAmount,openingDate,balance}:
-  1,💵 Wallet,debit,USD,false,12000,2026-01-05,9550
-  2,🏦 Bank,debit,COP,false,0,null,150000000
-  3,💳 Card,credit,COP,false,0,2026-11-24,-4500000
+accounts[3]{id,emoji,name,type,currency,archived,openingAmount,openingDate,balance}:
+  w2k9,💵,Wallet,debit,USD,false,12000,2026-01-05,9550
+  n8d3,🏦,Bank,debit,COP,false,0,null,150000000
+  c4tz,💳,Card,credit,COP,false,0,2026-11-24,-4500000
 ```
 
-`quaestor account add "🏦 Savings" --type savings --currency COP --opening 50000000 --opening-date 2026-11-24 --dry-run`,
+`quaestor account add Savings --emoji 🏦 --type savings --currency COP --opening 50000000 --opening-date 2026-11-24 --dry-run`,
 exit 0:
 
 ```
 dryRun: true
 account:
-  id: 4
-  name: 🏦 Savings
+  id: f6m1
+  emoji: 🏦
+  name: Savings
   type: savings
   currency: COP
   archived: false
@@ -78,10 +84,11 @@ account:
 `quaestor category list` and `quaestor tag list`, exit 0:
 
 ```
-categories[3]{id,name,archived}:
-  7,🍽️ Restaurants,false
-  11,🚕 Rideshare/Taxi,false
-  34,🎁 Gifts,true
+categories[4]{id,emoji,name,archived}:
+  q5d0,null,Food,true
+  r3sb,🍽️,Restaurants,false
+  x9ta,🚕,Rideshare/Taxi,false
+  a7hn,🛡️,Gifts,true
 ```
 
 ```
@@ -95,47 +102,68 @@ dryRun: true
 tag: "trip:japon-2027"
 ```
 
-`quaestor movement write --dry-run`, a correction (delete 1201, record it again) plus a
+`quaestor movement write --dry-run`, a correction (delete h4vw, record it again) plus a
 cross-currency transfer, exit 0:
 
 ```
 dryRun: true
 deleted[1]{id,date,account,payee,amount,currency,category,tags,note,transfer}:
-  1201,2026-11-20,2,Uber,-2500000,COP,11,"",null,null
+  h4vw,2026-11-20,n8d3,Uber,-2500000,COP,x9ta,"",null,null
 recorded[3]{id,date,account,payee,amount,currency,category,tags,note,transfer}:
-  1203,2026-11-20,2,Uber,-1500000,COP,11,"",null,null
-  1204,2026-11-21,1,To Bank,-10000,USD,null,"",null,1205
-  1205,2026-11-21,2,From Wallet,40000000,COP,null,"",null,1204
+  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null
+  m3pe,2026-11-21,w2k9,To Bank,-10000,USD,null,"",null,3qxa
+  3qxa,2026-11-21,n8d3,From Wallet,40000000,COP,null,"",null,m3pe
 balances[2]{account,currency,before,after}:
-  1,USD,19550,9550
-  2,COP,111000000,152000000
+  n8d3,COP,111000000,152000000
+  w2k9,USD,19550,9550
 ```
 
 The stdin it reads:
 
 ```json
 {
-  "delete": [1201],
+  "delete": [
+    "h4vw"
+  ],
   "movements": [
-    { "account": 2, "date": "2026-11-20", "payee": "Uber", "amount": -1500000, "currency": "COP", "category": 11 }
+    {
+      "account": "n8d3",
+      "date": "2026-11-20",
+      "payee": "Uber",
+      "amount": -1500000,
+      "currency": "COP",
+      "category": "x9ta"
+    }
   ],
   "transfers": [
     {
-      "from": { "account": 1, "date": "2026-11-21", "payee": "To Bank", "amount": -10000, "currency": "USD" },
-      "to": { "account": 2, "date": "2026-11-21", "payee": "From Wallet", "amount": 40000000, "currency": "COP" }
+      "from": {
+        "account": "w2k9",
+        "date": "2026-11-21",
+        "payee": "To Bank",
+        "amount": -10000,
+        "currency": "USD"
+      },
+      "to": {
+        "account": "n8d3",
+        "date": "2026-11-21",
+        "payee": "From Wallet",
+        "amount": 40000000,
+        "currency": "COP"
+      }
     }
   ]
 }
 ```
 
-`quaestor movement list --account 2 --from 2026-11-20`, exit 0. `balance` is the row's
+`quaestor movement list --account n8d3 --from 2026-11-20`, exit 0. `balance` is the row's
 account's balance after that movement, counting every earlier movement, including those before
 `--from`:
 
 ```
 movements[2]{id,date,account,payee,amount,currency,category,tags,note,transfer,balance}:
-  1203,2026-11-20,2,Uber,-1500000,COP,11,"",null,null,110000000
-  1205,2026-11-21,2,From Wallet,40000000,COP,null,"trip:lima-2026",cambio a 4.000,1204,150000000
+  k7f2,2026-11-20,n8d3,Uber,-1500000,COP,x9ta,"",null,null,110000000
+  3qxa,2026-11-21,n8d3,From Wallet,40000000,COP,null,"trip:lima-2026",cambio a 4.000,m3pe,150000000
 ```
 
 `quaestor import ~/.quaestor/legacy --dry-run`, exit 0:
@@ -149,7 +177,7 @@ imported:
   movements: 9
   tagLinks: 2
 openings[1]{account,amount,currency,date}:
-  1,12000,USD,2026-01-05
+  w2k9,12000,USD,2026-01-05
 ```
 
 A refusal leaves stdout empty and exits 1. The error goes on stderr after the `env:` line:
@@ -158,19 +186,19 @@ A refusal leaves stdout empty and exits 1. The error goes on stderr after the `e
 error:
   code: archived
   kind: account
-  id: 3
+  id: c4tz
   item: "movements[0]"
-  message: account 3 is archived
+  message: account c4tz is archived
 ```
 
 ```
 error:
   code: currency_mismatch
   item: "transfers[0].from"
-  account: 1
+  account: w2k9
   currency: COP
   expected: USD
-  message: "account 1 holds USD, not COP"
+  message: "account w2k9 holds USD, not COP"
 ```
 
 ```
@@ -193,6 +221,9 @@ error:
 - An amount is a non-zero JavaScript integer, signed: positive money in, negative money out. A
   currency is a member of `Intl.supportedValuesOf('currency')`. A date is `YYYY-MM-DD` and a
   real calendar day (`z.iso.date()`).
+- A code is `ID_LENGTH = 4` characters from `ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'`,
+  drawn with the injected `randomIndex` and drawn again while the insert hits a taken one.
+  Rows of a day are ordered by `rowid`, never by code.
 - Every write takes `--dry-run`. A dry run is the same transaction rolled back, and every
   write's stdout starts with `dryRun: <true|false>`.
 - Each failure is a class extending `RefusedError` (exit 1) or `FailedError` (exit 2), and its
@@ -214,7 +245,7 @@ error:
 1. A running balance under `--from` still counts every earlier movement of that account. Tested in Task 5.
 2. The payee filter ignores case and accents, so `--payee exito` finds `Éxito` and `--payee UBER`
    finds `Uber`. SQLite's own case folding is ASCII-only. Tested in Task 5.
-3. A delete list can name the same number twice, or both halves of one transfer. Each movement
+3. A delete list can name the same code twice, or both halves of one transfer. Each movement
    is deleted once and listed once. Tested in Task 7.
 4. Empty stdin on `movement write` is `invalid_json`, not a crash or an empty write. Tested in Task 4.
 5. Amount scale: a COP amount given ×100 too small or too large is only caught by the balance
@@ -223,7 +254,7 @@ error:
 
 ## File map
 
-- `src/core/ledger/`: `ledger.ts` (`isCurrency`, `checkWrite`, `matchesPayee`),
+- `src/core/ledger/`: `ledger.ts` (`isCurrency`, `drawCode`, `checkWrite`, `matchesPayee`),
   `ledger.types.ts`, `ledger.constants.ts`, `ledger.errors.ts`, `ledger.test.ts`, `index.ts`.
 - `src/core/legacy/`: `legacy.ts` (`ledgerFrom`), `legacy.types.ts`, `legacy.test.ts`,
   `index.ts`.
@@ -263,10 +294,10 @@ command groups and the test helper.
 **Interfaces:**
 
 - Produces: `ACCOUNT_TYPES = ['savings', 'debit', 'credit', 'cash'] as const`;
-  `type AccountType`; `type Account = { id: number; name: string; type: AccountType; currency:
+  `type AccountType`; `type Account = { id: string; emoji: string | null; name: string; type: AccountType; currency:
   string; archived: boolean; openingAmount: number; openingDate: string | null }`;
   `type AccountRow = Account & { balance: number }`;
-  `listAccounts(store: Store): AccountRow[]`, ordered by id.
+  `listAccounts(store: Store): AccountRow[]`, in the order they were stored (`rowid`).
 - Produces in `main.types.ts`: `CliCommand` gains `group?: CommandGroup`,
   `argument?: { name: string; description: string }` and
   `options?: { flags: string; description: string; defaultValue?: string }[]`, and
@@ -278,8 +309,8 @@ command groups and the test helper.
   Promise<CliRun> }`, which runs `runCli` with `dataDir` set to a `tempDir`, `defaultEnv`
   `'test'` and `migrationsDir: SHIPPED_MIGRATIONS`.
 
-Table `accounts`: `id` integer primary key autoincrement; `name` text not null unique and not
-blank; `type` text not null in `ACCOUNT_TYPES`; `currency` text not null, three uppercase
+Table `accounts`: `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`); `emoji` text; `name` text not null unique and
+not blank; `type` text not null in `ACCOUNT_TYPES`; `currency` text not null, three uppercase
 letters; `archived` integer boolean not null default false; `opening_amount` integer not null
 default 0; `opening_date` text, null or a valid date; check `opening_amount = 0 OR
 opening_date IS NOT NULL`.
@@ -338,15 +369,21 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   `src/shell/cli/invocation/input/{input.ts,input.schema.ts,input.constants.ts,input.errors.ts}`;
   `src/core/ledger/{ledger.ts,ledger.errors.ts,ledger.test.ts}`.
 - Modify: `src/shell/db/database/database.ts`, `src/shell/db/accounts/accounts.ts`,
-  `src/shell/cli/main/main.ts`, `docs/architecture.md`.
+  `src/shell/cli/main/{main.ts,main.types.ts}`, `context.types.ts`, `bin.ts`, `released.ts`,
+  `tests/support/run-cli/run-cli.ts`, `docs/architecture.md`.
 
 **Interfaces:**
 
 - Produces: `inTransaction<T>(store: Store, dryRun: boolean, work: () => T): T`, which commits,
   rolls back on a dry run, and rolls back and rethrows on a throw.
   `isUniqueViolation(error: unknown): boolean`.
-- Produces: `type AccountDraft = { name: string; type: AccountType; currency: string;
-  openingAmount: number; openingDate: string }`; `insertAccount(store, draft): AccountRow`.
+- Produces: `ID_ALPHABET`, `ID_LENGTH`, `type RandomIndex = (bound: number) => number` and
+  `drawCode(randomIndex: RandomIndex): string` in `#core/ledger`. `CliContext` gains
+  `randomIndex`: `crypto.randomInt` in `bin.ts` and `released.ts`, and a deterministic
+  sequence by default in `runCli`, overridable per test.
+- Produces: `type AccountDraft = { emoji: string; name: string; type: AccountType; currency:
+  string; openingAmount: number; openingDate: string }`;
+  `insertAccount(store, draft, randomIndex): AccountRow`.
   It throws `AlreadyExistsError('account', name)`, code `already_exists`, data
   `{ kind, name }`, message `account <name> already exists`.
 - Produces: `isCurrency(code: string): boolean`.
@@ -357,19 +394,26 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   - `dateText`: `must be a date like 2026-11-24`.
   - `flagInteger`: a flag string that is an integer, `must be a whole number`.
   - `currencyCode`: `must be an ISO 4217 code such as COP`.
-  - `oneOf(values)`: `must be one of savings, debit, credit or cash`.
+    - `oneOf(values)`: `must be one of savings, debit, credit or cash`.
+  - `emojiText`: exactly one emoji, `/^\p{RGI_Emoji}$/v`, `must be one emoji such as 🏦`.
   - An unknown key: `is not a field`.
 - Produces: `DRY_RUN_OPTION = { flags: '--dry-run', description: 'do everything but commit,
   and show what would change' }`.
 
-Flags: `account add <name> --type <type> --currency <code> --opening <amount>
+Flags: `account add <name> --emoji <emoji> --type <type> --currency <code> --opening <amount>
 --opening-date <date> [--dry-run]`. `--opening` defaults to `0`, `--opening-date` is
 required. Output: `{ dryRun, account: AccountRow }`.
 
 - [ ] **Step 1: Write the failing tests**
-  - `an account is created with its opening balance as its balance (USD)`:
-    `💵 Wallet --type debit --currency USD --opening 12000 --opening-date 2026-01-05` makes
-    `account list` show balance `12000`.
+    - `an account is created with its opening balance as its balance (USD)`:
+    `Wallet --emoji 💵 --type debit --currency USD --opening 12000 --opening-date 2026-01-05`
+    makes `account list` show balance `12000`.
+  - `an account keeps its emoji apart from its name`: `emoji: 💵`, `name: Wallet`.
+  - `an emoji field that is not exactly one emoji is refused`: `🏦🏦` and `A`.
+  - `an account gets a four-character code`: with `randomIndex` yielding `0,1,2,3`, the code is
+    `0123`.
+  - `a code already taken is drawn again`: the second account's first draw repeats the first
+    account's code, and it gets the next draw.
   - `a credit card in debt opens with a negative balance`: `--opening -4500000` gives balance
     `-4500000`.
   - `--dry-run shows the account and leaves the store unchanged`: stdout `dryRun: true`, and
@@ -404,16 +448,19 @@ required. Output: `{ dryRun, account: AccountRow }`.
 
 **Interfaces:**
 
-- Produces: `type Category = { id: number; name: string; archived: boolean }`;
-  `insertCategory(store, name): Category`; `listCategories(store): Category[]` by id;
+- Produces: `type Category = { id: string; emoji: string | null; name: string; archived:
+  boolean }`; `insertCategory(store, { emoji, name }, randomIndex): Category`;
+  `listCategories(store): Category[]` in stored order;
   `insertTag(store, name): string`; `listTags(store): string[]` sorted.
 
-Tables: `categories` has `id` integer primary key autoincrement, `name` text not null and not
-blank, `archived` integer boolean not null default false, and a unique index on `name`
+Tables: `categories` has `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`), `emoji` text, `name` text not
+null and not blank, `archived` integer boolean not null default false, and a unique index on `name`
 `WHERE archived = 0`. `tags` has `name` text primary key matching `TAG_PATTERN`.
 
 - [ ] **Step 1: Write the failing tests**
-  - `category add creates a category and category list shows it with its number`.
+    - `category add creates a category and category list shows it with its code`:
+    `category add Games --emoji 🎮`.
+  - `a category keeps its emoji apart from its name`.
   - `an unknown category name can be added once; a second active one is refused`: exits 1
     `already_exists`, kind `category`.
   - `tag add creates a tag; tag list shows it`: `trip:japon-2027`.
@@ -449,15 +496,15 @@ blank, `archived` integer boolean not null default false, and a unique index on 
 
 - Consumes: `inTransaction`, `parsed`, `listAccounts`.
 - Produces in `#core/ledger`:
-  - `type MovementDraft = { account: number; date: string; payee: string; amount: number;
-    currency: string; category: number; tags: string[]; note: string | null }`.
+  - `type MovementDraft = { account: string; date: string; payee: string; amount: number;
+    currency: string; category: string; tags: string[]; note: string | null }`.
   - `type HalfDraft = Omit<MovementDraft, 'category'>`.
   - `type TransferDraft = { from: HalfDraft; to: HalfDraft }`.
-  - `type WriteRequest = { delete: number[]; movements: MovementDraft[]; transfers:
+  - `type WriteRequest = { delete: string[]; movements: MovementDraft[]; transfers:
     TransferDraft[] }`.
-  - `type Catalog = { accounts: Map<number, Account>; categories: Map<number, Category>;
-    tags: Set<string>; movements: Set<number> }`, where `movements` holds the ids asked to be
-    deleted that exist.
+  - `type Catalog = { accounts: Map<string, Account>; categories: Map<string, Category>;
+    tags: Set<string>; movements: Set<string> }`, where `movements` holds the codes asked to
+    be deleted that exist.
   - `checkWrite(request: WriteRequest, catalog: Catalog): void`, pure. It throws the first
     refusal, with `item` set to `movements[i]` (later `transfers[i].from`,
     `transfers[i].to` and `delete[i]`):
@@ -471,28 +518,29 @@ blank, `archived` integer boolean not null default false, and a unique index on 
     opening date is accepted` and `an account without an opening date accepts any date`.
 - Produces: `readJson(context: CliContext): Promise<unknown>`, which throws `InvalidJsonError`:
   `invalid_json`, message `invalid JSON on stdin: <reason on one line>`.
-- Produces: `type MovementRow = { id: number; date: string; account: number; payee: string;
-  amount: number; currency: string; category: number | null; tags: string; note: string |
-  null; transfer: number | null }`, where `tags` is space-joined and `transfer` is the other
-  half's id. `type BalanceChange = { account: number; currency: string; before: number;
+- Produces: `type MovementRow = { id: string; date: string; account: string; payee: string;
+  amount: number; currency: string; category: string | null; tags: string; note: string |
+  null; transfer: string | null }`, where `tags` is space-joined and `transfer` is the other
+  half's code. `type BalanceChange = { account: string; currency: string; before: number;
   after: number }`. `type WriteResult = { deleted: MovementRow[]; recorded: MovementRow[];
   balances: BalanceChange[] }`.
-- Produces: `writeMovements(store: Store, request: WriteRequest): WriteResult`. It loads the
+- Produces: `writeMovements(store: Store, request: WriteRequest, randomIndex: RandomIndex):
+  WriteResult`. It loads the
   catalog and calls `checkWrite`, then reads the touched accounts' balances, writes in order
   (deletes, movements, transfers), reads the balances again, and returns the result with
   `balances` sorted by account.
 
 Tables: `movements` has these columns:
-- `id` integer primary key autoincrement;
-- `account_id` integer not null, referencing accounts;
+- `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`);
+- `account_id` text not null, referencing accounts;
 - `date` text not null, with `date(date) IS date`;
 - `payee` text not null and not blank;
 - `amount` integer not null `<> 0`;
-- `category_id` integer, referencing categories;
+- `category_id` text, referencing categories;
 - `transfer` text;
 - `note` text;
 - check `(category_id IS NULL) = (transfer IS NOT NULL)`;
-- index on `(account_id, date, id)`.
+- index on `(account_id, date)`.
 
 `movement_tags` has `movement_id` (referencing movements) and `tag` (referencing tags), with
 primary key `(movement_id, tag)`. The `transfer` column arrives now and is first written in Task 6.
@@ -501,7 +549,7 @@ stdin for `movement write [--dry-run]` is a strict object. `delete`, `movements`
 `transfers` all default to `[]`, and at least one must be non-empty, or the root issue is
 `nothing to write: give delete, movements or transfers`. A movement is a strict object with
 these fields:
-- `account` and `category`: integers;
+- `account` and `category`: codes (strings);
 - `date`;
 - `payee`: required text;
 - `amount`: a non-zero integer (`must not be 0`);
@@ -553,13 +601,12 @@ until then their schemas take only `[]`.
   compares the two strings after NFD normalisation, removing `\p{Diacritic}` and lowercasing.
   Its unit test: `matchesPayee finds Éxito from exito and Uber from UBER`.
 - Produces: `type MovementFilter = { account?: number; from?: string; to?: string; payee?:
-  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, ordered by
-  date and then id. `balance` is the row's account's opening amount plus the running sum
-  partitioned by account in `(date, id)` order. It is computed over every movement in SQL
+  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, ordered by date and then `rowid`. `balance` is the row's account's opening amount plus the running sum
+  partitioned by account in `(date, rowid)` order. It is computed over every movement in SQL
   before `from` and `to` filter the rows, and the payee filter runs afterwards in the shell
   with `matchesPayee`.
 
-Flags: `--account <id>`, `--from <date>`, `--to <date>` (inclusive) and `--payee <text>`.
+Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive) and `--payee <text>`.
 Output: `{ movements }`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -594,7 +641,7 @@ Output: `{ movements }`.
   - `to.amount` must be positive: `must be positive: the money arrives in this account`.
   - Halves have no `category`.
 - Both halves get the same `transfer` key, `crypto.randomUUID()`. Each half is listed with
-  `transfer` = the other half's id.
+  `transfer` = the other half's code.
 
 - [ ] **Step 1: Write the failing tests**
   - `a transfer writes both halves, each in its own account`.
@@ -624,17 +671,16 @@ Output: `{ movements }`.
 
 - `checkWrite` checks the deletes first: an id missing from `catalog.movements` is
   `NotFoundError('movement', id, 'delete[i]')`.
-- `delete` is an array of integers. The ids are deduplicated, and each is expanded to both
-  halves of its transfer. Tags are deleted before the movements, and `deleted` lists each
-  movement once, sorted by id.
+- `delete` is an array of codes. They are deduplicated, and each is expanded to both
+  halves of its transfer. Tags are deleted before the movements, and `deleted` lists each movement once, in stored order.
 
 - [ ] **Step 1: Write the failing tests**
   - `a deleted movement leaves its account and its balance returns (USD)`.
   - `deleting one half of a transfer deletes both`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
   - `a correction is a delete and a new record in one write`: the balances show both changes,
-    and the new movement gets a number above every earlier one, including the deleted number.
-  - `an unknown movement number is refused and nothing is deleted`: `not_found`, kind
+    and the new movement gets a fresh code.
+    - `an unknown movement code is refused and nothing is deleted`: `not_found`, kind
     `movement`.
   - `--dry-run of a delete writes nothing`.
 - [ ] **Step 2: Run them and see them fail.**
@@ -661,17 +707,21 @@ Output: `{ movements }`.
     LegacyAccount[]; categories: LegacyCategory[]; tags: LegacyTag[]; transactions:
     LegacyTransaction[]; tagLinks: LegacyTagLink[] }`, with values already parsed to numbers,
     booleans and null.
-  - `type StoredMovement = { id: number; account: number; date: string; payee: string; amount:
-    number; category: number | null; transfer: string | null; note: string | null }`, with
+  - `type StoredMovement = { id: string; account: string; date: string; payee: string; amount:
+    number; category: string | null; transfer: string | null; note: string | null }`, with
     `transfer` as the legacy group text.
   - `type Ledger = { accounts: Account[]; categories: Category[]; tags: string[]; movements:
     StoredMovement[]; tagLinks: { movement: number; tag: string }[] }`.
-  - `ledgerFrom(legacy: LegacyExport): Ledger` keeps only `posted` rows. An `expense` becomes
+  - `ledgerFrom(legacy: LegacyExport, randomIndex: RandomIndex): Ledger` keeps only `posted`
+    rows, in legacy id order. An `expense` becomes
     `-amount` and an `income` `+amount`; a transfer's `out` half becomes `-amount` and its
     `in_` half `+amount`. An account whose balance minus the sum of its movements is not 0
     gets that difference as `openingAmount`, dated the day before its first posted movement
-    (`Temporal.PlainDate`), or on the day of `exportedAt` when it has none. Ids, names, types,
-    archived marks, payees and notes are copied as stored, an empty-string note included.
+    (`Temporal.PlainDate`), or on the day of `exportedAt` when it has none. Every account, category and movement gets a fresh code, distinct within its list, and each
+    movement's account, category, tags and transfer partner follow the codes. A name splits
+    with `/^(\p{RGI_Emoji}) (.+)$/v` into `emoji` and `name`; a name it does not match keeps
+    `emoji: null`. Types, archived marks, payees and notes are copied as stored, an
+    empty-string note included.
 - Produces in `#shell/legacy`: `readLegacyExport(folder: string): Promise<LegacyExport>`.
   - It checks each manifest table's `rows` and `sha256`, then parses each `.jsonl` line with
     zod, and only then returns.
@@ -679,12 +729,12 @@ Output: `{ movements }`.
     `export_mismatch`, message `<file>: <reason>`.
   - The reasons are `sha256 differs from manifest.json`,
     `has <n> rows, manifest.json says <m>` and `line <l>: <issue>`.
-- Produces in `#shell/db`: `importLedger(store, ledger: Ledger, expected: Map<number,
-  number>): ImportCounts`.
+- Produces in `#shell/db`: `importLedger(store, ledger: Ledger, expected: Map<string, number>): ImportCounts`, with
+  `expected` keyed by the new account codes.
   - It refuses a store with any account: `AlreadyImportedError`, `already_imported` (exit 1),
     message `the legacy export is imported only into an empty store`.
-  - It inserts with the legacy ids, writing directly rather than through `checkWrite`, since
-    archived accounts hold history.
+    - It inserts in legacy id order, so `rowid` keeps the legacy order within a day, and writes
+    directly rather than through `checkWrite`, since archived accounts hold history.
   - Afterwards it checks every balance against `expected`: `BalanceMismatchError`,
     `balance_mismatch` (exit 2), data `{ account, expected, actual }`.
   - `type ImportCounts = { accounts; categories; tags; movements; tagLinks }`.
@@ -693,7 +743,7 @@ Output: `{ movements }`.
 
 The fixture is invented and has the shapes the real export has:
 - an archived account holding posted movements;
-- two categories sharing a name, one of them archived;
+- two categories sharing a name, one of them archived, and a category name with no emoji;
 - a negative expense in a transfer category;
 - a cross-currency transfer pair;
 - a `skipped` row and a `planned` row;
@@ -711,7 +761,10 @@ and `rows` of each file and each account's `balance`.
   - `posted movements in an archived account are imported`.
   - `a negative expense becomes money in`.
   - `skipped and planned rows stay in the export`.
-  - `imported numbers are kept, and a movement recorded afterwards gets a higher one`.
+    - `every legacy account, category and movement gets a code, and each movement keeps its
+    account, category, tags and transfer partner`.
+  - `a legacy name splits into its emoji and its name, and a name without one keeps none`.
+  - `movements of the same day keep their legacy order`.
   - `import --dry-run writes nothing`.
   - `import refuses a store that already holds data` (exit 1).
   - `a file whose sha256 differs from manifest.json stops the import` (exit 2, store
@@ -734,7 +787,7 @@ QUAESTOR_DB=$SCRATCH/copy.sqlite pnpm -s quaestor account list --json > $SCRATCH
 ```
 
 Then compare each account's `balance` with `~/.quaestor/legacy/manifest.json` in cents, with a
-script, not by eye. Expected: every account equal, and the openings Angelo approved, which Claude keeps outside the repo. Report the
+script, not by eye, matching each account by `<emoji> <name>` against the manifest's name. Expected: every account equal, and the openings Angelo approved, which Claude keeps outside the repo. Report the
 result to Angelo.
 
 ---

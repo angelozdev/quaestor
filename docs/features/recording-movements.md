@@ -51,7 +51,16 @@ The skill drives it; `quaestor` answers.
    its category (bank interest, a refund, whatever it was). Decided by Angelo on
    2026-11-24.
 
+## Codes
+
+Accounts, categories and movements are each identified by a random four-character code from
+`0123456789abcdefghjkmnpqrstvwxyz`, as Aletheia's cards are: `n8d3`, `k7f2`. They are never
+numbered in sequence. A code already taken is drawn again, so two never share one, and
+1,048,576 fit in each list: more than a lifetime of movements. Decided by Angelo on
+2026-11-24.
+
 ## Accounts
+
 
 - An account has an emoji, a name, a type, a currency, an archived mark and an opening
   balance.
@@ -115,7 +124,7 @@ by Angelo on 2026-11-24:
   Angelo on 2026-11-24, as YNAB, Actual Budget and Rocket Money recommend.
 - One bank charge is one movement with one category (Claude's call).
 - A correction is a delete and a new record in the same write: the movement gets a new
-  number, and nothing refers to that number. Decided by Angelo on 2026-11-24.
+  code, and nothing refers to the old one. Decided by Angelo on 2026-11-24.
 
 ## Transfers
 
@@ -170,6 +179,7 @@ Writes, each with `--dry-run`:
 - It reads `~/.quaestor/legacy/`, checks every file's row count and sha256 against
   `manifest.json`, and validates every row with zod before writing anything.
 - It refuses a store that already holds data, so nothing is imported twice.
+- Every account, category and movement gets a new code; the legacy numbers are not kept.
 - What comes over:
   - every account, some of them archived, each with its legacy type: `debit` (Wallet, Bank), `credit` (Card A, Card C, Loan, Card B), `savings` (Reserve, Trip fund, Earnings, Invest) and `cash` (Loans).
   - every category, some of them archived, with
