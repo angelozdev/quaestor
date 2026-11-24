@@ -30,7 +30,9 @@ currencies.
 
 - A balance made to match the bank with an unexplained adjustment.
 - A movement recorded from an app's activity list that no bank statement shows.
-- A write Angelo has not seen as a dry run and approved.
+- A write Angelo has not seen as a dry run and approved. The skill enforces this, not
+  `quaestor`, which cannot see Angelo's yes; writes keep a plain `--dry-run` (Claude's
+  call).
 
 ## A recording session
 
