@@ -193,8 +193,8 @@ imported:
   tags: 2
   movements: 9
   tagLinks: 2
-openings[1]{account,amount,currency,date}:
-  w2k9,120,USD,2026-01-05
+openings[1]{account,name,amount,currency,date}:
+  w2k9,Wallet,120,USD,2026-01-05
 ```
 
 A refusal leaves stdout empty and exits 1. The error goes on stderr after the `env:` line. A
@@ -799,7 +799,8 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
     `balance_mismatch` (exit 2), data `{ account, expected, actual }`.
   - `type ImportCounts = { accounts; categories; tags; movements; tagLinks }`.
 - Command: `quaestor import <folder> [--dry-run]`. Output: `{ dryRun, imported: ImportCounts,
-  openings: { account, amount, currency, date }[] }`.
+  openings: { account, name, amount, currency, date }[] }`, `name` being the account's
+  name, so the openings can be checked against the spec without a second read.
 
 The fixture is invented and has the shapes the real export has:
 - an archived account holding posted movements;
