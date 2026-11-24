@@ -257,6 +257,17 @@ describe('quaestor movement write', () => {
     })
   })
 
+  it('a null note is the same as no note, on a movement and on a transfer half', async () => {
+    const books = await openBooks()
+    const spending = spend(books, { note: null })
+    const moving = transfer(books, { note: null }, { note: null })
+
+    const run = await write(books.cli, { movements: [spending], transfers: [moving] })
+
+    expect(run.code).toBe(0)
+    expect(recordedRows(run)).toEqual([recorded(spending), ...recordedHalves(run, moving)])
+  })
+
   it('money in is positive and money out negative', async () => {
     const books = await openBooks()
     const refund = spend(books, { payee: 'Refund', amount: '20' })

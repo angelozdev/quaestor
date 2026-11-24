@@ -43,7 +43,7 @@ const movement = fields({
   tags: tagList,
   note: z
     .string()
-    .optional()
+    .nullish()
     .transform((note) => note ?? null),
 })
 
