@@ -28,7 +28,8 @@ These are hard to change once real data sits on them.
   `quaestor category list`, `quaestor category add <name>`, `quaestor tag list`,
   `quaestor tag add <name>`, `quaestor movement list`, `quaestor movement write` (JSON on
   stdin: records, transfers and deletes in one go), and `quaestor import <folder>`. Every write
-  takes `--dry-run`.
+  takes `--dry-run`. Flags carry one thing; a batch goes as JSON on stdin, as AWS does with
+  `route53 change-resource-record-sets --change-batch`. Confirmed by Angelo on 2026-11-24.
 - **Codes, not sequences.** Accounts, categories and movements are identified by a random
   four-character code from `0123456789abcdefghjkmnpqrstvwxyz`, as Aletheia's cards are:
   `n8d3`, `k7f2`. A code already taken is drawn again, so two never share one, and 1,048,576
