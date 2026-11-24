@@ -611,7 +611,8 @@ until then their schemas take only `[]`.
     `movements[0]` and another currency in `movements[2]` give `refused` with two `errors`, in
     that order. In the tests below, a rule's code is read from `errors[]`.
   - `a movement in another currency than its account's is refused`: `currency_mismatch`.
-  - `an archived account receives no new movement`: `archived`, kind `account`. The account is
+  - `an archived account receives no new movement`: `archived`, `account <code> is archived`. The account
+    is
     archived with `runSql` in the test.
   - `an archived category receives no new movement`.
   - `an unknown account, category or tag is refused`: `not_found`.
