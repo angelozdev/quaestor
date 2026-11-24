@@ -11,6 +11,7 @@ import {
   addAccount,
   addCategory,
   bookedMovements,
+  list,
   openBooks,
   spend,
   write,
@@ -303,6 +304,7 @@ describe('quaestor movement write', () => {
       fc.asyncProperty(faultyItems, async (faults) => {
         const books = await openBooks()
         const before = await accountsText(books.cli)
+        const listedBefore = (await list(books.cli)).stdout
         const movements = faults.map((fault) => faultyMovement(books, fault))
 
         const run = await write(books.cli, { movements })
@@ -312,6 +314,7 @@ describe('quaestor movement write', () => {
         )
         expect(run).toEqual({ code: 1, stdout: '', stderr: refused(...problems) })
         expect(await accountsText(books.cli)).toBe(before)
+        expect((await list(books.cli)).stdout).toBe(listedBefore)
       }),
       { numRuns: 50 },
     )

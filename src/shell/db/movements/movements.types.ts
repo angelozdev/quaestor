@@ -11,6 +11,10 @@ export type MovementRow = {
   transfer: string | null
 }
 
+export type ListedMovement = MovementRow & { balance: number }
+
+export type MovementFilter = { account?: string; from?: string; to?: string; payee?: string }
+
 export type BalanceChange = { account: string; currency: string; before: number; after: number }
 
 export type WriteResult = {

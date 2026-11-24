@@ -54,3 +54,7 @@ export function bookedMovements(books: Books, items: Booked[]): Json[] {
     spend(books, { account: accounts[account], amount: amountTextOf(cents), date }),
   )
 }
+
+export function list(cli: LedgerCli, ...flags: string[]) {
+  return cli.run(['movement', 'list', ...flags])
+}

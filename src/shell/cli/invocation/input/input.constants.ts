@@ -17,6 +17,8 @@ export const UNKNOWN_KEY_MESSAGE = 'is not a field'
 
 export const ZERO_AMOUNT_MESSAGE = 'must not be 0'
 
+export const LIMIT_MESSAGE = 'must be a whole number above 0'
+
 export const REPEATED_MESSAGE = 'is repeated'
 
 export const NOTHING_TO_WRITE_MESSAGE = 'nothing to write: give delete, movements or transfers'

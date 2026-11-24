@@ -2,6 +2,7 @@ import {
   CENTS_PER_UNIT,
   CURRENCIES,
   DECIMAL_DIGITS,
+  DIACRITICS,
   ID_ALPHABET,
   ID_LENGTH,
   PROBLEM_CODES,
@@ -33,6 +34,14 @@ export function centsOf(text: string): number {
 
 export function amountOf(cents: number): number {
   return cents / CENTS_PER_UNIT
+}
+
+function plain(text: string): string {
+  return text.normalize('NFD').replace(DIACRITICS, '').toLowerCase()
+}
+
+export function matchesPayee(payee: string, text: string): boolean {
+  return plain(payee).includes(plain(text))
 }
 
 function notFound(item: string, kind: string, id: string): WriteProblem {

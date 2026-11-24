@@ -36,7 +36,7 @@ export function amountTextOf(cents: number): string {
   return `${cents < 0 ? '-' : ''}${Math.floor(magnitude / CENTS_PER_UNIT)}.${decimals}`
 }
 
-function dateOnOrAfter(first: string): fc.Arbitrary<string> {
+export function dateOnOrAfter(first: string): fc.Arbitrary<string> {
   return fc
     .integer({ min: 0, max: MAX_DAYS_AFTER })
     .map((days) =>

@@ -19,3 +19,5 @@ export const PROBLEM_CODES = {
   CurrencyMismatch: 'currency_mismatch',
   BeforeOpening: 'before_opening',
 } as const
+
+export const DIACRITICS = /\p{Diacritic}/gu
