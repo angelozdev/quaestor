@@ -221,8 +221,8 @@ error:
 
 ## Global Constraints
 
-- Dependencies: only `drizzle-kit` 1.0.0-rc.5 enters, already chosen in `docs/stack.md`.
-  Nothing else is added.
+- Dependencies: `drizzle-kit` 1.0.0-rc.5 enters in Task 1 and `fast-check` 4.10.2 in Task 2,
+  both in `docs/stack.md`. Nothing else is added.
 - Layout as in `architecture.md`: `<name>.ts`, `.types.ts`, `.errors.ts`, `.constants.ts`,
   `.schema.ts` and `.test.ts` per module, an `index.ts` barrel per concept, kebab-case file
   names, and no comments (the `local/no-comments` lint, which also rules out ponytail
@@ -256,6 +256,9 @@ error:
   as the skeleton injects the clock. Every rule and example in the spec has a test whose name
   states the rule; every money figure is also tested in USD; fixtures are invented; no test
   reads `~/.quaestor`. Decided by Angelo on 2026-11-24.
+- A rule that must hold for any input also gets a property test with `fast-check`, written
+  as `docs/workflow.md` says. Each one below is marked `property`. Its arbitraries live in
+  `tests/support/arbitraries/`.
 - Migrations: one per task that changes tables, generated with
   `pnpm db:generate --name <name>`, its SQL read before committing, never edited once
   committed.
@@ -392,10 +395,12 @@ Expected: green, with knip seeing `drizzle.config.ts`.
 
 - Create: `src/shell/cli/commands/account-add/{account-add.ts,account-add.schema.ts,account-add.test.ts}`;
   `src/shell/cli/invocation/input/{input.ts,input.schema.ts,input.constants.ts,input.errors.ts}`;
-  `src/core/ledger/{ledger.ts,ledger.errors.ts}`.
-- Modify: `src/shell/db/database/database.ts`, `src/shell/db/accounts/accounts.ts`,
-  `src/shell/cli/main/{main.ts,main.types.ts}`, `context.types.ts`, `bin.ts`, `released.ts`,
-  `tests/support/run-cli/run-cli.ts`, `docs/architecture.md`.
+  `src/core/ledger/{ledger.ts,ledger.errors.ts}`;
+  `tests/support/arbitraries/{arbitraries.ts,arbitraries.types.ts}`.
+- Modify: `package.json` (`fast-check` 4.10.2), `src/shell/db/database/database.ts`,
+  `src/shell/db/accounts/accounts.ts`, `src/shell/cli/main/{main.ts,main.types.ts}`,
+  `context.types.ts`, `bin.ts`, `released.ts`, `tests/support/run-cli/run-cli.ts`,
+  `docs/architecture.md`, `docs/stack.md`.
 
 **Interfaces:**
 
@@ -455,6 +460,9 @@ required. Output: `{ dryRun, account: AccountRow }`.
   - `an opening amount with a thousands separator or more than two decimals is refused`:
     `--opening 15.000` and `--opening 1,500`.
   - `the opening date is required`.
+  - property `any opening amount written as text is read back as the same number (USD)`: a
+    sign, a whole part up to 10^12 and 0 to 2 decimal digits make `--opening <text>`, and
+    `balance` equals `Number(text)`. Its arbitrary, `amountText`, is shared by later tasks.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement** `accountAddCommand`: parse the flags with zod, then
   `inTransaction(store, dryRun, () => insertAccount(...))`. `insertAccount` maps
@@ -605,6 +613,15 @@ until then their schemas take only `[]`.
     the balance by -30.39.
   - `a COP amount copied with its thousands dot is refused`: `"-15.000"` (Review Focus 5).
   - `an amount given as a JSON number is refused`: `-15000`.
+  - property `an account's balance is its opening plus the sum of its movements, for any
+    movements (USD)`: up to 20 non-zero amounts on dates from the opening date on, written in
+    one go; the test adds them up in cents.
+  - property `a write with faulty items writes nothing and lists exactly those items, in
+    order`: valid movements with an unknown category, another currency or a date before the
+    opening at random positions; `errors[].item` are those positions, and `account list` and
+    `movement list` are unchanged.
+  - property `a dry run changes nothing, and its balances after are what the write then
+    shows`.
   - `an impossible date such as 2026-02-30 is refused`.
   - `every item at fault is listed at once, and nothing is written`: an unknown category in
     `movements[0]` and another currency in `movements[2]` give `refused` with two `errors`, in
@@ -657,6 +674,9 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `--from and --to keep the days in between, both included`.
   - `--payee finds Éxito from exito and Uber from UBER` (Review Focus 2).
   - `--payee across all accounts shows how a payee was categorised before`.
+  - property `each listed balance is the next older one of its account plus its own amount,
+    and the newest is the account's balance`: up to 20 movements over two accounts.
+  - property `--from never changes a listed movement's balance` (Review Focus 1).
   - `a --from after --to gives no movements`.
   - `movements are listed newest first, and same-day ones by the reverse of their recorded
     order`.
@@ -697,6 +717,8 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `each half keeps its own date, payee and note`: from on 2026-11-10, to on 2026-11-11.
   - `a transfer has no category`: `category` on a half is `is not a field`.
   - `a transfer between an account and itself is refused`: `same_account_transfer`.
+  - property `a transfer moves each account by its own half and no other account (USD and
+    COP)`.
   - `a refused half writes neither half`.
   - `tags can go on a transfer half`.
   - `an archived account cannot be either half`.
@@ -733,6 +755,8 @@ Flags: `--account <code>`, `--from <date>`, `--to <date>` (inclusive), `--payee 
   - `an unknown movement code is refused and nothing is deleted`: `not_found` in
     `errors[]`.
   - `--dry-run of a delete writes nothing`.
+  - property `deleting any of an account's movements leaves its balance at the opening plus
+    the rest`.
 - [ ] **Step 2: Run them and see them fail.**
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: `pnpm check` green.**
@@ -828,6 +852,10 @@ and `rows` of each file and each account's `balance`.
   - `a file whose sha256 differs from manifest.json stops the import` (exit 2, store
     unchanged).
   - `a row count that differs from manifest.json stops the import` (exit 2).
+  - property `for any export, every imported balance equals the manifest's`: generated
+    accounts, posted movements and balances, each balance drawn apart from its movements so
+    that most accounts need an opening. The builder in `tests/support/legacy-export` takes
+    the rows, so the fixture and the property share it.
   - `an archived account receives no new movement`: after importing the fixture,
     `movement write` into its archived account gives `archived` in `errors[]`.
   - `an archived category receives no new movement`.

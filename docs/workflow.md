@@ -38,6 +38,20 @@ real data.
 - Every rule and example in `docs/features/<name>.md` is covered by at least one
   CLI test, and the test's name says which.
 - Every money figure has a test in a currency other than COP.
+- A rule that must hold for any input also gets a property test with
+  `fast-check`, under these practices (decided by Angelo on 2026-11-24):
+  - it is a CLI test like any other: `fc.assert(fc.asyncProperty(...))` inside a
+    vitest `it` named after the rule, with a fresh store in every run;
+  - its oracle is the rule itself (a sum, a balance the export states, the
+    positions of the faulty items), never a copy of the code under test;
+  - arbitraries are built from fast-check's own and `.map`, with no
+    `Math.random` and no `.filter` that drops most values, so shrinking and
+    replay keep working;
+  - sizes are bounded and `numRuns` is 50, so the suite stays fast;
+  - seeds are not fixed; a failure's shrunk counterexample becomes an example
+    test named after the rule, before the fix;
+  - the spec's examples stay as example tests; properties add the cases no
+    example names.
 - A test is never weakened, skipped or deleted to make it pass. A test that looks
   wrong goes to Angelo.
 

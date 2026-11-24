@@ -11,13 +11,20 @@ categories, tags and movements it needs from the legacy export and rewrites the
 `record-movements` skill over the CLI. Done when Claude records a real movement
 from a bank screenshot: a dry run first, then the write after Angelo says yes.
 
-## 2. `rebuild` becomes `main`
+## 2. Skeleton tests through the command
+
+The skeleton's tests that call internal functions (backup names, store
+backups, the connection, migrations, env resolution) are rewritten through the
+command where one reaches them, as `docs/workflow.md` now asks, and the rest
+go to Angelo one by one.
+
+## 3. `rebuild` becomes `main`
 
 Once recording works, Angelo replaces `main` with `rebuild`, which means a
 force-push on GitHub, and stops the legacy container for good.
 `TRUNK_BRANCH` in `src/shell/release/release/release.constants.ts` becomes `main`.
 
-## 3. Next features
+## 4. Next features
 
 Rethought one at a time once recording works, in an order chosen then. What Angelo
 said he will ask Claude:

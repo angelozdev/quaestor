@@ -34,6 +34,10 @@ All of them are bundled into the release, so they are `devDependencies`.
 ## Development and quality
 
 - `vitest` 5.0.5: tests that run the real command through its entry point.
+- `fast-check` 4.10.2: property tests, through the real command, for rules that
+  must hold for any input. Aletheia does not use it: Angelo added it on
+  2026-11-24. 4.10.2 was the newest release published more than two weeks
+  earlier (2026-09-19).
 - `oxlint` 1.89.0 with `@oxlint/plugins` 1.89.0 and `eslint-plugin-sonarjs` 4.2.2:
   lint, including the boundary rules in `architecture.md`.
 - `oxfmt` 0.74.0: formatting.
