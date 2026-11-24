@@ -50,12 +50,11 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
 
 5. Ask only what you cannot infer, one question per message, with your best guess in it.
 
-6. Dry run: the JSON goes on stdin, every amount is text.
+6. Dry run: the JSON goes on stdin, every amount is text. A plain record names only `movements`.
 
    ```sh
    quaestor movement write --dry-run <<'JSON'
    {
-     "delete": ["h4vw"],
      "movements": [
        {
          "account": "n8d3",
@@ -67,19 +66,28 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
          "tags": ["who:alex"],
          "note": "breakfast"
        }
-     ],
-     "transfers": []
+     ]
    }
    JSON
    ```
 
-   `delete`, `movements`, `transfers`, `tags` and `note` may be left out, but a write names at least one change. The output lists `deleted`, `recorded` and `balances[]` with `account`, `currency`, `before` and `after`.
+   `delete`, `movements`, `transfers`, `tags` and `note` may be left out, but a write names at least one change. Add `delete` only to correct a movement already recorded: it holds the old code, and the corrected record goes in `movements` of the same write.
 
-7. Compare before asking for the yes. For every touched account, set `balances[].after` beside the bank's balance, to the cent.
+   ```json
+   {
+     "delete": ["h4vw"],
+     "movements": [
+       { "account": "n8d3", "date": "2026-11-20", "payee": "Sunrise Bakery", "amount": "-12000", "currency": "COP", "category": "r3sb" }
+     ]
+   }
+   ```
+
+   The output lists `deleted`, `recorded` and `balances[]` with `account`, `currency`, `before` and `after`.
+
+7. Compare before asking for the yes. For every touched account, set `balances[].after` beside the bank's balance, to the cent. `after` counts every movement the account has, whatever its date: if some are newer than the bank's balance, take them out of `after` first (`quaestor movement list --account n8d3 --from <next day>`).
    - Equal: show Angelo each movement (date, payee, amount, category, tags), each deletion, and each account's balance before and after next to the bank's, and ask for the yes.
-   - Different: look for the cause in this write first: a row missed or dropped wrongly, a wrong sign, a thousands dot read as a decimal, a pending row, a fee or interest the screenshot does not show. Fix it and dry run again. A cause that is a real movement is recorded with its category (bank interest, a refund, a fee) in the same write.
-   - Still different: compare `before` with the bank's balance before these rows. If it is off by the same amount, the gap predates this write. Show Angelo the dry run with the difference stated in one line, and let him decide whether to write; investigate it with him after. Never add a balancing row.
-   - `after` counts every movement the account has, whatever its date. If some are newer than the bank's balance, take them out of `after` first (`quaestor movement list --account n8d3 --from <next day>`).
+   - Different: do not ask for the yes. Recheck your transcription first: a row missed or dropped wrongly, a wrong sign, a thousands dot read as a decimal, a pending row. Fix it and dry run again.
+   - Still different: the cause is unknown, so there is no yes yet. Do not conclude that the gap predates this write: only a balance the bank itself showed for an earlier point, such as a running-balance column or an earlier statement, can show that, and the bank's balance minus these rows is not one. Investigate with Angelo what is missing, one question per message: a fee, interest, a refund, a movement no screenshot shows. Once found, record it as a real movement with its category (bank interest, a refund, a fee) in the same write, and dry run again. Never add a balancing row and never write with a known difference.
 
 8. After the yes, run the same `quaestor movement write` without `--dry-run`, with the same JSON.
 
