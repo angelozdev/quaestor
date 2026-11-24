@@ -77,12 +77,16 @@ export function isPrimaryKeyViolation(error: unknown): boolean {
   return constraintCode(error) === SQLITE_CONSTRAINT_PRIMARYKEY
 }
 
-export function withFreshCode<T>(randomIndex: RandomIndex, insert: (code: string) => T): T {
+export function withFreshCode<T>(
+  randomIndex: RandomIndex,
+  insert: (code: string) => T,
+  isTaken: (error: unknown) => boolean = isPrimaryKeyViolation,
+): T {
   for (;;) {
     try {
       return insert(drawCode(randomIndex))
     } catch (error) {
-      if (!isPrimaryKeyViolation(error)) throw error
+      if (!isTaken(error)) throw error
     }
   }
 }

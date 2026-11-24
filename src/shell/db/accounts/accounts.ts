@@ -1,4 +1,4 @@
-import { isNull } from 'drizzle-orm'
+import { isNull, sql } from 'drizzle-orm'
 import {
   AlreadyExistsError,
   amountOf,
@@ -8,6 +8,7 @@ import {
 } from '#core/ledger'
 import { database, isUniqueViolation, withFreshCode } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
+import { movements } from '../movements/movements.schema.ts'
 import { accounts } from './accounts.schema.ts'
 
 const STORED_FIELDS = {
@@ -21,19 +22,24 @@ const STORED_FIELDS = {
   openingDate: accounts.openingDate,
 }
 
-function rowOf(stored: Omit<AccountRow, 'balance'>): AccountRow {
-  const amount = amountOf(stored.openingAmount)
-  return { ...stored, openingAmount: amount, balance: amount }
+const MOVEMENT_TOTAL = sql<number>`coalesce((select sum(${movements.amount}) from ${movements} where ${movements.accountId} = ${accounts.id} and ${movements.deletedAt} is null), 0)`
+
+function rowOf(stored: Omit<AccountRow, 'balance'>, movementTotal: number): AccountRow {
+  return {
+    ...stored,
+    openingAmount: amountOf(stored.openingAmount),
+    balance: amountOf(stored.openingAmount + movementTotal),
+  }
 }
 
 export function listAccounts(store: Store): AccountRow[] {
   return database(store)
-    .select(STORED_FIELDS)
+    .select({ ...STORED_FIELDS, movementTotal: MOVEMENT_TOTAL })
     .from(accounts)
     .where(isNull(accounts.deletedAt))
     .orderBy(accounts.name)
     .all()
-    .map(rowOf)
+    .map(({ movementTotal, ...stored }) => rowOf(stored, movementTotal))
 }
 
 export function insertAccount(
@@ -50,6 +56,7 @@ export function insertAccount(
           .values({ ...draft, id, createdAt: instant, updatedAt: instant })
           .returning(STORED_FIELDS)
           .get(),
+        0,
       ),
     )
   } catch (error) {
