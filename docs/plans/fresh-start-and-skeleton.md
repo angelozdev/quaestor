@@ -52,6 +52,84 @@ Both items are named exceptions (shared setup): item 1 has no code and no tests;
 4. A data folder whose path holds a space → `backup` works and prints the path → Task 9.
 5. The release's first run, with no `~/.quaestor/` yet → the folder and the store are created, `env: prod` → Task 9.
 
+## What Claude reads
+
+Claude Code is the only client. These are the targets the tasks' tests pin; the TOON below was rendered with `@toon-format/toon` 4.4.0's `encode`, never typed by hand. Item 1 has no client output: its scripts are Angelo's.
+
+- `quaestor --version`: stdout `0.0.0 (<commit>)` (`dev` from the sources), stderr empty, exit 0.
+- `quaestor --help`, and a bare `quaestor`: commander's usage on stdout, stderr empty, exit 0, no store opened:
+
+  ```
+  Usage: quaestor [options] [command]
+
+  Options:
+    -V, --version   output the version number
+    --env <name>    use <name>.sqlite in the data folder
+    --json          JSON instead of TOON on stdout
+    -h, --help      display help for command
+
+  Commands:
+    backup          copy the current env's store to its backups folder
+  ```
+
+- `quaestor backup`: stderr `env: prod`, exit 0, stdout:
+
+  ```
+  path: /Users/angelozdev/.quaestor/backups/prod-2026-11-24T15-04-05-123Z.sqlite
+  removed[1]: /Users/angelozdev/.quaestor/backups/prod-2026-11-18T10-00-00-000Z.sqlite
+  ```
+
+  With nothing removed the second line is `removed: []`. With `--json`: `{"path":"…","removed":["…"]}`.
+- A `prod` command with pending migrations writes, on stderr before its result:
+
+  ```
+  env: prod
+  backup: /Users/angelozdev/.quaestor/backups/prod-2026-11-24T15-04-05-123Z.sqlite (before migrating)
+  migrated: 20261201000000_accounts
+  ```
+
+- A refused call: stdout empty, exit 1, Claude fixes the call and retries. `quaestor --nope`:
+
+  ```
+  error:
+    code: unknown_option
+    message: unknown option '--nope'
+  ```
+
+  `quaestor backup --env Prod`:
+
+  ```
+  error:
+    code: invalid_env
+    source: "--env"
+    value: Prod
+    message: "invalid --env \"Prod\": use lowercase letters, digits and dashes"
+  ```
+
+- A failed environment: stdout empty, exit 2, Claude stops and tells Angelo. A backups folder without write permission:
+
+  ```
+  env: prod
+  error:
+    code: backup_not_written
+    folder: /Users/angelozdev/.quaestor/backups
+    reason: "EACCES: permission denied"
+    message: "cannot write backup to /Users/angelozdev/.quaestor/backups: EACCES: permission denied"
+  ```
+
+  A store written by a newer release:
+
+  ```
+  env: prod
+  error:
+    code: unknown_migrations
+    names[1]: 20261201000000_accounts
+    message: "the store has migrations this code does not know: 20261201000000_accounts"
+  ```
+
+  `migration_failed` and `unexpected` (for example `message: file is not a database`) take the same shape.
+- With `--json` anywhere in argv, every error is one line: `{"error":{"code":"unknown_option","message":"unknown option '--nope'"}}`.
+
 ---
 
 ## Item 1: The fresh start
