@@ -41,8 +41,10 @@ These are hard to change once real data sits on them.
 - **Storage.** There are four lists: accounts, categories, tags and movements, plus which tags
   each movement carries. A transfer is two movements that share a link. A balance is never
   stored: it is the opening balance plus the sum of the account's movements. Movements on the
-  same day keep the order they were stored in, through SQLite's internal `rowid`, which Claude
-  never sees.
+  same day keep the order they were stored in, through a hidden `seq INTEGER PRIMARY KEY`
+  that Claude never sees: they are ordered by `(date, seq)`. Every list carries `created_at`,
+  `updated_at` and `deleted_at`, and deleting marks `deleted_at` instead of removing the row.
+  Decided by Angelo on 2026-11-24.
 - **Amounts are whole numbers in the currency's smallest unit**, in both input and output:
   COP 45,000.50 is `4500050`, USD 10.85 is `1085`. Every movement given to `quaestor` states
   its currency, and `quaestor` refuses one that differs from its account's.
@@ -223,7 +225,11 @@ error:
   real calendar day (`z.iso.date()`).
 - A code is `ID_LENGTH = 4` characters from `ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'`,
   drawn with the injected `randomIndex` and drawn again while the insert hits a taken one.
-  Rows of a day are ordered by `rowid`, never by code.
+  Movements are ordered by `(date, seq)`, never by code.
+- `accounts`, `categories`, `tags` and `movements` carry `created_at` and `updated_at` (not
+  null) and `deleted_at` (null until deleted): UTC ISO instants with milliseconds from
+  `context.clock`, such as `2026-11-24T21:04:05.123Z`. Every read filters `deleted_at IS NULL`,
+  and every unique index is partial on `deleted_at IS NULL`.
 - Every write takes `--dry-run`. A dry run is the same transaction rolled back, and every
   write's stdout starts with `dryRun: <true|false>`.
 - Each failure is a class extending `RefusedError` (exit 1) or `FailedError` (exit 2), and its
@@ -297,7 +303,7 @@ command groups and the test helper.
   `type AccountType`; `type Account = { id: string; emoji: string | null; name: string; type: AccountType; currency:
   string; archived: boolean; openingAmount: number; openingDate: string | null }`;
   `type AccountRow = Account & { balance: number }`;
-  `listAccounts(store: Store): AccountRow[]`, in the order they were stored (`rowid`).
+  `listAccounts(store: Store): AccountRow[]`, by name.
 - Produces in `main.types.ts`: `CliCommand` gains `group?: CommandGroup`,
   `argument?: { name: string; description: string }` and
   `options?: { flags: string; description: string; defaultValue?: string }[]`, and
@@ -309,11 +315,11 @@ command groups and the test helper.
   Promise<CliRun> }`, which runs `runCli` with `dataDir` set to a `tempDir`, `defaultEnv`
   `'test'` and `migrationsDir: SHIPPED_MIGRATIONS`.
 
-Table `accounts`: `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`); `emoji` text; `name` text not null unique and
-not blank; `type` text not null in `ACCOUNT_TYPES`; `currency` text not null, three uppercase
+Table `accounts`: `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`); `emoji` text; `name` text not null and not
+blank, unique among rows not deleted; `type` text not null in `ACCOUNT_TYPES`; `currency` text not null, three uppercase
 letters; `archived` integer boolean not null default false; `opening_amount` integer not null
-default 0; `opening_date` text, null or a valid date; check `opening_amount = 0 OR
-opening_date IS NOT NULL`.
+default 0; `opening_date` text, null or a valid date; check `opening_amount = 0 OR opening_date IS NOT NULL`; `created_at`, `updated_at` text not
+null; `deleted_at` text.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -383,7 +389,9 @@ Expected: green, with knip seeing `drizzle.config.ts`.
   sequence by default in `runCli`, overridable per test.
 - Produces: `type AccountDraft = { emoji: string; name: string; type: AccountType; currency:
   string; openingAmount: number; openingDate: string }`;
-  `insertAccount(store, draft, randomIndex): AccountRow`.
+  `type WriteDeps = { randomIndex: RandomIndex; now: Date }`;
+  `insertAccount(store, draft, deps: WriteDeps): AccountRow`, which sets `created_at` and
+  `updated_at` to `now`.
   It throws `AlreadyExistsError('account', name)`, code `already_exists`, data
   `{ kind, name }`, message `account <name> already exists`.
 - Produces: `isCurrency(code: string): boolean`.
@@ -449,13 +457,14 @@ required. Output: `{ dryRun, account: AccountRow }`.
 **Interfaces:**
 
 - Produces: `type Category = { id: string; emoji: string | null; name: string; archived:
-  boolean }`; `insertCategory(store, { emoji, name }, randomIndex): Category`;
-  `listCategories(store): Category[]` in stored order;
-  `insertTag(store, name): string`; `listTags(store): string[]` sorted.
+  boolean }`; `insertCategory(store, { emoji, name }, deps: WriteDeps): Category`;
+  `listCategories(store): Category[]` by name;
+  `insertTag(store, name, now: Date): string`; `listTags(store): string[]` sorted.
 
 Tables: `categories` has `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`), `emoji` text, `name` text not
 null and not blank, `archived` integer boolean not null default false, and a unique index on `name`
-`WHERE archived = 0`. `tags` has `name` text primary key matching `TAG_PATTERN`.
+`WHERE archived = 0 AND deleted_at IS NULL`. `tags` has `name` text primary key matching
+`TAG_PATTERN`. Both carry `created_at`, `updated_at` and `deleted_at`.
 
 - [ ] **Step 1: Write the failing tests**
   - `category add creates a category and category list shows it with its code`:
@@ -524,14 +533,16 @@ null and not blank, `archived` integer boolean not null default false, and a uni
   half's code. `type BalanceChange = { account: string; currency: string; before: number;
   after: number }`. `type WriteResult = { deleted: MovementRow[]; recorded: MovementRow[];
   balances: BalanceChange[] }`.
-- Produces: `writeMovements(store: Store, request: WriteRequest, randomIndex: RandomIndex):
+- Produces: `writeMovements(store: Store, request: WriteRequest, deps: WriteDeps):
   WriteResult`. It loads the
   catalog and calls `checkWrite`, then reads the touched accounts' balances, writes in order
   (deletes, movements, transfers), reads the balances again, and returns the result with
   `balances` sorted by account.
 
 Tables: `movements` has these columns:
-- `id` text primary key, a code (four characters from `ID_ALPHABET`, checked in SQL with `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`);
+- `seq` integer primary key, the hidden order;
+- `id` text not null unique, a code (four characters from `ID_ALPHABET`, checked in SQL with
+  `length(id) = 4 AND id NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'`);
 - `account_id` text not null, referencing accounts;
 - `date` text not null, with `date(date) IS date`;
 - `payee` text not null and not blank;
@@ -539,8 +550,9 @@ Tables: `movements` has these columns:
 - `category_id` text, referencing categories;
 - `transfer` text;
 - `note` text;
+- `created_at`, `updated_at` text not null; `deleted_at` text;
 - check `(category_id IS NULL) = (transfer IS NOT NULL)`;
-- index on `(account_id, date)`.
+- index on `(account_id, date, seq)`.
 
 `movement_tags` has `movement_id` (referencing movements) and `tag` (referencing tags), with
 primary key `(movement_id, tag)`. The `transfer` column arrives now and is first written in Task 6.
@@ -601,8 +613,8 @@ until then their schemas take only `[]`.
   compares the two strings after NFD normalisation, removing `\p{Diacritic}` and lowercasing.
   Its unit test: `matchesPayee finds Éxito from exito and Uber from UBER`.
 - Produces: `type MovementFilter = { account?: number; from?: string; to?: string; payee?:
-  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, ordered by date and then `rowid`. `balance` is the row's account's opening amount plus the running sum
-  partitioned by account in `(date, rowid)` order. It is computed over every movement in SQL
+  string }`; `listMovements(store, filter): (MovementRow & { balance: number })[]`, ordered by `(date, seq)`, without deleted rows. `balance` is the row's account's opening amount plus the running sum
+  partitioned by account in `(date, seq)` order. It is computed over every movement in SQL
   before `from` and `to` filter the rows, and the payee filter runs afterwards in the shell
   with `matchesPayee`.
 
@@ -672,10 +684,14 @@ Output: `{ movements }`.
 - `checkWrite` checks the deletes first: an id missing from `catalog.movements` is
   `NotFoundError('movement', id, 'delete[i]')`.
 - `delete` is an array of codes. They are deduplicated, and each is expanded to both
-  halves of its transfer. Tags are deleted before the movements, and `deleted` lists each movement once, in stored order.
+  halves of its transfer. A delete sets `deleted_at` and `updated_at` to `now` on
+  both halves; rows and their tags stay stored. `deleted` lists each movement once, by
+  `(date, seq)`.
 
 - [ ] **Step 1: Write the failing tests**
-  - `a deleted movement leaves its account and its balance returns (USD)`.
+    - `a deleted movement leaves every list and its balance returns (USD)`.
+  - `a deleted movement stays stored with its deleted_at`: checked with `selectAll`.
+  - `a movement already deleted is not_found`.
   - `deleting one half of a transfer deletes both`.
   - `naming a movement twice, or both halves, deletes each once` (Review Focus 3).
   - `a correction is a delete and a new record in one write`: the balances show both changes,
@@ -733,8 +749,11 @@ Output: `{ movements }`.
   `expected` keyed by the new account codes.
   - It refuses a store with any account: `AlreadyImportedError`, `already_imported` (exit 1),
     message `the legacy export is imported only into an empty store`.
-    - It inserts in legacy id order, so `rowid` keeps the legacy order within a day, and writes
+  - It inserts in legacy id order, so `seq` keeps the legacy order within a day, and writes
     directly rather than through `checkWrite`, since archived accounts hold history.
+  - Movements keep their legacy `created_at`, which the legacy code wrote as UTC
+    (`datetime.now(UTC)`), stored as an ISO instant with milliseconds. Accounts, categories
+    and tags get the import's `now`, and `updated_at` equals `created_at`.
   - Afterwards it checks every balance against `expected`: `BalanceMismatchError`,
     `balance_mismatch` (exit 2), data `{ account, expected, actual }`.
   - `type ImportCounts = { accounts; categories; tags; movements; tagLinks }`.

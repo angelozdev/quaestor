@@ -123,6 +123,9 @@ by Angelo on 2026-11-24:
   can go into 📦 Food Delivery, leaving delivery at 30.00 for the month. Decided by
   Angelo on 2026-11-24, as YNAB, Actual Budget and Rocket Money recommend.
 - One bank charge is one movement with one category (Claude's call).
+- Accounts, categories, tags and movements record when they were created, last updated and
+  deleted, as UTC instants. A deleted movement is marked, not removed: it leaves every list
+  and balance but stays stored. Decided by Angelo on 2026-11-24.
 - A correction is a delete and a new record in the same write: the movement gets a new
   code, and nothing refers to the old one. Decided by Angelo on 2026-11-24.
 
@@ -192,7 +195,7 @@ Writes, each with `--dry-run`:
   - every tag link, all on posted movements.
 - Signs: an expense becomes money out and an income money in, a transfer's `out` half
   becomes money out and its `in_` half money in. A negative expense, which the legacy app used for money coming back, therefore becomes money in, as it was.
-- What stays in the export: the skipped and planned rows, the links to metas and to repeating rules, `source` and `created_at`.
+- What stays in the export: the skipped and planned rows, the links to metas and to repeating rules, and `source`. Movements keep their legacy `created_at`.
 - The six opening balances above are added. After the import every account's balance
   equals its `manifest.json` balance to the cent; if any differs, nothing is written.
 - Claude runs it on a copy of the real data first, then on `prod`.
