@@ -20,9 +20,14 @@ go to Angelo one by one.
 
 ## 3. `rebuild` becomes `main`
 
-Once recording works, Angelo replaces `main` with `rebuild`, which means a
-force-push on GitHub, and stops the legacy container for good.
-`TRUNK_BRANCH` in `src/shell/release/release/release.constants.ts` becomes `main`.
+GitHub's `main` already holds `rebuild` since 2026-11-24: a force-push of its
+history, scrubbed of every real figure and name, with the legacy branch
+`monthly-report` and the tag `legacy-final` removed from GitHub (both kept
+locally). What remains, once recording works: the local branches swap names
+(`rebuild` becomes `main`, the legacy `main` is kept under another name),
+`TRUNK_BRANCH` in `src/shell/release/release/release.constants.ts` becomes
+`main`, the legacy container stops for good, and Angelo asks GitHub Support to
+purge the old commits still reachable by SHA.
 
 ## 4. Next features
 
