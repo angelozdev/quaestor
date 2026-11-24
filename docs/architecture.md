@@ -24,6 +24,10 @@ pace") is Claude's job, never a hard-coded rule.
   holds pure logic, `src/shell/<adapter>/<concept>/` holds I/O (`db`, `cli`,
   `release`). Each folder exposes an `index.ts` barrel, reached through the
   `#core/*` and `#shell/*` subpath imports.
+- Inside a concept folder, one folder per module: `<name>.ts` (logic only),
+  `<name>.test.ts`, and as needed `<name>.types.ts` (every type),
+  `<name>.errors.ts` (every error class), `<name>.constants.ts` (every literal
+  whose meaning is a convention) and `<name>.schema.ts` (zod and Drizzle schemas).
 - The core performs no I/O: no filesystem, SQL, network or direct clock. Time and
   persistence enter as injected ports. Lint forbids `node:*` under `src/core/`.
 - Only `src/shell/db` imports `node:sqlite` and `drizzle-orm`. Only the utilities
