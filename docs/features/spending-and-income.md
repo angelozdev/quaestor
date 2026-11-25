@@ -1,7 +1,7 @@
 # Spending and income
 
-Status: product approved by Angelo on 2026-11-25; technical part written on 2026-11-25,
-awaiting his approval.
+Status: product and technical part approved by Angelo on 2026-11-25; the plan is in
+`docs/plans/spending-and-income.md`.
 
 ## Why
 
@@ -200,9 +200,9 @@ In this order; none of it is code (Claude's call):
   differ from the COP shown by less than one centavo per movement.
 - Half a centavo rounds away from zero, through the one rounding function, so a -10.85 USD
   purchase and its +10.85 USD refund convert to exact opposites (Claude's call).
-- The conversion is exact for every amount `quaestor` accepts. A two-decimal rate keeps
-  30,000.00 USD (3,000,000 cents) times 391245 at 1.2 × 10^12, far below 2^53; larger
-  amounts must stay exact too (the builder's call how).
+- A figure is exact or the call fails. A two-decimal rate keeps 30,000.00 USD (3,000,000
+  cents) times 391245 at 1.2 × 10^12, far below 2^53; a conversion or total beyond 2^53
+  cents exits 2 as `unexpected`, never a figure off by a cent (Claude's call).
 - The local currency is COP, fixed in code (Claude's call).
 
 ## Commands
@@ -289,13 +289,13 @@ totals[4]{line,total,USD}:
   spending,2130000,20
   left,9885000.5,2980
   outside,-4000000,-1000
-groups[5]{code,kind,emoji,name,total,USD}:
+groups[5]{id,kind,emoji,name,total,USD}:
   k2m9,income,💰,Income,12015000.5,3000
   p4w8,spending,🚗,Auto & Transport,1200000,0
   h7d3,spending,🍽️,Food & Dining,850000,0
   r6t1,spending,💻,Software & AI,80000,20
   x3n5,outside,🔄,Transfers & Investments,-4000000,-1000
-categories[7]{code,group,emoji,name,total,USD}:
+categories[7]{id,group,emoji,name,total,USD}:
   c3d4,k2m9,💰,Interest,15000.5,0
   a1b2,k2m9,💼,Salary,12000000,3000
   j9k0,p4w8,🚘,Car Payment,1200000,0
@@ -305,12 +305,12 @@ categories[7]{code,group,emoji,name,total,USD}:
   q3r4,x3n5,📈,Investment,-4000000,-1000
 ```
 
-The rows above were reordered on 2026-11-25 to follow the order below; the figures are the
-ones Angelo approved.
+The rows above were reordered on 2026-11-25 to follow the order below, and `code` became
+`id` as every list names it; the figures are the ones Angelo approved.
 
 - `total` is in COP. Each foreign currency in the counted movements adds a column named by
   its code, with the part that was in that currency, in that currency; a period all in COP
-  has no such column and `rates[0]`.
+  has no such column and `rates: []`.
 - Spending is positive and a refund lowers it. Income is positive. What is outside the totals
   keeps the movement's sign: the investment fell 1,000.00 USD.
 - `totals` always has its four lines: income, spending, left (income less spending, in every
