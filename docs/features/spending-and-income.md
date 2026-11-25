@@ -28,10 +28,10 @@ How much is available this month, whether something is affordable, budgets, a ca
 and payment dates, a rate per day or one fetched from outside (such as the official TRM),
 loading years before the first recorded movement, what an investment holds (VTI, VXUS,
 crypto: in the backlog), a category in more than one group, and splitting one movement
-across categories. Also left out (Claude's call): creating, renaming or deleting a group,
-moving a category to another group, unarchiving a category, listing the rates on their own
-(the report and `rate set --dry-run` show them), a history of past rates, and a local
-currency other than COP.
+across categories. Also left out (Claude's call): changing a group's kind, which would
+change every past answer, unarchiving a category, listing the rates on their own (the
+report and `rate set --dry-run` show them), a history of past rates, and a local currency
+other than COP.
 
 ## What must never happen
 
@@ -175,7 +175,9 @@ In this order; none of it is code (Claude's call):
 ## The store
 
 - A group has a code, an emoji, an English name and a kind: `spending`, `income` or
-  `outside`. Its code is drawn from the same alphabet as every other code.
+  `outside`. Its code is drawn from the same alphabet as every other code. Like every other
+  row, it records when it was created, last updated and deleted; a deleted group is marked,
+  not removed, and its name can be taken again.
 - Every category points to exactly one group, in the store itself: a category without a
   group cannot be written.
 - The upgrade that brings groups creates the 14 groups above, in every store, new ones and
@@ -211,6 +213,18 @@ Codes and dry runs work as in `recording-movements.md`. The output and error cod
 New:
 
 - `quaestor group list`: every group with its code, kind, emoji and name.
+- `quaestor group add <name> --emoji <emoji> --kind <kind>`: creates a group, with
+  `--dry-run`. A name already taken is `already_exists`.
+- `quaestor group edit <code>` with `--name` and `--emoji`, at least one: renames a group or
+  changes its emoji, with `--dry-run`.
+- `quaestor group delete <code>`: deletes an empty group, with `--dry-run`. A group that still
+  holds a category, archived ones included, is refused as `group_not_empty` with its
+  `categories`, because no category may be left without a group: to delete 🎁 Gifts, Gifts
+  moves to another group first.
+- `quaestor category edit <code> --group <code>`: moves a category to another group, with
+  `--dry-run`. Its movements count in the new group in every answer, past periods included.
+- Creating, renaming and deleting groups and moving a category were added by Angelo on
+  2026-11-25. A group's emoji is a field of its own, as a category's is.
 - `quaestor category archive <code>`: archives a category, with `--dry-run`. Archiving one
   that still holds movements is allowed: they keep counting in its group, and the category
   takes no new ones (Claude's call).
@@ -331,8 +345,8 @@ ones Angelo approved.
     message: "tag trip:lima-2062 does not exist"
   ```
 
-  `not_found` also answers `category add` with a group that does not exist and
-  `category archive` with a category that does not exist.
+  `not_found` also answers a group or category code that does not exist in `category add`,
+  `category edit`, `category archive`, `group edit` and `group delete`.
 
 ## The skill
 
