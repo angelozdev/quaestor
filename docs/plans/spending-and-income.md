@@ -168,8 +168,18 @@ all four first.
 
 - [ ] **Step 1: Write the failing tests** (they set up categories through today's
   `category add`):
-  - `'category archive marks a category archived and category list shows it'`:
-    `expectWrite(run, false, { category: { ...GAMES, archived: true } })`.
+  - `'category archive marks a category archived and category list shows it'`: the stdout
+    is exactly the following, where `<games>` is the code `category add` printed (Task 4
+    adds `group` after `id`):
+
+    ```
+    dryRun: false
+    category:
+      id: <games>
+      emoji: 🎮
+      name: Games
+      archived: true
+    ```
   - `'an archived category takes no new movement'`: after the archive, `movement write`
     naming it is refused with `archived` (as `movement-write.test.ts` asserts).
   - `'archiving frees the name: a new active category may take it'`: archive Games, then
@@ -212,10 +222,29 @@ Task 4, which would break it.
   in "Not part of a session"); `docs/architecture.md`;
   `docs/features/recording-movements.md`
 
-- [ ] **Step 1: Re-set up the one surviving test that used `import`.** In
-  `category-list.test.ts`, `'categories with the same name are listed by code'` sets up
-  through commands: add Gifts, `category archive` it, add Gifts again, with
-  `descendingCodes()`. Its assertions stay as they are. Run it. Expected: PASS.
+What happens to each test that uses `import`, labelled on 2026-11-25. Every test in
+`import.test.ts` covers what `import` does, so it goes with the command, except these five
+rules of `movement write`. They outlive `import`, but only `import` could set them up,
+because no command archives an account or leaves it without an opening date. `prod` holds
+such accounts. Also, `released.test.ts` does not use `import`.
+
+| Test | Becomes |
+| --- | --- |
+| an archived account receives no new movement | core test of `checkWrite` through `#core/ledger` |
+| an archived account cannot be either half | core test of `checkWrite` |
+| an archived category receives no new movement (archived account, archived category and an unknown tag, in that order) | core test of `checkWrite`, same order |
+| an account without an opening date accepts a movement on any date | core test of `checkWrite` |
+| an archived account is refused as archived only, even before its opening date | core test of `checkWrite` |
+| categories with the same name are listed by code (`category-list.test.ts`) | CLI test set up with `category add`, `category archive` and `category add` |
+
+- [ ] **Step 1: Move the surviving rules.**
+  - Write `src/core/ledger/ledger.test.ts` with the five tests above, under the same names.
+    Each builds a `Catalog` by hand and asserts the `WriteProblem[]` that `checkWrite`
+    returns. The assertions are those of the old tests: the same codes, items and messages.
+  - Re-set up `'categories with the same name are listed by code'` through commands: add
+    Gifts, `category archive` it, then add Gifts again with `descendingCodes()`. Its
+    assertions stay as they are.
+  - Run both. Expected: PASS.
 - [ ] **Step 2: Write the failing test** in `main.test.ts`:
   `'import is no longer a command'`: `['import', '/tmp']` exits 1 with stdout `''` and
   stderr:
@@ -265,9 +294,13 @@ Task 4, which would break it.
     group;
   - `groupId(cli: LedgerCli, name: string): Promise<string>`, which reads `group list`;
   - `addCategory(cli, name = 'Food', group = 'Food & Dining')`;
-  - `upgradeMigrations(seedFile: string, underTest: string): string`, a migrations
-    folder holding the shipped migrations before `underTest`, then the seed as a migration
-    named to sort right before it, then `underTest`.
+  - `upgradeCli(seedFile: string, underTest: string): { before(argv: string[]): Promise<CliRun>; after(argv: string[]): Promise<CliRun> }`.
+    Both calls use one temporary data folder. `before` runs with a migrations folder that
+    holds the shipped migrations before `underTest`, plus the seed as a migration named to
+    sort after them and before `underTest`. `after` runs with that same folder plus
+    `underTest`. A test
+    calls `before` first, so the seed is committed before the upgrade runs. Neither call
+    warms up the store.
 
 The migration. Run `pnpm db:generate --name category_groups` after adding
 `group: text('group_id').notNull().references(() => groups.id)`. Then replace drizzle-kit's
@@ -311,17 +344,23 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
   - `category-groups.sql`: one COP account, one category per name in the table (48 rows)
     plus an archived `Auto Insurance`, and two movements on two of those categories.
   - `unknown-category.sql`: the same, plus a category named `Mystery`.
-- [ ] **Step 2: Write the failing tests** in `category-groups.test.ts`, each with
-  `ledgerCli({ migrationsDir: upgradeMigrations(seed, '<ts>_category_groups') })`:
+- [ ] **Step 2: Write the failing tests** in `category-groups.test.ts`. Each starts with
+  `const cli = upgradeCli(seed, '<ts>_category_groups')` and runs
+  `await cli.before(['movement', 'list'])` first, which commits the seed under the old
+  schema. `movement list` reads no category column.
   - `'the upgrade puts every existing category in its approved group, archived ones by their
-    name'`: `category list` exits 0, and each seeded code has the group the table gives it.
-  - `'the upgrade keeps every movement on its category'`: `movement list` shows the seeded
-    movements with their category codes.
-  - `'a category the list does not name stops the upgrade and leaves the store as it was'`:
-    with `unknown-category.sql`, `category list` exits 2 with stdout `''`. Its stderr is
-    `env: test\n` followed by the `migration_failed` error, naming the migration and the
-    reason `NOT NULL constraint failed: categories.group_id`. A second call fails the same
-    way. This test calls `runCli` directly, because `ledgerCli`'s warm-up would throw.
+    name'`: `cli.after(['category', 'list'])` exits 0, and each seeded code has the group
+    the table gives it.
+  - `'the upgrade keeps every movement on its category'`: `cli.after(['movement', 'list'])`
+    prints the same stdout as `before` did.
+  - `'a category the list does not name stops the upgrade and leaves the store as it was'`,
+    with `unknown-category.sql`:
+    - `cli.after(['category', 'list'])` exits 2 with stdout `''`;
+    - its stderr is `env: test\n` followed by the `migration_failed` error, naming the
+      migration and the reason `NOT NULL constraint failed: categories.group_id`;
+    - `cli.before(['movement', 'list'])` then prints the same stdout as before the
+      attempt;
+    - a second `after` call fails the same way.
 - [ ] **Step 3: Write the failing tests** in `category-add.test.ts` (the existing ones gain
   `--group`, and `GAMES` gains `group`):
   - `'a category is created with its group, and category list shows it'`: the stdout of
@@ -589,11 +628,33 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
   `src/shell/cli/commands/report/report.ts`, `report.schema.ts`, `report.test.ts`
 
 - [ ] **Step 1: Write the failing tests:**
-  - `'--by-month gives every month its four totals, a month with no movement at 0'`: with
-    Salary of 3,000 USD in September and none in October, at `rate set USD 4000`,
-    `report --from 2026-09-01 --to 2026-10-31 --by-month` prints `totals[8]{month,line,total,USD}:`.
-    Its first rows are `  2026-09,income,12000000,3000`, and October has
-    `  2026-10,income,0,0`.
+  - `'--by-month gives every month its four totals, a month with no movement at 0'`: with a
+    3,000 USD Salary in September, a -250,000 COP Restaurants in October and
+    `rate set USD 4000`, `report --from 2026-09-01 --to 2026-10-31 --by-month` prints
+    exactly:
+
+    ```
+    from: 2026-09-01
+    to: 2026-10-31
+    currency: COP
+    rates[1]{currency,rate}:
+      USD,4000
+    totals[8]{month,line,total,USD}:
+      2026-09,income,12000000,3000
+      2026-09,spending,0,0
+      2026-09,left,12000000,3000
+      2026-09,outside,0,0
+      2026-10,income,0,0
+      2026-10,spending,250000,0
+      2026-10,left,-250000,0
+      2026-10,outside,0,0
+    groups[2]{month,id,kind,emoji,name,total,USD}:
+      2026-09,m0z7,income,💰,Income,12000000,3000
+      2026-10,1aae,spending,🍽️,Food & Dining,250000,0
+    categories[2]{month,id,group,emoji,name,total,USD}:
+      2026-09,<salary>,m0z7,💼,Salary,12000000,3000
+      2026-10,<restaurants>,1aae,🍽️,Restaurants,250000,0
+    ```
   - `'months are cut to the period'`: from `2026-09-15` to `2026-10-10`, only `2026-09` and
     `2026-10`, and a movement on 2026-09-14 does not count.
   - `'groups and categories carry their month, only where they have movements'`.
@@ -724,7 +785,17 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
 
 - [ ] **Step 1: Write the failing tests:**
   - `'category edit moves a category to another group'`: `category edit <gifts> --group
-    ex09` gives the category with `group: ex09`.
+    ex09` prints exactly:
+
+    ```
+    dryRun: false
+    category:
+      id: <gifts>
+      group: ex09
+      emoji: 🎁
+      name: Gifts
+      archived: false
+    ```
   - `'its movements count in the new group, past periods included'`: a report of last month
     shows Gifts under `ex09`.
   - `'an unknown category or group is not_found'`.
@@ -750,7 +821,18 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
     categories include archived ones.
 
 - [ ] **Step 1: Write the failing tests:**
-  - `'group delete deletes an empty group and group list no longer shows it'`.
+  - `'group delete deletes an empty group and group list no longer shows it'`: on Children
+    (Task 11), `group delete k4tr` prints exactly the following, and `group list` is back
+    to the 14:
+
+    ```
+    dryRun: false
+    group:
+      id: k4tr
+      kind: spending
+      emoji: 🧸
+      name: Children
+    ```
   - `'a group with a category is refused as group_not_empty'`: on `zyt4` holding Gifts,
     exit 1, stdout `''`, stderr:
 
@@ -812,22 +894,27 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
 
 ## Getting the real data ready (non-code steps, in order)
 
-1. **Now, with the installed release:** create Car Payment and move the misfiled rows (car
-   loan payments, every Refund row, the Services rows that belong elsewhere). Each write is
-   a dry run Angelo approves, under `record-movements`'s rules. This can run before or
-   alongside Tasks 1–14.
-2. **After Task 14, before the release:** run `quaestor backup` and copy that backup into
-   the scratchpad. Then, from the repo, run
-   `QUAESTOR_DB=<copy> pnpm quaestor category list` and check every category's group
-   against the Task 4 table. Run `report` for a past month on the copy, at the rate Angelo
-   gives, and check it in cents against `movement list`.
-3. **Angelo** merges and runs `pnpm release`. The first `prod` call prints
+1. **Before Task 4 is committed, with the installed release:** create Car Payment and move
+   the misfiled rows (car loan payments, every Refund row, the Services rows that belong
+   elsewhere). Each write is a dry run Angelo approves, under `record-movements`'s rules.
+   It has to come first: from Task 4 on, the branch's `record-movements` skill passes
+   `--group`, which the installed release rejects.
+2. **The trial on a copy of `prod`, right after Task 4 and again just before the
+   release:**
+   - run `quaestor backup` and copy that backup into the scratchpad;
+   - from the repo, run `QUAESTOR_DB=<copy> pnpm quaestor category list` and check every
+     category's group against the Task 4 table;
+   - the second time, also run `report` for a past month on the copy, at the rate Angelo
+     gives, and check it in cents against `movement list`.
+3. **From the last trial to the release, no category is created in `prod`.** A name the
+   upgrade does not know makes every `prod` call exit 2 once the release is installed.
+4. **Angelo** merges and runs `pnpm release`. The first `prod` call prints
    `backup: … (before migrating)` and three `migrated:` lines.
-4. **With the new release:** `category archive` Refund and Reimbursable, and `rate set USD
+5. **With the new release:** `category archive` Refund and Reimbursable, and `rate set USD
    <rate>`, each a dry run and then a yes.
-5. Claude answers Angelo's questions against `prod` with the skill and checks the figures in
+6. Claude answers Angelo's questions against `prod` with the skill and checks the figures in
    cents.
-6. **Close:**
+7. **Close:**
    - drop "how much he spent last month, and on what" from `backlog.md`;
    - set the status line of `docs/features/spending-and-income.md` to built;
    - delete this plan.
