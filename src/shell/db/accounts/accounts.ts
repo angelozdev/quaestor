@@ -89,3 +89,8 @@ export function archiveAccount(store: Store, id: string, now: Date): AccountRow 
     throw new BalanceNotZeroError(account.id, account.currency, account.balance)
   return setArchived(store, account, true, now)
 }
+
+export function unarchiveAccount(store: Store, id: string, now: Date): AccountRow {
+  const account = liveAccount(store, id)
+  return account.archived ? setArchived(store, account, false, now) : account
+}

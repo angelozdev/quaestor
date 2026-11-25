@@ -10,6 +10,10 @@ function archive(cli: LedgerCli, code: string, ...flags: string[]) {
   return cli.run(['account', 'archive', code, ...flags])
 }
 
+function unarchive(cli: LedgerCli, code: string, ...flags: string[]) {
+  return cli.run(['account', 'unarchive', code, ...flags])
+}
+
 function alex(id: string, archived: boolean) {
   return {
     id,
@@ -132,5 +136,71 @@ describe('quaestor account archive', () => {
     const run = await archive(cli, wallet)
 
     expectWrite(run, false, { account: alex(wallet, true) })
+  })
+
+  it('account unarchive opens an archived account and account list shows it again', async () => {
+    const cli = ledgerCli()
+    const id = await addAccount(cli, 'Alex', 'USD', '0')
+    await archive(cli, id)
+
+    const run = await unarchive(cli, id)
+
+    expect(run).toEqual({
+      code: 0,
+      stdout: `${encode({ dryRun: false, account: alex(id, false) })}\n`,
+      stderr: 'env: test\n',
+    })
+    expect(await listed(cli)).toEqual({ accounts: [alex(id, false)] })
+  })
+
+  it('--dry-run on account unarchive shows it active and changes nothing', async () => {
+    const cli = ledgerCli()
+    const id = await addAccount(cli, 'Alex', 'USD', '0')
+    await archive(cli, id)
+
+    const dry = await unarchive(cli, id, '--dry-run')
+
+    expectWrite(dry, true, { account: alex(id, false) })
+    expect(await listed(cli, '--all')).toEqual({ accounts: [alex(id, true)] })
+  })
+
+  it('unarchiving an active account changes nothing', async () => {
+    const cli = ledgerCli()
+    const id = await addAccount(cli, 'Alex', 'USD', '0')
+
+    const run = await unarchive(cli, id)
+
+    expectWrite(run, false, { account: alex(id, false) })
+  })
+
+  it('account unarchive with an unknown code exits 1 as not_found', async () => {
+    const run = await unarchive(ledgerCli(), 'zzzz')
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: notFound('account', 'zzzz') })
+  })
+
+  it('a correction in an archived account is unarchive, correct, archive again', async () => {
+    const cli = ledgerCli()
+    const wallet = await addAccount(cli, 'Alex', 'USD', '0')
+    const food = await addCategory(cli)
+    const gifts = await addCategory(cli, 'Gifts', 'Gifts', '🎁')
+    const first = await write(cli, {
+      movements: [
+        spend({ wallet, food }, { amount: '5' }),
+        spend({ wallet, food }, { amount: '-5' }),
+      ],
+    })
+    const refund = (decode(first.stdout) as { recorded: { id: string }[] }).recorded[0]!.id
+    await archive(cli, wallet)
+
+    await unarchive(cli, wallet)
+    const corrected = await write(cli, {
+      delete: [refund],
+      movements: [spend({ wallet, food: gifts }, { amount: '5' })],
+    })
+    const archived = await archive(cli, wallet)
+
+    expect(corrected.code).toBe(0)
+    expectWrite(archived, false, { account: alex(wallet, true) })
   })
 })
