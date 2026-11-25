@@ -15,7 +15,17 @@ locally). What remains, once recording works: the local branches swap names
 `main`, the legacy container stops for good, and Angelo asks GitHub Support to
 purge the old commits still reachable by SHA.
 
-## 2. Next features
+## 2. Archive and unarchive an account
+
+The next feature, decided by Angelo on 2026-11-25. No command archives an account or
+opens an archived one, and an archived account takes no movement, so a correction there
+is refused. What it unblocks:
+
+- the misfiled rows of the spending-and-income moves that sit in accounts archived since
+  the legacy app: open the account, correct the rows, archive it again;
+- a loan account paid back to 0, one per person, which today stays in `account list`.
+
+## 3. Next features
 
 Rethought one at a time once recording works, in an order chosen then. What Angelo
 said he will ask Claude:

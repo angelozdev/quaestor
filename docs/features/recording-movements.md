@@ -133,8 +133,10 @@ hand, today's balance is exact and the balances before the reset are not.
   date, its own payee and its own note. It has no category. Decided by Angelo on
   2026-11-24 over double-entry bookkeeping (see Approaches).
 - Both halves are written together or not at all, and deleting one half deletes both.
-- Paying a card, moving money to a savings account and lending to someone (through the
-  account that holds loans) are transfers.
+- Paying a card, moving money to a savings account and lending to someone are transfers.
+  Each borrower has a loan account of their own, so its balance is what that person owes;
+  what comes back is a transfer out of it, and interest is income. Decided by Angelo on
+  2026-11-25, as GnuCash and YNAB do it.
 - A transfer across currencies carries both amounts: -100.00 USD from Wallet, +400,000.00
   COP into Bank. `quaestor` does not compare them, because it knows no rate. Both are
   shown side by side so Claude can check the rate they imply against the statement
