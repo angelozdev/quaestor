@@ -4,16 +4,11 @@ Only what is still to do, in order. A finished item is deleted; git keeps the
 history. Each feature is rethought from scratch in its own conversation before it
 is built; nothing here inherits a rule from the legacy app.
 
-## 1. `rebuild` becomes `main`
+## 1. Retire the legacy app
 
-GitHub's `main` already holds `rebuild` since 2026-11-24: a force-push of its
-history, scrubbed of every real figure and name, with the legacy branch
-`monthly-report` and the tag `legacy-final` removed from GitHub (both kept
-locally). What remains, once recording works: the local branches swap names
-(`rebuild` becomes `main`, the legacy `main` is kept under another name),
-`TRUNK_BRANCH` in `src/shell/release/release/release.constants.ts` becomes
-`main`, the legacy container stops for good, and Angelo asks GitHub Support to
-purge the old commits still reachable by SHA.
+`rebuild` became `main` on 2026-11-25. What remains is Angelo's: the legacy
+container stops for good, and GitHub Support is asked to purge the old commits
+still reachable by SHA.
 
 ## 2. Next features
 

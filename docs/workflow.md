@@ -77,8 +77,9 @@ real data.
 
 ## Branches and commits
 
-- The new project grows on the orphan branch `rebuild`, separate from the legacy
-  `main`, until Angelo decides it replaces `main`.
+- The trunk is `main`. It grew as the orphan branch `rebuild` until it replaced
+  the legacy `main` on 2026-11-25; the legacy app is kept on the local branch
+  `legacy`, which shares no history with it.
 - Each delivery is built on its own branch and committed after each green step,
   with Conventional Commits in English.
 - Claude never commits a delivery's code on the trunk, never merges and never
