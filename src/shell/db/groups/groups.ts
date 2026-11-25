@@ -1,0 +1,22 @@
+import { isNull } from 'drizzle-orm'
+import { GROUP_KINDS, type Group } from '#core/ledger'
+import { database } from '../database/database.ts'
+import type { Store } from '../database/database.types.ts'
+import { groups } from './groups.schema.ts'
+
+const STORED_FIELDS = {
+  id: groups.id,
+  kind: groups.kind,
+  emoji: groups.emoji,
+  name: groups.name,
+}
+
+export function listGroups(store: Store): Group[] {
+  return database(store)
+    .select(STORED_FIELDS)
+    .from(groups)
+    .where(isNull(groups.deletedAt))
+    .orderBy(groups.name, groups.id)
+    .all()
+    .toSorted((a, b) => GROUP_KINDS.indexOf(a.kind) - GROUP_KINDS.indexOf(b.kind))
+}

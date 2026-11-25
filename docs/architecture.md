@@ -161,6 +161,8 @@ Written for a reader that is a model, not a person.
 ## Migrations and backups
 
 - Drizzle's migrator applies pending migrations at startup, all or nothing.
+- The migration that brings groups seeds the 14 approved groups with fixed codes, in every
+  store.
 - In `prod`, a backup is taken before any migration runs. A `QUAESTOR_DB` store
   gets none, so `QUAESTOR_DB` always names a copy, never
   `~/.quaestor/prod.sqlite`. Decided by Angelo on 2026-11-24.

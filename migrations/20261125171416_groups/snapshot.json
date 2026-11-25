@@ -1,0 +1,734 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "id": "6b91ae5b-2407-4f95-b3c5-d1f14f100ed8",
+  "prevIds": ["30dd8ef4-6821-4bdf-b1f3-cfda9b31834d"],
+  "ddl": [
+    {
+      "name": "accounts",
+      "entityType": "tables"
+    },
+    {
+      "name": "categories",
+      "entityType": "tables"
+    },
+    {
+      "name": "groups",
+      "entityType": "tables"
+    },
+    {
+      "name": "movement_tags",
+      "entityType": "tables"
+    },
+    {
+      "name": "movements",
+      "entityType": "tables"
+    },
+    {
+      "name": "tags",
+      "entityType": "tables"
+    },
+    {
+      "table": "accounts",
+      "name": "id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "emoji",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "type",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "currency",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "archived",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "opening_amount",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "opening_date",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "emoji",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "archived",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "categories",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "kind",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "emoji",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "name",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "groups",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movement_tags",
+      "name": "movement_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movement_tags",
+      "name": "tag",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "seq",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "account_id",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "date",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "payee",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "amount",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "category_id",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "transfer",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "note",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "movements",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "tags",
+      "name": "name",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "tags",
+      "name": "created_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "tags",
+      "name": "updated_at",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "tags",
+      "name": "deleted_at",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_name_unique",
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"accounts\".\"deleted_at\" IS NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "categories",
+      "name": "categories_name_unique",
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"categories\".\"archived\" = 0 AND \"categories\".\"deleted_at\" IS NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "groups",
+      "name": "groups_name_unique",
+      "columns": [
+        {
+          "value": "name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"groups\".\"deleted_at\" IS NULL",
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "movements",
+      "name": "movements_account_date",
+      "columns": [
+        {
+          "value": "account_id",
+          "isExpression": false
+        },
+        {
+          "value": "date",
+          "isExpression": false
+        },
+        {
+          "value": "seq",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "movement_tags",
+      "name": "fk_movement_tags_movement_id_movements_id_fk",
+      "columns": ["movement_id"],
+      "tableTo": "movements",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "movement_tags",
+      "name": "fk_movement_tags_tag_tags_name_fk",
+      "columns": ["tag"],
+      "tableTo": "tags",
+      "columnsTo": ["name"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "movements",
+      "name": "fk_movements_account_id_accounts_id_fk",
+      "columns": ["account_id"],
+      "tableTo": "accounts",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "movements",
+      "name": "fk_movements_category_id_categories_id_fk",
+      "columns": ["category_id"],
+      "tableTo": "categories",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "nameExplicit": false,
+      "entityType": "fks"
+    },
+    {
+      "table": "movement_tags",
+      "name": "movement_tags_pk",
+      "columns": ["movement_id", "tag"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_pk",
+      "columns": ["id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "categories",
+      "name": "categories_pk",
+      "columns": ["id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "groups",
+      "name": "groups_pk",
+      "columns": ["id"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_pk",
+      "columns": ["seq"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "tags",
+      "name": "tags_pk",
+      "columns": ["name"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_id_unique",
+      "columns": ["id"],
+      "nameExplicit": false,
+      "entityType": "uniques"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_id",
+      "value": "\"id\" IS NOT NULL AND length(\"id\") = 4 AND \"id\" NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_name",
+      "value": "length(trim(\"name\")) > 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_type",
+      "value": "\"type\" IN ('savings','debit','credit','cash')",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_currency",
+      "value": "length(\"currency\") = 3 AND \"currency\" NOT GLOB '*[^A-Z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_archived",
+      "value": "\"archived\" IN (0, 1)",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_opening_date",
+      "value": "\"opening_date\" IS NULL OR date(\"opening_date\") IS \"opening_date\"",
+      "entityType": "checks"
+    },
+    {
+      "table": "accounts",
+      "name": "accounts_opening_amount",
+      "value": "\"opening_amount\" = 0 OR \"opening_date\" IS NOT NULL",
+      "entityType": "checks"
+    },
+    {
+      "table": "categories",
+      "name": "categories_id",
+      "value": "\"id\" IS NOT NULL AND length(\"id\") = 4 AND \"id\" NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "categories",
+      "name": "categories_name",
+      "value": "length(trim(\"name\")) > 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "categories",
+      "name": "categories_archived",
+      "value": "\"archived\" IN (0, 1)",
+      "entityType": "checks"
+    },
+    {
+      "table": "groups",
+      "name": "groups_id",
+      "value": "\"id\" IS NOT NULL AND length(\"id\") = 4 AND \"id\" NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "groups",
+      "name": "groups_name",
+      "value": "length(trim(\"name\")) > 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "groups",
+      "name": "groups_kind",
+      "value": "\"kind\" IN ('income','spending','outside')",
+      "entityType": "checks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_id",
+      "value": "\"id\" IS NOT NULL AND length(\"id\") = 4 AND \"id\" NOT GLOB '*[^0-9a-hjkmnp-tv-z]*'",
+      "entityType": "checks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_date",
+      "value": "date(\"date\") IS \"date\"",
+      "entityType": "checks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_payee",
+      "value": "length(trim(\"payee\")) > 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_amount",
+      "value": "\"amount\" <> 0",
+      "entityType": "checks"
+    },
+    {
+      "table": "movements",
+      "name": "movements_category_or_transfer",
+      "value": "(\"category_id\" IS NULL) = (\"transfer\" IS NOT NULL)",
+      "entityType": "checks"
+    },
+    {
+      "table": "tags",
+      "name": "tags_name",
+      "value": "\"name\" IS NOT NULL AND length(\"name\") > 0 AND \"name\" NOT GLOB '*[^a-z0-9:-]*'",
+      "entityType": "checks"
+    }
+  ],
+  "renames": []
+}

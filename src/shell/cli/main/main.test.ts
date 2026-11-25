@@ -6,8 +6,8 @@ import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
 const MISSING_COMMAND = {
   code: 'missing_command',
-  commands: ['backup', 'account', 'category', 'tag', 'movement', 'import'],
-  message: 'missing command: use one of backup, account, category, tag, movement, import',
+  commands: ['backup', 'account', 'group', 'category', 'tag', 'movement', 'import'],
+  message: 'missing command: use one of backup, account, group, category, tag, movement, import',
 }
 
 describe('main', () => {
@@ -22,13 +22,14 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
-  it('--help lists backup, the account, category, tag and movement groups and import as its commands', async () => {
+  it('--help lists backup, the account, group, category, tag and movement groups and import as its commands', async () => {
     const { stdout } = await runCli(['--help'])
 
     const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
     expect(commands).toEqual([
       expect.stringMatching(/^ {2}backup\s+copy the current env's store to its backups folder$/),
       expect.stringMatching(/^ {2}account\s+accounts and their balances$/),
+      expect.stringMatching(/^ {2}group\s+groups of categories and their kind$/),
       expect.stringMatching(/^ {2}category\s+categories a movement can take$/),
       expect.stringMatching(/^ {2}tag\s+tags a movement can carry$/),
       expect.stringMatching(/^ {2}movement\s+movements and transfers$/),

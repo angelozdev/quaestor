@@ -6,6 +6,7 @@ export const HELP_FLAG = '--help'
 
 export const COMMAND_GROUPS = {
   account: 'accounts and their balances',
+  group: 'groups of categories and their kind',
   category: 'categories a movement can take',
   tag: 'tags a movement can carry',
   movement: 'movements and transfers',

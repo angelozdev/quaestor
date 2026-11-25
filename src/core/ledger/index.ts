@@ -1,4 +1,10 @@
-export { ACCOUNT_TYPES, AMOUNT_PATTERN, ID_LENGTH, TAG_PATTERN } from './ledger.constants.ts'
+export {
+  ACCOUNT_TYPES,
+  AMOUNT_PATTERN,
+  GROUP_KINDS,
+  ID_LENGTH,
+  TAG_PATTERN,
+} from './ledger.constants.ts'
 export { AlreadyExistsError, RefusedWriteError } from './ledger.errors.ts'
 export { amountOf, centsOf, checkWrite, drawCode, isCurrency, matchesPayee } from './ledger.ts'
 export type {
@@ -9,6 +15,8 @@ export type {
   Catalog,
   Category,
   CategoryDraft,
+  Group,
+  GroupKind,
   HalfDraft,
   RandomIndex,
   TransferDraft,

@@ -1,5 +1,7 @@
 export const ACCOUNT_TYPES = ['savings', 'debit', 'credit', 'cash'] as const
 
+export const GROUP_KINDS = ['income', 'spending', 'outside'] as const
+
 export const ID_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz'
 
 export const ID_LENGTH = 4

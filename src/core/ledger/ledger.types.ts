@@ -1,6 +1,10 @@
-import type { ACCOUNT_TYPES } from './ledger.constants.ts'
+import type { ACCOUNT_TYPES, GROUP_KINDS } from './ledger.constants.ts'
 
 export type AccountType = (typeof ACCOUNT_TYPES)[number]
+
+export type GroupKind = (typeof GROUP_KINDS)[number]
+
+export type Group = { id: string; kind: GroupKind; emoji: string; name: string }
 
 export type RandomIndex = (bound: number) => number
 
