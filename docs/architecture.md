@@ -145,7 +145,10 @@ Written for a reader that is a model, not a person.
   `--env` or `QUAESTOR_ENV`, as `invalid_env` (exit 1): `prod` only ever means the
   installed release's `~/.quaestor/prod.sqlite`. Decided by Angelo on 2026-11-24.
 - Tests use temporary stores and folders that they remove, and under vitest both
-  entry points refuse named environments, so a test can never reach a real store.
+  entry points refuse named environments. The end-to-end tests of the built
+  release run it without `VITEST`, so their helper builds its environment from
+  nothing and sets `HOME` to a temporary folder it refuses to leave. Either way,
+  a test can never reach a real store.
 - Resolution order: `--env`, then `QUAESTOR_DB` (an absolute path), then
   `QUAESTOR_ENV`, then the default of whoever is running. An env name starts with
   a lowercase letter and holds only lowercase letters, digits and dashes, and
