@@ -50,7 +50,8 @@ INSERT INTO `categories` (`id`, `emoji`, `name`, `archived`, `created_at`, `upda
 	('c045', '🏷️', 'Payment / Transfer', 0, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z'),
 	('c046', '🏷️', 'Investment', 0, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z'),
 	('c047', '🏷️', 'Investment Gains', 0, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z'),
-	('c048', '🏷️', 'Auto Insurance', 1, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z');
+	('c048', '🏷️', 'Auto Insurance', 1, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z'),
+	('c049', '🏷️', 'Lodging', 0, '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z');
 --> statement-breakpoint
 INSERT INTO `movements` (`id`, `account_id`, `date`, `payee`, `amount`, `category_id`, `created_at`, `updated_at`) VALUES
 	('m001', 'a001', '2026-10-03', 'Corner Bistro', -4500000, 'c007', '2026-01-05T10:00:00.000Z', '2026-01-05T10:00:00.000Z'),

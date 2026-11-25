@@ -331,7 +331,7 @@ The `CASE` maps exactly these names, and nothing else, so an unknown one is NULL
 | `q3rh` Shopping | Clothing, Gadgets, Home Goods, Pets |
 | `cx75` Health & Wellness | Healthcare, Fitness, Beauty & Wellness |
 | `ex09` Entertainment | Entertainment, Streaming, Fun |
-| `xgn8` Travel | Flights, Car Rental |
+| `xgn8` Travel | Flights, Car Rental, Lodging |
 | `pjbv` Software & AI | AI Tools, Software |
 | `d7gd` Education | Courses / Learning |
 | `zyt4` Gifts | Gifts |

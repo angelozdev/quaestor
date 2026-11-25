@@ -53,6 +53,7 @@ INSERT INTO `categories` (`id`, `emoji`, `name`, `archived`, `created_at`, `upda
 		WHEN 'Fun' THEN 'ex09'
 		WHEN 'Flights' THEN 'xgn8'
 		WHEN 'Car Rental' THEN 'xgn8'
+		WHEN 'Lodging' THEN 'xgn8'
 		WHEN 'AI Tools' THEN 'pjbv'
 		WHEN 'Software' THEN 'pjbv'
 		WHEN 'Courses / Learning' THEN 'd7gd'

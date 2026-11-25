@@ -117,7 +117,7 @@ Spending:
 - 🛍️ Shopping: Clothing, Gadgets, Home Goods, Pets
 - ⚕️ Health & Wellness: Healthcare, Fitness, Beauty & Wellness
 - 🎢 Entertainment: Entertainment, Streaming
-- ✈️ Travel: Flights, Car Rental
+- ✈️ Travel: Flights, Car Rental, and a new Lodging
 - 💻 Software & AI: AI Tools, Software
 - 🧠 Education: Courses / Learning
 - 🎁 Gifts: Gifts
@@ -156,8 +156,8 @@ No category is ever without a group, not even for a moment. Decided by Angelo on
   gets a new code and goes to the end of its day. There is no edit command.
 - The moves run before the release that brings groups, with the release installed today,
   so Refund arrives empty and its group never touches a figure (Claude's call). Car Payment
-  is created then with today's `category add`, and the upgrade puts it in its group by
-  name.
+  and Lodging, for the rentals of a trip, are created then with today's `category add`,
+  and the upgrade puts each in its group by name. Lodging decided by Angelo on 2026-11-25.
 
 ## Getting the real data ready
 

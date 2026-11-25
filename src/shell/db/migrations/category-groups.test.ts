@@ -19,7 +19,7 @@ const APPROVED_PLACES: Record<string, string[]> = {
   q3rh: ['Clothing', 'Gadgets', 'Home Goods', 'Pets'],
   cx75: ['Healthcare', 'Fitness', 'Beauty & Wellness'],
   ex09: ['Entertainment', 'Streaming', 'Fun'],
-  xgn8: ['Flights', 'Car Rental'],
+  xgn8: ['Flights', 'Car Rental', 'Lodging'],
   pjbv: ['AI Tools', 'Software'],
   d7gd: ['Courses / Learning'],
   zyt4: ['Gifts'],
@@ -28,7 +28,7 @@ const APPROVED_PLACES: Record<string, string[]> = {
   '7hdg': ['Payment / Transfer', 'Investment', 'Investment Gains'],
 }
 
-const SEEDED_CODES = Array.from({ length: 49 }, (_, index) => `c0${String(index).padStart(2, '0')}`)
+const SEEDED_CODES = Array.from({ length: 50 }, (_, index) => `c0${String(index).padStart(2, '0')}`)
 
 type Listed = { id: string; group: string; name: string; archived: boolean }
 
