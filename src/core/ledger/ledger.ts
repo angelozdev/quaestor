@@ -40,6 +40,17 @@ export function addCents(a: number, b: number): number {
   return sum
 }
 
+export function convertCents(cents: number, rate: number): number {
+  const product = BigInt(cents) * BigInt(rate)
+  const magnitude = product < 0n ? -product : product
+  const hundredths = BigInt(CENTS_PER_UNIT)
+  const rounded = (magnitude + hundredths / 2n) / hundredths
+  const converted = Number(product < 0n ? -rounded : rounded)
+  if (!Number.isSafeInteger(converted))
+    throw new RangeError(`${cents} cents at ${rate} is not a safe integer`)
+  return converted
+}
+
 export function amountOf(cents: number): number {
   return cents / CENTS_PER_UNIT
 }

@@ -3,26 +3,54 @@ import {
   LOCAL_CURRENCY,
   addCents,
   amountOf,
+  convertCents,
   type Category,
   type Group,
 } from '#core/ledger'
 import { LINES } from './report.constants.ts'
 import { MissingRateError } from './report.errors.ts'
-import type { CountedMovement, Line, Report, ReportCatalog, ReportRequest } from './report.types.ts'
+import type {
+  Columns,
+  CountedMovement,
+  Line,
+  Report,
+  ReportCatalog,
+  ReportRequest,
+} from './report.types.ts'
 
-type Placed = { category: Category; group: Group; cents: number }
+type Figures = number[]
 
-function refuseMissingRates(movements: CountedMovement[], rates: Map<string, number>): void {
-  const missing = new Set(
-    movements
-      .map(({ currency }) => currency)
-      .filter((currency) => currency !== LOCAL_CURRENCY && !rates.has(currency)),
-  )
-  if (missing.size > 0) throw new MissingRateError([...missing].toSorted())
+type Placed = { category: Category; group: Group; figures: Figures }
+
+type GroupFigures = { group: Group; figures: Figures }
+
+function foreignCurrencies(movements: CountedMovement[]): string[] {
+  const currencies = movements
+    .map(({ currency }) => currency)
+    .filter((currency) => currency !== LOCAL_CURRENCY)
+  return [...new Set(currencies)].toSorted()
 }
 
-function signed(group: Group, cents: number): number {
-  return group.kind === 'spending' ? 0 - cents : cents
+function refuseMissingRates(currencies: string[], rates: Map<string, number>): void {
+  const missing = currencies.filter((currency) => !rates.has(currency))
+  if (missing.length > 0) throw new MissingRateError(missing)
+}
+
+function plus(a: Figures, b: Figures): Figures {
+  return a.map((cents, index) => addCents(cents, b[index]!))
+}
+
+function figuresOf(
+  { cents, currency }: CountedMovement,
+  currencies: string[],
+  rates: Map<string, number>,
+): Figures {
+  const converted = currency === LOCAL_CURRENCY ? cents : convertCents(cents, rates.get(currency)!)
+  return [converted, ...currencies.map((foreign) => (foreign === currency ? cents : 0))]
+}
+
+function signed(group: Group, figures: Figures): Figures {
+  return group.kind === 'spending' ? figures.map((cents) => 0 - cents) : figures
 }
 
 function compare(a: string, b: string): number {
@@ -40,38 +68,66 @@ function byPlace(a: Placed, b: Placed): number {
   )
 }
 
-function placed(movements: CountedMovement[], catalog: ReportCatalog): Placed[] {
+function placed(
+  movements: CountedMovement[],
+  catalog: ReportCatalog,
+  currencies: string[],
+  rates: Map<string, number>,
+): Placed[] {
   const groups = new Map(catalog.groups.map((group) => [group.id, group]))
   const categories = new Map(catalog.categories.map((category) => [category.id, category]))
-  const sums = new Map<string, number>()
-  for (const { category, cents } of movements)
-    sums.set(category, addCents(sums.get(category) ?? 0, cents))
+  const sums = new Map<string, Figures>()
+  for (const movement of movements) {
+    const figures = figuresOf(movement, currencies, rates)
+    const sum = sums.get(movement.category)
+    sums.set(movement.category, sum === undefined ? figures : plus(sum, figures))
+  }
   return [...sums]
-    .map(([id, cents]) => {
+    .map(([id, figures]) => {
       const category = categories.get(id)!
       const group = groups.get(category.group)!
-      return { category, group, cents: signed(group, cents) }
+      return { category, group, figures: signed(group, figures) }
     })
     .toSorted(byPlace)
 }
 
-function groupTotals(rows: Placed[]): { group: Group; cents: number }[] {
-  const totals = new Map<string, { group: Group; cents: number }>()
-  for (const { group, cents } of rows) {
-    const total = totals.get(group.id) ?? { group, cents: 0 }
-    totals.set(group.id, { group, cents: addCents(total.cents, cents) })
+function groupFigures(rows: Placed[]): GroupFigures[] {
+  const totals = new Map<string, GroupFigures>()
+  for (const { group, figures } of rows) {
+    const total = totals.get(group.id)
+    totals.set(group.id, {
+      group,
+      figures: total === undefined ? figures : plus(total.figures, figures),
+    })
   }
   return [...totals.values()]
 }
 
-function lineTotals(groups: { group: Group; cents: number }[]): Record<Line, number> {
+function lineFigures(groups: GroupFigures[], width: number): Record<Line, Figures> {
+  const zero = Array.from({ length: width }, () => 0)
   const sumOf = (kind: Group['kind']) =>
     groups
       .filter(({ group }) => group.kind === kind)
-      .reduce((sum, { cents }) => addCents(sum, cents), 0)
+      .reduce((sum, { figures }) => plus(sum, figures), zero)
   const income = sumOf('income')
   const spending = sumOf('spending')
-  return { income, spending, left: addCents(income, 0 - spending), outside: sumOf('outside') }
+  return {
+    income,
+    spending,
+    left: plus(
+      income,
+      spending.map((cents) => 0 - cents),
+    ),
+    outside: sumOf('outside'),
+  }
+}
+
+function columnsOf(figures: Figures, currencies: string[]): Columns {
+  const [total = 0, ...parts] = figures.map(amountOf)
+  return {
+    total,
+    ...Object.fromEntries(currencies.map((currency, index) => [currency, parts[index]!])),
+  }
 }
 
 export function reportOf(
@@ -80,23 +136,24 @@ export function reportOf(
   catalog: ReportCatalog,
   rates: Map<string, number>,
 ): Report {
-  refuseMissingRates(movements, rates)
-  const rows = placed(movements, catalog)
-  const groups = groupTotals(rows)
-  const lines = lineTotals(groups)
+  const currencies = foreignCurrencies(movements)
+  refuseMissingRates(currencies, rates)
+  const rows = placed(movements, catalog, currencies, rates)
+  const groups = groupFigures(rows)
+  const lines = lineFigures(groups, currencies.length + 1)
   return {
     from: request.from,
     to: request.to,
     currency: LOCAL_CURRENCY,
-    rates: [],
-    totals: LINES.map((line) => ({ line, total: amountOf(lines[line]) })),
-    groups: groups.map(({ group, cents }) => ({ ...group, total: amountOf(cents) })),
-    categories: rows.map(({ category: { id, group, emoji, name }, cents }) => ({
+    rates: currencies.map((currency) => ({ currency, rate: amountOf(rates.get(currency)!) })),
+    totals: LINES.map((line) => ({ line, ...columnsOf(lines[line], currencies) })),
+    groups: groups.map(({ group, figures }) => ({ ...group, ...columnsOf(figures, currencies) })),
+    categories: rows.map(({ category: { id, group, emoji, name }, figures }) => ({
       id,
       group,
       emoji,
       name,
-      total: amountOf(cents),
+      ...columnsOf(figures, currencies),
     })),
   }
 }

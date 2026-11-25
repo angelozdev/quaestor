@@ -5,6 +5,16 @@ import type { Store } from '../database/database.types.ts'
 import { rates } from './rates.schema.ts'
 import type { RateChange } from './rates.types.ts'
 
+export function listRates(store: Store): Map<string, number> {
+  return new Map(
+    database(store)
+      .select({ currency: rates.currency, rate: rates.rate })
+      .from(rates)
+      .all()
+      .map(({ currency, rate }) => [currency, rate]),
+  )
+}
+
 export function setRate(store: Store, currency: string, rate: number, now: Date): RateChange {
   const instant = now.toISOString()
   const db = database(store)

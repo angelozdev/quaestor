@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkWrite, type Account, type Catalog, type Category } from '#core/ledger'
+import { checkWrite, convertCents, type Account, type Catalog, type Category } from '#core/ledger'
 
 function account(id: string, currency: string, extra: Partial<Account> = {}): Account {
   return {
@@ -143,5 +143,23 @@ describe('checkWrite', () => {
     )
 
     expect(problems).toEqual([archived('movements[0]', 'account', 'bank')])
+  })
+})
+
+describe('convertCents', () => {
+  it.for([
+    [1085, 391245, 4245008],
+    [-1085, 391245, -4245008],
+    [1, 400050, 4001],
+    [-1, 400050, -4001],
+  ])(
+    '%i cents at %i hundredths is %i cents, half a centavo away from zero',
+    ([cents, rate, converted]) => {
+      expect(convertCents(cents!, rate!)).toBe(converted)
+    },
+  )
+
+  it('a conversion beyond 2^53 cents throws instead of rounding', () => {
+    expect(() => convertCents(9007199254740991, 391245)).toThrow(RangeError)
   })
 })

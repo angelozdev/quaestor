@@ -1,5 +1,5 @@
 import { reportOf } from '#core/report'
-import { countedMovements, listCategories, listGroups } from '#shell/db'
+import { countedMovements, listCategories, listGroups, listRates } from '#shell/db'
 import { parsed } from '../../invocation/input/input.ts'
 import { withStore } from '../../invocation/with-store/with-store.ts'
 import type { CliCommand } from '../../main/main.types.ts'
@@ -19,7 +19,7 @@ export const reportCommand: CliCommand = {
         request,
         countedMovements(store, request),
         { groups: listGroups(store), categories: listCategories(store) },
-        new Map(),
+        listRates(store),
       ),
     )
   },

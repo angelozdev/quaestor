@@ -13,6 +13,7 @@ export {
   amountOf,
   centsOf,
   checkWrite,
+  convertCents,
   drawCode,
   isCurrency,
   matchesPayee,
