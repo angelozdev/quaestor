@@ -1,4 +1,4 @@
-export { insertAccount, listAccounts } from './accounts/accounts.ts'
+export { archiveAccount, insertAccount, listAccounts } from './accounts/accounts.ts'
 export { backupStore } from './backups/backups.ts'
 export type { BackupResult } from './backups/backups.types.ts'
 export {

@@ -1,5 +1,6 @@
 import { Command, CommanderError, Option } from '@commander-js/extra-typings'
 import { accountAddCommand } from '../commands/account-add/account-add.ts'
+import { accountArchiveCommand } from '../commands/account-archive/account-archive.ts'
 import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
 import { categoryAddCommand } from '../commands/category-add/category-add.ts'
@@ -26,6 +27,7 @@ const COMMANDS: CliCommand[] = [
   backupCommand,
   accountListCommand,
   accountAddCommand,
+  accountArchiveCommand,
   groupListCommand,
   groupAddCommand,
   groupEditCommand,
