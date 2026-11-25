@@ -45,9 +45,10 @@ Files that call an internal function, read a table or write SQL today:
   defaults to `prod` under `<home>/.quaestor`, finds migrations in
   `<entryDir>/../migrations`, its first run creates `~/.quaestor`, and it has no data
   folder under vitest. `pnpm release` still smoke-runs the packed `--help` and `--version`.
-- By the same reasoning, the source entry's "data folder is `<repoRoot>/data`" half is
-  deleted. It is visible only outside vitest, where it would write into the repo's real
-  `data/`. The source bin already shows its default env, `test`, under vitest.
+- The source entry's data folder checks are deleted: that its store is
+  `<repoRoot>/data/<env>.sqlite`, and that a refused `--env prod` creates nothing there.
+  Under vitest the bin has no data folder, so neither can show. The source bin still shows
+  that its default env is `test` and that it refuses `prod`.
 
 ## Global constraints
 
@@ -62,7 +63,8 @@ Files that call an internal function, read a table or write SQL today:
   committing, break the rule it names with a one-line edit to the source, watch the test
   fail on that rule, and revert the edit.
 - `pnpm check` is green at the end of every task. knip and jscpd count: a support helper
-  left with no user is deleted in the same task.
+  left with no user is deleted in the same task. If a deletion leaves a `src/` export with
+  no user, stop and report it instead of editing `src/`.
 - Commit after each task on branch `skeleton-tests`, never on `rebuild`, never push.
 
 ## Review focus
@@ -172,9 +174,9 @@ Ledger:
 - Partial copies: new test "a partial copy another process left or is still writing is
   neither used nor removed". Seed `${COPY_NAME}.partial` and `${COPY_NAME}.0.partial`, then
   `backup` exits 0. Both are intact, and the folder holds them plus `COPY_NAME`.
-- A copy that cannot be moved into place: new test. A folder named `COPY_NAME` inside
-  `backups/` makes `backup` exit 2 with `backup_not_written` and `folder` = `<dataDir>/backups`.
-  Paste the real stderr. The listing is `[COPY_NAME]`, so no `.partial` is left.
+- A copy that cannot be moved into place: covered by "a second backup at the same instant
+  exits 2 …". A folder blocking the name fails the same `link` with `EEXIST`, and that test
+  already asserts the listing is `[COPY_NAME]`, so no `.partial` is left. Dropped.
 - A backups folder that cannot be created: new test. Put the store at
   `QUAESTOR_DB=<other tmp>/x.sqlite` and `chmod 0o500` the `dataDir`, registered in
   `lockedFolder`. `backup` exits 2, stderr starts `env: custom (<path>)\n` and holds
@@ -190,7 +192,7 @@ Ledger:
   - Replace the `backup(…)` call in `writeCopy` with `new DatabaseSync(partial).close()`.
     Fails: "the copy holds the same accounts".
   - Name the partial `${path}${PARTIAL_SUFFIX}`, without the pid. Fails: "a partial copy …".
-  - Drop the `finally` `rm(partial)`. Fails: "a copy that cannot be moved into place".
+  - Drop the `finally` `rm(partial)`. Fails: "a second backup at the same instant …".
   - Move `mkdir` above the `try` in `writeCopy`. Fails: "a backups folder that cannot be
     created".
 - [ ] **Step 3:** Run `pnpm check` and expect green. Commit
@@ -204,7 +206,8 @@ Ledger:
   and `tests/support/store/`, which has no user left after this task.
 
 **Produces:** in `backup.test.ts`, `migrate(path: string, migrationsDir: string): Promise<string[]>`.
-It runs `backup` with `vars: { QUAESTOR_DB: path }`, its own `dataDir: tempDir('quaestor-migrate-')`
+It runs `backup` with `vars: { QUAESTOR_DB: path }`, a fresh `dataDir: tempDir('quaestor-migrate-')`
+on every call (two calls at the fixed instant would otherwise collide as `already exists`)
 and the given migrations. It throws with the stderr if the exit is not 0, and returns the
 names on the `migrated: ` lines of stderr, in order. It is the setup that replaces
 `openTestStore`, and the check that replaces `fixtureTables`.
@@ -253,8 +256,8 @@ Ledger for the deleted files:
     Revert.
   - For each `migrate(…)` assertion changed above, swap its expected value once (`[]` for
     both names, or both names for `[]`). It must fail. Revert.
-- [ ] **Step 3:** `grep -rn "runSql\|selectAll\|openTestStore\|closeStore" src tests` returns
-  nothing. Run `pnpm check` and expect green. Commit
+- [ ] **Step 3:** `grep -rn --include='*.test.ts' -e runSql -e selectAll -e openTestStore -e closeStore src tests`
+  returns nothing. Run `pnpm check` and expect green. Commit
   `test(cli): migrations and the connection through the command`.
 
 ### Task 4: the source entry through its bin
@@ -273,16 +276,15 @@ Ledger:
   Status 0, stdout `dev\n`, stderr empty.
 - The source context refuses `prod`: new `it.each` for `['--env', 'prod', 'backup']` and
   `['backup']` with `vars: { QUAESTOR_ENV: 'prod' }`. Status 1, stdout empty, stderr
-  `encode({ error: { code: 'invalid_env', source, value: 'prod', message: 'invalid <source> "prod": prod is reserved for the installed quaestor' } })`,
-  and `<REPO_ROOT>/data/prod.sqlite` does not exist.
+  `encode({ error: { code: 'invalid_env', source, value: 'prod', message: 'invalid <source> "prod": prod is reserved for the installed quaestor' } })`.
 - The source context finds migrations in `<repoRoot>/migrations`, plus migrations test 3:
   new test "the source bin migrates a new store with every shipped migration".
   `vars: { QUAESTOR_DB: <tmp>/x.sqlite }` and `['account', 'list']` give status 0, stdout
   `accounts: []\n`, and stderr `env: custom (<path>)\n` followed by `migrated: <name>\n`
   for every folder under `SHIPPED_MIGRATIONS` that holds `MIGRATION_FILE`, sorted.
 - The source default is `test` under vitest: covered by "the source bin under vitest
-  refuses its default env" and the leak test (`source: 'default', env: 'test'`). The data
-  folder half is deleted (ruling).
+  refuses its default env" and the leak test (`source: 'default', env: 'test'`).
+  The data folder checks are deleted (ruling).
 - Every installed-entry case is deleted (ruling).
 
 - [ ] **Step 1:** Write the new tests and delete `context.test.ts`. Run
