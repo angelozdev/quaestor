@@ -1,6 +1,6 @@
 import { decode, encode } from '@toon-format/toon'
 import { describe, expect, it } from 'vitest'
-import { addAccount } from '../../../../../tests/support/books/books.ts'
+import { addAccount, addCategory, spend, write } from '../../../../../tests/support/books/books.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import { alreadyExists, notFound } from '../../../../../tests/support/refusals/refusals.ts'
@@ -22,6 +22,12 @@ function alex(id: string, archived: boolean) {
     openingDate: '2026-01-05',
     balance: 0,
   }
+}
+
+function balanceNotZero(account: string): string {
+  const message = `account ${account} holds 120.5 USD; only an account at 0 can be archived`
+  const error = { code: 'balance_not_zero', account, currency: 'USD', balance: 120.5, message }
+  return `env: test\n${encode({ error })}\n`
 }
 
 async function listed(cli: LedgerCli, ...flags: string[]) {
@@ -91,5 +97,40 @@ describe('quaestor account archive', () => {
     ])
 
     expect(run).toEqual({ code: 1, stdout: '', stderr: alreadyExists('account', 'Alex') })
+  })
+
+  it('an account that is not at 0 is refused as balance_not_zero (USD)', async () => {
+    const cli = ledgerCli()
+    const id = await addAccount(cli, 'Wallet', 'USD', '120.50')
+
+    const run = await archive(cli, id)
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: balanceNotZero(id) })
+    expect(await listed(cli)).toMatchObject({ accounts: [{ id, archived: false }] })
+  })
+
+  it('a dry run of an archive that is refused is refused the same way', async () => {
+    const cli = ledgerCli()
+    const id = await addAccount(cli, 'Wallet', 'USD', '120.50')
+
+    const run = await archive(cli, id, '--dry-run')
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: balanceNotZero(id) })
+  })
+
+  it('an account back at 0 after movements archives', async () => {
+    const cli = ledgerCli()
+    const wallet = await addAccount(cli, 'Alex', 'USD', '0')
+    const food = await addCategory(cli)
+    await write(cli, {
+      movements: [
+        spend({ wallet, food }, { amount: '5' }),
+        spend({ wallet, food }, { amount: '-5' }),
+      ],
+    })
+
+    const run = await archive(cli, wallet)
+
+    expectWrite(run, false, { account: alex(wallet, true) })
   })
 })

@@ -1,6 +1,7 @@
 import { eq, isNull, sql } from 'drizzle-orm'
 import {
   AlreadyExistsError,
+  BalanceNotZeroError,
   NotFoundError,
   amountOf,
   type AccountDraft,
@@ -83,5 +84,8 @@ function setArchived(store: Store, account: AccountRow, archived: boolean, now: 
 
 export function archiveAccount(store: Store, id: string, now: Date): AccountRow {
   const account = liveAccount(store, id)
-  return account.archived ? account : setArchived(store, account, true, now)
+  if (account.archived) return account
+  if (account.balance !== 0)
+    throw new BalanceNotZeroError(account.id, account.currency, account.balance)
+  return setArchived(store, account, true, now)
 }
