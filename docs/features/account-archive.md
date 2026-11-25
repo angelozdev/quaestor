@@ -1,6 +1,6 @@
 # Archiving an account
 
-Status: approved by Angelo on 2026-11-25, not built.
+Status: built on 2026-11-25, not released.
 
 ## Why
 
@@ -57,8 +57,8 @@ an `account edit` command (see Approaches).
 
 ## Examples
 
-Invented figures. These outputs come from the real TOON encoder and are pasted again from
-the real stdout and stderr once the commands exist.
+Invented figures, checked against the real stdout and stderr on 2026-11-25, with each
+random code shown as `k7f2`.
 
 A loan to Alex, account `k7f2`, paid back to 0, archived with a dry run:
 
