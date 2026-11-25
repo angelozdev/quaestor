@@ -694,13 +694,26 @@ categories[2]{month,id,group,emoji,name,total,USD}:
         payee: 'UBER *TRIP',
       }),
       movement(books.wallet, books.restaurants, '2026-09-04', '-2', 'USD', { payee: 'Úber Eats' }),
-      movement(books.wallet, books.restaurants, '2026-09-05', '-7', 'USD', { payee: 'Rappi' }),
+      movement(books.wallet, books.restaurants, '2026-09-05', '-7', 'USD', {
+        payee: 'Tienda Luna',
+      }),
     )
     await books.cli.run(['rate', 'set', 'USD', '4000'])
 
     const run = await report(books.cli, ...SEPTEMBER, '--payee', 'uber')
 
     expect(totalsOf(run.stdout).spending).toBe(48000)
+  })
+
+  it('--payee made only of a symbol such as ^ or ` keeps only the payees containing it', async () => {
+    const books = await reportBooks()
+    await record(books.cli, movement(books.bank, books.restaurants, '2026-10-03', '-10', 'COP'))
+
+    const caret = await report(books.cli, ...OCTOBER, '--payee', '^')
+    const backtick = await report(books.cli, ...OCTOBER, '--payee', '`')
+
+    expect(caret.stdout).toBe(EMPTY_OCTOBER)
+    expect(backtick.stdout).toBe(EMPTY_OCTOBER)
   })
 
   it('a tag that does not exist is refused as not_found', async () => {

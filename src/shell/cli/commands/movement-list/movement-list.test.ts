@@ -194,7 +194,7 @@ describe('quaestor movement list', () => {
     const [shop, ride] = await recordAll(books, [
       spend(books, { date: '2026-11-20', payee: 'Éxito', amount: '-10' }),
       spend(books, { date: '2026-11-21', payee: 'Uber', amount: '-12.50' }),
-      spend(books, { date: '2026-11-22', payee: 'Rappi', amount: '-4' }),
+      spend(books, { date: '2026-11-22', payee: 'Tienda Luna', amount: '-4' }),
     ])
 
     const byExito = await list(books.cli, '--payee', 'exito')

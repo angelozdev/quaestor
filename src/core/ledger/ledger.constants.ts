@@ -30,4 +30,4 @@ export const PROBLEM_CODES = {
   Archived: 'archived',
 } as const
 
-export const DIACRITICS = /\p{Diacritic}/gu
+export const DIACRITICS = /\p{M}/gu
