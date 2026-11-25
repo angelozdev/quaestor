@@ -5,7 +5,7 @@ export {
   ID_LENGTH,
   TAG_PATTERN,
 } from './ledger.constants.ts'
-export { AlreadyExistsError, RefusedWriteError } from './ledger.errors.ts'
+export { AlreadyExistsError, NotFoundError, RefusedWriteError } from './ledger.errors.ts'
 export { amountOf, centsOf, checkWrite, drawCode, isCurrency, matchesPayee } from './ledger.ts'
 export type {
   Account,

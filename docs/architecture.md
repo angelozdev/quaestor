@@ -77,7 +77,8 @@ Written for a reader that is a model, not a person.
   `migration` and the `reason`, the store left as it was; `unknown_migrations`, 2,
   when the store holds migrations this code does not ship, with their `names`, the
   store left as it was; `already_exists`, 1, when a name is already taken, with the
-  `kind` and the `name`; `invalid_input`, 1, when a flag or a field is wrong, with
+  `kind` and the `name`; `not_found`, 1, when a code or a name names nothing live, with the
+  `kind` and the `value`; `invalid_input`, 1, when a flag or a field is wrong, with
   every problem as `issues`, each `<field>: <what is wrong>` (`movements[0].amount` for a
   field inside a list), found before a store is opened; `invalid_json`, 1, when stdin
   holds no valid JSON, found before a store is opened, with the reason on one line in its

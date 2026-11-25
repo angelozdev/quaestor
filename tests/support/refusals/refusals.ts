@@ -24,3 +24,8 @@ export function refused(...errors: { code: string; item: string; message: string
   const message = `${errors.length} ${errors.length === 1 ? 'item' : 'items'} refused`
   return `env: test\n${encode({ error: { code: 'refused', errors, message } })}\n`
 }
+
+export function notFound(kind: string, value: string): string {
+  const message = `${kind} ${value} does not exist`
+  return `env: test\n${encode({ error: { code: 'not_found', kind, value, message } })}\n`
+}

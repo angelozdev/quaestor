@@ -7,6 +7,12 @@ export class AlreadyExistsError extends RefusedError {
   }
 }
 
+export class NotFoundError extends RefusedError {
+  constructor(kind: string, value: string) {
+    super('not_found', `${kind} ${value} does not exist`, { kind, value })
+  }
+}
+
 export class RefusedWriteError extends RefusedError {
   constructor(problems: WriteProblem[]) {
     super('refused', `${problems.length} ${problems.length === 1 ? 'item' : 'items'} refused`, {
