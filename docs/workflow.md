@@ -29,12 +29,25 @@ real data.
 ## Tests
 
 - Test-first: a failing test, the minimum code that passes, then refactor.
-- Tests are of behaviour, never of implementation: each runs the real command
-  through its entry point and asserts what it prints and its exit code. No test
-  calls an internal function, reads a table or writes SQL; setup goes through
-  commands too. Only code with no command of its own (the release script, the
-  lint rules) is tested through its exported function. Decided by Angelo on
-  2026-11-24.
+- Tests are of behaviour, never of implementation: a test breaks when what
+  `quaestor` does changes, and never when its code is only rearranged. Decided by
+  Angelo on 2026-11-24.
+- A test checks the resulting state (what is printed, the exit code, what is left
+  on disk, what a function returns), never which calls our code made inside
+  itself: no spy on an internal function. Fakes stand only for what is outside
+  `quaestor`, such as git, pnpm, the bundler or the clock. Decided by Angelo on
+  2026-11-25.
+- The shell is tested by running the real command through its entry point: it
+  asserts what the command prints, its exit code and the files it leaves. No such
+  test calls an internal function, reads a table or writes SQL; setup goes
+  through commands too. Only code with no command of its own (the release script,
+  the lint rules) is tested through its exported function.
+- Pure logic in `src/core/` may also be tested directly, through its concept's
+  barrel (`#core/<concept>`), for cases the command cannot set up or sets up only
+  slowly. Decided by Angelo on 2026-11-25.
+- A few end-to-end tests build the release, the same bundle `pnpm release`
+  installs, and run it with a temporary home folder. Decided by Angelo on
+  2026-11-25.
 - Every rule and example in `docs/features/<name>.md` is covered by at least one
   CLI test, and the test's name says which.
 - Every money figure has a test in a currency other than COP.
