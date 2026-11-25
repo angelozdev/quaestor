@@ -202,7 +202,7 @@ In this order; none of it is code (Claude's call):
 - A figure is exact or the call fails. A two-decimal rate keeps 30,000.00 USD (3,000,000
   cents) times 391245 at 1.2 × 10^12, far below the 15 digits a number prints to the cent;
   a conversion or total beyond 9999999999999.99 exits 2 as `unexpected`, never a figure off
-  by a cent (Claude's call).
+  by a cent (approved by Angelo on 2026-11-25).
 - The local currency is COP, fixed in code (Claude's call).
 
 ## Commands
