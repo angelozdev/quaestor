@@ -227,5 +227,6 @@ Written for a reader that is a model, not a person.
 ## Skills
 
 - Skills never touch the database; every read and write goes through `quaestor`.
-- `record-movements` lives in `.claude/skills/` and calls the installed `quaestor`, never
-  `pnpm quaestor`, so it works only with Claude open in this repo.
+- `record-movements` and `spending-and-income` live in `.claude/skills/` and call the
+  installed `quaestor`, never `pnpm quaestor`, so they work only with Claude open in this
+  repo.
