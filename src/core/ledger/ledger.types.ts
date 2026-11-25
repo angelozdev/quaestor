@@ -69,7 +69,7 @@ export type Catalog = {
   accounts: Map<string, Account>
   categories: Map<string, Category>
   tags: Set<string>
-  movements: Set<string>
+  movements: Map<string, string[]>
 }
 
 export type WriteProblem = { code: string; item: string; message: string }

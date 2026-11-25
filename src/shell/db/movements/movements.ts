@@ -72,14 +72,15 @@ function rowOf<T extends MovementRow>(stored: T): T {
   return { ...stored, amount: amountOf(stored.amount) }
 }
 
-function liveCodes(store: Store, codes: string[]): Set<string> {
-  return new Set(
+function deleteTargets(store: Store, codes: string[]): Map<string, string[]> {
+  return new Map(
     database(store)
-      .select({ id: movements.id })
+      .select({ id: movements.id, account: movements.accountId, partner: partner.accountId })
       .from(movements)
+      .leftJoin(partner, PARTNER_IS_LIVE)
       .where(and(inArray(movements.id, codes), isNull(movements.deletedAt)))
       .all()
-      .map(({ id }) => id),
+      .map(({ id, account, partner }) => [id, partner === null ? [account] : [account, partner]]),
   )
 }
 
@@ -88,7 +89,7 @@ function loadCatalog(store: Store, request: WriteRequest): Catalog {
     accounts: new Map(listAccounts(store).map((account) => [account.id, account])),
     categories: new Map(listCategories(store).map((category) => [category.id, category])),
     tags: new Set(listTags(store)),
-    movements: liveCodes(store, request.delete),
+    movements: deleteTargets(store, request.delete),
   }
 }
 

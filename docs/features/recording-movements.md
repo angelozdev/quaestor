@@ -71,7 +71,8 @@ numbered in sequence. A code already taken is drawn again, so two never share on
   always computed and never stored, so it cannot drift the way a legacy balance did when it was reset by hand.
 - A credit card in debt has a negative balance: a card owing 1,000,000.00 COP is at
   -1,000,000.00 COP.
-- An archived account receives no new movement. Some legacy accounts arrive archived.
+- An archived account receives no new movement and no delete (see `account-archive.md`). Some
+  legacy accounts arrive archived.
 - A new account is created with its emoji, name, type, currency, and opening balance and date,
   the opening balance being 0 when the account starts empty.
 

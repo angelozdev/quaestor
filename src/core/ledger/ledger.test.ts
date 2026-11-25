@@ -24,7 +24,7 @@ function catalogOf(accounts: Account[], categories: Category[]): Catalog {
     accounts: new Map(accounts.map((row) => [row.id, row])),
     categories: new Map(categories.map((row) => [row.id, row])),
     tags: new Set(),
-    movements: new Set(),
+    movements: new Map(),
   }
 }
 
