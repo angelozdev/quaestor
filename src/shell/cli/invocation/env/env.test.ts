@@ -1,117 +1,109 @@
-import { describe, expect, it } from 'vitest'
-import { resolveEnv } from './env.ts'
-import type { Env, EnvSources } from './env.types.ts'
+import { encode } from '@toon-format/toon'
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
+import type { CliOverrides } from '../../../../../tests/support/run-cli/run-cli.types.ts'
+import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
 
-const base: EnvSources = {
-  flag: undefined,
-  vars: {},
-  defaultEnv: 'test',
-  releaseOnlyEnvs: [],
-  dataDir: '/d',
+let dataDir: string
+
+beforeEach(() => {
+  dataDir = tempDir('quaestor-cli-')
+})
+
+function backup(argv: string[] = [], overrides: CliOverrides = {}) {
+  return runCli(['backup', ...argv], { dataDir, ...overrides })
 }
 
-const everySource = { QUAESTOR_DB: '/tmp/x.sqlite', QUAESTOR_ENV: 'staging' }
-
-const precedence: Array<{ name: string; sources: Partial<EnvSources>; env: Env }> = [
-  {
-    name: '--env over QUAESTOR_DB and QUAESTOR_ENV',
-    sources: { flag: 'dev', vars: everySource },
-    env: { name: 'dev', dbPath: '/d/dev.sqlite' },
-  },
-  {
-    name: 'QUAESTOR_DB over QUAESTOR_ENV and the default',
-    sources: { vars: everySource },
-    env: { name: 'custom', dbPath: '/tmp/x.sqlite' },
-  },
-  {
-    name: 'QUAESTOR_ENV over the default',
-    sources: { vars: { QUAESTOR_ENV: 'staging' } },
-    env: { name: 'staging', dbPath: '/d/staging.sqlite' },
-  },
-  {
-    name: 'the default when nothing else is set',
-    sources: {},
-    env: { name: 'test', dbPath: '/d/test.sqlite' },
-  },
-]
-
-function refusal(code: string, message: string, data: Record<string, string>) {
-  return expect.objectContaining({ code, message, data })
+function refused(error: Record<string, string>) {
+  return { code: 1, stdout: '', stderr: `${encode({ error })}\n` }
 }
 
-describe('resolveEnv', () => {
-  it.each(precedence)(
-    '--env wins over QUAESTOR_DB, QUAESTOR_DB over QUAESTOR_ENV, QUAESTOR_ENV over the default: $name',
-    ({ sources, env }) => {
-      expect(resolveEnv({ ...base, ...sources })).toEqual(env)
-    },
-  )
+describe('env resolution', () => {
+  it('QUAESTOR_DB wins over QUAESTOR_ENV', async () => {
+    const dbPath = join(tempDir('quaestor-store-'), 'x.sqlite')
 
-  it('--env x maps to <dataDir>/x.sqlite', () => {
-    expect(resolveEnv({ ...base, flag: 'x' }).dbPath).toBe('/d/x.sqlite')
+    const { code, stderr } = await backup([], {
+      vars: { QUAESTOR_DB: dbPath, QUAESTOR_ENV: 'staging' },
+    })
+
+    expect(code).toBe(0)
+    expect(stderr).toBe(`env: custom (${dbPath})\n`)
+    expect(existsSync(join(dataDir, 'staging.sqlite'))).toBe(false)
+  })
+
+  it('QUAESTOR_ENV wins over the default', async () => {
+    const { code, stderr } = await backup([], { vars: { QUAESTOR_ENV: 'staging' } })
+
+    expect(code).toBe(0)
+    expect(stderr).toBe('env: staging\n')
+    expect(existsSync(join(dataDir, 'staging.sqlite'))).toBe(true)
   })
 
   it.each([
-    { source: '--env', value: 'Prod', sources: { flag: 'Prod' } },
-    { source: 'QUAESTOR_ENV', value: 'a b', sources: { vars: { QUAESTOR_ENV: 'a b' } } },
-    { source: '--env', value: '1prod', sources: { flag: '1prod' } },
+    { source: 'QUAESTOR_ENV', value: 'a b', argv: [], vars: { QUAESTOR_ENV: 'a b' } },
+    { source: '--env', value: '1prod', argv: ['--env', '1prod'], vars: {} },
   ])(
     'an env name that breaks the naming rule is refused as invalid_env with the whole rule: $value',
-    ({ source, value, sources }) => {
-      expect(() => resolveEnv({ ...base, ...sources })).toThrow(
-        refusal(
-          'invalid_env',
-          `invalid ${source} "${value}": start with a lowercase letter, then use lowercase letters, digits and dashes`,
-          { source, value },
-        ),
+    async ({ source, value, argv, vars }) => {
+      expect(await backup(argv, { vars })).toEqual(
+        refused({
+          code: 'invalid_env',
+          source,
+          value,
+          message: `invalid ${source} "${value}": start with a lowercase letter, then use lowercase letters, digits and dashes`,
+        }),
       )
+      expect(readdirSync(dataDir)).toEqual([])
     },
   )
 
-  it('custom is refused unless it comes from QUAESTOR_DB', () => {
-    expect(() => resolveEnv({ ...base, flag: 'custom' })).toThrow(
-      refusal('invalid_env', 'invalid --env "custom": custom is reserved for QUAESTOR_DB', {
-        source: '--env',
-        value: 'custom',
-      }),
-    )
-    expect(() => resolveEnv({ ...base, vars: { QUAESTOR_ENV: 'custom' } })).toThrow(
-      refusal('invalid_env', 'invalid QUAESTOR_ENV "custom": custom is reserved for QUAESTOR_DB', {
-        source: 'QUAESTOR_ENV',
-        value: 'custom',
-      }),
-    )
-  })
+  it.each([
+    { source: '--env', argv: ['--env', 'custom'], vars: {} },
+    { source: 'QUAESTOR_ENV', argv: [], vars: { QUAESTOR_ENV: 'custom' } },
+  ])(
+    'custom is refused unless it comes from QUAESTOR_DB: $source',
+    async ({ source, argv, vars }) => {
+      expect(await backup(argv, { vars })).toEqual(
+        refused({
+          code: 'invalid_env',
+          source,
+          value: 'custom',
+          message: `invalid ${source} "custom": custom is reserved for QUAESTOR_DB`,
+        }),
+      )
+      expect(readdirSync(dataDir)).toEqual([])
+    },
+  )
 
-  it('a relative QUAESTOR_DB is refused as invalid_env', () => {
-    expect(() => resolveEnv({ ...base, vars: { QUAESTOR_DB: 'rel/x.sqlite' } })).toThrow(
-      refusal('invalid_env', 'invalid QUAESTOR_DB "rel/x.sqlite": must be an absolute path', {
+  it('a relative QUAESTOR_DB is refused as invalid_env', async () => {
+    expect(await backup([], { vars: { QUAESTOR_DB: 'rel/x.sqlite' } })).toEqual(
+      refused({
+        code: 'invalid_env',
         source: 'QUAESTOR_DB',
         value: 'rel/x.sqlite',
+        message: 'invalid QUAESTOR_DB "rel/x.sqlite": must be an absolute path',
       }),
     )
+    expect(readdirSync(dataDir)).toEqual([])
   })
 
-  it('with no data folder a named env is refused naming where it came from', () => {
-    const noData = { ...base, dataDir: null }
-    const disabled = (source: string, env: string) =>
-      refusal(
-        'named_env_disabled',
-        `named environments are disabled here (${source}: ${env}); set QUAESTOR_DB to a temporary file`,
-        { source, env },
+  it.each([
+    { source: '--env', env: 'prod', argv: ['--env', 'prod'], vars: {} },
+    { source: 'QUAESTOR_ENV', env: 'x', argv: [], vars: { QUAESTOR_ENV: 'x' } },
+  ])(
+    'with no data folder a named env is refused naming where it came from: $source',
+    async ({ source, env, argv, vars }) => {
+      expect(await backup(argv, { dataDir: null, vars })).toEqual(
+        refused({
+          code: 'named_env_disabled',
+          source,
+          env,
+          message: `named environments are disabled here (${source}: ${env}); set QUAESTOR_DB to a temporary file`,
+        }),
       )
-
-    expect(() => resolveEnv({ ...noData, flag: 'prod' })).toThrow(disabled('--env', 'prod'))
-    expect(() => resolveEnv({ ...noData, vars: { QUAESTOR_ENV: 'x' } })).toThrow(
-      disabled('QUAESTOR_ENV', 'x'),
-    )
-    expect(() => resolveEnv(noData)).toThrow(disabled('default', 'test'))
-  })
-
-  it('with no data folder QUAESTOR_DB still names a custom store', () => {
-    expect(resolveEnv({ ...base, dataDir: null, vars: { QUAESTOR_DB: '/tmp/x.sqlite' } })).toEqual({
-      name: 'custom',
-      dbPath: '/tmp/x.sqlite',
-    })
-  })
+      expect(readdirSync(dataDir)).toEqual([])
+    },
+  )
 })
