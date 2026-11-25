@@ -6,8 +6,8 @@ import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
 const MISSING_COMMAND = {
   code: 'missing_command',
-  commands: ['backup', 'account', 'group', 'category', 'tag', 'movement'],
-  message: 'missing command: use one of backup, account, group, category, tag, movement',
+  commands: ['backup', 'account', 'group', 'category', 'tag', 'movement', 'report'],
+  message: 'missing command: use one of backup, account, group, category, tag, movement, report',
 }
 
 describe('main', () => {
@@ -22,7 +22,7 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
-  it('--help lists backup and the account, group, category, tag and movement groups as its commands', async () => {
+  it('--help lists backup, the account, group, category, tag and movement groups and report as its commands', async () => {
     const { stdout } = await runCli(['--help'])
 
     const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
@@ -33,6 +33,9 @@ describe('main', () => {
       expect.stringMatching(/^ {2}category\s+categories a movement can take$/),
       expect.stringMatching(/^ {2}tag\s+tags a movement can carry$/),
       expect.stringMatching(/^ {2}movement\s+movements and transfers$/),
+      expect.stringMatching(
+        /^ {2}report \[options\]\s+spending and income of a period, by group and category$/,
+      ),
     ])
   })
 
@@ -42,7 +45,12 @@ describe('main', () => {
     expect(code).toBe(1)
     expect(stdout).toBe('')
     expect(stderr).toBe(
-      `${encode({ error: { code: 'unknown_command', message: "unknown command 'import'" } })}\n`,
+      `${encode({
+        error: {
+          code: 'unknown_command',
+          message: "unknown command 'import'\n(Did you mean report?)",
+        },
+      })}\n`,
     )
   })
 

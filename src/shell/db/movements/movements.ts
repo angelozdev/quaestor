@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import {
   RefusedWriteError,
@@ -12,6 +12,7 @@ import {
   type WriteDeps,
   type WriteRequest,
 } from '#core/ledger'
+import type { CountedMovement } from '#core/report'
 import { listAccounts } from '../accounts/accounts.ts'
 import { accounts } from '../accounts/accounts.schema.ts'
 import { listCategories } from '../categories/categories.ts'
@@ -22,6 +23,7 @@ import { TAG_SEPARATOR } from './movements.constants.ts'
 import { movementTags, movements } from './movements.schema.ts'
 import type {
   BalanceChange,
+  CountedFilter,
   ListedMovement,
   MovementFilter,
   MovementRow,
@@ -239,4 +241,26 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
     .all()
     .filter(({ payee }) => filter.payee === undefined || matchesPayee(payee, filter.payee))
     .map(({ balance, ...stored }) => ({ ...rowOf(stored), balance: amountOf(balance) }))
+}
+
+export function countedMovements(store: Store, filter: CountedFilter): CountedMovement[] {
+  return database(store)
+    .select({
+      date: movements.date,
+      cents: movements.amount,
+      currency: accounts.currency,
+      category: sql<string>`${movements.categoryId}`,
+    })
+    .from(movements)
+    .innerJoin(accounts, eq(accounts.id, movements.accountId))
+    .where(
+      and(
+        isNull(movements.deletedAt),
+        isNotNull(movements.categoryId),
+        gte(movements.date, filter.from),
+        lte(movements.date, filter.to),
+      ),
+    )
+    .orderBy(movements.date, movements.seq)
+    .all()
 }

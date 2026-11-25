@@ -25,8 +25,13 @@ async function groupId(cli: LedgerCli, name: string): Promise<string> {
   return group.id
 }
 
-export async function addCategory(cli: LedgerCli, name = 'Food', group = 'Food & Dining') {
-  const argv = ['category', 'add', name, '--emoji', '🍽️', '--group', await groupId(cli, group)]
+export async function addCategory(
+  cli: LedgerCli,
+  name = 'Food',
+  group = 'Food & Dining',
+  emoji = '🍽️',
+) {
+  const argv = ['category', 'add', name, '--emoji', emoji, '--group', await groupId(cli, group)]
   return added(cli, argv, 'category')
 }
 

@@ -3,10 +3,19 @@ export {
   AMOUNT_PATTERN,
   GROUP_KINDS,
   ID_LENGTH,
+  LOCAL_CURRENCY,
   TAG_PATTERN,
 } from './ledger.constants.ts'
 export { AlreadyExistsError, NotFoundError, RefusedWriteError } from './ledger.errors.ts'
-export { amountOf, centsOf, checkWrite, drawCode, isCurrency, matchesPayee } from './ledger.ts'
+export {
+  addCents,
+  amountOf,
+  centsOf,
+  checkWrite,
+  drawCode,
+  isCurrency,
+  matchesPayee,
+} from './ledger.ts'
 export type {
   Account,
   AccountDraft,

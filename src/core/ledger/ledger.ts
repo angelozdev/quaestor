@@ -34,6 +34,12 @@ export function centsOf(text: string): number {
   return text.startsWith('-') ? 0 - cents : cents
 }
 
+export function addCents(a: number, b: number): number {
+  const sum = a + b
+  if (!Number.isSafeInteger(sum)) throw new RangeError(`${a} + ${b} cents is not a safe integer`)
+  return sum
+}
+
 export function amountOf(cents: number): number {
   return cents / CENTS_PER_UNIT
 }
