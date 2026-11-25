@@ -4,6 +4,7 @@ import { accountListCommand } from '../commands/account-list/account-list.ts'
 import { backupCommand } from '../commands/backup/backup.ts'
 import { categoryAddCommand } from '../commands/category-add/category-add.ts'
 import { categoryArchiveCommand } from '../commands/category-archive/category-archive.ts'
+import { categoryEditCommand } from '../commands/category-edit/category-edit.ts'
 import { categoryListCommand } from '../commands/category-list/category-list.ts'
 import { groupAddCommand } from '../commands/group-add/group-add.ts'
 import { groupEditCommand } from '../commands/group-edit/group-edit.ts'
@@ -30,6 +31,7 @@ const COMMANDS: CliCommand[] = [
   categoryListCommand,
   categoryAddCommand,
   categoryArchiveCommand,
+  categoryEditCommand,
   tagListCommand,
   tagAddCommand,
   movementListCommand,

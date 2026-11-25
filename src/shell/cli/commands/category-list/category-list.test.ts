@@ -61,6 +61,10 @@ describe('quaestor category list', () => {
   it('a bare group exits 1 as missing_command with its own commands', async () => {
     const run = await ledgerCli().run(['category'])
 
-    expect(run).toEqual({ code: 1, stdout: '', stderr: missingCommand(['list', 'add', 'archive']) })
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: missingCommand(['list', 'add', 'archive', 'edit']),
+    })
   })
 })

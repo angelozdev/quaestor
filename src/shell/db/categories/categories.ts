@@ -49,17 +49,37 @@ export function insertCategory(
   }
 }
 
-export function archiveCategory(store: Store, id: string, now: Date): Category {
-  const instant = now.toISOString()
-  const live = and(eq(categories.id, id), isNull(categories.deletedAt))
-  const db = database(store)
-  const category = db.select(STORED_FIELDS).from(categories).where(live).get()
+function liveCategory(store: Store, id: string): Category {
+  const category = database(store)
+    .select(STORED_FIELDS)
+    .from(categories)
+    .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+    .get()
   if (category === undefined) throw new NotFoundError('category', id)
-  if (category.archived) return category
-  return db
+  return category
+}
+
+function updateCategory(
+  store: Store,
+  id: string,
+  change: { archived?: boolean; group?: string },
+  now: Date,
+): Category {
+  return database(store)
     .update(categories)
-    .set({ archived: true, updatedAt: instant })
-    .where(live)
+    .set({ ...change, updatedAt: now.toISOString() })
+    .where(eq(categories.id, id))
     .returning(STORED_FIELDS)
     .get()!
+}
+
+export function archiveCategory(store: Store, id: string, now: Date): Category {
+  const category = liveCategory(store, id)
+  return category.archived ? category : updateCategory(store, id, { archived: true }, now)
+}
+
+export function setCategoryGroup(store: Store, id: string, group: string, now: Date): Category {
+  liveCategory(store, id)
+  liveGroup(store, group)
+  return updateCategory(store, id, { group }, now)
 }
