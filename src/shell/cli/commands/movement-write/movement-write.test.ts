@@ -179,6 +179,26 @@ function archivedDelete(books: Books, index: number): string {
   })
 }
 
+async function expectArchivedAtZero(
+  books: Books,
+  archived: CliRun,
+  balance: number,
+  attempts: Json[],
+): Promise<void> {
+  if (balance !== 0) {
+    expect(archived).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: balanceNotZero(books.savings, balance / 100),
+    })
+    expect(balancesById(await accountsText(books.cli))[books.savings]).toBe(balance / 100)
+    return
+  }
+  expect(archived.code).toBe(0)
+  for (const attempt of attempts) expect((await write(books.cli, attempt)).code).toBe(1)
+  expect(balancesById(await allAccountsText(books.cli))[books.savings]).toBe(0)
+}
+
 function balanceNotZero(account: string, balance: number): string {
   const message = `account ${account} holds ${balance} USD; only an account at 0 can be archived`
   const error = { code: 'balance_not_zero', account, currency: 'USD', balance, message }
@@ -1319,25 +1339,74 @@ describe('quaestor movement write', () => {
           )
         const balance = settle ? 0 : sum
 
-        const archived = await archiveSavings(books)
+        const savingsCodes = rows.filter(({ account }) => account === books.savings).map(idOf)
+        const attempts = [
+          ...savingsCodes.map((code) => ({ delete: [code] })),
+          { movements: [spend(books, { account: books.savings, amount: '1' })] },
+        ]
 
-        if (balance === 0) {
-          const savingsCodes = rows.filter(({ account }) => account === books.savings).map(idOf)
-          const attempts = [
-            ...savingsCodes.map((code) => ({ delete: [code] })),
-            { movements: [spend(books, { account: books.savings, amount: '1' })] },
-          ]
-          expect(archived.code).toBe(0)
-          for (const attempt of attempts) expect((await write(books.cli, attempt)).code).toBe(1)
-          expect(balancesById(await allAccountsText(books.cli))[books.savings]).toBe(0)
-        } else {
-          expect(archived).toEqual({
-            code: 1,
-            stdout: '',
-            stderr: balanceNotZero(books.savings, balance / 100),
+        await expectArchivedAtZero(books, await archiveSavings(books), balance, attempts)
+      }),
+      { numRuns: 50 },
+    )
+  })
+
+  it('an archived account takes no new movement and is neither half of a transfer', async () => {
+    const books = await openBooks()
+    await archiveSavings(books)
+    const refusal = (item: string) => ({
+      code: 'archived',
+      item,
+      message: `account ${books.savings} is archived`,
+    })
+
+    const run = await write(books.cli, {
+      movements: [spend(books, { account: books.savings, amount: '1' })],
+      transfers: [
+        transfer(books),
+        transfer(
+          books,
+          { account: books.savings, payee: 'Back', amount: '-10' },
+          { account: books.wallet, payee: 'Back', amount: '10' },
+        ),
+      ],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        refusal('movements[0]'),
+        refusal('transfers[0].to'),
+        refusal('transfers[1].from'),
+      ),
+    })
+  })
+
+  it('an archived account stays at 0 under transfers: it archives exactly when its balance is 0, and no half moves it after', async () => {
+    await fc.assert(
+      fc.asyncProperty(moved(OPENING_DATE), fc.boolean(), async (items, settle) => {
+        const books = await openBooks()
+        const sum = movedCents(items, 'savings')
+        const halves = await recordedBy(books.cli, { transfers: movedTransfers(books, items) })
+        if (settle && sum !== 0)
+          await write(books.cli, {
+            movements: [spend(books, { account: books.savings, amount: amountTextOf(-sum) })],
           })
-          expect(balancesById(await accountsText(books.cli))[books.savings]).toBe(balance / 100)
-        }
+        const balance = settle ? 0 : sum
+
+        const inSavings = new Set(
+          halves.filter(({ account }) => account === books.savings).map(idOf),
+        )
+        const touching = halves.filter(
+          (half) => inSavings.has(idOf(half)) || inSavings.has(String(half.transfer)),
+        )
+        const attempts = [
+          ...touching.map((half) => ({ delete: [idOf(half)] })),
+          { transfers: [transfer(books)] },
+        ]
+
+        await expectArchivedAtZero(books, await archiveSavings(books), balance, attempts)
       }),
       { numRuns: 50 },
     )

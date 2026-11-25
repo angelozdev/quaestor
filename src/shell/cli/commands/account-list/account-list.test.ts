@@ -94,12 +94,13 @@ describe('quaestor account list', () => {
         spend({ wallet, food: salary }, { amount: '5', payee: 'Acme' }),
       ],
     })
-    await cli.run(['account', 'archive', wallet])
+    const archived = await cli.run(['account', 'archive', wallet])
     await cli.run(['rate', 'set', 'USD', '4000'])
 
     const movements = await list(cli, '--account', wallet)
     const report = await cli.run(['report', '--from', '2026-11-20', '--to', '2026-11-20'])
 
+    expect(decode(archived.stdout)).toMatchObject({ account: { archived: true } })
     expect(decode(movements.stdout)).toMatchObject({ total: 2 })
     expect(decode(report.stdout)).toMatchObject({
       categories: [

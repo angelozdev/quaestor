@@ -83,6 +83,7 @@ describe('quaestor account archive', () => {
     const cli = ledgerCli()
     const id = await addAccount(cli, 'Alex', 'USD', '0')
     await archive(cli, id)
+    expect(await listed(cli)).toEqual({ accounts: [] })
 
     const run = await cli.run([
       'account',
