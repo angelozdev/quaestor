@@ -12,6 +12,15 @@ export const reportCommand: CliCommand = {
     { flags: '--from <day>', description: 'the first day, included, such as 2026-10-01' },
     { flags: '--to <day>', description: 'the last day, included, such as 2026-10-31' },
     { flags: '--by-month', description: 'split every table by calendar month, cut to the period' },
+    {
+      flags: '--tag <tag>',
+      description: 'only the movements with this tag, such as trip:lima-2026',
+    },
+    { flags: '--without-tag <tag>', description: 'leave out the movements with this tag' },
+    {
+      flags: '--payee <text>',
+      description: 'only payees containing this text, ignoring case and accents',
+    },
   ],
   run: (context, options, _args, flags) => {
     const request = parsed(reportSchema, flags)

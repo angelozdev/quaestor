@@ -15,7 +15,13 @@ export type ListedMovement = MovementRow & { balance: number }
 
 export type MovementFilter = { account?: string; from?: string; to?: string; payee?: string }
 
-export type CountedFilter = { from: string; to: string }
+export type CountedFilter = {
+  from: string
+  to: string
+  tag?: string
+  withoutTag?: string
+  payee?: string
+}
 
 export type BalanceChange = { account: string; currency: string; before: number; after: number }
 

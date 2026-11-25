@@ -27,8 +27,9 @@ export function movement(
   date: string,
   amount: string,
   currency = 'COP',
+  extra: Json = {},
 ): Json {
-  return { account, category, date, amount, currency, payee: 'Payee' }
+  return { account, category, date, amount, currency, payee: 'Payee', ...extra }
 }
 
 export function record(cli: LedgerCli, ...movements: Json[]) {

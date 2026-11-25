@@ -1,6 +1,21 @@
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or, sql } from 'drizzle-orm'
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  notExists,
+  or,
+  sql,
+} from 'drizzle-orm'
 import { alias } from 'drizzle-orm/sqlite-core'
 import {
+  NotFoundError,
   RefusedWriteError,
   amountOf,
   checkWrite,
@@ -243,13 +258,28 @@ export function listMovements(store: Store, filter: MovementFilter): ListedMovem
     .map(({ balance, ...stored }) => ({ ...rowOf(stored), balance: amountOf(balance) }))
 }
 
+function taggedWith(store: Store, tag: string) {
+  return database(store)
+    .select({ tag: movementTags.tag })
+    .from(movementTags)
+    .where(and(eq(movementTags.movementId, movements.id), eq(movementTags.tag, tag)))
+}
+
+function refuseUnknownTags(store: Store, tags: (string | undefined)[]): void {
+  const known = new Set(listTags(store))
+  for (const tag of tags)
+    if (tag !== undefined && !known.has(tag)) throw new NotFoundError('tag', tag)
+}
+
 export function countedMovements(store: Store, filter: CountedFilter): CountedMovement[] {
+  refuseUnknownTags(store, [filter.tag, filter.withoutTag])
   return database(store)
     .select({
       date: movements.date,
       cents: movements.amount,
       currency: accounts.currency,
       category: sql<string>`${movements.categoryId}`,
+      payee: movements.payee,
     })
     .from(movements)
     .innerJoin(accounts, eq(accounts.id, movements.accountId))
@@ -259,8 +289,14 @@ export function countedMovements(store: Store, filter: CountedFilter): CountedMo
         isNotNull(movements.categoryId),
         gte(movements.date, filter.from),
         lte(movements.date, filter.to),
+        filter.tag === undefined ? undefined : exists(taggedWith(store, filter.tag)),
+        filter.withoutTag === undefined
+          ? undefined
+          : notExists(taggedWith(store, filter.withoutTag)),
       ),
     )
     .orderBy(movements.date, movements.seq)
     .all()
+    .filter(({ payee }) => filter.payee === undefined || matchesPayee(payee, filter.payee))
+    .map(({ payee: _payee, ...counted }) => counted)
 }

@@ -3,7 +3,7 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { addAccount, addCategory, write } from '../../../../../tests/support/books/books.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
-import { invalidInput } from '../../../../../tests/support/refusals/refusals.ts'
+import { invalidInput, notFound } from '../../../../../tests/support/refusals/refusals.ts'
 import {
   mixedMoves,
   movement,
@@ -33,6 +33,23 @@ async function usdAndKrwOctober() {
     movement(books.wallet, books.restaurants, '2026-10-03', '-10.85', 'USD'),
     movement(books.card, books.restaurants, '2026-10-04', '-15000', 'KRW'),
   )
+  return books
+}
+
+const SEPTEMBER = ['2026-09-01', '2026-09-30'] as const
+
+async function tripSeptember() {
+  const books = await reportBooks()
+  await books.cli.run(['tag', 'add', 'trip:lima-2026'])
+  await record(
+    books.cli,
+    movement(books.wallet, books.restaurants, '2026-09-03', '-20', 'USD', {
+      tags: ['trip:lima-2026'],
+    }),
+    movement(books.wallet, books.restaurants, '2026-09-04', '-5', 'USD'),
+    movement(books.bank, books.restaurants, '2026-09-05', '-100000'),
+  )
+  await books.cli.run(['rate', 'set', 'USD', '4000'])
   return books
 }
 
@@ -640,6 +657,75 @@ categories[2]{month,id,group,emoji,name,total,USD}:
       }),
       { numRuns: 50 },
     )
+  })
+
+  it('--tag keeps only the movements with that tag: how much the trip cost', async () => {
+    const books = await tripSeptember()
+
+    const run = await report(books.cli, ...SEPTEMBER, '--tag', 'trip:lima-2026')
+
+    expect(totalsOf(run.stdout)).toEqual({ income: 0, spending: 80000, left: -80000, outside: 0 })
+    expect((decode(run.stdout) as Report).categories).toMatchObject([{ total: 80000, USD: 20 }])
+  })
+
+  it('--without-tag leaves them out: September without the trip', async () => {
+    const books = await tripSeptember()
+
+    const run = await report(books.cli, ...SEPTEMBER, '--without-tag', 'trip:lima-2026')
+
+    expect(totalsOf(run.stdout)).toEqual({ income: 0, spending: 120000, left: -120000, outside: 0 })
+    expect((decode(run.stdout) as Report).categories).toMatchObject([{ total: 120000, USD: 5 }])
+  })
+
+  it('--payee keeps the payees containing the text, ignoring case and accents', async () => {
+    const books = await reportBooks()
+    await record(
+      books.cli,
+      movement(books.wallet, books.restaurants, '2026-09-03', '-10', 'USD', {
+        payee: 'UBER *TRIP',
+      }),
+      movement(books.wallet, books.restaurants, '2026-09-04', '-2', 'USD', { payee: 'Úber Eats' }),
+      movement(books.wallet, books.restaurants, '2026-09-05', '-7', 'USD', { payee: 'Rappi' }),
+    )
+    await books.cli.run(['rate', 'set', 'USD', '4000'])
+
+    const run = await report(books.cli, ...SEPTEMBER, '--payee', 'uber')
+
+    expect(totalsOf(run.stdout).spending).toBe(48000)
+  })
+
+  it('a tag that does not exist is refused as not_found', async () => {
+    const books = await tripSeptember()
+
+    const run = await report(books.cli, ...SEPTEMBER, '--tag', 'trip:lima-2062')
+    const without = await report(books.cli, ...SEPTEMBER, '--without-tag', 'trip:lima-2062')
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: notFound('tag', 'trip:lima-2062') })
+    expect(run.stderr).toBe(`env: test
+error:
+  code: not_found
+  kind: tag
+  value: "trip:lima-2062"
+  message: "tag trip:lima-2062 does not exist"
+`)
+    expect(without).toEqual(run)
+  })
+
+  it('a movement the filters leave out needs no rate', async () => {
+    const books = await reportBooks()
+    await books.cli.run(['tag', 'add', 'trip:lima-2026'])
+    await record(
+      books.cli,
+      movement(books.wallet, books.restaurants, '2026-09-03', '-5', 'USD'),
+      movement(books.bank, books.restaurants, '2026-09-04', '-100000', 'COP', {
+        tags: ['trip:lima-2026'],
+      }),
+    )
+
+    const run = await report(books.cli, ...SEPTEMBER, '--tag', 'trip:lima-2026')
+
+    expect(run.code).toBe(0)
+    expect(totalsOf(run.stdout).spending).toBe(100000)
   })
 
   it('categories add up to their group and groups to their line, for any movements', async () => {
