@@ -1,6 +1,6 @@
 # Archiving an account
 
-Status: draft, waiting for Angelo's approval.
+Status: approved by Angelo on 2026-11-25, not built.
 
 ## Why
 
