@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tempDir } from '../temp-dir/temp-dir.ts'
-import { MIGRATION_FILE } from './fixture-migrations.constants.ts'
+import { MIGRATION_FILE, SHIPPED_MIGRATIONS } from './fixture-migrations.constants.ts'
 import type { FixtureMigrations } from './fixture-migrations.types.ts'
 
 export function writeMigrations(dir: string, migrations: FixtureMigrations): string {
@@ -14,4 +14,10 @@ export function writeMigrations(dir: string, migrations: FixtureMigrations): str
 
 export function noMigrations(): string {
   return tempDir('quaestor-migrations-')
+}
+
+export function shippedMigrationNames(): string[] {
+  return readdirSync(SHIPPED_MIGRATIONS)
+    .filter((name) => existsSync(join(SHIPPED_MIGRATIONS, name, MIGRATION_FILE)))
+    .toSorted()
 }

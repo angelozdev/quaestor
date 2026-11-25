@@ -1,12 +1,9 @@
 import { encode } from '@toon-format/toon'
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  MIGRATION_FILE,
-  SHIPPED_MIGRATIONS,
-} from '../../../../tests/support/fixture-migrations/fixture-migrations.constants.ts'
+import { shippedMigrationNames } from '../../../../tests/support/fixture-migrations/fixture-migrations.ts'
 import { invalidInput } from '../../../../tests/support/refusals/refusals.ts'
 import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 import { REPO_ROOT } from './bin.constants.ts'
@@ -110,9 +107,7 @@ describe('source bin', () => {
 
   it('the source bin migrates a new store with every shipped migration', () => {
     const dbPath = join(tempDir('quaestor-store-'), 'x.sqlite')
-    const shipped = readdirSync(SHIPPED_MIGRATIONS)
-      .filter((name) => existsSync(join(SHIPPED_MIGRATIONS, name, MIGRATION_FILE)))
-      .toSorted()
+    const shipped = shippedMigrationNames()
 
     const result = runBin(['account', 'list'], { vars: { QUAESTOR_DB: dbPath } })
 
