@@ -1,7 +1,6 @@
 import { decode, encode } from '@toon-format/toon'
 import { describe, expect, it } from 'vitest'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
-import { fixtureExport } from '../../../../../tests/support/legacy-export/legacy-export.ts'
 import { missingCommand } from '../../../../../tests/support/refusals/refusals.ts'
 
 function descendingCodes() {
@@ -37,7 +36,10 @@ describe('quaestor category list', () => {
 
   it('categories with the same name are listed by code', async () => {
     const cli = ledgerCli({ randomIndex: descendingCodes() })
-    await cli.run(['import', fixtureExport()])
+    const { stdout: added } = await cli.run(['category', 'add', 'Gifts', '--emoji', '🎁'])
+    const first = (decode(added) as { category: { id: string } }).category.id
+    await cli.run(['category', 'archive', first])
+    await cli.run(['category', 'add', 'Gifts', '--emoji', '🎁'])
 
     const { stdout } = await cli.run(['category', 'list'])
 

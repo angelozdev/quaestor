@@ -5,7 +5,7 @@ import { REPO_ROOT } from '#shell/cli'
 import { runCli } from '../support/run-cli/run-cli.ts'
 
 const SKILL_PATH = join(REPO_ROOT, '.claude', 'skills', 'record-movements', 'SKILL.md')
-const COMMAND = /\bquaestor (?:(?:account|category|tag|movement) [a-z]+|import|backup)\b/g
+const COMMAND = /\bquaestor (?:(?:account|category|tag|movement) [a-z]+|backup)\b/g
 
 function skill(): string {
   return readFileSync(SKILL_PATH, 'utf8')

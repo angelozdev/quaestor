@@ -46,8 +46,8 @@ Written for a reader that is a model, not a person.
   `env: custom (<path>)`), `backup: <path> (before migrating)` (only in `prod`, and
   only when a migration is pending), `migrated: <name>` per migration applied, then
   the error object when the command fails. A call refused before a store is chosen,
-  such as a usage error, `invalid_env`, `invalid_json`, `invalid_input` or
-  `export_mismatch`, writes only the error object.
+  such as a usage error, `invalid_env`, `invalid_json` or `invalid_input`, writes only
+  the error object.
 - A failure leaves stdout empty, exits non-zero and writes a structured error with
   a stable `code` (for example `invalid_env`) and the data needed to act on it.
 - Exit codes, decided by Angelo on 2026-11-23: 0 success; 1 refused, the call was
@@ -86,19 +86,7 @@ Written for a reader that is a model, not a person.
   each `{code, item, message}` where `item` is the position (`delete[0]`,
   `movements[2]`, `transfers[0].from`) and `code` is `not_found`, `currency_mismatch`,
   `before_opening`, `same_account_transfer` or `archived`, and nothing written;
-  `already_imported`, 1, when `import` meets a store that holds any data (an account, a category, a tag or
-  a movement, deleted ones included);
-  `export_mismatch`, 2, when a legacy export cannot be trusted, with the `file` (relative
-  to the export folder) and the `reason`, found before a store is opened: a file cannot be
-  read (`cannot be read: ENOENT`), its sha256 or row count differs from `manifest.json`,
-  one of its rows does not parse (`line 14: id: must be a whole number`), or
-  `manifest.json` itself is not valid JSON, fails validation
-  (`exportedAt: Invalid input: ...`), lists no `account`, `category`, `tag`,
-  `transaction` or `transaction_tag` table (`lists no tag table`) or gives an account no
-  balance (`account 3 has no balance`); `balance_mismatch`, 2,
-  when an imported account's balance would differ from the export's, with the `account`
-  and the `expected` and `actual` balance, nothing written; `unexpected`,
-  2, for any error no class names, with its message.
+  `unexpected`, 2, for any error no class names, with its message.
 - Quaestor's own failures are error classes in their module's `.errors.ts`, each
   extending `RefusedError` (exit 1) or `FailedError` (exit 2) from `#core/errors`
   with its stable code. Commander's parse errors are not classes: `failure.ts` maps
@@ -208,6 +196,9 @@ Written for a reader that is a model, not a person.
   `docker start quaestor-db-1`,
   `docker exec -i quaestor-db-1 sh -c 'psql -U "${POSTGRES_USER:-quaestor}" -d "${POSTGRES_DB:-quaestor}"'`,
   `docker stop quaestor-db-1`. Nothing writes to it.
+- The `import` command loaded the export into `prod` once, on 2026-11-24, and was
+  retired on 2026-11-25 (see `docs/features/spending-and-income.md`). The export stays
+  untouched in `~/.quaestor/legacy/`.
 - Each feature, when it is built, imports the legacy rows it needs into its own
   new tables. Nothing is imported before its table exists, and nothing is
   imported twice.

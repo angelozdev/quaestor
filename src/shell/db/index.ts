@@ -5,6 +5,5 @@ export { archiveCategory, insertCategory, listCategories } from './categories/ca
 export { closeStore, inTransaction, openStore } from './database/database.ts'
 export type { Store } from './database/database.types.ts'
 export { listGroups } from './groups/groups.ts'
-export { importLedger } from './legacy-import/legacy-import.ts'
 export { listMovements, writeMovements } from './movements/movements.ts'
 export { insertTag, listTags } from './tags/tags.ts'

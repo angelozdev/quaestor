@@ -181,7 +181,7 @@ Writes:
 - `quaestor tag add <name>` and `quaestor category add <name> --emoji <emoji>`.
 - `quaestor account add <name>` with `--emoji`, `--type`, `--currency`, `--opening` and
   `--opening-date`.
-- `quaestor import <folder>`, once, into a store with no data.
+- `quaestor import <folder>`: retired on 2026-11-25 (see `spending-and-income.md`).
 
 ## Importing the legacy export
 

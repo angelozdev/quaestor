@@ -153,9 +153,9 @@ After the yes, run the same command without `--dry-run`. The dry run's code for 
   - `refused`, `invalid_input` and `invalid_json` list every item at fault, such as `movements[2]` or `transfers[0].from`. Fix every listed item, dry run again, and show Angelo the new dry run.
   - `already_exists` means the account, category or tag name is taken: use the existing one, and read its code from the matching `list`.
   - The usage codes (`unknown_option`, `unknown_command`, `option_missing_argument`, `missing_command`) mean the command line is wrong: read the message, fix it and run again.
-- A command that fails before opening a store (`invalid_input`, `invalid_json`, `export_mismatch`, the usage codes) prints no `env:` line. No `env:` line means no store was opened, not that the wrong store was.
+- A command that fails before opening a store (`invalid_input`, `invalid_json`, the usage codes) prints no `env:` line. No `env:` line means no store was opened, not that the wrong store was.
 - Exit 2: stop and tell Angelo what stderr said. Do not retry or work around it.
 
 ## Not part of a session
 
-`quaestor import` loads the legacy export once, into an empty store; never run it here. `quaestor backup` copies the store to its backups folder; run it only when Angelo asks.
+`quaestor backup` copies the store to its backups folder; run it only when Angelo asks.
