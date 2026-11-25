@@ -1,9 +1,9 @@
 import { decode, encode } from '@toon-format/toon'
+import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { closeStore } from '#shell/db'
 import {
   FAILING_MIGRATIONS,
   FIXTURE_MIGRATIONS,
@@ -17,7 +17,6 @@ import type { FixtureMigrations } from '../../../../../tests/support/fixture-mig
 import { FIXED_INSTANT } from '../../../../../tests/support/run-cli/run-cli.constants.ts'
 import { runCli } from '../../../../../tests/support/run-cli/run-cli.ts'
 import type { CliOverrides } from '../../../../../tests/support/run-cli/run-cli.types.ts'
-import { openTestStore, runSql, selectAll } from '../../../../../tests/support/store/store.ts'
 import { tempDir } from '../../../../../tests/support/temp-dir/temp-dir.ts'
 
 const COPY_NAME = 'test-2026-11-23T21-04-05-123Z.sqlite'
@@ -33,6 +32,21 @@ afterEach(() => {
   if (lockedFolder !== null) chmodSync(lockedFolder, 0o700)
   lockedFolder = null
 })
+
+const MIGRATED = 'migrated: '
+
+const FIXTURE_NAMES = Object.keys(FIXTURE_MIGRATIONS)
+
+const HOLD_EXCLUSIVE_LOCK = `
+const { DatabaseSync } = require('node:sqlite')
+const db = new DatabaseSync(process.argv[1])
+db.exec('BEGIN EXCLUSIVE')
+process.stdout.write('locked\\n')
+setTimeout(() => {
+  db.exec('COMMIT')
+  db.close()
+}, 400)
+`
 
 const WALLET_ARGV = [
   'account',
@@ -76,8 +90,26 @@ function advancingClock(): () => Date {
   return () => new Date(Date.parse(FIXED_INSTANT) + calls++)
 }
 
-function fixtureTables(path: string): unknown[] {
-  return selectAll(path, "select name from sqlite_master where name like 'fixture_%' order by name")
+async function migrate(path: string, migrationsDir: string): Promise<string[]> {
+  const { code, stderr } = await runCli(['backup'], {
+    dataDir: tempDir('quaestor-migrate-'),
+    vars: { QUAESTOR_DB: path },
+    migrationsDir,
+  })
+  if (code !== 0) throw new Error(`migrate exited ${code}: ${stderr}`)
+  return stderr
+    .split('\n')
+    .filter((line) => line.startsWith(MIGRATED))
+    .map((line) => line.slice(MIGRATED.length))
+}
+
+function holdExclusiveLock(path: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['-e', HOLD_EXCLUSIVE_LOCK, path])
+    child.once('error', reject)
+    child.stdout.once('data', () => resolve())
+    child.once('close', () => reject(new Error('the writer ended before it held the file')))
+  })
 }
 
 async function expectNotAStoreLeftAlone(env: string) {
@@ -111,12 +143,13 @@ describe('quaestor backup', () => {
 
   it('a second backup at the same instant exits 2 as backup_not_written and keeps the first copy', async () => {
     const folder = join(dataDir, 'backups')
-    await backup()
+    const shipped = { migrationsDir: SHIPPED_MIGRATIONS }
+    await backup([], shipped)
     const copy = join(folder, COPY_NAME)
     const before = sha256(copy)
-    runSql(join(dataDir, 'test.sqlite'), 'create table notes (id integer primary key)')
+    expect((await runCli(WALLET_ARGV, { dataDir, ...shipped })).code).toBe(0)
 
-    const { code, stdout, stderr } = await backup()
+    const { code, stdout, stderr } = await backup([], shipped)
 
     const reason = `${COPY_NAME} already exists`
     expect(code).toBe(2)
@@ -216,17 +249,14 @@ describe('quaestor backup', () => {
 
   it('an unwritable backups folder exits 2 as backup_not_written, leaves no copy and leaves the store unchanged', async () => {
     const store = join(dataDir, 'test.sqlite')
-    closeStore(await openTestStore(store, noMigrations()))
-    runSql(
-      store,
-      "create table notes (id integer primary key, body text); insert into notes (body) values ('first')",
-    )
+    const shipped = { migrationsDir: SHIPPED_MIGRATIONS }
+    expect((await runCli(WALLET_ARGV, { dataDir, ...shipped })).code).toBe(0)
     const before = sha256(store)
     const folder = join(dataDir, 'backups')
     mkdirSync(folder, { mode: 0o500 })
     lockedFolder = folder
 
-    const { code, stdout, stderr } = await backup()
+    const { code, stdout, stderr } = await backup([], shipped)
 
     expect(code).toBe(2)
     expect(stdout).toBe('')
@@ -371,7 +401,7 @@ describe('quaestor backup', () => {
       'env: test\nmigrated: 20261123000000_first\nmigrated: 20261123000100_second\n',
     )
     expect(stdout).toBe(`${encode({ path: copy, removed: [] })}\n`)
-    expect(fixtureTables(copy)).toEqual([{ name: 'fixture_a' }, { name: 'fixture_b' }])
+    expect(await migrate(copy, fixtureMigrations())).toEqual([])
   })
 
   it('in a non-prod env pending migrations apply without a backup', async () => {
@@ -400,8 +430,8 @@ describe('quaestor backup', () => {
         'migrated: 20261123000000_first\nmigrated: 20261123000100_second\n',
     )
     expect(stdout).toBe(`${encode({ path: own, removed: [] })}\n`)
-    expect(fixtureTables(beforeMigrating)).toEqual([])
-    expect(fixtureTables(own)).toEqual([{ name: 'fixture_a' }, { name: 'fixture_b' }])
+    expect(await migrate(beforeMigrating, fixtureMigrations())).toEqual(FIXTURE_NAMES)
+    expect(await migrate(own, fixtureMigrations())).toEqual([])
     expect(readdirSync(folder)).toEqual([
       'prod-2026-11-23T21-04-05-123Z.sqlite',
       'prod-2026-11-23T21-04-05-124Z.sqlite',
@@ -426,7 +456,7 @@ describe('quaestor backup', () => {
     )
     expect(stderr).not.toContain('migrated:')
     expect(readdirSync(folder)).toEqual([])
-    expect(fixtureTables(join(dataDir, 'prod.sqlite'))).toEqual([])
+    expect(await migrate(join(dataDir, 'prod.sqlite'), fixtureMigrations())).toEqual(FIXTURE_NAMES)
   })
 
   it('a failing migration in prod exits 2 as migration_failed and keeps the copy taken before it', async () => {
@@ -451,12 +481,12 @@ describe('quaestor backup', () => {
       })}\n`,
     )
     expect(readdirSync(folder)).toEqual(['prod-2026-11-23T21-04-05-123Z.sqlite'])
-    expect(fixtureTables(join(dataDir, 'prod.sqlite'))).toEqual([])
+    expect(await migrate(join(dataDir, 'prod.sqlite'), fixtureMigrations())).toEqual(FIXTURE_NAMES)
   })
 
   it('a store with migrations this code does not know exits 2 as unknown_migrations and is unchanged', async () => {
     const store = join(dataDir, 'prod.sqlite')
-    closeStore(await openTestStore(store, fixtureMigrations()))
+    await migrate(store, fixtureMigrations())
     const before = sha256(store)
 
     const { code, stdout, stderr } = await backup(['--env', 'prod'], {
@@ -586,11 +616,7 @@ describe('quaestor backup copies', () => {
     expect(code).toBe(0)
     expect(readdirSync(folder).toSorted()).toEqual([COPY_NAME, ...foreign].toSorted())
     expectIntact(folder, foreign)
-    const opened = await runCli(['backup'], {
-      dataDir: tempDir('quaestor-cli-'),
-      vars: { QUAESTOR_DB: join(folder, COPY_NAME) },
-    })
-    expect(opened.code).toBe(0)
+    expect(await migrate(join(folder, COPY_NAME), noMigrations())).toEqual([])
   })
 
   it('a clock older than the copies on disk keeps the copy it just wrote', async () => {
@@ -626,5 +652,16 @@ describe('quaestor backup copies', () => {
     }
     expect(error.message).toBe(`cannot write backup to ${folder}: ${error.reason}`)
     expect(readdirSync(dataDir)).toEqual([])
+  })
+
+  it('a store another process holds briefly is waited for, not refused as locked', async () => {
+    const store = join(dataDir, 'test.sqlite')
+    await migrate(store, noMigrations())
+    await holdExclusiveLock(store)
+
+    const { code, stdout } = await backup()
+
+    expect(code).toBe(0)
+    expect(stdout).toBe(`${encode({ path: join(dataDir, 'backups', COPY_NAME), removed: [] })}\n`)
   })
 })
