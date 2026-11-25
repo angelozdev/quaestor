@@ -137,7 +137,7 @@ function monthsBetween(from: string, to: string): string[] {
   let [year = 0, month = 0] = from.split('-').map(Number)
   const last = to.slice(0, MONTH_LENGTH)
   for (;;) {
-    const current = `${year}-${String(month).padStart(2, '0')}`
+    const current = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`
     months.push(current)
     if (current >= last) return months
     month = (month % MONTHS_PER_YEAR) + 1

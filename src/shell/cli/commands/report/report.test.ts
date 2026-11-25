@@ -533,6 +533,15 @@ error:
     )
   })
 
+  it('--by-month names a month before the year 1000 with four digits and goes on into 1000', async () => {
+    const { cli } = await reportBooks()
+
+    const run = await report(cli, '0999-12-01', '1000-01-31', '--by-month')
+
+    const { totals } = decode(run.stdout) as Report
+    expect([...new Set(totals.map((row) => row['month']))]).toEqual(['0999-12', '1000-01'])
+  })
+
   it('--by-month gives every month its four totals, a month with no movement at 0', async () => {
     const books = await reportBooks()
     await record(
