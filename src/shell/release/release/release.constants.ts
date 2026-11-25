@@ -1,4 +1,4 @@
-export const TRUNK_BRANCH = 'rebuild'
+export const TRUNK_BRANCH = 'main'
 
 export const CHECK_SCRIPT = 'check'
 
