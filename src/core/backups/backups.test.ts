@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backupFileName, copiesToRemove } from './backups.ts'
+import { backupFileName, copiesToRemove } from '#core/backups'
 
 const prodCopies = [
   'prod-2026-11-01T10-00-00-000Z.sqlite',

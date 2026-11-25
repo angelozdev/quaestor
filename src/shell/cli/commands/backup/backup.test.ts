@@ -7,6 +7,7 @@ import { closeStore } from '#shell/db'
 import {
   FAILING_MIGRATIONS,
   FIXTURE_MIGRATIONS,
+  SHIPPED_MIGRATIONS,
 } from '../../../../../tests/support/fixture-migrations/fixture-migrations.constants.ts'
 import {
   noMigrations,
@@ -32,6 +33,31 @@ afterEach(() => {
   if (lockedFolder !== null) chmodSync(lockedFolder, 0o700)
   lockedFolder = null
 })
+
+const WALLET_ARGV = [
+  'account',
+  'add',
+  'Wallet',
+  '--emoji',
+  '💵',
+  '--type',
+  'debit',
+  '--currency',
+  'USD',
+  '--opening',
+  '120.50',
+  '--opening-date',
+  '2026-01-05',
+]
+
+function seed(folder: string, names: string[]): void {
+  mkdirSync(folder, { recursive: true })
+  for (const name of names) writeFileSync(join(folder, name), name)
+}
+
+function expectIntact(folder: string, names: string[]): void {
+  for (const name of names) expect(readFileSync(join(folder, name), 'utf8')).toBe(name)
+}
 
 function sha256(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -508,5 +534,97 @@ describe('quaestor backup', () => {
     expect(stderr).toBe(
       `env: test\n${encode({ error: { code: 'unexpected', message: 'clock broke' } })}\n`,
     )
+  })
+})
+
+describe('quaestor backup copies', () => {
+  it('the copy holds the same accounts as the store', async () => {
+    const shipped = { migrationsDir: SHIPPED_MIGRATIONS }
+    expect((await runCli(WALLET_ARGV, { dataDir, ...shipped })).code).toBe(0)
+
+    const { stdout } = await backup([], shipped)
+
+    const { path } = decode(stdout) as { path: string }
+    const original = await runCli(['account', 'list'], { dataDir, ...shipped })
+    const copy = await runCli(['account', 'list'], {
+      dataDir,
+      ...shipped,
+      vars: { QUAESTOR_DB: path },
+    })
+    expect(original.stdout).toContain('Wallet')
+    expect(copy.stdout).toBe(original.stdout)
+  })
+
+  it("a sixth backup removes that env's oldest copy and leaves other envs and other files untouched", async () => {
+    const folder = join(dataDir, 'backups')
+    const prod = [1, 2, 3, 4, 5].map((day) => `prod-2026-11-0${day}T10-00-00-000Z.sqlite`)
+    const others = [
+      'test-2026-10-01T10-00-00-000Z.sqlite',
+      'test-2026-10-02T10-00-00-000Z.sqlite',
+      'notes.txt',
+    ]
+    const own = 'prod-2026-11-23T21-04-05-123Z.sqlite'
+    seed(folder, [...prod, ...others])
+
+    const { code, stdout } = await backup(['--env', 'prod'])
+
+    expect(code).toBe(0)
+    expect(stdout).toBe(
+      `${encode({ path: join(folder, own), removed: [join(folder, prod[0]!)] })}\n`,
+    )
+    expect(readdirSync(folder).toSorted()).toEqual([...prod.slice(1), ...others, own].toSorted())
+    expectIntact(folder, [...prod.slice(1), ...others])
+  })
+
+  it('a partial copy another process left or is still writing is neither used nor removed', async () => {
+    const folder = join(dataDir, 'backups')
+    const foreign = [`${COPY_NAME}.partial`, `${COPY_NAME}.0.partial`]
+    seed(folder, foreign)
+
+    const { code } = await backup()
+
+    expect(code).toBe(0)
+    expect(readdirSync(folder).toSorted()).toEqual([COPY_NAME, ...foreign].toSorted())
+    expectIntact(folder, foreign)
+    const opened = await runCli(['backup'], {
+      dataDir: tempDir('quaestor-cli-'),
+      vars: { QUAESTOR_DB: join(folder, COPY_NAME) },
+    })
+    expect(opened.code).toBe(0)
+  })
+
+  it('a clock older than the copies on disk keeps the copy it just wrote', async () => {
+    const folder = join(dataDir, 'backups')
+    const newer = [1, 2, 3, 4, 5].map((day) => `test-2026-12-0${day}T10-00-00-000Z.sqlite`)
+    seed(folder, newer)
+
+    const { code, stdout } = await backup()
+
+    expect(code).toBe(0)
+    expect(stdout).toBe(`${encode({ path: join(folder, COPY_NAME), removed: [] })}\n`)
+    expect(readdirSync(folder)).toEqual([COPY_NAME, ...newer])
+    expectIntact(folder, newer)
+  })
+
+  it('a backups folder that cannot be created exits 2 as backup_not_written naming that folder', async () => {
+    const dbPath = join(tempDir('quaestor-store-'), 'x.sqlite')
+    const folder = join(dataDir, 'backups')
+    chmodSync(dataDir, 0o500)
+    lockedFolder = dataDir
+
+    const { code, stdout, stderr } = await backup([], { vars: { QUAESTOR_DB: dbPath } })
+
+    expect(code).toBe(2)
+    expect(stdout).toBe('')
+    expect(stderr).toMatch(
+      new RegExp(
+        `^${RegExp.escape(`env: custom (${dbPath})\nerror:\n  code: backup_not_written\n  folder: ${folder}\n  reason: `)}`,
+      ),
+    )
+    const { error } = decode(stderr.slice(stderr.indexOf('\n') + 1)) as {
+      error: { reason: string; message: string }
+    }
+    expect(error.message).toBe(`cannot write backup to ${folder}: ${error.reason}`)
+    expect(readdirSync(dataDir)).toEqual([])
   })
 })
