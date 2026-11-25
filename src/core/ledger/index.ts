@@ -4,6 +4,7 @@ export {
   GROUP_KINDS,
   ID_LENGTH,
   LOCAL_CURRENCY,
+  MAX_PRINTED_CENTS,
   RATE_PATTERN,
   TAG_PATTERN,
 } from './ledger.constants.ts'

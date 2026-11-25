@@ -10,6 +10,8 @@ export const ID_LENGTH = 4
 
 export const AMOUNT_PATTERN = /^-?\d+(\.\d{1,2})?$/
 
+export const MAX_PRINTED_CENTS = 999_999_999_999_999
+
 export const RATE_PATTERN = /^\d+(\.\d{1,2})?$/
 
 export const TAG_PATTERN = /^[a-z0-9:-]+$/

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   AMOUNT_PATTERN,
   LOCAL_CURRENCY,
+  MAX_PRINTED_CENTS,
   RATE_PATTERN,
   TAG_PATTERN,
   centsOf,
@@ -16,6 +17,7 @@ import {
   EMOJI_PATTERN,
   LOCAL_CURRENCY_MESSAGE,
   RATE_MESSAGE,
+  RATE_TOO_LARGE_MESSAGE,
   REQUIRED_MESSAGE,
   TAG_MESSAGE,
   UNKNOWN_KEY_MESSAGE,
@@ -52,7 +54,8 @@ export const rateText = z
   .string(wrongOr(RATE_MESSAGE))
   .regex(RATE_PATTERN, RATE_MESSAGE)
   .transform(centsOf)
-  .refine((rate) => rate > 0 && Number.isSafeInteger(rate), { error: RATE_MESSAGE, abort: true })
+  .refine((rate) => rate > 0, { error: RATE_MESSAGE, abort: true })
+  .refine((rate) => rate <= MAX_PRINTED_CENTS, { error: RATE_TOO_LARGE_MESSAGE, abort: true })
 
 export const emojiText = z.string(wrongOr(EMOJI_MESSAGE)).regex(EMOJI_PATTERN, EMOJI_MESSAGE)
 

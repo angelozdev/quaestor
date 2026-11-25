@@ -127,8 +127,9 @@ Written for a reader that is a model, not a person.
   decimals keep it at 1.2 × 10^12. Decided by Angelo on 2026-11-25.
 - A report converts each foreign movement on its own through `convertCents`, cents ×
   rate / 100, half a centavo away from zero, and then adds the converted figures. A
-  conversion or a total that is not a safe integer fails as `unexpected` (exit 2) instead
-  of printing a rounded figure.
+  number prints to the cent only up to 15 digits, so a conversion or a total beyond
+  9999999999999.99 either way fails as `unexpected` (exit 2) instead of printing a figure
+  off by a cent, and `rate set` refuses a rate beyond it.
 
 ## Environments and data
 

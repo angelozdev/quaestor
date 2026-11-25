@@ -5,6 +5,7 @@ import {
   DIACRITICS,
   ID_ALPHABET,
   ID_LENGTH,
+  MAX_PRINTED_CENTS,
   PROBLEM_CODES,
 } from './ledger.constants.ts'
 import type {
@@ -34,10 +35,13 @@ export function centsOf(text: string): number {
   return text.startsWith('-') ? 0 - cents : cents
 }
 
+function printed(cents: number, of: string): number {
+  if (Math.abs(cents) > MAX_PRINTED_CENTS) throw new RangeError(`${of} is too large to print`)
+  return cents
+}
+
 export function addCents(a: number, b: number): number {
-  const sum = a + b
-  if (!Number.isSafeInteger(sum)) throw new RangeError(`${a} + ${b} cents is not a safe integer`)
-  return sum
+  return printed(a + b, `${a} + ${b} cents`)
 }
 
 export function convertCents(cents: number, rate: number): number {
@@ -45,10 +49,7 @@ export function convertCents(cents: number, rate: number): number {
   const magnitude = product < 0n ? -product : product
   const hundredths = BigInt(CENTS_PER_UNIT)
   const rounded = (magnitude + hundredths / 2n) / hundredths
-  const converted = Number(product < 0n ? -rounded : rounded)
-  if (!Number.isSafeInteger(converted))
-    throw new RangeError(`${cents} cents at ${rate} is not a safe integer`)
-  return converted
+  return printed(Number(product < 0n ? -rounded : rounded), `${cents} cents at ${rate}`)
 }
 
 export function amountOf(cents: number): number {

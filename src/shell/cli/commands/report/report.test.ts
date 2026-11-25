@@ -728,6 +728,26 @@ error:
     expect(totalsOf(run.stdout).spending).toBe(100000)
   })
 
+  it('a figure too long to print to the cent fails as unexpected; the longest exact one prints whole', async () => {
+    const exact = await reportBooks()
+    const tooLong = await reportBooks()
+    await record(exact.cli, movement(exact.bank, exact.salary, '2026-10-03', '9999999999999.99'))
+    await record(
+      tooLong.cli,
+      movement(tooLong.bank, tooLong.salary, '2026-10-03', '10000000000000'),
+    )
+
+    const printed = await report(exact.cli, ...OCTOBER)
+    const failed = await report(tooLong.cli, ...OCTOBER)
+
+    expect(printed.stdout).toContain('  income,9999999999999.99\n')
+    expect(failed.code).toBe(2)
+    expect(failed.stdout).toBe('')
+    expect(decode(failed.stderr.replace('env: test\n', ''))).toMatchObject({
+      error: { code: 'unexpected' },
+    })
+  })
+
   it('categories add up to their group and groups to their line, for any movements', async () => {
     const kinds = [
       ['Salary', 'Income', 1],

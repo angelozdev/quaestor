@@ -46,6 +46,16 @@ describe('quaestor rate set', () => {
     },
   )
 
+  it('a rate too long to print to the cent is refused', async () => {
+    const run = await ledgerCli().run(['rate', 'set', 'USD', '10000000000000'])
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: invalidInput('rate: is too large: at most 9999999999999.99'),
+    })
+  })
+
   it('COP has no rate', async () => {
     const run = await ledgerCli().run(['rate', 'set', 'COP', '1'])
 
