@@ -1,5 +1,5 @@
-import { isNull } from 'drizzle-orm'
-import { GROUP_KINDS, type Group } from '#core/ledger'
+import { and, eq, isNull } from 'drizzle-orm'
+import { GROUP_KINDS, NotFoundError, type Group } from '#core/ledger'
 import { database } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
 import { groups } from './groups.schema.ts'
@@ -19,4 +19,14 @@ export function listGroups(store: Store): Group[] {
     .orderBy(groups.name, groups.id)
     .all()
     .toSorted((a, b) => GROUP_KINDS.indexOf(a.kind) - GROUP_KINDS.indexOf(b.kind))
+}
+
+export function liveGroup(store: Store, id: string): Group {
+  const group = database(store)
+    .select(STORED_FIELDS)
+    .from(groups)
+    .where(and(eq(groups.id, id), isNull(groups.deletedAt)))
+    .get()
+  if (group === undefined) throw new NotFoundError('group', id)
+  return group
 }

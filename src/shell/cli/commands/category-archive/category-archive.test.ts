@@ -7,7 +7,7 @@ import { notFound, refused } from '../../../../../tests/support/refusals/refusal
 import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 async function addGames(cli: LedgerCli): Promise<string> {
-  const { stdout } = await cli.run(['category', 'add', 'Games', '--emoji', '🎮'])
+  const { stdout } = await cli.run(['category', 'add', 'Games', '--emoji', '🎮', '--group', 'ex09'])
   return (decode(stdout) as { category: { id: string } }).category.id
 }
 
@@ -16,7 +16,7 @@ function archive(cli: LedgerCli, code: string, ...flags: string[]) {
 }
 
 function games(id: string, archived: boolean) {
-  return { id, emoji: '🎮', name: 'Games', archived }
+  return { id, group: 'ex09', emoji: '🎮', name: 'Games', archived }
 }
 
 describe('quaestor category archive', () => {
@@ -59,7 +59,7 @@ describe('quaestor category archive', () => {
     const old = await addGames(cli)
     await archive(cli, old)
 
-    const again = await cli.run(['category', 'add', 'Games', '--emoji', '🎮'])
+    const again = await cli.run(['category', 'add', 'Games', '--emoji', '🎮', '--group', 'ex09'])
     const listed = await cli.run(['category', 'list'])
 
     expect(again.code).toBe(0)

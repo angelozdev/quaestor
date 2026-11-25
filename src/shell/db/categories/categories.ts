@@ -8,10 +8,12 @@ import {
 } from '#core/ledger'
 import { database, isUniqueViolation, withFreshCode } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
+import { liveGroup } from '../groups/groups.ts'
 import { categories } from './categories.schema.ts'
 
 const STORED_FIELDS = {
   id: categories.id,
+  group: categories.group,
   emoji: categories.emoji,
   name: categories.name,
   archived: categories.archived,
@@ -32,6 +34,7 @@ export function insertCategory(
   { randomIndex, now }: WriteDeps,
 ): Category {
   const instant = now.toISOString()
+  liveGroup(store, draft.group)
   try {
     return withFreshCode(randomIndex, (id) =>
       database(store)

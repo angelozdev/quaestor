@@ -32,10 +32,11 @@ export type Account = {
 
 export type AccountRow = Account & { balance: number }
 
-export type CategoryDraft = { emoji: string; name: string }
+export type CategoryDraft = { emoji: string; name: string; group: string }
 
 export type Category = {
   id: string
+  group: string
   emoji: string | null
   name: string
   archived: boolean

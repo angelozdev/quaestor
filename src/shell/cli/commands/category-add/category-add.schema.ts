@@ -3,5 +3,6 @@ import { dryRun, emojiText, fields, requiredText } from '../../invocation/input/
 export const categoryAddSchema = fields({
   name: requiredText,
   emoji: emojiText,
+  group: requiredText,
   dryRun,
 })

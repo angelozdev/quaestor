@@ -16,7 +16,7 @@ function account(id: string, currency: string, extra: Partial<Account> = {}): Ac
 }
 
 function category(id: string, archived = false): Category {
-  return { id, emoji: '🎁', name: id, archived }
+  return { id, group: 'zyt4', emoji: '🎁', name: id, archived }
 }
 
 function catalogOf(accounts: Account[], categories: Category[]): Catalog {

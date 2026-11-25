@@ -152,6 +152,12 @@ Written for a reader that is a model, not a person.
 - Drizzle's migrator applies pending migrations at startup, all or nothing.
 - The migration that brings groups seeds the 14 approved groups with fixed codes, in every
   store.
+- A table that other tables reference is rebuilt with `PRAGMA defer_foreign_keys = ON`,
+  copied through a temporary table and created again under its own name; drizzle-kit's
+  `PRAGMA foreign_keys=OFF` rebuild is a no-op inside the migrator's transaction and fails
+  once rows point at the table (checked on 2026-11-25). When drizzle-kit generates an
+  `ALTER TABLE ... ADD ... NOT NULL` instead, which SQLite refuses on a table with rows, the
+  same rebuild replaces it.
 - In `prod`, a backup is taken before any migration runs. A `QUAESTOR_DB` store
   gets none, so `QUAESTOR_DB` always names a copy, never
   `~/.quaestor/prod.sqlite`. Decided by Angelo on 2026-11-24.

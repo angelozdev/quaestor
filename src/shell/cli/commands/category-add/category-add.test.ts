@@ -1,20 +1,25 @@
 import { decode, encode } from '@toon-format/toon'
 import { describe, expect, it } from 'vitest'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
-import { alreadyExists, invalidInput } from '../../../../../tests/support/refusals/refusals.ts'
+import {
+  alreadyExists,
+  invalidInput,
+  notFound,
+} from '../../../../../tests/support/refusals/refusals.ts'
 import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
 
 const CODE = /^[0-9a-hjkmnp-tv-z]{4}$/
 
 const GAMES = {
   id: expect.stringMatching(CODE),
+  group: 'ex09',
   emoji: '🎮',
   name: 'Games',
   archived: false,
 }
 
-function addArgv(name = 'Games', emoji = '🎮'): string[] {
-  return ['category', 'add', name, '--emoji', emoji]
+function addArgv(name = 'Games', emoji = '🎮', group = 'ex09'): string[] {
+  return ['category', 'add', name, '--emoji', emoji, '--group', group]
 }
 
 function repeatingDraw() {
@@ -24,6 +29,42 @@ function repeatingDraw() {
 }
 
 describe('quaestor category add', () => {
+  it('a category is created with its group, and category list shows it', async () => {
+    const cli = ledgerCli()
+
+    const added = await cli.run(addArgv('Gifts', '🎁', 'zyt4'))
+    const listed = await cli.run(['category', 'list'])
+
+    const { id } = (decode(added.stdout) as { category: { id: string } }).category
+    expect(added).toEqual({
+      code: 0,
+      stdout: `${encode({
+        dryRun: false,
+        category: { id, group: 'zyt4', emoji: '🎁', name: 'Gifts', archived: false },
+      })}\n`,
+      stderr: 'env: test\n',
+    })
+    expect(listed.stdout).toBe(
+      `categories[1]{id,group,emoji,name,archived}:\n  ${encode(id)},zyt4,🎁,Gifts,false\n`,
+    )
+  })
+
+  it('the group is required', async () => {
+    const run = await ledgerCli().run(['category', 'add', 'Games', '--emoji', '🎮'])
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: invalidInput('group: is required') })
+  })
+
+  it('a group that does not exist is refused as not_found', async () => {
+    const cli = ledgerCli()
+
+    const run = await cli.run(addArgv('Games', '🎮', 'zzzz'))
+    const listed = await cli.run(['category', 'list'])
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: notFound('group', 'zzzz') })
+    expect(listed.stdout).toBe(`${encode({ categories: [] })}\n`)
+  })
+
   it('category add creates a category and category list shows it with its code', async () => {
     const cli = ledgerCli()
 
@@ -95,7 +136,7 @@ describe('quaestor category add', () => {
   )
 
   it('the emoji is required', async () => {
-    const run = await ledgerCli().run(['category', 'add', 'Games'])
+    const run = await ledgerCli().run(['category', 'add', 'Games', '--group', 'ex09'])
 
     expect(run).toEqual({ code: 1, stdout: '', stderr: invalidInput('emoji: is required') })
   })

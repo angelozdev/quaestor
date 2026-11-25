@@ -24,8 +24,8 @@ describe('quaestor category list', () => {
 
   it('categories are listed by name', async () => {
     const cli = ledgerCli()
-    await cli.run(['category', 'add', 'Rideshare', '--emoji', '🚕'])
-    await cli.run(['category', 'add', 'Games', '--emoji', '🎮'])
+    await cli.run(['category', 'add', 'Rideshare', '--emoji', '🚕', '--group', 'y6v7'])
+    await cli.run(['category', 'add', 'Games', '--emoji', '🎮', '--group', 'ex09'])
 
     const { stdout } = await cli.run(['category', 'list'])
 
@@ -36,10 +36,18 @@ describe('quaestor category list', () => {
 
   it('categories with the same name are listed by code', async () => {
     const cli = ledgerCli({ randomIndex: descendingCodes() })
-    const { stdout: added } = await cli.run(['category', 'add', 'Gifts', '--emoji', '🎁'])
+    const { stdout: added } = await cli.run([
+      'category',
+      'add',
+      'Gifts',
+      '--emoji',
+      '🎁',
+      '--group',
+      'zyt4',
+    ])
     const first = (decode(added) as { category: { id: string } }).category.id
     await cli.run(['category', 'archive', first])
-    await cli.run(['category', 'add', 'Gifts', '--emoji', '🎁'])
+    await cli.run(['category', 'add', 'Gifts', '--emoji', '🎁', '--group', 'zyt4'])
 
     const { stdout } = await cli.run(['category', 'list'])
 

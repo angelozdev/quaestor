@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { check, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { groups } from '../groups/groups.schema.ts'
 
 export const categories = sqliteTable(
   'categories',
@@ -11,6 +12,9 @@ export const categories = sqliteTable(
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
     deletedAt: text('deleted_at'),
+    group: text('group_id')
+      .notNull()
+      .references(() => groups.id),
   },
   (table) => [
     check(

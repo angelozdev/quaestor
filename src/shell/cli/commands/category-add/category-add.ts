@@ -10,7 +10,11 @@ export const categoryAddCommand: CliCommand = {
   group: 'category',
   description: 'create a category',
   argument: { name: 'name', description: 'the category name in English, such as Restaurants' },
-  options: [{ flags: '--emoji <emoji>', description: 'one emoji, such as 🍽️' }, DRY_RUN_OPTION],
+  options: [
+    { flags: '--emoji <emoji>', description: 'one emoji, such as 🍽️' },
+    { flags: '--group <code>', description: 'its group, from group list' },
+    DRY_RUN_OPTION,
+  ],
   run: (context, options, args, flags) => {
     const { dryRun, ...draft } = parsed(categoryAddSchema, { name: args[0], ...flags })
     return withStore(context, options, async (store) => ({

@@ -17,8 +17,17 @@ export function addAccount(cli: LedgerCli, name: string, currency: string, openi
   return added(cli, ['account', 'add', name, ...argv], 'account')
 }
 
-export function addCategory(cli: LedgerCli, name = 'Food') {
-  return added(cli, ['category', 'add', name, '--emoji', '🍽️'], 'category')
+async function groupId(cli: LedgerCli, name: string): Promise<string> {
+  const { stdout } = await cli.run(['group', 'list'])
+  const { groups } = decode(stdout) as { groups: { id: string; name: string }[] }
+  const group = groups.find((row) => row.name === name)
+  if (group === undefined) throw new Error(`no group named ${name}`)
+  return group.id
+}
+
+export async function addCategory(cli: LedgerCli, name = 'Food', group = 'Food & Dining') {
+  const argv = ['category', 'add', name, '--emoji', '🍽️', '--group', await groupId(cli, group)]
+  return added(cli, argv, 'category')
 }
 
 export async function openBooks(cli = ledgerCli()): Promise<Books> {

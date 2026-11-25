@@ -141,11 +141,12 @@ An unknown category or tag is never invented to make a write pass. Creating one 
 
 ```sh
 quaestor tag add trip:lima-2026 --dry-run
-quaestor category add Bakery --emoji 🥐 --dry-run
+quaestor group list
+quaestor category add Bakery --emoji 🥐 --group 1aae --dry-run
 quaestor account add Savings --emoji 🏦 --type savings --currency COP --opening 500000 --opening-date 2026-11-01 --dry-run
 ```
 
-After the yes, run the same command without `--dry-run`. The dry run's code for a new account or category is not the real one: use the code the real command prints in the movement write. A category is an emoji and an English name. A tag is lowercase letters, digits, colons and dashes. An account's opening balance is what the bank showed the day before the first row you will record; ask Angelo for it.
+After the yes, run the same command without `--dry-run`. The dry run's code for a new account or category is not the real one: use the code the real command prints in the movement write. A category is an emoji, an English name and the code of its group from `group list` (Bakery goes in 🍽️ Food & Dining). A tag is lowercase letters, digits, colons and dashes. An account's opening balance is what the bank showed the day before the first row you will record; ask Angelo for it.
 
 ## When a command fails
 

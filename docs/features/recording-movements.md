@@ -178,7 +178,8 @@ Writes:
   `to` half each) and `delete` (codes), any number of each, all or nothing. It shows what
   it deleted and recorded, and each touched account's balance before and after. A write
   that breaks a rule is refused whole, with every item at fault listed at once.
-- `quaestor tag add <name>` and `quaestor category add <name> --emoji <emoji>`.
+- `quaestor tag add <name>` and `quaestor category add <name> --emoji <emoji> --group
+  <code>`.
 - `quaestor account add <name>` with `--emoji`, `--type`, `--currency`, `--opening` and
   `--opening-date`.
 - `quaestor import <folder>`: retired on 2026-11-25 (see `spending-and-income.md`).
