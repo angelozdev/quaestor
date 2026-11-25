@@ -1,9 +1,11 @@
 import { encode } from '@toon-format/toon'
+import fc from 'fast-check'
 import { addAccount, addCategory, write } from '../books/books.ts'
 import type { Json } from '../books/books.types.ts'
 import { ledgerCli } from '../ledger/ledger.ts'
 import type { LedgerCli } from '../ledger/ledger.types.ts'
-import type { ReportBooks } from './reports.types.ts'
+import { MAX_CENTS, MAX_MOVES, REPORT_CATEGORIES } from './reports.constants.ts'
+import type { MixedMove, ReportBooks } from './reports.types.ts'
 
 export async function reportBooks(cli = ledgerCli()): Promise<ReportBooks> {
   return {
@@ -41,5 +43,37 @@ export function withCodes(stdout: string, codes: Record<string, string>): string
   return Object.entries(codes).reduce(
     (text, [name, code]) => text.replaceAll(encode(code), `<${name}>`),
     stdout,
+  )
+}
+
+export function mixedMoves(months: { min: number; max: number }): fc.Arbitrary<MixedMove[]> {
+  return fc.array(
+    fc.record({
+      usd: fc.boolean(),
+      cents: fc.integer({ min: -MAX_CENTS, max: MAX_CENTS }).map((cents) => cents || 1),
+      category: fc.constantFrom(...REPORT_CATEGORIES),
+      month: fc.integer(months),
+      day: fc.integer({ min: 1, max: 28 }),
+    }),
+    { minLength: 1, maxLength: MAX_MOVES },
+  )
+}
+
+function twoDigits(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+export function recordMixed(books: ReportBooks, moves: MixedMove[]) {
+  return record(
+    books.cli,
+    ...moves.map(({ usd, cents, category, month, day }) =>
+      movement(
+        usd ? books.wallet : books.bank,
+        books[category],
+        `2026-${twoDigits(month)}-${twoDigits(day)}`,
+        (cents / 100).toFixed(2),
+        usd ? 'USD' : 'COP',
+      ),
+    ),
   )
 }

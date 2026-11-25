@@ -7,7 +7,7 @@ import {
   type Category,
   type Group,
 } from '#core/ledger'
-import { LINES } from './report.constants.ts'
+import { LINES, MONTH_LENGTH, MONTHS_PER_YEAR } from './report.constants.ts'
 import { MissingRateError } from './report.errors.ts'
 import type {
   Columns,
@@ -16,6 +16,8 @@ import type {
   Report,
   ReportCatalog,
   ReportRequest,
+  Section,
+  Tables,
 } from './report.types.ts'
 
 type Figures = number[]
@@ -130,6 +132,51 @@ function columnsOf(figures: Figures, currencies: string[]): Columns {
   }
 }
 
+function monthsBetween(from: string, to: string): string[] {
+  const months: string[] = []
+  let [year = 0, month = 0] = from.split('-').map(Number)
+  const last = to.slice(0, MONTH_LENGTH)
+  for (;;) {
+    const current = `${year}-${String(month).padStart(2, '0')}`
+    months.push(current)
+    if (current >= last) return months
+    month = (month % MONTHS_PER_YEAR) + 1
+    if (month === 1) year += 1
+  }
+}
+
+function sections(request: ReportRequest, movements: CountedMovement[]): Section[] {
+  if (!request.byMonth) return [{ month: null, movements }]
+  return monthsBetween(request.from, request.to).map((month) => ({
+    month,
+    movements: movements.filter(({ date }) => date.slice(0, MONTH_LENGTH) === month),
+  }))
+}
+
+function inMonth<T extends object>(month: string | null, row: T): T {
+  return month === null ? row : { month, ...row }
+}
+
+function tablesOf(
+  { month, movements }: Section,
+  catalog: ReportCatalog,
+  currencies: string[],
+  rates: Map<string, number>,
+): Tables {
+  const rows = placed(movements, catalog, currencies, rates)
+  const groups = groupFigures(rows)
+  const lines = lineFigures(groups, currencies.length + 1)
+  return {
+    totals: LINES.map((line) => inMonth(month, { line, ...columnsOf(lines[line], currencies) })),
+    groups: groups.map(({ group, figures }) =>
+      inMonth(month, { ...group, ...columnsOf(figures, currencies) }),
+    ),
+    categories: rows.map(({ category: { id, group, emoji, name }, figures }) =>
+      inMonth(month, { id, group, emoji, name, ...columnsOf(figures, currencies) }),
+    ),
+  }
+}
+
 export function reportOf(
   request: ReportRequest,
   movements: CountedMovement[],
@@ -138,22 +185,16 @@ export function reportOf(
 ): Report {
   const currencies = foreignCurrencies(movements)
   refuseMissingRates(currencies, rates)
-  const rows = placed(movements, catalog, currencies, rates)
-  const groups = groupFigures(rows)
-  const lines = lineFigures(groups, currencies.length + 1)
+  const tables = sections(request, movements).map((section) =>
+    tablesOf(section, catalog, currencies, rates),
+  )
   return {
     from: request.from,
     to: request.to,
     currency: LOCAL_CURRENCY,
     rates: currencies.map((currency) => ({ currency, rate: amountOf(rates.get(currency)!) })),
-    totals: LINES.map((line) => ({ line, ...columnsOf(lines[line], currencies) })),
-    groups: groups.map(({ group, figures }) => ({ ...group, ...columnsOf(figures, currencies) })),
-    categories: rows.map(({ category: { id, group, emoji, name }, figures }) => ({
-      id,
-      group,
-      emoji,
-      name,
-      ...columnsOf(figures, currencies),
-    })),
+    totals: tables.flatMap(({ totals }) => totals),
+    groups: tables.flatMap(({ groups }) => groups),
+    categories: tables.flatMap(({ categories }) => categories),
   }
 }

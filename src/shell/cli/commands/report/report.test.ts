@@ -5,13 +5,15 @@ import { addAccount, addCategory, write } from '../../../../../tests/support/boo
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import { invalidInput } from '../../../../../tests/support/refusals/refusals.ts'
 import {
+  mixedMoves,
   movement,
   record,
+  recordMixed,
   report,
   reportBooks,
   withCodes,
 } from '../../../../../tests/support/reports/reports.ts'
-import type { Report } from '../../../../../tests/support/reports/reports.types.ts'
+import type { MixedMove, Report } from '../../../../../tests/support/reports/reports.types.ts'
 
 const OCTOBER = ['2026-10-01', '2026-10-31'] as const
 
@@ -479,40 +481,19 @@ error:
       clothing: 'spending',
       investment: 'outside',
     } as const
-    const items = fc.array(
-      fc.record({
-        usd: fc.boolean(),
-        cents: fc.integer({ min: -1_000_000_000, max: 1_000_000_000 }).map((cents) => cents || 1),
-        category: fc.constantFrom('salary', 'restaurants', 'clothing', 'investment'),
-        day: fc.integer({ min: 1, max: 28 }),
-      }),
-      { minLength: 1, maxLength: 20 },
-    )
     const wholeRate = fc.integer({ min: 1, max: 5000 })
 
     await fc.assert(
-      fc.asyncProperty(items, wholeRate, async (moves, rate) => {
+      fc.asyncProperty(mixedMoves({ min: 10, max: 10 }), wholeRate, async (moves, rate) => {
         const books = await reportBooks()
-        await record(
-          books.cli,
-          ...moves.map(({ usd, cents, category, day }) =>
-            movement(
-              usd ? books.wallet : books.bank,
-              books[category],
-              `2026-10-${String(day).padStart(2, '0')}`,
-              (cents / 100).toFixed(2),
-              usd ? 'USD' : 'COP',
-            ),
-          ),
-        )
+        await recordMixed(books, moves)
         await books.cli.run(['rate', 'set', 'USD', String(rate)])
 
         const { totals, categories } = decode(
           (await report(books.cli, ...OCTOBER)).stdout,
         ) as Report
 
-        type Move = (typeof moves)[number]
-        const inCop = (keep: (move: Move) => boolean) =>
+        const inCop = (keep: (move: MixedMove) => boolean) =>
           moves
             .filter(keep)
             .reduce(
@@ -521,7 +502,7 @@ error:
             )
         const cents = (amount: number) => Math.round(amount * 100)
         for (const row of categories) {
-          const name = (Object.keys(sign) as Move['category'][]).find(
+          const name = (Object.keys(sign) as MixedMove['category'][]).find(
             (key) => books[key] === row.id,
           )
           expect(cents(row.total)).toBe(inCop((move) => move.category === name))
@@ -530,6 +511,132 @@ error:
         for (const line of ['income', 'spending', 'outside'])
           expect(lines[line]).toBe(inCop((move) => lineOf[move.category] === line))
         expect(lines.left).toBe(lines.income! - lines.spending!)
+      }),
+      { numRuns: 50 },
+    )
+  })
+
+  it('--by-month gives every month its four totals, a month with no movement at 0', async () => {
+    const books = await reportBooks()
+    await record(
+      books.cli,
+      movement(books.wallet, books.salary, '2026-09-30', '3000', 'USD'),
+      movement(books.bank, books.restaurants, '2026-10-03', '-250000'),
+    )
+    await books.cli.run(['rate', 'set', 'USD', '4000'])
+
+    const run = await report(books.cli, '2026-09-01', '2026-10-31', '--by-month')
+
+    expect(run.code).toBe(0)
+    expect(withCodes(run.stdout, { salary: books.salary, restaurants: books.restaurants }))
+      .toBe(`from: 2026-09-01
+to: 2026-10-31
+currency: COP
+rates[1]{currency,rate}:
+  USD,4000
+totals[8]{month,line,total,USD}:
+  2026-09,income,12000000,3000
+  2026-09,spending,0,0
+  2026-09,left,12000000,3000
+  2026-09,outside,0,0
+  2026-10,income,0,0
+  2026-10,spending,250000,0
+  2026-10,left,-250000,0
+  2026-10,outside,0,0
+groups[2]{month,id,kind,emoji,name,total,USD}:
+  2026-09,m0z7,income,💰,Income,12000000,3000
+  2026-10,1aae,spending,🍽️,Food & Dining,250000,0
+categories[2]{month,id,group,emoji,name,total,USD}:
+  2026-09,<salary>,m0z7,💼,Salary,12000000,3000
+  2026-10,<restaurants>,1aae,🍽️,Restaurants,250000,0
+`)
+  })
+
+  it('months are cut to the period', async () => {
+    const books = await reportBooks()
+    await record(
+      books.cli,
+      movement(books.bank, books.restaurants, '2026-09-14', '-1000'),
+      movement(books.bank, books.restaurants, '2026-09-15', '-20000'),
+      movement(books.bank, books.restaurants, '2026-10-10', '-300000'),
+      movement(books.bank, books.restaurants, '2026-10-11', '-4000000'),
+    )
+
+    const run = await report(books.cli, '2026-09-15', '2026-10-10', '--by-month')
+
+    const { totals } = decode(run.stdout) as {
+      totals: { month: string; line: string; total: number }[]
+    }
+    expect([...new Set(totals.map(({ month }) => month))]).toEqual(['2026-09', '2026-10'])
+    expect(totals.filter(({ line }) => line === 'spending')).toEqual([
+      { month: '2026-09', line: 'spending', total: 20000 },
+      { month: '2026-10', line: 'spending', total: 300000 },
+    ])
+  })
+
+  it('groups and categories carry their month, only where they have movements', async () => {
+    const books = await reportBooks()
+    await record(
+      books.cli,
+      movement(books.bank, books.restaurants, '2026-08-03', '-1000'),
+      movement(books.bank, books.clothing, '2026-10-03', '-2000'),
+      movement(books.bank, books.restaurants, '2026-10-04', '-3000'),
+    )
+
+    const run = await report(books.cli, '2026-08-01', '2026-10-31', '--by-month')
+
+    const { totals, groups, categories } = decode(run.stdout) as {
+      totals: { month: string }[]
+      groups: { month: string; id: string }[]
+      categories: { month: string; id: string }[]
+    }
+    expect(totals).toHaveLength(12)
+    expect(groups.map(({ month, id }) => [month, id])).toEqual([
+      ['2026-08', '1aae'],
+      ['2026-10', '1aae'],
+      ['2026-10', 'q3rh'],
+    ])
+    expect(categories.map(({ month, id }) => [month, id])).toEqual([
+      ['2026-08', books.restaurants],
+      ['2026-10', books.restaurants],
+      ['2026-10', books.clothing],
+    ])
+  })
+
+  it('the months add up to the period, for any movements', async () => {
+    const rate = fc.integer({ min: 1, max: 500_000 })
+
+    await fc.assert(
+      fc.asyncProperty(mixedMoves({ min: 9, max: 11 }), rate, async (moves, hundredths) => {
+        const books = await reportBooks()
+        await recordMixed(books, moves)
+        await books.cli.run(['rate', 'set', 'USD', (hundredths / 100).toFixed(2)])
+
+        const whole = decode((await report(books.cli, '2026-09-01', '2026-11-30')).stdout) as Report
+        const split = decode(
+          (await report(books.cli, '2026-09-01', '2026-11-30', '--by-month')).stdout,
+        ) as Record<
+          'totals' | 'groups' | 'categories',
+          ({ month: string } & Record<string, unknown>)[]
+        >
+
+        const cents = (amount: unknown) => Math.round(Number(amount) * 100)
+        const added = (
+          rows: Record<string, unknown>[],
+          key: string,
+          value: string,
+          column: string,
+        ) =>
+          rows.filter((row) => row[key] === value).reduce((sum, row) => sum + cents(row[column]), 0)
+        const columns = ['total', ...(moves.some(({ usd }) => usd) ? ['USD'] : [])]
+        for (const column of columns) {
+          for (const row of whole.totals)
+            expect(added(split.totals, 'line', row.line, column)).toBe(cents(row[column]))
+          for (const row of whole.groups)
+            expect(added(split.groups, 'id', row.id, column)).toBe(cents(row[column]))
+          for (const row of whole.categories)
+            expect(added(split.categories, 'id', row.id, column)).toBe(cents(row[column]))
+        }
       }),
       { numRuns: 50 },
     )
