@@ -1,7 +1,7 @@
 # Spending and income
 
-Status: product approved by Angelo on 2026-11-25; the technical part (commands, store,
-output) is still to be settled.
+Status: product approved by Angelo on 2026-11-25; technical part written on 2026-11-25,
+awaiting his approval.
 
 ## Why
 
@@ -28,7 +28,10 @@ How much is available this month, whether something is affordable, budgets, a ca
 and payment dates, a rate per day or one fetched from outside (such as the official TRM),
 loading years before the first recorded movement, what an investment holds (VTI, VXUS,
 crypto: in the backlog), a category in more than one group, and splitting one movement
-across categories.
+across categories. Also left out (Claude's call): creating, renaming or deleting a group,
+moving a category to another group, unarchiving a category, listing the rates on their own
+(the report and `rate set --dry-run` show them), a history of past rates, and a local
+currency other than COP.
 
 ## What must never happen
 
@@ -132,6 +135,14 @@ Two placements are Claude's call: Software & AI is a group of its own, which non
 apps ships, because it is one of Angelo's larger monthly lines; Pets goes into Shopping,
 because it has one purchase in a year. A new category is created with its group.
 
+Categories the list above does not name, placed by Angelo on 2026-11-25: Food, archived,
+goes into 🍽️ Food & Dining; Fun, archived, into 🎢 Entertainment; Refund and Reimbursable
+into 🧾 Financial, and both are archived once empty. An archived category that shares a name
+with a listed one, such as an archived Auto Insurance, goes into the same group.
+
+No category is ever without a group, not even for a moment. Decided by Angelo on
+2026-11-25.
+
 ## Moving misfiled rows
 
 - Car loan payments filed under Payment / Transfer move to Car Payment.
@@ -140,6 +151,202 @@ because it has one purchase in a year. A new category is created with its group.
 - Rows filed under Services that belong elsewhere, such as a utility bill or a rental, move
   to their category.
 - Refund and Reimbursable are archived once empty.
+- Every move is a correction as `recording-movements.md` defines it: a delete and a new
+  record in one `movement write`, shown as a dry run and approved by Angelo. A moved row
+  gets a new code and goes to the end of its day. There is no edit command.
+- The moves run before the release that brings groups, with the release installed today,
+  so Refund arrives empty and its group never touches a figure (Claude's call). Car Payment
+  is created then with today's `category add`, and the upgrade puts it in its group by
+  name.
+
+## Getting the real data ready
+
+In this order; none of it is code (Claude's call):
+
+1. With the release installed today: create Car Payment and move the misfiled rows above,
+   each write a dry run Angelo approves.
+2. Before the release, Claude runs the new sources against a copy of `prod`
+   (`QUAESTOR_DB`) and checks that the upgrade places every category.
+3. Angelo merges and runs `pnpm release`. The first `prod` call backs the store up and
+   upgrades it.
+4. Claude archives Refund and Reimbursable, and sets the dollar rate Angelo gives.
+5. Claude answers Angelo's questions against `prod` and checks the figures in cents.
+
+## The store
+
+- A group has a code, an emoji, an English name and a kind: `spending`, `income` or
+  `outside`. Its code is drawn from the same alphabet as every other code.
+- Every category points to exactly one group, in the store itself: a category without a
+  group cannot be written.
+- The upgrade that brings groups creates the 14 groups above, in every store, new ones and
+  test ones included, and puts every existing category in its group by name, all in one
+  step. A store holding a category whose name the list does not know is not upgraded: the
+  call fails as `migration_failed` (exit 2) and the store is left as it was, after the
+  backup `prod` already takes before any migration. Decided by Angelo on 2026-11-25.
+- A rate has a foreign currency and the COP that one unit of it is worth, with at most two
+  decimals: 1 USD = 3,912.45 COP. It is stored as integer hundredths of a peso (391245).
+  There is at most one rate per currency; setting it again replaces it. COP itself has no
+  rate.
+
+## Conversion
+
+- Each movement in a foreign currency is converted on its own, then the converted figures
+  are added. 10.85 USD at 3,912.45 is 42,450.0825 COP, rounded to 42,450.08. Decided by
+  Angelo on 2026-11-25.
+- Every split therefore adds up to the cent: the months add up to the period, the
+  categories to their group, and the groups to their line. The USD part times the rate can
+  differ from the COP shown by less than one centavo per movement.
+- Half a centavo rounds away from zero, through the one rounding function, so a -10.85 USD
+  purchase and its +10.85 USD refund convert to exact opposites (Claude's call).
+- The conversion is exact for every amount `quaestor` accepts. A two-decimal rate keeps
+  30,000.00 USD (3,000,000 cents) times 391245 at 1.2 × 10^12, far below 2^53; larger
+  amounts must stay exact too (the builder's call how).
+- The local currency is COP, fixed in code (Claude's call).
+
+## Commands
+
+Codes and dry runs work as in `recording-movements.md`. The output and error codes go in
+`docs/architecture.md` and each command's `--help`.
+
+New:
+
+- `quaestor group list`: every group with its code, kind, emoji and name.
+- `quaestor category archive <code>`: archives a category, with `--dry-run`. Archiving one
+  that still holds movements is allowed: they keep counting in its group, and the category
+  takes no new ones (Claude's call).
+- `quaestor rate set <currency> <rate>`: sets the rate of a currency, as text with at most
+  two decimals and no thousands separator (`"3912.45"`), with `--dry-run`. It shows the
+  rate before and after, `null` before when there was none. COP, a rate of zero or less and
+  a currency that is not ISO 4217 are refused as `invalid_input`.
+
+  ```
+  dryRun: true
+  rate:
+    currency: USD
+    before: null
+    after: 3912.45
+  ```
+
+- `quaestor report`, below.
+
+Changed:
+
+- `quaestor category add <name> --emoji <emoji> --group <code>`: the group is required.
+- `quaestor category list` shows each category's group code.
+
+## The report
+
+```
+quaestor report --from <day> --to <day> [--by-month] [--tag <tag>] [--without-tag <tag>] [--payee <text>]
+```
+
+- `--from` and `--to` are required, both days included; `--to` before `--from` is
+  `invalid_input`.
+- It counts every live movement with a category in the period. Transfer halves have no
+  category, so they never count, and an opening balance is not a movement.
+- `--tag` keeps only the movements with that tag; `--without-tag` leaves them out. A tag that
+  does not exist is refused as `not_found`, so a misspelt `trip:lima-2062` never answers 0.
+- `--payee` keeps the payees containing that text, ignoring case and accents, as
+  `movement list` does.
+- A period whose counted movements hold a currency with no rate is refused as
+  `missing_rate`, with every such `currencies`. A movement the filters leave out needs no
+  rate.
+
+Example with invented figures, 1 USD = 4,000 COP, pasted from the real TOON encoder and
+approved by Angelo on 2026-11-25:
+
+```
+from: 2026-10-01
+to: 2026-10-31
+currency: COP
+rates[1]{currency,rate}:
+  USD,4000
+totals[4]{line,total,USD}:
+  income,12015000.5,3000
+  spending,2130000,20
+  left,9885000.5,2980
+  outside,-4000000,-1000
+groups[5]{code,kind,emoji,name,total,USD}:
+  k2m9,income,💰,Income,12015000.5,3000
+  h7d3,spending,🍽️,Food & Dining,850000,0
+  p4w8,spending,🚗,Auto & Transport,1200000,0
+  r6t1,spending,💻,Software & AI,80000,20
+  x3n5,outside,🔄,Transfers & Investments,-4000000,-1000
+categories[7]{code,group,emoji,name,total,USD}:
+  a1b2,k2m9,💼,Salary,12000000,3000
+  c3d4,k2m9,💰,Interest,15000.5,0
+  e5f6,h7d3,🍽️,Restaurants,250000,0
+  g7h8,h7d3,🛒,Groceries,600000,0
+  j9k0,p4w8,🚘,Car Payment,1200000,0
+  m1n2,r6t1,🤖,AI Tools,80000,20
+  q3r4,x3n5,📈,Investment,-4000000,-1000
+```
+
+- `total` is in COP. Each foreign currency in the counted movements adds a column named by
+  its code, with the part that was in that currency, in that currency; a period all in COP
+  has no such column and `rates[0]`.
+- Spending is positive and a refund lowers it. Income is positive. What is outside the totals
+  keeps the movement's sign: the investment fell 1,000.00 USD.
+- `totals` always has its four lines: income, spending, left (income less spending, in every
+  column) and outside. `groups` and `categories` list only those with counted movements.
+- Groups come by kind (income, spending, outside), then by name; categories follow their
+  group, then by name (Claude's call).
+- `--by-month` adds a first `month` column (`2026-10`) to the three tables. Months are
+  calendar months cut to the period, and every month in it has its four `totals` lines, a
+  month with no movement at 0, so a month without salary shows as 0.
+
+  ```
+  totals[3]{month,line,total,USD}:
+    2026-09,income,12000000,3000
+    2026-09,spending,1900000,15
+    2026-10,income,12015000.5,3000
+  ```
+
+- The refusals, each exit 1:
+
+  ```
+  error:
+    code: missing_rate
+    currencies[1]: USD
+    message: no rate for USD; set one with quaestor rate set
+  ```
+
+  ```
+  error:
+    code: not_found
+    kind: tag
+    value: "trip:lima-2062"
+    message: "tag trip:lima-2062 does not exist"
+  ```
+
+  `not_found` also answers `category add` with a group that does not exist and
+  `category archive` with a category that does not exist.
+
+## The skill
+
+- A new skill in `.claude/skills/spending-and-income/`, which calls the installed
+  `quaestor`, never `pnpm quaestor`, as `record-movements` does (Claude's call).
+- It holds Claude's judgment, never a sum: which periods to ask for ("this year" is 1
+  January to today; a month in progress against the same days of the month before), when to
+  split by month, when to filter by tag or payee, how to explain an odd month such as a
+  refund landing after its purchase, and stating the rate in every answer.
+- On `missing_rate` Claude asks Angelo for the rate, shows `rate set --dry-run`, and sets it
+  after his yes.
+
+## Tests
+
+- As `workflow.md` sets them: CLI tests through the entry point, each named after the rule
+  or example it covers, with setup through commands.
+- The upgrade is tested from a store at the previous migrations that holds categories with
+  movements, one of them archived and sharing a name: every category lands in its group, and
+  an unknown name fails the upgrade and leaves the store as it was.
+- "Every money figure has a test in a currency other than COP" means, for the report, its
+  foreign part: the conversion and the foreign columns are tested in USD and in KRW, each
+  with its own rate. The `total` column is always COP, the local currency (Claude's call).
+- A property test, oracle the rules themselves, for any movements: the months add up to the
+  period, the categories to their group, the groups to their line; left is income less
+  spending; each converted figure is the sum of its movements converted one by one; and a
+  transfer never changes the report.
 
 ## Approaches
 
@@ -163,4 +370,21 @@ Copilot, Actual Budget, Lunch Money, Rocket Money and PocketSmith:
 - **Trips**: counted as any spending with a tag filter, chosen; always apart, dropped
   because the year's total would leave the trip out.
 
-The technical approaches are settled next.
+Technical choices, made on 2026-11-25:
+
+- **Existing categories**: the upgrade puts each in its group by name, chosen by Angelo;
+  a report that refuses or sets apart a category with no group, dropped by Angelo because no
+  category may be without one; two releases, the first leaving groups for Claude to fill
+  and the second making them required, dropped because categories would sit without a group
+  in between.
+- **The rate's precision**: two decimals with each movement converted, chosen by Angelo; a
+  whole-number rate, dropped because a currency worth a few pesos (1 KRW ≈ 2.9 COP) could
+  not be written; two decimals with each total converted, dropped because the months would
+  not add up to the year.
+- **The report's output**: flat tables joined by codes, chosen by Angelo; groups holding
+  their categories, dropped because by month it nests three levels and runs about twice as
+  long.
+- **Moving rows**: today's `movement write`, chosen because a correction is a delete and a
+  new record (decided on 2026-11-24); an edit command, dropped for the same reason.
+- **Claude's calls**: a skill, chosen because picking periods and explaining figures is
+  judgment; only the command's `--help`, dropped because it cannot hold how Claude answers.
