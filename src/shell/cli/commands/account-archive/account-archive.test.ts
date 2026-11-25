@@ -35,7 +35,7 @@ async function listed(cli: LedgerCli, ...flags: string[]) {
 }
 
 describe('quaestor account archive', () => {
-  it('account archive marks an account archived and account list shows it', async () => {
+  it('account archive marks an account archived and account list --all shows it', async () => {
     const cli = ledgerCli()
     const id = await addAccount(cli, 'Alex', 'USD', '0')
 
@@ -46,7 +46,7 @@ describe('quaestor account archive', () => {
       stdout: `${encode({ dryRun: false, account: alex(id, true) })}\n`,
       stderr: 'env: test\n',
     })
-    expect(await listed(cli)).toEqual({ accounts: [alex(id, true)] })
+    expect(await listed(cli, '--all')).toEqual({ accounts: [alex(id, true)] })
   })
 
   it('--dry-run on account archive shows it archived and changes nothing', async () => {

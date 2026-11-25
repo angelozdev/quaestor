@@ -164,7 +164,8 @@ command's `--help`.
 
 Reads:
 
-- `quaestor account list`: every account, archived ones included, with its balance today.
+- `quaestor account list`: the active accounts, with their balance today; `--all` adds the
+  archived ones (see `account-archive.md`).
 - `quaestor category list` and `quaestor tag list`.
 - `quaestor movement list`, filtered by `--account <code>`, `--from` and `--to` (both
   days included) and `--payee <text>` (any part of it, ignoring case and accents). The

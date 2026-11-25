@@ -32,7 +32,7 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
    quaestor movement list --account n8d3 --from 2026-11-01
    ```
 
-   `account list` gives each account's code, currency, archived mark and balance today. Start `--from` a few days before the screenshot's oldest row. `total` counts every match; if it is more than the rows listed, add `--limit <n>`. Each row's `balance` is the account's balance after that movement.
+   `account list` gives each active account's code, currency and balance today; `account list --all` adds the archived ones. A correction in an archived account is `account unarchive <code>`, the correction, then `account archive <code>`, each shown as a dry run Angelo approves. Start `--from` a few days before the screenshot's oldest row. `total` counts every match; if it is more than the rows listed, add `--limit <n>`. Each row's `balance` is the account's balance after that movement.
 
 2. Transcribe every row: the date the bank shows, the payee as printed, the signed amount in the account's currency. Note the bank's balance and the day it is for.
 
