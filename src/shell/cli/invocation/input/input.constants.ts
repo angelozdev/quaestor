@@ -30,6 +30,8 @@ export const LIMIT_MESSAGE = 'must be a whole number above 0'
 
 export const REPEATED_MESSAGE = 'is repeated'
 
+export const NOTHING_TO_CHANGE_MESSAGE = 'nothing to change: give --name, --emoji or both'
+
 export const NOTHING_TO_WRITE_MESSAGE = 'nothing to write: give delete, movements or transfers'
 
 export const EMOJI_PATTERN = /^\p{RGI_Emoji}$/v

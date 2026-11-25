@@ -57,3 +57,23 @@ export function insertGroup(
     throw error
   }
 }
+
+export function updateGroup(
+  store: Store,
+  id: string,
+  change: { name?: string; emoji?: string },
+  now: Date,
+): Group {
+  liveGroup(store, id)
+  try {
+    return database(store)
+      .update(groups)
+      .set({ ...change, updatedAt: now.toISOString() })
+      .where(eq(groups.id, id))
+      .returning(STORED_FIELDS)
+      .get()!
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new AlreadyExistsError('group', change.name ?? '')
+    throw error
+  }
+}
