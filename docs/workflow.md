@@ -42,6 +42,11 @@ real data.
   test calls an internal function, reads a table or writes SQL; setup goes
   through commands too. Only code with no command of its own (the release script,
   the lint rules) is tested through its exported function.
+- One exception: a test of a migration that changes rows already stored starts from a
+  store at the previous migrations, which no command of the new code can build. It
+  loads a readable text file of invented rows right after those migrations and before
+  the one under test; everything after goes through commands. Decided by Angelo on
+  2026-11-25.
 - Pure logic in `src/core/` may also be tested directly, through its concept's
   barrel (`#core/<concept>`), for cases the command cannot set up or sets up only
   slowly. Decided by Angelo on 2026-11-25.

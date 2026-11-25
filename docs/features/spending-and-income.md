@@ -234,6 +234,15 @@ Changed:
 - `quaestor category add <name> --emoji <emoji> --group <code>`: the group is required.
 - `quaestor category list` shows each category's group code.
 
+Removed:
+
+- `quaestor import`, with its code, its tests and its error codes (`already_imported`,
+  `export_mismatch`, `balance_mismatch`). It loaded the legacy export into `prod` on
+  2026-11-24 and only takes an empty store, so it cannot run there again, and every
+  category it wrote would now need a group. The export stays untouched in
+  `~/.quaestor/legacy/`; a later feature that needs legacy rows brings its own way in.
+  Decided by Angelo on 2026-11-25.
+
 ## The report
 
 ```
@@ -268,19 +277,22 @@ totals[4]{line,total,USD}:
   outside,-4000000,-1000
 groups[5]{code,kind,emoji,name,total,USD}:
   k2m9,income,💰,Income,12015000.5,3000
-  h7d3,spending,🍽️,Food & Dining,850000,0
   p4w8,spending,🚗,Auto & Transport,1200000,0
+  h7d3,spending,🍽️,Food & Dining,850000,0
   r6t1,spending,💻,Software & AI,80000,20
   x3n5,outside,🔄,Transfers & Investments,-4000000,-1000
 categories[7]{code,group,emoji,name,total,USD}:
-  a1b2,k2m9,💼,Salary,12000000,3000
   c3d4,k2m9,💰,Interest,15000.5,0
-  e5f6,h7d3,🍽️,Restaurants,250000,0
-  g7h8,h7d3,🛒,Groceries,600000,0
+  a1b2,k2m9,💼,Salary,12000000,3000
   j9k0,p4w8,🚘,Car Payment,1200000,0
+  g7h8,h7d3,🛒,Groceries,600000,0
+  e5f6,h7d3,🍽️,Restaurants,250000,0
   m1n2,r6t1,🤖,AI Tools,80000,20
   q3r4,x3n5,📈,Investment,-4000000,-1000
 ```
+
+The rows above were reordered on 2026-11-25 to follow the order below; the figures are the
+ones Angelo approved.
 
 - `total` is in COP. Each foreign currency in the counted movements adds a column named by
   its code, with the part that was in that currency, in that currency; a period all in COP
@@ -290,7 +302,7 @@ categories[7]{code,group,emoji,name,total,USD}:
 - `totals` always has its four lines: income, spending, left (income less spending, in every
   column) and outside. `groups` and `categories` list only those with counted movements.
 - Groups come by kind (income, spending, outside), then by name; categories follow their
-  group, then by name (Claude's call).
+  group, then by name, and two with the same name by code (Claude's call).
 - `--by-month` adds a first `month` column (`2026-10`) to the three tables. Months are
   calendar months cut to the period, and every month in it has its four `totals` lines, a
   month with no movement at 0, so a month without salary shows as 0.
@@ -339,7 +351,10 @@ categories[7]{code,group,emoji,name,total,USD}:
   or example it covers, with setup through commands.
 - The upgrade is tested from a store at the previous migrations that holds categories with
   movements, one of them archived and sharing a name: every category lands in its group, and
-  an unknown name fails the upgrade and leaves the store as it was.
+  an unknown name fails the upgrade and leaves the store as it was. No command can build
+  that store, so the test loads a readable text file of invented rows right after the
+  previous migrations and before the new one; everything after goes through commands.
+  Decided by Angelo on 2026-11-25, as the one exception in `workflow.md`.
 - "Every money figure has a test in a currency other than COP" means, for the report, its
   foreign part: the conversion and the foreign columns are tested in USD and in KRW, each
   with its own rate. The `total` column is always COP, the local currency (Claude's call).
@@ -384,6 +399,8 @@ Technical choices, made on 2026-11-25:
 - **The report's output**: flat tables joined by codes, chosen by Angelo; groups holding
   their categories, dropped because by month it nests three levels and runs about twice as
   long.
+- **`import`**: retired, chosen by Angelo; kept, placing each legacy category by the same
+  name list, dropped because the list would live twice and drift.
 - **Moving rows**: today's `movement write`, chosen because a correction is a delete and a
   new record (decided on 2026-11-24); an edit command, dropped for the same reason.
 - **Claude's calls**: a skill, chosen because picking periods and explaining figures is
