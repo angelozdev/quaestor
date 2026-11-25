@@ -25,7 +25,6 @@ is refused. What it unblocks:
 Rethought one at a time once recording works, in an order chosen then. What Angelo
 said he will ask Claude:
 
-- how much he spent last month, and on what;
 - how much he has available this month;
 - whether he can afford something, such as a trip next year.
 

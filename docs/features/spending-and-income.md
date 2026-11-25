@@ -1,7 +1,6 @@
 # Spending and income
 
-Status: product and technical part approved by Angelo on 2026-11-25; the plan is in
-`docs/plans/spending-and-income.md`.
+Status: built and released on 2026-11-25 as 0.0.0 (25320e6).
 
 ## Why
 
