@@ -118,10 +118,16 @@ Written for a reader that is a model, not a person.
   text, as the bank shows it (`"45000.50"`, at most two decimals, no thousands
   separator), and gives it back as a number (`45000.5`). An amount whose cents are
   not a safe integer, beyond 90071992547409.91 either way, is refused.
-- How the dollar rate is stored is decided by the currency feature. The legacy rate has six decimals, and a six-decimal integer rate
-  times a USD balance in cents passes JavaScript's safe-integer limit: 30,000.00 USD
-  is 3,000,000 cents, and 3,000,000 × 4,000,000,000 (a rate of 4,000.000000) = 1.2 ×
-  10^16, above 2^53 ≈ 9.0 × 10^15.
+- A rate is the COP that one unit of a foreign currency is worth, stored as integer
+  hundredths of a peso, at most two decimals and above 0: 1 USD = 3,912.45 COP is
+  `391245`. There is at most one rate per currency, and COP, the local currency fixed in
+  code, has none. A six-decimal rate, as the legacy one, would pass the safe-integer
+  limit: 3,000,000 cents (30,000.00 USD) × 4,000,000,000 = 1.2 × 10^16, above 2^53; two
+  decimals keep it at 1.2 × 10^12. Decided by Angelo on 2026-11-25.
+- A report converts each foreign movement on its own through `convertCents`, cents ×
+  rate / 100, half a centavo away from zero, and then adds the converted figures. A
+  conversion or a total that is not a safe integer fails as `unexpected` (exit 2) instead
+  of printing a rounded figure.
 
 ## Environments and data
 

@@ -31,7 +31,7 @@ export type CliCommand = {
   name: string
   description: string
   group?: CommandGroup
-  argument?: { name: string; description: string }
+  arguments?: { name: string; description: string }[]
   options?: { flags: string; description: string; defaultValue?: string }[]
   run(context: CliContext, options: GlobalOptions, args: string[], flags: Flags): Promise<unknown>
 }

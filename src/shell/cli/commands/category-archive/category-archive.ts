@@ -9,7 +9,7 @@ export const categoryArchiveCommand: CliCommand = {
   name: 'archive',
   group: 'category',
   description: 'archive a category: its movements keep counting, and it takes no new ones',
-  argument: { name: 'code', description: 'the category code, from category list' },
+  arguments: [{ name: 'code', description: 'the category code, from category list' }],
   options: [DRY_RUN_OPTION],
   run: (context, options, args, flags) => {
     const { code, dryRun } = parsed(categoryArchiveSchema, { code: args[0], ...flags })

@@ -9,6 +9,11 @@ export const AMOUNT_TOO_LARGE_MESSAGE = 'is too large: at most 90071992547409.91
 
 export const CURRENCY_MESSAGE = 'must be an ISO 4217 code such as COP'
 
+export const LOCAL_CURRENCY_MESSAGE = 'must not be COP, the local currency'
+
+export const RATE_MESSAGE =
+  'must be a rate like "3912.45": above 0, no thousands separator, at most 2 decimals'
+
 export const EMOJI_MESSAGE = 'must be one emoji such as 🏦'
 
 export const TAG_MESSAGE = 'must be lowercase letters, digits, colons and dashes'

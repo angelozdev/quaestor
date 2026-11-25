@@ -1,5 +1,12 @@
 import { z } from 'zod'
-import { AMOUNT_PATTERN, TAG_PATTERN, centsOf, isCurrency } from '#core/ledger'
+import {
+  AMOUNT_PATTERN,
+  LOCAL_CURRENCY,
+  RATE_PATTERN,
+  TAG_PATTERN,
+  centsOf,
+  isCurrency,
+} from '#core/ledger'
 import {
   AMOUNT_MESSAGE,
   AMOUNT_TOO_LARGE_MESSAGE,
@@ -7,6 +14,8 @@ import {
   DATE_MESSAGE,
   EMOJI_MESSAGE,
   EMOJI_PATTERN,
+  LOCAL_CURRENCY_MESSAGE,
+  RATE_MESSAGE,
   REQUIRED_MESSAGE,
   TAG_MESSAGE,
   UNKNOWN_KEY_MESSAGE,
@@ -33,6 +42,17 @@ export const amountText = z
   .refine(Number.isSafeInteger, { error: AMOUNT_TOO_LARGE_MESSAGE, abort: true })
 
 export const currencyCode = z.string(wrongOr(CURRENCY_MESSAGE)).refine(isCurrency, CURRENCY_MESSAGE)
+
+export const foreignCurrency = currencyCode.refine(
+  (currency) => currency !== LOCAL_CURRENCY,
+  LOCAL_CURRENCY_MESSAGE,
+)
+
+export const rateText = z
+  .string(wrongOr(RATE_MESSAGE))
+  .regex(RATE_PATTERN, RATE_MESSAGE)
+  .transform(centsOf)
+  .refine((rate) => rate > 0 && Number.isSafeInteger(rate), { error: RATE_MESSAGE, abort: true })
 
 export const emojiText = z.string(wrongOr(EMOJI_MESSAGE)).regex(EMOJI_PATTERN, EMOJI_MESSAGE)
 

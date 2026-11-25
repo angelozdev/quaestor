@@ -10,4 +10,5 @@ export const COMMAND_GROUPS = {
   category: 'categories a movement can take',
   tag: 'tags a movement can carry',
   movement: 'movements and transfers',
+  rate: 'rates from a foreign currency to COP',
 } as const

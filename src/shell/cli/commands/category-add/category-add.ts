@@ -9,7 +9,7 @@ export const categoryAddCommand: CliCommand = {
   name: 'add',
   group: 'category',
   description: 'create a category',
-  argument: { name: 'name', description: 'the category name in English, such as Restaurants' },
+  arguments: [{ name: 'name', description: 'the category name in English, such as Restaurants' }],
   options: [
     { flags: '--emoji <emoji>', description: 'one emoji, such as 🍽️' },
     { flags: '--group <code>', description: 'its group, from group list' },

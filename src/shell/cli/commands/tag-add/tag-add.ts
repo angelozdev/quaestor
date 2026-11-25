@@ -9,10 +9,12 @@ export const tagAddCommand: CliCommand = {
   name: 'add',
   group: 'tag',
   description: 'create a tag',
-  argument: {
-    name: 'name',
-    description: 'lowercase letters, digits, colons and dashes, such as trip:japon-2027',
-  },
+  arguments: [
+    {
+      name: 'name',
+      description: 'lowercase letters, digits, colons and dashes, such as trip:japon-2027',
+    },
+  ],
   options: [DRY_RUN_OPTION],
   run: (context, options, args, flags) => {
     const { name, dryRun } = parsed(tagAddSchema, { name: args[0], ...flags })

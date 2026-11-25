@@ -8,6 +8,7 @@ import { categoryListCommand } from '../commands/category-list/category-list.ts'
 import { groupListCommand } from '../commands/group-list/group-list.ts'
 import { movementListCommand } from '../commands/movement-list/movement-list.ts'
 import { movementWriteCommand } from '../commands/movement-write/movement-write.ts'
+import { rateSetCommand } from '../commands/rate-set/rate-set.ts'
 import { reportCommand } from '../commands/report/report.ts'
 import { tagAddCommand } from '../commands/tag-add/tag-add.ts'
 import { tagListCommand } from '../commands/tag-list/tag-list.ts'
@@ -30,6 +31,7 @@ const COMMANDS: CliCommand[] = [
   movementListCommand,
   movementWriteCommand,
   reportCommand,
+  rateSetCommand,
 ]
 
 const COMMAND_NAMES = [...new Set(COMMANDS.map((command) => command.group ?? command.name))]
@@ -67,8 +69,8 @@ type Parent = Program | ReturnType<typeof registerGroup>
 
 function register(root: Program, context: CliContext, parent: Parent, command: CliCommand): void {
   const subcommand = parent.command(command.name).description(command.description)
-  if (command.argument)
-    subcommand.argument(`<${command.argument.name}>`, command.argument.description)
+  for (const { name, description } of command.arguments ?? [])
+    subcommand.argument(`<${name}>`, description)
   for (const { flags, description, defaultValue } of command.options ?? [])
     subcommand.addOption(new Option(flags, description).default(defaultValue))
   subcommand.action(async () => {

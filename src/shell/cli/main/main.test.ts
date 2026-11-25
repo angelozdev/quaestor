@@ -6,8 +6,9 @@ import { tempDir } from '../../../../tests/support/temp-dir/temp-dir.ts'
 
 const MISSING_COMMAND = {
   code: 'missing_command',
-  commands: ['backup', 'account', 'group', 'category', 'tag', 'movement', 'report'],
-  message: 'missing command: use one of backup, account, group, category, tag, movement, report',
+  commands: ['backup', 'account', 'group', 'category', 'tag', 'movement', 'report', 'rate'],
+  message:
+    'missing command: use one of backup, account, group, category, tag, movement, report, rate',
 }
 
 describe('main', () => {
@@ -22,7 +23,7 @@ describe('main', () => {
     expect(stderr).toBe('')
   })
 
-  it('--help lists backup, the account, group, category, tag and movement groups and report as its commands', async () => {
+  it('--help lists backup, the account, group, category, tag and movement groups, report and the rate group as its commands', async () => {
     const { stdout } = await runCli(['--help'])
 
     const commands = stdout.slice(stdout.indexOf('Commands:')).trimEnd().split('\n').slice(1)
@@ -36,6 +37,7 @@ describe('main', () => {
       expect.stringMatching(
         /^ {2}report \[options\]\s+spending and income of a period, by group and category$/,
       ),
+      expect.stringMatching(/^ {2}rate\s+rates from a foreign currency to COP$/),
     ])
   })
 

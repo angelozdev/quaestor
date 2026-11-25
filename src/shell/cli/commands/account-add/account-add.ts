@@ -9,7 +9,7 @@ export const accountAddCommand: CliCommand = {
   name: 'add',
   group: 'account',
   description: 'create an account with its opening balance',
-  argument: { name: 'name', description: 'the account name, such as Wallet' },
+  arguments: [{ name: 'name', description: 'the account name, such as Wallet' }],
   options: [
     { flags: '--emoji <emoji>', description: 'one emoji, such as 🏦' },
     { flags: '--type <type>', description: 'savings, debit, credit or cash' },
