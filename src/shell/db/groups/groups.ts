@@ -1,6 +1,13 @@
 import { and, eq, isNull } from 'drizzle-orm'
-import { GROUP_KINDS, NotFoundError, type Group } from '#core/ledger'
-import { database } from '../database/database.ts'
+import {
+  AlreadyExistsError,
+  GROUP_KINDS,
+  NotFoundError,
+  type Group,
+  type GroupDraft,
+  type WriteDeps,
+} from '#core/ledger'
+import { database, isUniqueViolation, withFreshCode } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
 import { groups } from './groups.schema.ts'
 
@@ -29,4 +36,24 @@ export function liveGroup(store: Store, id: string): Group {
     .get()
   if (group === undefined) throw new NotFoundError('group', id)
   return group
+}
+
+export function insertGroup(
+  store: Store,
+  draft: GroupDraft,
+  { randomIndex, now }: WriteDeps,
+): Group {
+  const instant = now.toISOString()
+  try {
+    return withFreshCode(randomIndex, (id) =>
+      database(store)
+        .insert(groups)
+        .values({ ...draft, id, createdAt: instant, updatedAt: instant })
+        .returning(STORED_FIELDS)
+        .get(),
+    )
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new AlreadyExistsError('group', draft.name)
+    throw error
+  }
 }

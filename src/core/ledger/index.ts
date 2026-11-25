@@ -27,6 +27,7 @@ export type {
   Category,
   CategoryDraft,
   Group,
+  GroupDraft,
   GroupKind,
   HalfDraft,
   RandomIndex,

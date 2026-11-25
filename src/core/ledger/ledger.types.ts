@@ -6,6 +6,8 @@ export type GroupKind = (typeof GROUP_KINDS)[number]
 
 export type Group = { id: string; kind: GroupKind; emoji: string; name: string }
 
+export type GroupDraft = Omit<Group, 'id'>
+
 export type RandomIndex = (bound: number) => number
 
 export type WriteDeps = { randomIndex: RandomIndex; now: Date }
