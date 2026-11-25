@@ -10,6 +10,7 @@ export {
 } from './ledger.constants.ts'
 export {
   AlreadyExistsError,
+  BalanceNotZeroError,
   GroupNotEmptyError,
   NotFoundError,
   RefusedWriteError,

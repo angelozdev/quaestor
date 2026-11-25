@@ -7,6 +7,16 @@ export class AlreadyExistsError extends RefusedError {
   }
 }
 
+export class BalanceNotZeroError extends RefusedError {
+  constructor(account: string, currency: string, balance: number) {
+    super(
+      'balance_not_zero',
+      `account ${account} holds ${balance} ${currency}; only an account at 0 can be archived`,
+      { account, currency, balance },
+    )
+  }
+}
+
 export class GroupNotEmptyError extends RefusedError {
   constructor(group: string, categories: string[]) {
     const count = categories.length

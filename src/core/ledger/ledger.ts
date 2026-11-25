@@ -151,11 +151,21 @@ function transferProblems(
   ]
 }
 
+function deleteProblems(
+  id: string,
+  item: string,
+  { accounts, movements }: Catalog,
+): WriteProblem[] {
+  const touched = movements.get(id)
+  if (touched === undefined) return [notFound(item, 'movement', id)]
+  return touched
+    .filter((account) => accounts.get(account)?.archived)
+    .map((account) => archived(item, 'account', account))
+}
+
 export function checkWrite(request: WriteRequest, catalog: Catalog): WriteProblem[] {
   return [
-    ...request.delete.flatMap((id, index) =>
-      catalog.movements.has(id) ? [] : [notFound(`delete[${index}]`, 'movement', id)],
-    ),
+    ...request.delete.flatMap((id, index) => deleteProblems(id, `delete[${index}]`, catalog)),
     ...request.movements.flatMap((movement, index) =>
       movementProblems(movement, `movements[${index}]`, catalog),
     ),

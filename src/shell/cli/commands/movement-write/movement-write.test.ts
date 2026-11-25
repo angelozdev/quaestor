@@ -1,7 +1,8 @@
-import { decode } from '@toon-format/toon'
+import { decode, encode } from '@toon-format/toon'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import {
+  amountTextOf,
   booked,
   bookedWithDeletes,
   faultyItems,
@@ -151,6 +152,57 @@ function idOf(row: Json | undefined): string {
 
 async function recordedBy(cli: LedgerCli, body: Json): Promise<Json[]> {
   return recordedRows(await write(cli, body))
+}
+
+async function allAccountsText(cli: LedgerCli): Promise<string> {
+  return (await cli.run(['account', 'list', '--all'])).stdout
+}
+
+function settledSavings(books: Books): Promise<Json[]> {
+  return recordedBy(books.cli, {
+    movements: [
+      spend(books, { account: books.savings, amount: '5' }),
+      spend(books, { account: books.savings, amount: '-5' }),
+    ],
+  })
+}
+
+function archiveSavings(books: Books): Promise<CliRun> {
+  return books.cli.run(['account', 'archive', books.savings])
+}
+
+function archivedDelete(books: Books, index: number): string {
+  return refused({
+    code: 'archived',
+    item: `delete[${index}]`,
+    message: `account ${books.savings} is archived`,
+  })
+}
+
+async function expectArchivedAtZero(
+  books: Books,
+  archived: CliRun,
+  balance: number,
+  attempts: Json[],
+): Promise<void> {
+  if (balance !== 0) {
+    expect(archived).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: balanceNotZero(books.savings, balance / 100),
+    })
+    expect(balancesById(await accountsText(books.cli))[books.savings]).toBe(balance / 100)
+    return
+  }
+  expect(archived.code).toBe(0)
+  for (const attempt of attempts) expect((await write(books.cli, attempt)).code).toBe(1)
+  expect(balancesById(await allAccountsText(books.cli))[books.savings]).toBe(0)
+}
+
+function balanceNotZero(account: string, balance: number): string {
+  const message = `account ${account} holds ${balance} USD; only an account at 0 can be archived`
+  const error = { code: 'balance_not_zero', account, currency: 'USD', balance, message }
+  return `env: test\n${encode({ error })}\n`
 }
 
 async function listedText(cli: LedgerCli): Promise<string> {
@@ -1225,5 +1277,138 @@ describe('quaestor movement write', () => {
         'movements[0].tags[0]: must be lowercase letters, digits, colons and dashes',
       ),
     })
+  })
+
+  it('a movement in an archived account cannot be deleted', async () => {
+    const books = await openBooks()
+    const [kept] = await settledSavings(books)
+    await archiveSavings(books)
+
+    const run = await write(books.cli, { delete: [idOf(kept)] })
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: archivedDelete(books, 0) })
+    expect(balancesById(await allAccountsText(books.cli))[books.savings]).toBe(0)
+    expect(decode((await list(books.cli, '--account', books.savings)).stdout)).toMatchObject({
+      total: 2,
+    })
+  })
+
+  it('a transfer whose other half sits in an archived account cannot be deleted', async () => {
+    const books = await openBooks()
+    const [leaving] = await recordedBy(books.cli, { transfers: [transfer(books)] })
+    await write(books.cli, {
+      transfers: [
+        transfer(
+          books,
+          { account: books.savings, payee: 'Back', amount: '-10' },
+          { account: books.wallet, payee: 'Back', amount: '10' },
+        ),
+      ],
+    })
+    await archiveSavings(books)
+
+    const run = await write(books.cli, { delete: [idOf(leaving)] })
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: archivedDelete(books, 0) })
+  })
+
+  it('a write deleting in an active and an archived account is refused whole', async () => {
+    const books = await openBooks()
+    const [spent] = await recordedBy(books.cli, { movements: [spend(books)] })
+    const [kept] = await settledSavings(books)
+    await archiveSavings(books)
+    const before = await allAccountsText(books.cli)
+
+    const run = await write(books.cli, { delete: [idOf(spent), idOf(kept)] })
+
+    expect(run).toEqual({ code: 1, stdout: '', stderr: archivedDelete(books, 1) })
+    expect(await allAccountsText(books.cli)).toBe(before)
+  })
+
+  it('an archived account stays at 0: it archives exactly when its balance is 0, and no write moves it after', async () => {
+    await fc.assert(
+      fc.asyncProperty(booked(OPENING_DATE), fc.boolean(), async (items, settle) => {
+        const books = await openBooks()
+        const sum = totalCents(items, 'savings')
+        const rows = await recordedBy(books.cli, { movements: bookedMovements(books, items) })
+        if (settle && sum !== 0)
+          rows.push(
+            ...(await recordedBy(books.cli, {
+              movements: [spend(books, { account: books.savings, amount: amountTextOf(-sum) })],
+            })),
+          )
+        const balance = settle ? 0 : sum
+
+        const savingsCodes = rows.filter(({ account }) => account === books.savings).map(idOf)
+        const attempts = [
+          ...savingsCodes.map((code) => ({ delete: [code] })),
+          { movements: [spend(books, { account: books.savings, amount: '1' })] },
+        ]
+
+        await expectArchivedAtZero(books, await archiveSavings(books), balance, attempts)
+      }),
+      { numRuns: 50 },
+    )
+  })
+
+  it('an archived account takes no new movement and is neither half of a transfer', async () => {
+    const books = await openBooks()
+    await archiveSavings(books)
+    const refusal = (item: string) => ({
+      code: 'archived',
+      item,
+      message: `account ${books.savings} is archived`,
+    })
+
+    const run = await write(books.cli, {
+      movements: [spend(books, { account: books.savings, amount: '1' })],
+      transfers: [
+        transfer(books),
+        transfer(
+          books,
+          { account: books.savings, payee: 'Back', amount: '-10' },
+          { account: books.wallet, payee: 'Back', amount: '10' },
+        ),
+      ],
+    })
+
+    expect(run).toEqual({
+      code: 1,
+      stdout: '',
+      stderr: refused(
+        refusal('movements[0]'),
+        refusal('transfers[0].to'),
+        refusal('transfers[1].from'),
+      ),
+    })
+  })
+
+  it('an archived account stays at 0 under transfers: it archives exactly when its balance is 0, and no half moves it after', async () => {
+    await fc.assert(
+      fc.asyncProperty(moved(OPENING_DATE), fc.boolean(), async (items, settle) => {
+        const books = await openBooks()
+        const sum = movedCents(items, 'savings')
+        const halves = await recordedBy(books.cli, { transfers: movedTransfers(books, items) })
+        if (settle && sum !== 0)
+          await write(books.cli, {
+            movements: [spend(books, { account: books.savings, amount: amountTextOf(-sum) })],
+          })
+        const balance = settle ? 0 : sum
+
+        const inSavings = new Set(
+          halves.filter(({ account }) => account === books.savings).map(idOf),
+        )
+        const touching = halves.filter(
+          (half) => inSavings.has(idOf(half)) || inSavings.has(String(half.transfer)),
+        )
+        const attempts = [
+          ...touching.map((half) => ({ delete: [idOf(half)] })),
+          { transfers: [transfer(books)] },
+        ]
+
+        await expectArchivedAtZero(books, await archiveSavings(books), balance, attempts)
+      }),
+      { numRuns: 50 },
+    )
   })
 })

@@ -32,7 +32,7 @@ Keep Quaestor equal to the bank. Angelo sends screenshots of his bank apps, you 
    quaestor movement list --account n8d3 --from 2026-11-01
    ```
 
-   `account list` gives each account's code, currency, archived mark and balance today. Start `--from` a few days before the screenshot's oldest row. `total` counts every match; if it is more than the rows listed, add `--limit <n>`. Each row's `balance` is the account's balance after that movement.
+   `account list` gives each active account's code, currency and balance today; `account list --all` adds the archived ones. A correction in an archived account is `account unarchive <code>`, the correction, then `account archive <code>`, each shown as a dry run Angelo approves. Start `--from` a few days before the screenshot's oldest row. `total` counts every match; if it is more than the rows listed, add `--limit <n>`. Each row's `balance` is the account's balance after that movement.
 
 2. Transcribe every row: the date the bank shows, the payee as printed, the signed amount in the account's currency. Note the bank's balance and the day it is for.
 
@@ -152,7 +152,7 @@ After the yes, run the same command without `--dry-run`. The dry run's code for 
 
 - Exit 1, with stdout empty: nothing was written. stderr has `error:` with a `code`.
   - `refused`, `invalid_input` and `invalid_json` list every item at fault, such as `movements[2]` or `transfers[0].from`. Fix every listed item, dry run again, and show Angelo the new dry run.
-  - `already_exists` means the account, category or tag name is taken: use the existing one, and read its code from the matching `list`.
+  - `already_exists` means the account, category or tag name is taken: use the existing one, and read its code from the matching `list`. For an account, use `account list --all`: if it is archived, `account unarchive` it first, as a dry run Angelo approves.
   - The usage codes (`unknown_option`, `unknown_command`, `option_missing_argument`, `missing_command`) mean the command line is wrong: read the message, fix it and run again.
 - A command that fails before opening a store (`invalid_input`, `invalid_json`, the usage codes) prints no `env:` line. No `env:` line means no store was opened, not that the wrong store was.
 - Exit 2: stop and tell Angelo what stderr said. Do not retry or work around it.

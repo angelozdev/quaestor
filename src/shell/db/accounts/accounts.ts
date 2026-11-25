@@ -1,6 +1,8 @@
-import { isNull, sql } from 'drizzle-orm'
+import { eq, isNull, sql } from 'drizzle-orm'
 import {
   AlreadyExistsError,
+  BalanceNotZeroError,
+  NotFoundError,
   amountOf,
   type AccountDraft,
   type AccountRow,
@@ -63,4 +65,32 @@ export function insertAccount(
     if (isUniqueViolation(error)) throw new AlreadyExistsError('account', draft.name)
     throw error
   }
+}
+
+function liveAccount(store: Store, id: string): AccountRow {
+  const account = listAccounts(store).find((row) => row.id === id)
+  if (account === undefined) throw new NotFoundError('account', id)
+  return account
+}
+
+function setArchived(store: Store, account: AccountRow, archived: boolean, now: Date): AccountRow {
+  database(store)
+    .update(accounts)
+    .set({ archived, updatedAt: now.toISOString() })
+    .where(eq(accounts.id, account.id))
+    .run()
+  return { ...account, archived }
+}
+
+export function archiveAccount(store: Store, id: string, now: Date): AccountRow {
+  const account = liveAccount(store, id)
+  if (account.archived) return account
+  if (account.balance !== 0)
+    throw new BalanceNotZeroError(account.id, account.currency, account.balance)
+  return setArchived(store, account, true, now)
+}
+
+export function unarchiveAccount(store: Store, id: string, now: Date): AccountRow {
+  const account = liveAccount(store, id)
+  return account.archived ? setArchived(store, account, false, now) : account
 }
