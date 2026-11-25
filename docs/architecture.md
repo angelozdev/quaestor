@@ -181,8 +181,7 @@ Written for a reader that is a model, not a person.
 
 ## Release
 
-- `pnpm release`, run by Angelo from a clean, green `rebuild` until it replaces
-  `main`, then from `main`, bundles the sources with Rolldown, packs them and
+- `pnpm release`, run by Angelo from a clean, green `main`, bundles the sources with Rolldown, packs them and
   installs them globally with `pnpm add -g`.
 - A `git`, `tar`, `pnpm pack` or `pnpm add -g` command that exits non-zero stops
   the release with `release: failed: <command and arguments> exited <status>`
@@ -194,8 +193,9 @@ Written for a reader that is a model, not a person.
 ## Legacy data
 
 - The legacy Postgres database is frozen: nothing writes to it again.
-- The legacy app stays on `main`, tagged `legacy-final`; the new project grows on
-  the orphan branch `rebuild`, which shares no history with it.
+- The legacy app stays on the local branch `legacy`, tagged `legacy-final`, and
+  is never pushed because it holds real data; the new project grows on `main`,
+  which shares no history with it.
 - On 2026-11-23 (manifest `exportedAt` 2026-11-24T03:03:33Z) every table was
   exported once to `~/.quaestor/legacy/`, outside the repo because it is real
   financial data, and the folder was made read-only. `tables/<table>.jsonl`

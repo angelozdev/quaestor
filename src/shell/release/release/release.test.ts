@@ -12,8 +12,8 @@ const packageJson = {
   version: '0.0.0',
   scripts: { check: checks.map((name) => `pnpm ${name}`).join(' && ') },
 }
-const onCleanRebuild = {
-  'git rev-parse --abbrev-ref HEAD': { stdout: 'rebuild\n' },
+const onCleanMain = {
+  'git rev-parse --abbrev-ref HEAD': { stdout: 'main\n' },
   'git status --porcelain': { stdout: '' },
 }
 
@@ -22,8 +22,8 @@ const tarball = '/r/.release/quaestor-0.0.0.tgz'
 const packedBin = '/t/package/dist/quaestor.js'
 const released = '0.0.0 (2033257)'
 const packedWithoutMigrations = ['package/package.json', 'package/dist/quaestor.js']
-const onGreenRebuild = {
-  ...onCleanRebuild,
+const onGreenMain = {
+  ...onCleanMain,
   'git rev-parse --short HEAD': { stdout: '2033257\n' },
   [`tar -tzf ${tarball}`]: {
     stdout: `${[...packedWithoutMigrations, 'package/migrations/.gitkeep'].join('\n')}\n`,
@@ -103,18 +103,18 @@ function expectTempDirRemovedLast(result: ReleaseResult) {
 }
 
 describe('release refusals', () => {
-  it('refuses off rebuild', async () => {
+  it('refuses off main, the old rebuild trunk included', async () => {
     const result = await releaseWith({
-      'git rev-parse --abbrev-ref HEAD': { stdout: 'skeleton\n' },
+      'git rev-parse --abbrev-ref HEAD': { stdout: 'rebuild\n' },
     })
 
-    expectRefusedBeforeBuild(result, 'on skeleton, not rebuild')
+    expectRefusedBeforeBuild(result, 'on rebuild, not main')
     expect(commandsStartingWith(result, 'pnpm run')).toEqual([])
   })
 
   it('refuses with uncommitted changes', async () => {
     const result = await releaseWith({
-      ...onCleanRebuild,
+      ...onCleanMain,
       'git status --porcelain': { stdout: ' M src/x.ts\n' },
     })
 
@@ -123,7 +123,7 @@ describe('release refusals', () => {
   })
 
   it('refuses naming the failing check', async () => {
-    const result = await releaseWith({ ...onCleanRebuild, 'pnpm run lint': { status: 1 } })
+    const result = await releaseWith({ ...onCleanMain, 'pnpm run lint': { status: 1 } })
 
     expectRefusedBeforeBuild(result, 'lint failed')
     expect(commandsStartingWith(result, 'pnpm run')).toEqual(['pnpm run test', 'pnpm run lint'])
@@ -133,16 +133,16 @@ describe('release refusals', () => {
   it('runs the checks named in scripts.check, whatever they are', async () => {
     const custom = { ...packageJson, scripts: { check: 'pnpm one && pnpm two:x && pnpm three' } }
 
-    const result = await releaseWith({ ...onCleanRebuild, 'pnpm run two:x': { status: 1 } }, custom)
+    const result = await releaseWith({ ...onCleanMain, 'pnpm run two:x': { status: 1 } }, custom)
 
     expectRefusedBeforeBuild(result, 'two:x failed')
     expect(commandsStartingWith(result, 'pnpm run')).toEqual(['pnpm run one', 'pnpm run two:x'])
   })
 })
 
-describe('release from a clean green rebuild', () => {
-  it('builds, packs, smoke-runs and installs from a clean green rebuild', async () => {
-    const result = await releaseWith(onGreenRebuild)
+describe('release from a clean green main', () => {
+  it('builds, packs, smoke-runs and installs from a clean green main', async () => {
+    const result = await releaseWith(onGreenMain)
 
     expect(result.calls.slice(0, result.callsBeforeBuild)).toEqual([
       step('git rev-parse --abbrev-ref HEAD', repoRoot),
@@ -173,7 +173,7 @@ describe('release from a clean green rebuild', () => {
 
   it('refuses before installing when the package has no migrations/', async () => {
     const result = await releaseWith({
-      ...onGreenRebuild,
+      ...onGreenMain,
       [`tar -tzf ${tarball}`]: { stdout: `${packedWithoutMigrations.join('\n')}\n` },
     })
 
@@ -182,7 +182,7 @@ describe('release from a clean green rebuild', () => {
 
   it('refuses before installing when the packed CLI fails its smoke run', async () => {
     const result = await releaseWith({
-      ...onGreenRebuild,
+      ...onGreenMain,
       [`node ${packedBin} --version`]: { stdout: 'dev\n' },
     })
 
@@ -191,7 +191,7 @@ describe('release from a clean green rebuild', () => {
 
   it('refuses before installing when the packed --help fails', async () => {
     const result = await releaseWith({
-      ...onGreenRebuild,
+      ...onGreenMain,
       [`node ${packedBin} --help`]: { status: 3 },
     })
 
@@ -200,7 +200,7 @@ describe('release from a clean green rebuild', () => {
 
   it('reports a PATH mismatch after installing', async () => {
     const result = await releaseWith({
-      ...onGreenRebuild,
+      ...onGreenMain,
       'quaestor --version': { stdout: '0.0.0 (1111111)\n' },
     })
 
@@ -228,7 +228,7 @@ describe('release command failures', () => {
   ])(
     'fails with exit 2 and stops when %s exits non-zero',
     async ([, line, status, built, removesTempDir]) => {
-      const result = await releaseWith({ ...onGreenRebuild, [line]: { status } })
+      const result = await releaseWith({ ...onGreenMain, [line]: { status } })
 
       expect(result).toMatchObject({
         code: 2,
@@ -243,7 +243,7 @@ describe('release command failures', () => {
   )
 
   it('keeps the PATH mismatch failure when quaestor --version exits non-zero', async () => {
-    const result = await releaseWith({ ...onGreenRebuild, 'quaestor --version': { status: 127 } })
+    const result = await releaseWith({ ...onGreenMain, 'quaestor --version': { status: 127 } })
 
     expect(result).toMatchObject({
       code: 2,
@@ -254,7 +254,7 @@ describe('release command failures', () => {
 
   it('keeps the smoke refusal when the packed --version exits non-zero', async () => {
     const result = await releaseWith({
-      ...onGreenRebuild,
+      ...onGreenMain,
       [`node ${packedBin} --version`]: { status: 127 },
     })
 
@@ -264,14 +264,11 @@ describe('release command failures', () => {
 
 describe('release temp folder', () => {
   it.for<[string, Parameters<typeof fakeRunner>[0]]>([
-    ['once installed', onGreenRebuild],
-    [
-      'when the smoke run fails',
-      { ...onGreenRebuild, [`node ${packedBin} --help`]: { status: 3 } },
-    ],
+    ['once installed', onGreenMain],
+    ['when the smoke run fails', { ...onGreenMain, [`node ${packedBin} --help`]: { status: 3 } }],
     [
       'when PATH prints another version',
-      { ...onGreenRebuild, 'quaestor --version': { stdout: '0.0.0 (1111111)\n' } },
+      { ...onGreenMain, 'quaestor --version': { stdout: '0.0.0 (1111111)\n' } },
     ],
   ])('removes its temp folder after its last command %s', async ([, responses]) => {
     const result = await releaseWith(responses)
