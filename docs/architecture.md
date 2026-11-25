@@ -79,7 +79,8 @@ Written for a reader that is a model, not a person.
   store left as it was; `already_exists`, 1, when a name is already taken, with the
   `kind` and the `name`; `not_found`, 1, when a code or a name names nothing live, with the
   `kind` and the `value`; `missing_rate`, 1, when a report counts a foreign currency with no
-  rate, with every such `currencies`; `invalid_input`, 1, when a flag or a field is wrong, with
+  rate, with every such `currencies`; `group_not_empty`, 1, when a group to delete still holds
+  a category, archived ones included, with the `group` and its `categories`; `invalid_input`, 1, when a flag or a field is wrong, with
   every problem as `issues`, each `<field>: <what is wrong>` (`movements[0].amount` for a
   field inside a list), found before a store is opened; `invalid_json`, 1, when stdin
   holds no valid JSON, found before a store is opened, with the reason on one line in its

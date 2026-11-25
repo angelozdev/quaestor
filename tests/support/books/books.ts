@@ -17,6 +17,10 @@ export function addAccount(cli: LedgerCli, name: string, currency: string, openi
   return added(cli, ['account', 'add', name, ...argv], 'account')
 }
 
+export function addGroup(cli: LedgerCli, name = 'Kids', emoji = '👶', kind = 'spending') {
+  return added(cli, ['group', 'add', name, '--emoji', emoji, '--kind', kind], 'group')
+}
+
 async function groupId(cli: LedgerCli, name: string): Promise<string> {
   const { stdout } = await cli.run(['group', 'list'])
   const { groups } = decode(stdout) as { groups: { id: string; name: string }[] }

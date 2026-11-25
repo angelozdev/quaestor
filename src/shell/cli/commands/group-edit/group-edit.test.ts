@@ -1,6 +1,6 @@
-import { decode, encode } from '@toon-format/toon'
+import { decode } from '@toon-format/toon'
 import { describe, expect, it } from 'vitest'
-import { addAccount, addCategory } from '../../../../../tests/support/books/books.ts'
+import { addAccount, addCategory, addGroup } from '../../../../../tests/support/books/books.ts'
 import { ledgerCli } from '../../../../../tests/support/ledger/ledger.ts'
 import type { LedgerCli } from '../../../../../tests/support/ledger/ledger.types.ts'
 import {
@@ -10,12 +10,7 @@ import {
 } from '../../../../../tests/support/refusals/refusals.ts'
 import { movement, record, report } from '../../../../../tests/support/reports/reports.ts'
 import type { Report } from '../../../../../tests/support/reports/reports.types.ts'
-import { expectWrite } from '../../../../../tests/support/writes/writes.ts'
-
-async function addKids(cli: LedgerCli): Promise<string> {
-  const { stdout } = await cli.run(['group', 'add', 'Kids', '--emoji', '👶', '--kind', 'spending'])
-  return (decode(stdout) as { group: { id: string } }).group.id
-}
+import { expectWrite, written } from '../../../../../tests/support/writes/writes.ts'
 
 function edit(cli: LedgerCli, code: string, ...flags: string[]) {
   return cli.run(['group', 'edit', code, ...flags])
@@ -28,18 +23,13 @@ async function groupsOf(cli: LedgerCli): Promise<string> {
 describe('quaestor group edit', () => {
   it('group edit renames a group and changes its emoji', async () => {
     const cli = ledgerCli()
-    const kids = await addKids(cli)
+    const kids = await addGroup(cli)
 
     const run = await edit(cli, kids, '--name', 'Children', '--emoji', '🧸')
 
-    expect(run).toEqual({
-      code: 0,
-      stdout: `${encode({
-        dryRun: false,
-        group: { id: kids, kind: 'spending', emoji: '🧸', name: 'Children' },
-      })}\n`,
-      stderr: 'env: test\n',
-    })
+    expect(run).toEqual(
+      written({ group: { id: kids, kind: 'spending', emoji: '🧸', name: 'Children' } }),
+    )
     expect(decode(await groupsOf(cli))).toMatchObject({
       groups: expect.arrayContaining([
         { id: kids, kind: 'spending', emoji: '🧸', name: 'Children' },
@@ -49,7 +39,7 @@ describe('quaestor group edit', () => {
 
   it('the report shows the new name', async () => {
     const cli = ledgerCli()
-    const kids = await addKids(cli)
+    const kids = await addGroup(cli)
     const bank = await addAccount(cli, 'Bank', 'COP', '0')
     const toys = await addCategory(cli, 'Toys', 'Kids', '🧸')
     await record(cli, movement(bank, toys, '2026-10-03', '-50000'))
@@ -74,7 +64,7 @@ describe('quaestor group edit', () => {
 
   it('a name already taken is already_exists', async () => {
     const cli = ledgerCli()
-    const kids = await addKids(cli)
+    const kids = await addGroup(cli)
     const before = await groupsOf(cli)
 
     const run = await edit(cli, kids, '--name', 'Gifts')

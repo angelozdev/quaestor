@@ -7,6 +7,17 @@ export class AlreadyExistsError extends RefusedError {
   }
 }
 
+export class GroupNotEmptyError extends RefusedError {
+  constructor(group: string, categories: string[]) {
+    const count = categories.length
+    super(
+      'group_not_empty',
+      `group ${group} still holds ${count} ${count === 1 ? 'category' : 'categories'}`,
+      { group, categories },
+    )
+  }
+}
+
 export class NotFoundError extends RefusedError {
   constructor(kind: string, value: string) {
     super('not_found', `${kind} ${value} does not exist`, { kind, value })

@@ -7,7 +7,12 @@ export {
   RATE_PATTERN,
   TAG_PATTERN,
 } from './ledger.constants.ts'
-export { AlreadyExistsError, NotFoundError, RefusedWriteError } from './ledger.errors.ts'
+export {
+  AlreadyExistsError,
+  GroupNotEmptyError,
+  NotFoundError,
+  RefusedWriteError,
+} from './ledger.errors.ts'
 export {
   addCents,
   amountOf,

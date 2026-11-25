@@ -2,6 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import {
   AlreadyExistsError,
   GROUP_KINDS,
+  GroupNotEmptyError,
   NotFoundError,
   type Group,
   type GroupDraft,
@@ -9,6 +10,7 @@ import {
 } from '#core/ledger'
 import { database, isUniqueViolation, withFreshCode } from '../database/database.ts'
 import type { Store } from '../database/database.types.ts'
+import { categories } from '../categories/categories.schema.ts'
 import { groups } from './groups.schema.ts'
 
 const STORED_FIELDS = {
@@ -76,4 +78,20 @@ export function updateGroup(
     if (isUniqueViolation(error)) throw new AlreadyExistsError('group', change.name ?? '')
     throw error
   }
+}
+
+export function deleteGroup(store: Store, id: string, now: Date): Group {
+  const group = liveGroup(store, id)
+  const db = database(store)
+  const held = db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.group, id), isNull(categories.deletedAt)))
+    .orderBy(categories.id)
+    .all()
+    .map((category) => category.id)
+  if (held.length > 0) throw new GroupNotEmptyError(id, held)
+  const instant = now.toISOString()
+  db.update(groups).set({ deletedAt: instant, updatedAt: instant }).where(eq(groups.id, id)).run()
+  return group
 }
