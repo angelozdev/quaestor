@@ -28,7 +28,7 @@ function installed(
   return spawnSync(process.execPath, [join(pkg, 'dist', 'quaestor.js'), ...args], {
     cwd: home,
     encoding: 'utf8',
-    env: { PATH: process.env.PATH, HOME: home, ...vars },
+    env: { PATH: process.env.PATH, ...vars, HOME: home },
   })
 }
 

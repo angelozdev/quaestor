@@ -651,6 +651,7 @@ describe('quaestor backup copies', () => {
       error: { reason: string; message: string }
     }
     expect(error.message).toBe(`cannot write backup to ${folder}: ${error.reason}`)
+    expect(error.reason).not.toBe('')
     expect(readdirSync(dataDir)).toEqual([])
   })
 
